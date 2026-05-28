@@ -39,6 +39,9 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from data_center.constants import (
+    BUS_BASE_MUSD,
+    BUS_FLATTEN_AFTER_YR,
+    BUS_GROWTH_PRE,
     CADENCE_CEILING_DEFAULT,
     FIRST_LAUNCH_YEAR_DEFAULT,
     FOLD_RATIO,
@@ -48,20 +51,30 @@ from data_center.constants import (
     LAUNCHES_AT_YEAR_10_DEFAULT,
     LOW_CADENCE_COST_MUSD_DEFAULT,
     LOW_CADENCE_LAUNCHES_DEFAULT,
+    MASS_ENVELOPE_T,
     MAX_FY,
     MAX_HORIZON_YEARS,
     MIN_FY,
     MIN_HORIZON_YEARS,
     MOUNTING_OVERHEAD_PCT,
     NEUTRON_FAIRING_USABLE_VOLUME_M3,
+    NODE_MASS_FIXED_T,
+    NODE_VOLUME_FIXED_M3,
     R_BAND_CENTRAL_ANCHORS_DEFAULT,
     R_BAND_HIGH_ANCHORS_DEFAULT,
     R_BAND_LOW_ANCHORS_DEFAULT,
+    RADIATOR_COST_MUSD_PER_KW,
     RADIATOR_SOLAR_AREA_RATIO,
+    RADIATOR_T_PER_KW_POST,
+    RADIATOR_T_PER_KW_PRE,
+    RELEASE_CADENCE_YR,
     SERVICE_LIFE_YEARS,
     SI_AREAL_DENSITY_KG_M2,
     SI_BOL_EFFICIENCY,
+    SOLAR_COST_MUSD_PER_KW,
+    SOLAR_MASS_T_PER_KW,
     STOWED_PITCH_MM,
+    TJMAX_LIFT_YEAR,
 )
 from data_center.generations import (
     GENERATIONS_YAML_KEY,
@@ -284,7 +297,7 @@ class GospelInputs(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     mass_envelope_t: float = Field(
-        default=12.5,
+        default=MASS_ENVELOPE_T,
         description=(
             "Neutron block-upgrade reusable SSO payload scenario, tonnes "
             "(SOURCE_INDEX NTR-007) — the model's hard physical constraint "
@@ -293,7 +306,7 @@ class GospelInputs(BaseModel):
         gt=0.0,
     )
     node_mass_fixed_t: float = Field(
-        default=2.5,
+        default=NODE_MASS_FIXED_T,
         description=(
             "Fixed-per-node mass overhead (bus + propulsion + structure), "
             "tonnes — subtracted from the envelope before packing GPUs."
@@ -301,7 +314,7 @@ class GospelInputs(BaseModel):
         ge=0.0,
     )
     node_volume_fixed_m3: float = Field(
-        default=5.0,
+        default=NODE_VOLUME_FIXED_M3,
         description=(
             "Fixed-per-node stowed volume overhead (bus + structure), m3 "
             "— added to the stowed package-array volume in the cycle-2 "
@@ -310,7 +323,7 @@ class GospelInputs(BaseModel):
         ge=0.0,
     )
     tjmax_lift_year: int = Field(
-        default=5,
+        default=TJMAX_LIFT_YEAR,
         description=(
             "Year index (0-based) at which the radiator hot-loop arrives "
             "and radiator t/kW steps down (D11)."
@@ -318,12 +331,12 @@ class GospelInputs(BaseModel):
         ge=0,
     )
     bus_base_musd: float = Field(
-        default=8.0,
+        default=BUS_BASE_MUSD,
         description="Year-0 bus cost (vehicle + avionics + propulsion), $M.",
         gt=0.0,
     )
     bus_flatten_after_yr: int = Field(
-        default=5,
+        default=BUS_FLATTEN_AFTER_YR,
         description=(
             "Year (0-based) after which bus cost holds flat instead of "
             "continuing its real decline (D12)."
@@ -331,29 +344,29 @@ class GospelInputs(BaseModel):
         ge=0,
     )
     bus_growth_pre: float = Field(
-        default=-0.03,
+        default=BUS_GROWTH_PRE,
         description=(
             "Bus real-cost growth per year between year 0 and "
             "'bus_flatten_after_yr' (negative = decline)."
         ),
     )
     solar_cost_musd_per_kw: float = Field(
-        default=0.04,
+        default=SOLAR_COST_MUSD_PER_KW,
         description="Solar-array cost per kilowatt of flown power, $M/kW.",
         gt=0.0,
     )
     radiator_cost_musd_per_kw: float = Field(
-        default=0.04,
+        default=RADIATOR_COST_MUSD_PER_KW,
         description="Radiator cost per kilowatt of flown power, $M/kW.",
         gt=0.0,
     )
     solar_mass_t_per_kw: float = Field(
-        default=0.011,
+        default=SOLAR_MASS_T_PER_KW,
         description="Solar-array mass per kilowatt of flown power, t/kW.",
         gt=0.0,
     )
     radiator_t_per_kw_pre: float = Field(
-        default=0.013,
+        default=RADIATOR_T_PER_KW_PRE,
         description=(
             "Radiator t/kW before the Tjmax lift (pre 'tjmax_lift_year') — "
             "the conservative t/kW (D11)."
@@ -361,7 +374,7 @@ class GospelInputs(BaseModel):
         gt=0.0,
     )
     radiator_t_per_kw_post: float = Field(
-        default=0.012,
+        default=RADIATOR_T_PER_KW_POST,
         description=(
             "Radiator t/kW after the Tjmax lift (post 'tjmax_lift_year') — "
             "the hot-loop coolant arrives and lowers t/kW (D11). Cycle-2 "
@@ -372,7 +385,7 @@ class GospelInputs(BaseModel):
         gt=0.0,
     )
     release_cadence_yr: float = Field(
-        default=1.5,
+        default=RELEASE_CADENCE_YR,
         description=("Years per generation, used to extrapolate post-Feynman generations (D6)."),
         gt=0.0,
     )

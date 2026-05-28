@@ -31,6 +31,7 @@ from typing import Any, Final, Union, get_args, get_origin  # typing-acceptable:
 from pydantic import BaseModel
 
 from data_center.config import ValuationConfig
+from data_center.constants import USD_PER_MUSD
 from data_center.generations import GenerationSpec
 from data_center.input_manifest import InputCell, SourceStatus, build_input_manifest
 from data_center.output import (
@@ -388,7 +389,7 @@ def _build_generations_dictionary(gens: list[GenerationSpec]) -> list[Generation
             die_count=g.die_count,
             kw_per_pkg=g.kw_per_pkg,
             pkg_mass_kg=g.kg_per_pkg,
-            pkg_cost_musd=g.usd_per_pkg / 1_000_000.0,
+            pkg_cost_musd=g.usd_per_pkg / USD_PER_MUSD,
             pf_per_pkg=g.pf_per_pkg,
             source_class=g.source.sourcing.value,
             source_doc_path=g.source.doc_path,
