@@ -99,7 +99,7 @@ Orbital reference values from `.orbital_reference.component_costs[]`:
 
 ## Commands Run
 
-These commands were run from `/Users/chris/Documents/projects/rklb_space_data_center`
+These commands were run from the repository root
 on 2026-05-28.
 
 ```sh

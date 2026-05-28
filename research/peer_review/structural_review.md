@@ -6,7 +6,7 @@
 > history, not as current navigation guidance.
 
 *Reviewer: Structural QA pass. Date: 2026-05-18. Scope: the whole repository
-at `/Users/chris/Documents/projects/rklb_space_data_center` — folder layout,
+at the repository root — folder layout,
 workstream separation, catalog/tracker completeness, the root README, legacy
 content, build cruft, and naming. **Report-only — no file was edited, moved,
 renamed, or deleted.** All keep / archive / delete calls are left to the owner.*
