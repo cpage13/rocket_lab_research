@@ -149,3 +149,20 @@ deliberately.
 
 The top-level [communications](communications/README.md) folder is a future
 researched workstream. It makes no communications model claims in this release.
+
+## Disclaimer
+
+This is an independent research project with **no affiliation with, sponsorship
+by, or endorsement from Rocket Lab**. "Rocket Lab" and "Neutron" are used only
+to name the real-world vehicle and company the analysis reasons about; all
+trademarks belong to their respective owners.
+
+Nothing here is a Rocket Lab plan, guidance, or official figure. The numbers are
+source-linked feasibility estimates and chosen scenario assumptions, not
+predictions, forecasts, or financial projections. **Do not use this repository
+as investment advice or as a basis for any investment decision.** It is provided
+"as is" under the [MIT License](LICENSE), for research and discussion only.
+
+## License
+
+Released under the [MIT License](LICENSE). Copyright (c) 2026 Chris Page.
