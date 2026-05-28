@@ -63,13 +63,13 @@ infrastructure business rather than a demonstration.
 The revenue run-rate is a separate 2036 view. By that same year, the active
 on-orbit base reaches **268 nodes** and about **112 MW**, producing roughly
 **$5.94B** in annual revenue and **$1.74B** in annual gross profit at about
-**29%** gross margin. Do not merge those two statements. The 90-launch cadence
+**29.3%** gross margin. Do not merge those two statements. The 90-launch cadence
 is the annual deployment story; the active on-orbit base is the installed-base
 revenue story.
 
 The default also uses a block-upgrade Neutron SSO mass-envelope scenario, a
 five-year service life, and a central revenue multiple anchored at 1.5x cost
-that tapers to a 2036 central output near 29 percent gross margin. Those are
+that tapers to a 2036 central output near 29.3 percent gross margin. Those are
 source-marked scenario inputs in the assumptions ledger and promoted JSON, not
 loose guesses.
 
