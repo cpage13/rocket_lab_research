@@ -1,0 +1,42 @@
+# Python — virtual environments, bytecode, build artifacts
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Test / lint / type caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Claude Code — personal local settings (not shared)
+.claude/settings.local.json
+.claude/worktrees/
+
+# Cycle-3 restructure: code/ project (Python)
+code/.venv/
+code/__pycache__/
+code/.mypy_cache/
+code/.pytest_cache/
+code/.ruff_cache/
+code/outputs/data_center/runs/*
+!code/outputs/data_center/runs/.gitkeep
+
+# Promoted public model artifacts. Keep the reviewed default model tracked;
+# custom promoted models and conclusions stay local unless intentionally
+# force-added.
+data_center/models/*
+!data_center/models/space/
+!data_center/models/space/default.json
+!data_center/models/ground/
+!data_center/models/ground/default.json
+data_center/conclusion_*.md

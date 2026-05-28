@@ -1,0 +1,91 @@
+# =============================================================================
+# rklb-value — CONSERVATIVE scenario (v8 cycle-2, hostile dial set)
+# =============================================================================
+#
+# The pessimistic-but-defensible read of the venture. v8 rewrite of the
+# cycle-1 conservative scenario: the hostile mass envelope, heavier node,
+# shorter service life, thinner margin, and costlier node/launch are all
+# preserved; cycle-2 adds the R-band, slower cadence, and the metadata /
+# volume blocks.
+#
+# Conservative intent: lower R band, shorter service life (3 yr), hostile
+# 11 t expendable-Neutron mass envelope, slower launch ramp.
+#
+# To run:   uv run rklb-value scenarios/conservative.yaml
+# =============================================================================
+
+scenario_name: "Conservative — 11t SSO, 3yr life, low R band, slow cadence"
+
+metadata:
+  workload_type: inference
+  operator_model: b2b_dedicated_optical_rf
+  radiator_architecture: single_face_co_mounted
+  deployment_philosophy: ground_validated_before_launch
+  base_year: 2026
+  horizon_years: 10
+
+cadence:
+  # Slower launch ramp — the hostile read of program build-up.
+  cadence_ceiling: 150
+  launches_at_year_5: 14
+  launches_at_year_10: 50         # slower than default 90 (conservative)
+  first_launch_year: 1
+
+fleet:
+  service_life_years: 3           # hostile reliability-grounded short life
+
+volume:
+  si_areal_density_kg_m2: 2.0
+  si_bol_efficiency: 0.20
+  fold_ratio: 80.0
+  stowed_pitch_mm: 6.0
+  radiator_solar_area_ratio: 0.70
+  mounting_overhead_pct: 0.30
+  neutron_fairing_usable_volume_m3: 80.0
+
+r_band:
+  # Conservative R band — central below the default at every anchor,
+  # encoding a thinner industry margin. The base-year anchor is 1.40 (the
+  # B2B-premium floor, V12 / strategy § 5.1): a B2B dedicated-optical/RF
+  # operator cannot price below ~neocloud + premium even in the hostile
+  # read. Still strictly below the default central (1.50 -> 1.40) while
+  # staying above the 25% active-fleet gross-margin floor.
+  # low / high fall to the model defaults.
+  central:
+    - { fy: 2026, r: 1.40 }
+    - { fy: 2036, r: 1.34 }
+
+launch_cost:
+  # Hostile launch costs: $28M low-cadence, $15M high-cadence.
+  low_cadence_cost_musd: 28.0
+  high_cadence_cost_musd: 15.0
+  low_cadence_launches: 5.0
+  high_cadence_launches: 100.0
+
+gospel:
+  # Hostile physical + cost dials (preserved from the cycle-1 conservative
+  # scenario). radiator_t_per_kw_post: 0.012 (D17, v8 value).
+  mass_envelope_t: 11.0           # hostile: expendable Neutron
+  node_mass_fixed_t: 2.8          # hostile: heavier fixed node mass
+  node_volume_fixed_m3: 5.0
+  tjmax_lift_year: 5
+  radiator_t_per_kw_pre: 0.013
+  radiator_t_per_kw_post: 0.012   # D17 (v8)
+  solar_mass_t_per_kw: 0.011
+  bus_base_musd: 9.0              # hostile: costlier bus
+  bus_flatten_after_yr: 5
+  bus_growth_pre: -0.03
+  solar_cost_musd_per_kw: 0.047   # hostile: pricier $/kW
+  radiator_cost_musd_per_kw: 0.047
+  release_cadence_yr: 1.5
+
+slopes:
+  usd_growth_per_gen: 0.30
+  # 0.20 — per-package power growth/gen; corrected from 0.30
+  # (assembly-rate misapplied) per validation V-A, sourcing_audit_05_21.md.
+  kw_growth_per_gen: 0.20
+  kg_growth_per_gen: -0.10
+  pf_growth_per_gen: 0.625
+
+# slopes: the conservative scenario does not bet on a slower technology
+# trajectory — it bets on a hostile envelope, thinner margin, shorter life.

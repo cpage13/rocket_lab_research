@@ -1,0 +1,121 @@
+# =============================================================================
+# rklb-value — DEFAULT scenario (v8 cycle-2 central case)
+# =============================================================================
+#
+# The cycle-2 v8 central scenario. Reproduces the cycle-2 strategy's locked
+# anchors. Everything is overridable; this file makes every value explicit
+# as a self-documenting record.
+#
+# Model: each fiscal year picks a frontier GPU generation (latest with
+# year_available <= FY); derives N packages that fit under the selected
+# Neutron SSO mass-envelope scenario; computes per-node economics; the fleet
+# rollup vintages each cohort and applies a 5-year cliff. Revenue is coupled
+# to cost via the R band (low / central / high trajectories).
+#
+# v8 schema (clean break from v7, no back-compat shim). Top-level blocks:
+# metadata, cadence, fleet, volume, r_band, launch_cost, gospel, slopes.
+#
+# To run:   uv run rklb-value scenarios/default.yaml
+# To sweep: copy this file, override any block, re-run.
+#
+# Conventions: money in $M; year 0 = FY2026 (Neutron's first-flight year);
+# all per-package values are ALL-IN (incl. networking, cooling, NVLink fabric).
+# =============================================================================
+
+scenario_name: "Default block-upgrade scenario (v8 central case)"
+
+metadata:
+  workload_type: inference                       # D14 (founder-locked)
+  operator_model: b2b_dedicated_optical_rf       # D15 (founder-locked)
+  radiator_architecture: single_face_co_mounted  # D16 (founder-locked)
+  deployment_philosophy: ground_validated_before_launch
+  base_year: 2026
+  horizon_years: 10
+
+cadence:
+  # Logistic launch ramp — scenario dials from SOURCE_INDEX NTR-010.
+  cadence_ceiling: 150
+  launches_at_year_5: 14
+  launches_at_year_10: 90     # FY2036 anchor when base_year=2026
+  first_launch_year: 1        # clamps FY2026 to zero; does not shift anchors
+
+fleet:
+  service_life_years: 5            # node operating life, hard cliff (D1)
+
+volume:
+  # Stowed solar+radiator volume-envelope dials — R1-sourced.
+  si_areal_density_kg_m2: 2.0
+  si_bol_efficiency: 0.20
+  fold_ratio: 80.0
+  stowed_pitch_mm: 6.0
+  radiator_solar_area_ratio: 0.70
+  mounting_overhead_pct: 0.30
+  neutron_fairing_usable_volume_m3: 80.0
+
+r_band:
+  # The three R trajectories — scenario assumptions tied to SOURCE_INDEX REV-008.
+  # R is revenue / annualized cost. R=1.50 implies 33.3% gross margin;
+  # R=1.40 implies 28.6%, keeping the default above the 25% active-fleet floor.
+  central:
+    - { fy: 2026, r: 1.50 }
+    - { fy: 2028, r: 1.48 }
+    - { fy: 2030, r: 1.46 }
+    - { fy: 2032, r: 1.44 }
+    - { fy: 2034, r: 1.42 }
+    - { fy: 2036, r: 1.40 }
+  low:
+    - { fy: 2026, r: 1.20 }
+    - { fy: 2028, r: 1.20 }
+    - { fy: 2030, r: 1.15 }
+    - { fy: 2032, r: 1.15 }
+    - { fy: 2034, r: 1.15 }
+    - { fy: 2036, r: 1.15 }
+  high:
+    - { fy: 2026, r: 1.80 }
+    - { fy: 2028, r: 1.80 }
+    - { fy: 2030, r: 1.75 }
+    - { fy: 2032, r: 1.70 }
+    - { fy: 2034, r: 1.65 }
+    - { fy: 2036, r: 1.65 }
+
+launch_cost:
+  # Cadence-indexed launch cost (log-linear curve) — SOURCE_INDEX NTR-009.
+  low_cadence_cost_musd: 25.0
+  high_cadence_cost_musd: 13.5
+  low_cadence_launches: 5.0
+  high_cadence_launches: 100.0
+
+gospel:
+  # v8 gospel = cycle-1 gospel verbatim except: radiator dial 0.007 -> 0.012
+  # (D17); node_volume_fixed_m3 added (volume model). r_revenue_cost,
+  # launch_y0/y10_musd, service_life_years, base_year, horizon_years are no
+  # longer set here in v8 — R is the r_band block, launch cost is the
+  # launch_cost block, service life is the fleet block, base year/horizon
+  # are the metadata block. node_mass_fixed_t stays 2.5 (cycle-1 value).
+  # Block-upgraded reusable SSO scenario (SOURCE_INDEX NTR-007), not an
+  # official Rocket Lab SSO payload figure.
+  mass_envelope_t: 12.5
+  node_mass_fixed_t: 2.5
+  node_volume_fixed_m3: 5.0
+  tjmax_lift_year: 5
+  radiator_t_per_kw_pre: 0.013
+  radiator_t_per_kw_post: 0.012   # <-- changed from cycle-1 0.007 (D17)
+  solar_mass_t_per_kw: 0.011
+  bus_base_musd: 8.0
+  bus_flatten_after_yr: 5
+  bus_growth_pre: -0.03
+  solar_cost_musd_per_kw: 0.04
+  radiator_cost_musd_per_kw: 0.04
+  release_cadence_yr: 1.5         # GENERATION cadence (18 months, D6)
+
+slopes:
+  # Post-Feynman per-generation growth slopes (every ~18 months).
+  usd_growth_per_gen: 0.30
+  # 0.20 — per-package power growth/gen; corrected from 0.30
+  # (assembly-rate misapplied) per validation V-A, sourcing_audit_05_21.md.
+  kw_growth_per_gen: 0.20
+  kg_growth_per_gen: -0.10        # mass falls per gen (denser packaging)
+  pf_growth_per_gen: 0.625        # implied PF/kW slope ~25%/gen (D12)
+
+# `generations:` omitted = use the bundled KNOWN_GENS (5 sourced gens:
+# B200/GB200, B300/GB300, Rubin VR200, Rubin Ultra, Feynman).

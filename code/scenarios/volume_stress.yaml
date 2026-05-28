@@ -1,0 +1,136 @@
+# =============================================================================
+# rklb-value — VOLUME_STRESS scenario (V15-trigger test fixture)
+# =============================================================================
+#
+# THIS IS A DELIBERATELY ARTIFICIAL SCENARIO. Its ONLY purpose is to prove
+# that validation rule V15 (volume_fits_horizon) fires correctly. It is
+# NEVER used for real projections, sensitivity sweeps, or any headline
+# number — quote nothing from it.
+#
+# How it trips V15. V15 fails only on a SOLE-VOLUME-bound year — a year
+# whose binding_constraint is VOLUME (not BOTH, not MASS). A sole-VOLUME
+# year requires two things at once:
+#   (a) volume_utilization_pct >= 99  — the stowed node busts the fairing;
+#   (b) mass_utilization_pct  <  99   — the node does NOT pack the mass
+#       envelope tight, so the year is not also mass-bound (which would
+#       make it BOTH, and BOTH does not fail V15).
+# The engine is mass-only-binding (D6): the volume: block alone can only
+# change volume_utilization, never mass_utilization. So this fixture makes
+# two deviations from default.yaml, both ONLY to satisfy (a) and (b):
+#   1. volume.neutron_fairing_usable_volume_m3: 5.0  (vs 80.0 default) —
+#      per-node stowed volume is ~5.1 m3, so a 5.0 m3 fairing drives
+#      volume_utilization_pct just past 100% every year  -> satisfies (a).
+#   2. gospel.mass_envelope_t: 11.0  (vs 12.5 default) — a smaller mass
+#      envelope makes the integer package-count floor leave > 1% mass
+#      slack on several years, so those years' mass_utilization_pct falls
+#      below 99 and they are not mass-bound  -> satisfies (b).
+# With both, the years that are not mass-bound become sole-VOLUME and V15
+# (correctly) FAILS. That failure is the designed behaviour this fixture
+# exists to demonstrate — it is NOT a model regression.
+#
+# NOTE — deviation from plan T86. plan_05_20_cycle2.md T86 specified a
+# single dial change (neutron_fairing_usable_volume_m3: 8.0). That value
+# does not work: per-node volume is ~5.1 m3, so an 8 m3 fairing only
+# reaches ~64% volume utilization — volume never binds. And even a fairing
+# tiny enough to bust volume leaves every year ALSO mass-bound (-> BOTH),
+# which V15 permits. Tripping the V15 rule as Phase 5 actually built it
+# (sole-VOLUME only) structurally requires a non-mass-bound year, hence
+# the mass_envelope_t change. The scenario's purpose (prove V15 fires) is
+# unchanged. See the Phase 6 sub-agent log for the full rationale.
+#
+# To run:   uv run rklb-value scenarios/volume_stress.yaml
+# =============================================================================
+
+scenario_name: "Volume stress (V15-trigger test fixture)"
+
+metadata:
+  workload_type: inference                       # D14 (founder-locked)
+  operator_model: b2b_dedicated_optical_rf       # D15 (founder-locked)
+  radiator_architecture: single_face_co_mounted  # D16 (founder-locked)
+  deployment_philosophy: ground_validated_before_launch
+  base_year: 2026
+  horizon_years: 10
+
+cadence:
+  # Logistic launch ramp — integer mission counts from SOURCE_INDEX NTR-010.
+  cadence_ceiling: 150
+  launches_at_year_5: 14
+  launches_at_year_10: 90
+  first_launch_year: 1
+
+fleet:
+  service_life_years: 5            # node operating life, hard cliff (D1)
+
+volume:
+  # Stowed solar+radiator volume-envelope dials — R1-sourced.
+  # neutron_fairing_usable_volume_m3 is ARTIFICIALLY cut from 80.0 to 5.0 —
+  # a V15-trigger deviation (see the file header), NOT a real dial value.
+  si_areal_density_kg_m2: 2.0
+  si_bol_efficiency: 0.20
+  fold_ratio: 80.0
+  stowed_pitch_mm: 6.0
+  radiator_solar_area_ratio: 0.70
+  mounting_overhead_pct: 0.30
+  neutron_fairing_usable_volume_m3: 5.0   # <-- ARTIFICIAL: V15 trigger (see header)
+
+r_band:
+  # The three R trajectories — scenario assumptions tied to SOURCE_INDEX REV-008.
+  central:
+    - { fy: 2026, r: 1.50 }
+    - { fy: 2028, r: 1.48 }
+    - { fy: 2030, r: 1.46 }
+    - { fy: 2032, r: 1.44 }
+    - { fy: 2034, r: 1.42 }
+    - { fy: 2036, r: 1.40 }
+  low:
+    - { fy: 2026, r: 1.20 }
+    - { fy: 2028, r: 1.20 }
+    - { fy: 2030, r: 1.15 }
+    - { fy: 2032, r: 1.15 }
+    - { fy: 2034, r: 1.15 }
+    - { fy: 2036, r: 1.15 }
+  high:
+    - { fy: 2026, r: 1.80 }
+    - { fy: 2028, r: 1.80 }
+    - { fy: 2030, r: 1.75 }
+    - { fy: 2032, r: 1.70 }
+    - { fy: 2034, r: 1.65 }
+    - { fy: 2036, r: 1.65 }
+
+launch_cost:
+  # Cadence-indexed launch cost (log-linear curve) — v7-archaeology dials.
+  low_cadence_cost_musd: 25.0
+  high_cadence_cost_musd: 13.5
+  low_cadence_launches: 5.0
+  high_cadence_launches: 100.0
+
+gospel:
+  # v8 gospel = cycle-1 gospel verbatim except: radiator dial 0.007 -> 0.012
+  # (D17); node_volume_fixed_m3 added (volume model). mass_envelope_t is
+  # ARTIFICIALLY 11.0 (vs the real 12.5) — a V15-trigger deviation (see the
+  # file header), NOT a real Neutron payload figure.
+  mass_envelope_t: 11.0           # <-- ARTIFICIAL: V15 trigger (see header)
+  node_mass_fixed_t: 2.5
+  node_volume_fixed_m3: 5.0
+  tjmax_lift_year: 5
+  radiator_t_per_kw_pre: 0.013
+  radiator_t_per_kw_post: 0.012   # <-- changed from cycle-1 0.007 (D17)
+  solar_mass_t_per_kw: 0.011
+  bus_base_musd: 8.0
+  bus_flatten_after_yr: 5
+  bus_growth_pre: -0.03
+  solar_cost_musd_per_kw: 0.04
+  radiator_cost_musd_per_kw: 0.04
+  release_cadence_yr: 1.5         # GENERATION cadence (18 months, D6)
+
+slopes:
+  # Post-Feynman per-generation growth slopes (every ~18 months).
+  usd_growth_per_gen: 0.30
+  # 0.20 — per-package power growth/gen; corrected from 0.30
+  # (assembly-rate misapplied) per validation V-A, sourcing_audit_05_21.md.
+  kw_growth_per_gen: 0.20
+  kg_growth_per_gen: -0.10        # mass falls per gen (denser packaging)
+  pf_growth_per_gen: 0.625        # implied PF/kW slope ~25%/gen (D12)
+
+# `generations:` omitted = use the bundled KNOWN_GENS (5 sourced gens:
+# B200/GB200, B300/GB300, Rubin VR200, Rubin Ultra, Feynman).

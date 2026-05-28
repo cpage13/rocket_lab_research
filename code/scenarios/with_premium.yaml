@@ -1,0 +1,80 @@
+# =============================================================================
+# rklb-value — WITH-PREMIUM scenario (v8 cycle-2, premium R band)
+# =============================================================================
+#
+# The v8 default dial set with an elevated central R band — encoding the
+# orbital-premium uplift (sovereignty + schedule + isolation premium) on
+# top of the cost-coupled rate. The model has no separate premium dial;
+# the premium folds into the R band.
+#
+# With-premium intent: central R band lifted above the default (premium
+# capture); everything else identical to the default scenario.
+#
+# To run:   uv run rklb-value scenarios/with_premium.yaml
+# =============================================================================
+
+scenario_name: "With premium — v8 default dials, premium-uplifted central R band"
+
+metadata:
+  workload_type: inference
+  operator_model: b2b_dedicated_optical_rf
+  radiator_architecture: single_face_co_mounted
+  deployment_philosophy: ground_validated_before_launch
+  base_year: 2026
+  horizon_years: 10
+
+cadence:
+  cadence_ceiling: 150
+  launches_at_year_5: 14
+  launches_at_year_10: 90
+  first_launch_year: 1
+
+fleet:
+  service_life_years: 5
+
+volume:
+  si_areal_density_kg_m2: 2.0
+  si_bol_efficiency: 0.20
+  fold_ratio: 80.0
+  stowed_pitch_mm: 6.0
+  radiator_solar_area_ratio: 0.70
+  mounting_overhead_pct: 0.30
+  neutron_fairing_usable_volume_m3: 80.0
+
+r_band:
+  # Premium-uplifted central R band — above the default (premium capture).
+  # low / high fall to the model defaults.
+  central:
+    - { fy: 2026, r: 1.65 }
+    - { fy: 2036, r: 1.50 }
+
+launch_cost:
+  low_cadence_cost_musd: 25.0
+  high_cadence_cost_musd: 13.5
+  low_cadence_launches: 5.0
+  high_cadence_launches: 100.0
+
+gospel:
+  mass_envelope_t: 12.5
+  node_mass_fixed_t: 2.5
+  node_volume_fixed_m3: 5.0
+  tjmax_lift_year: 5
+  radiator_t_per_kw_pre: 0.013
+  radiator_t_per_kw_post: 0.012   # D17 (v8)
+  solar_mass_t_per_kw: 0.011
+  bus_base_musd: 8.0
+  bus_flatten_after_yr: 5
+  bus_growth_pre: -0.03
+  solar_cost_musd_per_kw: 0.04
+  radiator_cost_musd_per_kw: 0.04
+  release_cadence_yr: 1.5
+
+slopes:
+  usd_growth_per_gen: 0.30
+  # 0.20 — per-package power growth/gen; corrected from 0.30
+  # (assembly-rate misapplied) per validation V-A, sourcing_audit_05_21.md.
+  kw_growth_per_gen: 0.20
+  kg_growth_per_gen: -0.10
+  pf_growth_per_gen: 0.625
+
+# generations: omitted = KNOWN_GENS.
