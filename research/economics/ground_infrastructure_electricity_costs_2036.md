@@ -99,7 +99,7 @@ Orbital reference values from `.orbital_reference.component_costs[]`:
 
 ## Commands Run
 
-These commands were run from `<repo root>`
+These commands were run from the repository root
 on 2026-05-28.
 
 ```sh
