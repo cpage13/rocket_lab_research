@@ -38,6 +38,7 @@ References:
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -50,9 +51,9 @@ from data_center.constants import MAX_FY, MAX_HORIZON_YEARS, MIN_FY, MIN_HORIZON
 from data_center.input_manifest import InputManifest
 from data_center.provenance import FieldPath, ProvenanceCell, YearString
 
-# The v8 output JSON schema version. A bare constant — the single place the
-# schema-version string is defined.
-SCHEMA_VERSION: str = "v8"
+# The v8 output JSON schema version. The single place the schema-version
+# string is defined; mirrors ``GROUND_SCHEMA_VERSION`` in ``ground.py``.
+SCHEMA_VERSION: Final[str] = "v8"
 
 # ---------------------------------------------------------------------------
 # Enums (cycle-1 types — reused verbatim)
@@ -262,15 +263,6 @@ class ValidationReport(BaseModel):
             "to find any failure."
         ),
     )
-
-
-# ---------------------------------------------------------------------------
-# Inputs block
-# ---------------------------------------------------------------------------
-
-
-InputsBlock = InputManifest
-"""Compatibility name for the Phase-2 ``InputManifest`` public input block."""
 
 
 # ---------------------------------------------------------------------------
@@ -773,7 +765,6 @@ __all__ = [
     "FieldKind",
     "FormulaDefinition",
     "GenerationSummary",
-    "InputsBlock",
     "MetaBlock",
     "PhysicalBlock",
     "PhysicalYear",

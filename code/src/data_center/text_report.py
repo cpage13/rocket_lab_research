@@ -27,6 +27,8 @@ R-band trajectory block on top of the v8-typed tables.
 
 from __future__ import annotations
 
+from typing import Final
+
 from data_center.output import (
     BusinessYear,
     PhysicalYear,
@@ -34,7 +36,8 @@ from data_center.output import (
 )
 from data_center.provenance import ProvenanceCell
 
-_WIDTH = 78
+# Fixed monospaced report width, in characters.
+_WIDTH: Final[int] = 78
 
 # Key formula_name keys cited in the provenance-summary banner — the
 # load-bearing formulas a reader most wants to see traced. Each must exist
