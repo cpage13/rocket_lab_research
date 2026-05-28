@@ -1,0 +1,61 @@
+generations:
+- name: B200/GB200
+  year_available: 2024.5
+  usd_per_pkg: 50000
+  kw_per_pkg: 1.75
+  kg_per_pkg: 18.9
+  pf_per_pkg: 9.0
+  die_count: 2
+  source:
+    doc_path: research/ai_hardware/gpu_generational_roadmap.md
+    anchor: null
+    quoted_figure: null
+    sourcing: fact
+- name: B300/GB300
+  year_available: 2025.5
+  usd_per_pkg: 70000
+  kw_per_pkg: 2.05
+  kg_per_pkg: 18.9
+  pf_per_pkg: 15.0
+  die_count: 2
+  source:
+    doc_path: research/ai_hardware/gpu_generational_roadmap.md
+    anchor: null
+    quoted_figure: null
+    sourcing: fact
+- name: Rubin VR200
+  year_available: 2026.5
+  usd_per_pkg: 70000
+  kw_per_pkg: 2.6
+  kg_per_pkg: 23.0
+  pf_per_pkg: 34.0
+  die_count: 2
+  source:
+    doc_path: research/ai_hardware/gpu_generational_roadmap.md
+    anchor: null
+    quoted_figure: null
+    sourcing: estimate
+- name: Rubin Ultra
+  year_available: 2027.5
+  usd_per_pkg: 180000
+  kw_per_pkg: 4.17
+  kg_per_pkg: 22.0
+  pf_per_pkg: 52.0
+  die_count: 4
+  source:
+    doc_path: research/ai_hardware/gpu_generational_roadmap.md
+    anchor: null
+    quoted_figure: null
+    sourcing: estimate
+- name: Feynman
+  year_available: 2029.0
+  usd_per_pkg: 225000
+  kw_per_pkg: 5.5
+  kg_per_pkg: 10.0
+  pf_per_pkg: 100.0
+  die_count: 8
+  source:
+    doc_path: research/ai_hardware/gpu_generational_roadmap.md
+    anchor: null
+    quoted_figure: null
+    sourcing: extrapolation

@@ -1,0 +1,21 @@
+# =============================================================================
+# rklb-value — DEFAULT ground reference assumptions (ground-v1)
+# =============================================================================
+#
+# This is a deliberately small terrestrial comparison input. The promoted ground
+# artifact uses the 2036 deployed-year cohort from the promoted space model,
+# then applies research-backed ground-side assumptions over the same five-year
+# window. Source statuses are attached in code from research/SOURCE_INDEX.md.
+# =============================================================================
+
+scenario_name: "Default ground reference scenario"
+
+gpu_package_cost_multiplier: 1.0
+facility_shell_fitout_musd_per_mw: 18.0
+racked_power_network_musd_per_gpu_package: 0.08
+energy_price_usd_per_mwh: 85.0
+pue: 1.25
+utilization: 0.85
+operations_maintenance_musd_per_mw_year: 1.5
+cooling_cost_musd_per_mw: 4.0
+comparison_period_years: 5

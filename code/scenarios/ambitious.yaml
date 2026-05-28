@@ -1,0 +1,86 @@
+# =============================================================================
+# rklb-value — AMBITIOUS scenario (v8 cycle-2, favourable dial set)
+# =============================================================================
+#
+# The optimistic-but-bounded read of the venture. v8 rewrite of the cycle-1
+# ambitious scenario: the favourable mass envelope, lighter node, richer
+# margin, and cheaper node/launch are preserved; cycle-2 adds a high R band,
+# max launch cadence, and the metadata / volume blocks.
+#
+# Ambitious intent: high R band, max launch cadence, generous 13 t mass
+# envelope, lighter node, cheaper launch.
+#
+# To run:   uv run rklb-value scenarios/ambitious.yaml
+# =============================================================================
+
+scenario_name: "Ambitious ('go for it') — 13t SSO, high R band, max cadence"
+
+metadata:
+  workload_type: inference
+  operator_model: b2b_dedicated_optical_rf
+  radiator_architecture: single_face_co_mounted
+  deployment_philosophy: ground_validated_before_launch
+  base_year: 2026
+  horizon_years: 10
+
+cadence:
+  # Max launch cadence — the favourable read of program build-up.
+  cadence_ceiling: 150            # max ceiling
+  launches_at_year_5: 14
+  launches_at_year_10: 120        # faster than default 90 (ambitious)
+  first_launch_year: 1
+
+fleet:
+  service_life_years: 5
+
+volume:
+  si_areal_density_kg_m2: 2.0
+  si_bol_efficiency: 0.20
+  fold_ratio: 80.0
+  stowed_pitch_mm: 6.0
+  radiator_solar_area_ratio: 0.70
+  mounting_overhead_pct: 0.30
+  neutron_fairing_usable_volume_m3: 80.0
+
+r_band:
+  # Ambitious R band — high trajectory above the model default, encoding
+  # the high-end revenue anchor + orbital premium. central / low fall to
+  # the model defaults.
+  high:
+    - { fy: 2026, r: 2.00 }
+    - { fy: 2036, r: 1.80 }
+
+launch_cost:
+  # Favourable launch: $23M low-cadence, $12M high-cadence.
+  low_cadence_cost_musd: 23.0
+  high_cadence_cost_musd: 12.0
+  low_cadence_launches: 5.0
+  high_cadence_launches: 100.0
+
+gospel:
+  # Favourable physical + cost dials (preserved from the cycle-1 ambitious
+  # scenario). radiator_t_per_kw_post: 0.012 (D17, v8 value).
+  mass_envelope_t: 13.0           # favourable: upper block-upgrade estimate
+  node_mass_fixed_t: 2.2          # favourable: lighter fixed node mass
+  node_volume_fixed_m3: 5.0
+  tjmax_lift_year: 5
+  radiator_t_per_kw_pre: 0.013
+  radiator_t_per_kw_post: 0.012   # D17 (v8)
+  solar_mass_t_per_kw: 0.011
+  bus_base_musd: 7.0              # favourable: lighter/cheaper bus
+  bus_flatten_after_yr: 5
+  bus_growth_pre: -0.03
+  solar_cost_musd_per_kw: 0.030   # favourable: cheaper $/kW
+  radiator_cost_musd_per_kw: 0.030
+  release_cadence_yr: 1.5
+
+slopes:
+  usd_growth_per_gen: 0.30
+  # 0.20 — per-package power growth/gen; corrected from 0.30
+  # (assembly-rate misapplied) per validation V-A, sourcing_audit_05_21.md.
+  kw_growth_per_gen: 0.20
+  kg_growth_per_gen: -0.10
+  pf_growth_per_gen: 0.625
+
+# slopes: the ambitious scenario does not bet on a faster technology
+# trajectory — it bets on a generous envelope, richer margin, lighter node.

@@ -1,0 +1,220 @@
+# Source Index - Claim-Level Hard-Number Ledger
+
+**Status:** draft public claim ledger
+**Created:** 2026-05-25
+**Updated:** 2026-05-28
+**Scope:** Rocket Lab Research data-center investigation source ledger
+
+This file is the query surface for hard-number source status. It does not
+replace the topic documents. It records which claims are externally certified,
+which claims are derived from sourced inputs, which are scenario assumptions,
+and which claims must not be presented as facts.
+
+## Source Status Taxonomy
+
+Use this exact public taxonomy in docs, code metadata, and JSON source fields.
+
+| Source status | Meaning |
+|---|---|
+| `certified` | Directly supported by a primary or official source. |
+| `sourced_estimate` | Estimated from credible external sources, but not an official exact value. |
+| `derived_estimate` | Computed from sourced or scenario inputs using a stated formula. |
+| `projection` | A forward-looking market or technical projection from an external source. |
+| `extrapolation` | A project extrapolation from known or sourced behavior. |
+| `scenario` | A chosen modeling assumption for feasibility analysis. |
+| `placeholder` | A known open slot that should not support public claims. |
+| `stale` | Known old material retained only for historical context. |
+
+Default-model hard numbers may use `certified`, `sourced_estimate`,
+`derived_estimate`, `projection`, `extrapolation`, or `scenario`. Public docs
+must not cite `placeholder` or `stale` items as current evidence.
+
+## How To Query This Wiki
+
+Use this file when asking whether a number is safe to quote. Search by claim ID
+or by topic prefix:
+
+- `RLDC` - release-critical data-center default assumptions and public claims.
+- `NTR` - Neutron payload, launch mode, cadence, and launch economics.
+- `GPU` - AI hardware rack configuration, power, mass, and cost.
+- `REV` - market size, revenue per watt, pricing, premiums, and venture cases.
+- `THR` - thermal, solar, reliability, burn-in, and model-derived spacecraft mass.
+
+The topic documents remain the source of narrative reasoning. This ledger is the
+fast pass/fail layer for source quality.
+
+## Current Verdict
+
+The research corpus is usable as research support when the docs preserve the
+boundary between facts, estimates, derived model outputs, projections,
+extrapolations, and scenarios. The highest-risk claims are Neutron SSO payload,
+Neutron internal launch cost, future GPU rack mass/power/cost, orbital premium
+revenue, five-year GPU service life, radiator/solar mass and cost, and ground
+reference scope. Those are not deletion issues; they are wording and
+source-status issues.
+
+The ground reference is a derived five-year comparison assembled from
+source-backed cost bands and explicit scenario choices. The promoted ground JSON
+now carries the same per-input source statuses used below.
+
+Reviewed conclusions and promoted model JSON do not belong in `research/`.
+Research is the primary-source and reasoning layer. Static conclusions and
+default model outputs belong under `data_center/`.
+
+## RLDC - Release-Critical Data-Center Claims
+
+| Claim ID | Claim text | Source status | Role | Links or internal references | Uncertainty notes |
+|---|---|---|---|---|---|
+| `RLDC-LAUNCH-COST-2036` | The default high-cadence Neutron launch-cost assumption is around `$13M` to `$13.5M` per launch. | `scenario` | Model input; public doc claim | `code/scenarios/default.yaml` `launch_cost.high_cadence_cost_musd`; supporting claim `NTR-009`; [rocket_lab/neutron/launch_cost_economics.md](rocket_lab/neutron/launch_cost_economics.md) | Cadence-indexed scenario conclusion, not an official Rocket Lab cost or customer price. |
+| `RLDC-PAYLOAD-SSO-UPGRADE` | The default payload envelope is `12.5t` to sun-synchronous orbit in a block-upgrade scenario. | `scenario` | Model input; public doc claim | `code/scenarios/default.yaml` `gospel.mass_envelope_t`; supporting claim `NTR-007`; [rocket_lab/neutron/payload_and_block_upgrade.md](rocket_lab/neutron/payload_and_block_upgrade.md) | No current public Rocket Lab source guarantees this SSO payload. |
+| `RLDC-CADENCE-90` | The default 2036 target case uses `90` launches per year. | `scenario` | Model input; public doc claim | `code/scenarios/default.yaml` `cadence.launches_at_year_10`; model path `business.years."2036".launches`; supporting claim `NTR-010` | Venture-model target, not Rocket Lab guidance. |
+| `RLDC-NODE-POWER-400KW` | The current simplification is one `~400 kW` node per launch; the promoted 2036 model output is about `422 kW` per node. | `derived_estimate` | Model output; public doc claim | Model path `physical.years."2036".kw_per_node`; [ai_hardware/gpu_generational_roadmap.md](ai_hardware/gpu_generational_roadmap.md); [node_design/node_mass_model.md](node_design/node_mass_model.md) | Derived from scenario and hardware trajectory assumptions. Node is not the bus. |
+| `RLDC-SERVICE-LIFE-5Y` | The default model uses a five-year service life. | `scenario` | Model input; public doc claim | `code/scenarios/default.yaml` `fleet.service_life_years`; supporting claim `THR-008`; [node_design/reliability_failure_handling.md](node_design/reliability_failure_handling.md) | Design target, not a field-proven GPU life. |
+| `RLDC-REVENUE-MULTIPLE-1_5X` | The central revenue band is anchored at `1.5x` annualized cost and tapers to `1.40x` by 2036. | `scenario` | Model input; public doc claim | `code/scenarios/default.yaml` `r_band.central`; model path `business.years."2036".margin_central_pct`; supporting claims `REV-007` and `REV-008` | Low and high R bands are sensitivities; no observed orbital-compute premium exists yet. |
+| `RLDC-MARKET-100GW-2036` | The rough mid-2030s AI data-center capacity reference is order-of-`100 GW`, used only as scale context for the `~40 MW/year` deployment sanity check. | `projection` | Public doc claim | [economics/ai_datacenter_tam.md](economics/ai_datacenter_tam.md) section 3; [McKinsey AI power](https://www.mckinsey.com/industries/technology-media-and-telecommunications/our-insights/ai-power-expanding-data-center-capacity-to-meet-growing-demand); [McKinsey cost of compute](https://www.mckinsey.com/industries/technology-media-and-telecommunications/our-insights/the-cost-of-compute-a-7-trillion-dollar-race-to-scale-data-centers) | McKinsey projects `156 GW` of AI-related capacity demand by 2030. The project uses `~100 GW` as conservative order-of-magnitude context, not a precise 2036 forecast or market-share thesis. |
+| `RLDC-GROUND-COST-BASIS` | The ground comparison asks whether a five-year equivalent ground data-center cohort is in the same order of magnitude as the orbital cohort. | `derived_estimate` | Ground reference framing; public doc claim with caveats | [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md); `data_center/models/ground/default.json` paths `.anchor`, `.ground.component_costs[]`, and `.comparison`; supporting ground claims below | The research basis is documented and the promoted ground JSON now points to per-input source statuses. Do not describe the ratio as parity or market validation. |
+| `RLDC-GROUND-GPU-PACKAGE-COST-BOUNDARY` | The ground reference uses the same 2036 GPU package cohort and package-cost basis as the space model, with `gpu_package_cost_multiplier = 1.0`. | `scenario` | Ground model input; comparison boundary | [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md); `code/scenarios/ground_default.yaml`; `data_center/models/ground/default.json` path `.inputs.assumption_index["inputs.config.gpu_package_cost_multiplier"]` | This is a like-for-like comparison rule, not a claim about 2036 terrestrial GPU market pricing. |
+| `RLDC-GROUND-FACILITY-FITOUT-18M-MW` | The ground reference uses `$18M/MW` for facility shell / fit-out allocation. | `sourced_estimate` | Ground model input | [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md); [JLL 2026 Global Data Center Market Outlook](https://www.jll.com/en-us/insights/market-outlook/global-data-centers); [Turner & Townsend 2025 cost trends](https://reports.turnerandtownsend.com/data-centre-construction-cost-index-2025/data-centre-cost-trends); `.inputs.assumption_index["inputs.config.facility_shell_fitout_musd_per_mw"]`; `.ground.component_costs[] | select(.name=="facility_shell_fitout")` | Sits within a sourced shell/core plus AI fit-out range. Scope must remain clear so cooling and rack/network lines are not double counted. |
+| `RLDC-GROUND-RACKED-POWER-NETWORK-80K-PACKAGE` | The ground reference uses `$0.08M` per GPU package for racked power and networking. | `scenario` | Ground model input with sourced support | [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md); [Epoch AI 1 GW TCO model](https://epoch.ai/data-insights/ai-datacenter-cost-breakdown); `.inputs.assumption_index["inputs.config.racked_power_network_musd_per_gpu_package"]`; `.ground.component_costs[] | select(.name=="racked_power_networking")` | Blends rack-side power distribution and networking. This is a source-supported scenario, not an independently certified rack/network quote. Split this line in a future model pass if public docs need cleaner scope. |
+| `RLDC-GROUND-ENERGY-PRICE-85-MWH` | The ground reference uses `$85/MWh` for electricity. | `sourced_estimate` | Ground model input | [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md); [EIA Electric Power Monthly Table 5.3](https://www.eia.gov/electricity/monthly/epm_table_grapher.php?t=epmt_5_03); [Epoch AI 1 GW TCO model](https://epoch.ai/data-insights/ai-datacenter-cost-breakdown); `.inputs.assumption_index["inputs.config.energy_price_usd_per_mwh"]`; `.ground.component_costs[] | select(.name=="energy")` | Current-real-dollar industrial/data-center electricity estimate, not a certified 2036 tariff or site-specific PPA. |
+| `RLDC-GROUND-PUE-1_25` | The ground reference uses `PUE = 1.25`. | `scenario` | Ground model input with sourced support | [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md); [Google data-center efficiency](https://datacenters.google/intl/en/efficiency/); [LBNL 2024 United States Data Center Energy Usage Report](https://eta-publications.lbl.gov/sites/default/files/2024-12/lbnl-2024-united-states-data-center-energy-usage-report.pdf?stream=top); [Epoch AI 1 GW TCO model](https://epoch.ai/data-insights/ai-datacenter-cost-breakdown); `.inputs.assumption_index["inputs.config.pue"]`; `.ground.component_costs[] | select(.name=="energy")` | Conservative relative to best-in-class and hyperscale AI evidence; not a certified site PUE. |
+| `RLDC-GROUND-UTILIZATION-0_85` | The ground reference uses `85%` utilization for the electricity line. | `scenario` | Ground model input | [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md); [Tyler Norris load-factor/utilization note](https://www.powerpolicy.net/p/the-puzzle-of-low-data-center-utilization); [Epoch AI 1 GW TCO model](https://epoch.ai/data-insights/ai-datacenter-cost-breakdown); `.inputs.assumption_index["inputs.config.utilization"]`; `.ground.component_costs[] | select(.name=="energy")` | Public utilization data is weak. The value is a high-utilization scenario and affects only the current energy line. |
+| `RLDC-GROUND-O_AND_M-1_5M-MW-YR` | The ground reference uses `$1.5M/MW-year` for operations, maintenance, and labor. | `scenario` | Ground model input with sourced support | [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md); [Epoch AI 1 GW TCO model](https://epoch.ai/data-insights/ai-datacenter-cost-breakdown); `.inputs.assumption_index["inputs.config.operations_maintenance_musd_per_mw_year"]`; `.ground.component_costs[] | select(.name=="operations_maintenance_labor")` | Plausible only as a combined support allowance. This is a source-supported scenario, not a certified facility labor/O&M quote. |
+| `RLDC-GROUND-COOLING-4M-MW` | The ground reference uses `$4M/MW` for cooling infrastructure. | `scenario` | Ground model input with sourced support | [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md); [Turner & Townsend 2025 cost trends](https://reports.turnerandtownsend.com/data-centre-construction-cost-index-2025/data-centre-cost-trends); [Turner & Townsend methodology](https://reports.turnerandtownsend.com/data-centre-construction-cost-index-2025/methodology); `.inputs.assumption_index["inputs.config.cooling_cost_musd_per_mw"]`; `.ground.component_costs[] | select(.name=="cooling")` | Source-supported scenario; scope must avoid overlap with facility shell / fit-out and racked power/networking. |
+| `RLDC-GROUND-COMPARISON-PERIOD-5Y` | The ground reference compares costs over `5` years. | `scenario` | Ground model input; comparison boundary | [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md); supporting claim `RLDC-SERVICE-LIFE-5Y`; `.inputs.assumption_index["inputs.config.comparison_period_years"]` | Service-life-aligned comparison period, not a ground data-center depreciation schedule. |
+| `RLDC-GROUND-FIVE-YEAR-TOTAL-2036` | The current ground reference computes about `$3.6769B` over five years for the 2036 deployed-year cohort. | `derived_estimate` | Ground model output; public doc claim with caveats | [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md); `data_center/models/ground/default.json` path `.ground.total_five_year_cost.value` | Derived from the current source-backed/scenario ground inputs. Not a certified 2036 market price. |
+| `RLDC-GROUND-ORBIT-RATIO-2036` | The current orbital build-plus-launch reference is about `1.9168x` the ground five-year reference for the 2036 deployed-year cohort. | `derived_estimate` | Ground comparison output; public doc claim with caveats | [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md); `data_center/models/ground/default.json` path `.comparison.orbit_to_ground_ratio.value` | Cost ratio under current default assumptions. It supports same-order-of-magnitude framing, not parity or proof that orbital is cheaper. |
+| `RLDC-SOLAR-RADIATOR-COST` | The current model uses solar and radiator cost dials of `$0.04M/kW` each. | `scenario` | Model input; open research question | `code/scenarios/default.yaml` `gospel.solar_cost_musd_per_kw` and `gospel.radiator_cost_musd_per_kw`; supporting claims `THR-006`, `THR-007`, `THR-013`, `THR-014`, `THR-016`, and `THR-020`; [node_design/solar_radiator_trajectory.md](node_design/solar_radiator_trajectory.md); [node_design/space_solar_costdown_2030_2036.md](node_design/space_solar_costdown_2030_2036.md); [node_design/radiator_costdown_2030_2036.md](node_design/radiator_costdown_2030_2036.md); [node_design/gpu_hotter_operation_reliability_2030_2036.md](node_design/gpu_hotter_operation_reliability_2030_2036.md) | `$40,000/kW` remains the cautious default for both solar and radiator. `$20,000/kW` is now supported as a 2036 sensitivity, stronger for solar than radiator, but not as a certified Rocket Lab cost or default. Hotter chip-junction operation should not be used to justify changing this default without vendor reliability data. |
+| `RLDC-ORBITAL-TOKEN-PREMIUM-2036` | If ground and orbital providers target comparable margins, the current 2036 default implies an orbital token would need to cost roughly `90%` more than a comparable ground token. | `derived_estimate` | Model output interpretation; public doc claim | `data_center/models/ground/default.json` paths `comparison.orbit_to_ground_ratio`, `comparison.ground_total_five_year_cost`, and `comparison.orbital_total_five_year_cost`; [data_center/assumptions.md](../data_center/assumptions.md); supporting claim `RLDC-GROUND-ORBIT-RATIO-2036` | The underlying ratio is about `1.92x`. This is not a separate secure-compute markup. |
+| `RLDC-SOLAR-RADIATOR-COSTDOWN-SENSITIVITY` | If both solar and radiator costs move from `$40k/kW` toward `$20k/kW`, the 2036 orbital/ground cost ratio falls from about `1.92x` to about `1.50x`. | `scenario` | Sensitivity interpretation; public doc claim | [node_design/space_solar_costdown_2030_2036.md](node_design/space_solar_costdown_2030_2036.md); [node_design/radiator_costdown_2030_2036.md](node_design/radiator_costdown_2030_2036.md); supporting claims `THR-013` and `THR-016`; [data_center/assumptions.md](../data_center/assumptions.md) | This is a sensitivity, not the promoted default. Solar cost-down is better supported than radiator cost-down. |
+| `RLDC-THERMAL-PACKAGE-DENSITY-SENSITIVITY` | If thermal-path improvements free enough mass for three to four more packages per node, the 2036 deployed-year cohort rises from `3,330` packages to roughly `3,600-3,690` packages. | `scenario` | Sensitivity interpretation; open model-hardening item | [node_design/gpu_temperature_cooling_limits.md](node_design/gpu_temperature_cooling_limits.md); [node_design/gpu_hotter_operation_reliability_2030_2036.md](node_design/gpu_hotter_operation_reliability_2030_2036.md); supporting claims `THR-014`, `THR-015`, and `THR-020`; model paths `physical.years."2036".gpus_per_node` and `anchor.gpu_packages` | Not yet implemented as a model scenario. Treat as package-density upside, not a booked cost saving or proof of parity. |
+| `RLDC-DEPLOYED-CAPACITY-2036-40MW` | The default 2036 newly deployed capacity is roughly `40 MW/year`. | `derived_estimate` | Model output; public doc claim | Formula: `business.years."2036".nodes_deployed_this_year * physical.years."2036".kw_per_node` in `data_center/models/space/default.json` | Current promoted output is `90 * 421.98 kW`, or about `38 MW/year`, rounded to `~40 MW/year`. |
+| `RLDC-SPACE-2036-GPU-PACKAGES-PER-NODE` | The promoted 2036 model has `37` GPU packages per node. | `derived_estimate` | Model output; public doc claim | Model path `physical.years."2036".gpus_per_node` | Derived from mass, power, and GPU/package trajectory assumptions. |
+| `RLDC-SPACE-2036-LIVING-FLEET` | The promoted 2036 model has `268` living nodes. | `derived_estimate` | Model output; public doc claim | Model path `business.years."2036".living_fleet` | Living fleet is cumulative active nodes, not same-year deployment. |
+| `RLDC-SPACE-2036-ON-ORBIT-POWER` | The promoted 2036 model has about `112 MW` active on-orbit node power. | `derived_estimate` | Model output; public doc claim | Model paths `business.years."2036".kw_living_fleet` and `business.years."2036".kw_on_orbit` | Active fleet capacity, not new deployed-year capacity. Public docs usually cite `kw_living_fleet`; `kw_on_orbit` is the equivalent alias in the promoted JSON. |
+| `RLDC-SPACE-2036-REVENUE-CENTRAL` | The promoted 2036 model has about `$5.94B` annual living-fleet revenue in the central R band. | `derived_estimate` | Model output; public doc claim | Model path `business.years."2036".revenue_annual_fleet_musd_central` | Dynamic model output tied to the current default scenario. |
+| `RLDC-SPACE-2036-MARGIN-CENTRAL` | The promoted 2036 model has about `29%` gross margin in the central R band. | `derived_estimate` | Model output; public doc claim | Model path `business.years."2036".margin_central_pct` | Dynamic model output tied to the current default scenario. |
+
+## NTR - Rocket Lab Neutron Claims
+
+| ID | Claim or value | Source status | Role | Source trail | Uncertainty notes |
+|---|---|---|---|---|---|
+| `NTR-001` | Neutron is a medium-lift launch vehicle with `13,000 kg` reusable payload to low Earth orbit. | `certified` | Supporting source claim | [Rocket Lab Neutron](https://www.rocketlabusa.com/launch/neutron/); [Neutron Payload User's Guide](https://www.rocketlabusa.com/assets/Uploads/Rocket-Lab-Neutron-Payload-Users-Guide.pdf) | Official LEO value, not an SSO value. |
+| `NTR-002` | Neutron RTLS LEO payload is `8,500 kg`. | `sourced_estimate` | Supporting source claim | [Neutron PUG](https://www.rocketlabusa.com/assets/Uploads/Rocket-Lab-Neutron-Payload-Users-Guide.pdf); [Rocket Lab reusable rockets](https://www.rocketlabusa.com/launch/reusable-rockets/) | The PUG lists `8.5t`; Rocket Lab's reusable-rocket page has also used `8.0t`, so cite the PUG when using `8.5t`. |
+| `NTR-003` | Neutron expendable LEO payload is `15,000 kg`. | `certified` | Supporting source claim | [Rocket Lab Neutron](https://www.rocketlabusa.com/launch/neutron/); [Neutron PUG](https://www.rocketlabusa.com/assets/Uploads/Rocket-Lab-Neutron-Payload-Users-Guide.pdf) | Official LEO value, not an SSO value. |
+| `NTR-004` | Official `500 km` polar payload values are RTLS `6.2t`, DRL `10.1t`, and expendable `11.8t`. | `certified` | Supporting source claim | [Neutron PUG](https://www.rocketlabusa.com/assets/Uploads/Rocket-Lab-Neutron-Payload-Users-Guide.pdf) | Closest official proxy for SSO, but not itself an SSO number. |
+| `NTR-005` | Reusable Neutron SSO payload is about `9,500 kg`, with a range of `8,500-10,500 kg`. | `sourced_estimate` | Supporting source claim | [Neutron PUG](https://www.rocketlabusa.com/assets/Uploads/Rocket-Lab-Neutron-Payload-Users-Guide.pdf); [rocket_lab/neutron/payload_and_block_upgrade.md](rocket_lab/neutron/payload_and_block_upgrade.md) | Working reusable-to-SSO estimate; not a Rocket Lab published number. |
+| `NTR-006` | Expendable Neutron SSO payload is about `11,000 kg`. | `sourced_estimate` | Supporting source claim | [Neutron PUG](https://www.rocketlabusa.com/assets/Uploads/Rocket-Lab-Neutron-Payload-Users-Guide.pdf); [rocket_lab/neutron/payload_and_block_upgrade.md](rocket_lab/neutron/payload_and_block_upgrade.md) | Working expendable-to-SSO estimate; not a Rocket Lab published number. |
+| `NTR-007` | Block-upgraded Neutron could reach about `12-13t` reusable to SSO. | `scenario` | Supporting source claim; model input support | [rocket_lab/neutron/payload_and_block_upgrade.md](rocket_lab/neutron/payload_and_block_upgrade.md) | Upside scenario based on historical launch-vehicle growth; no such upgrade has been announced. |
+| `NTR-008` | Neutron customer price target is about `$50-55M` per launch. | `sourced_estimate` | Supporting source claim | [CNBC interview/reporting](https://www.cnbc.com/2024/11/12/rocket-lab-rklb-q3-results-neutron-still-on-track.html); [rocket_lab/neutron/launch_cost_economics.md](rocket_lab/neutron/launch_cost_economics.md) | Company target or market-price assumption, not a published list price or signed contract price. |
+| `NTR-009` | Neutron internal cost at steady state is `$10-20M` per launch. | `sourced_estimate` | Supporting source claim; model input support | [CNBC interview/reporting](https://www.cnbc.com/2024/11/12/rocket-lab-rklb-q3-results-neutron-still-on-track.html); [rocket_lab/neutron/launch_cost_economics.md](rocket_lab/neutron/launch_cost_economics.md) | Use cadence-specific estimates; do not quote as a single certified fact. |
+| `NTR-010` | Neutron `90-100` flights per year is a plausible cadence in the model. | `scenario` | Supporting source claim; model input support | [rocket_lab/neutron/launch_cost_economics.md](rocket_lab/neutron/launch_cost_economics.md) | Venture-model scenario, not Rocket Lab guidance. |
+| `NTR-011` | Q4 2026 first flight target appears in current public materials. | `certified` | Supporting source claim | [Rocket Lab investor relations releases](https://investors.rocketlabusa.com/news/news-details/); [Spaceflight Now coverage](https://spaceflightnow.com/) | Schedule remains forward-looking. |
+
+## GPU - AI Hardware Claims
+
+| ID | Claim or value | Source status | Role | Source trail | Uncertainty notes |
+|---|---|---|---|---|---|
+| `GPU-001` | GB200 NVL72 rack contains `72` Blackwell GPUs and `36` Grace CPUs. | `certified` | Supporting source claim | [NVIDIA GB200](https://www.nvidia.com/en-us/data-center/gb200-nvl72/); [NVIDIA DGX GB200](https://www.nvidia.com/en-us/data-center/dgx-gb200/) | Product source claim. |
+| `GPU-002` | GB200 NVL72 rack power is about `120 kW`; some OEM systems specify about `132 kW`. | `certified` | Supporting source claim | [NVIDIA GB200](https://www.nvidia.com/en-us/data-center/gb200-nvl72/); [HPE GB200 system specs](https://www.hpe.com/) | Use vendor-specific power; avoid a universal value. |
+| `GPU-003` | GB300 NVL72 is a `72`-GPU rack-scale Blackwell Ultra system. | `certified` | Supporting source claim | [NVIDIA GB300 NVL72](https://www.nvidia.com/en-us/data-center/gb300-nvl72/) | Product source claim. |
+| `GPU-004` | GB300 rack power is about `132 kW` nominal and can be around `155 kW` peak in OEM materials. | `certified` | Supporting source claim | [HPE GB300 NVL72 QuickSpecs](https://www.hpe.com/) | Use vendor-specific power; avoid a universal value. |
+| `GPU-005` | GB300 rack mass is about `1.5-1.58t` in Lenovo/HPE-class OEM materials. | `sourced_estimate` | Supporting source claim | [Lenovo GB300 NVL72 docs](https://lenovopress.lenovo.com/); [HPE GB300 QuickSpecs](https://www.hpe.com/) | OEM-specific mass range, not a fixed rack mass. |
+| `GPU-006` | Standard Vera Rubin rack name should be Vera Rubin NVL72. | `certified` | Supporting source claim | [NVIDIA DGX Vera Rubin](https://www.nvidia.com/en-us/data-center/dgx-vera-rubin/) | Do not label the standard rack NVL144 unless discussing die/package interpretation explicitly. |
+| `GPU-007` | Vera Rubin rack power around `190 kW`. | `sourced_estimate` | Supporting source claim | [ai_hardware/ai_hardware.md](ai_hardware/ai_hardware.md); [ai_hardware/gpu_generational_roadmap.md](ai_hardware/gpu_generational_roadmap.md) | Working estimate only; public NVIDIA materials checked here do not publish a definitive rack power number. |
+| `GPU-008` | Rubin CPX rack power of `370 kW`. | `placeholder` | Open research question | [NVIDIA Rubin CPX newsroom/blog](https://nvidianews.nvidia.com/) checked for product framing | No public `370 kW` rack spec found in this audit; do not use as current evidence. |
+| `GPU-009` | Rubin Ultra rack power around `600 kW`. | `projection` | Supporting source claim | [NVIDIA keynote/newsroom materials](https://nvidianews.nvidia.com/); [Data Center Dynamics coverage](https://www.datacenterdynamics.com/) | Roadmap target, not a shipping product specification. |
+| `GPU-010` | Feynman rack power around `1 MW`. | `projection` | Supporting source claim | [ai_hardware/gpu_generational_roadmap.md](ai_hardware/gpu_generational_roadmap.md) | Long-run model input, not a present product spec. |
+| `GPU-011` | GB300 rack acquisition cost near `$6M`. | `sourced_estimate` | Supporting source claim | [Tom's Hardware AI rack pricing coverage](https://www.tomshardware.com/); [economics/gpu_cost_trajectory.md](economics/gpu_cost_trajectory.md) | Source-date-specific scenario; later reporting points closer to about `$4M`. |
+| `GPU-012` | Vera Rubin rack acquisition cost around `$7-8M`. | `sourced_estimate` | Supporting source claim | [Tom's Hardware AI rack pricing coverage](https://www.tomshardware.com/); [economics/gpu_cost_trajectory.md](economics/gpu_cost_trajectory.md) | Analyst/reporting range, not a vendor price list. |
+
+## REV - Revenue, Market, And Venture Claims
+
+| ID | Claim or value | Source status | Role | Source trail | Uncertainty notes |
+|---|---|---|---|---|---|
+| `REV-001` | CoreWeave FY2025 revenue was `$5.131B`. | `certified` | Supporting source claim | [CoreWeave investor relations](https://investors.coreweave.com/) | Company-reported value. |
+| `REV-002` | CoreWeave backlog/RPO was `$66.8B` and contracted power was about `3.1 GW`. | `certified` | Supporting source claim | [CoreWeave investor relations](https://investors.coreweave.com/) | Terrestrial cloud market context, not orbital-data-center proof. |
+| `REV-003` | Oracle Q3 FY26 OCI revenue was `$4.9B` and RPO was `$553B`. | `certified` | Supporting source claim | [Oracle investor relations](https://investor.oracle.com/) | Terrestrial cloud market context. |
+| `REV-004` | McKinsey projects `171-219 GW` of total data-center demand by 2030, including `156 GW` AI-related. | `projection` | Supporting source claim; public market context | [McKinsey AI power](https://www.mckinsey.com/industries/technology-media-and-telecommunications/our-insights/ai-power-expanding-data-center-capacity-to-meet-growing-demand); [McKinsey cost of compute](https://www.mckinsey.com/industries/technology-media-and-telecommunications/our-insights/the-cost-of-compute-a-7-trillion-dollar-race-to-scale-data-centers) | Analyst projection; do not state as a realized market fact. |
+| `REV-005` | Gross IaaS revenue can reach about `$15-20B` per GW-year. | `derived_estimate` | Supporting source claim | [economics/revenue_per_watt.md](economics/revenue_per_watt.md) | Derived planning band from GPU density, utilization, and market price assumptions. |
+| `REV-006` | Inference-service revenue can reach about `$25-50B` per GW-year. | `scenario` | Supporting source claim | [economics/revenue_per_watt.md](economics/revenue_per_watt.md) | Conditional owner-operator inference scenario, not a general data-center revenue fact. |
+| `REV-007` | One orbital rack can produce about `$13M` per year. | `scenario` | Supporting source claim | [economics/revenue_per_watt.md](economics/revenue_per_watt.md) | High-end owner-operator scenario. Prefer `$10-13M` per rack-year, with `$11-12M` central and `$13M` optimistic. |
+| `REV-008` | Orbital compute can command a `+50-100%` premium. | `scenario` | Supporting source claim | [economics/revenue_per_watt.md](economics/revenue_per_watt.md); premium analogs from [BCG sovereign cloud work](https://www.bcg.com/) | Unproven premium hypothesis supported by analogy, not observed market pricing. |
+| `REV-009` | A `$5B` annual revenue case is feasible under the ambition model. | `scenario` | Supporting source claim | [economics/ambition_case.md](economics/ambition_case.md) | Target-driven ambition case; use as stress test of fleet size, launch cadence, capex, and payback. |
+| `REV-010` | `$50B` and `$150B` annual revenue cases are moonshot cases. | `scenario` | Supporting source claim | [economics/moonshot_50b.md](economics/moonshot_50b.md); [economics/moonshot_150b.md](economics/moonshot_150b.md) | Stress tests that expose bigger-rocket and capital constraints; not baseline forecasts. |
+| `REV-011` | GPU-hour market prices are valid pricing anchors. | `sourced_estimate` | Supporting source claim | [AWS EC2 pricing](https://aws.amazon.com/ec2/pricing/); [CoreWeave pricing](https://www.coreweave.com/pricing) | Quote with provider, date, hardware class, and billing model. |
+| `REV-012` | Epoch AI's `1 GW` data-center TCO work supports capital-cost framing. | `certified` | Supporting source claim | [Epoch AI](https://epoch.ai/) | External modeling context, not validation of the orbital model. |
+
+## THR - Thermal, Solar, Reliability, And Spacecraft Mass Claims
+
+| ID | Claim or value | Source status | Role | Source trail | Uncertainty notes |
+|---|---|---|---|---|---|
+| `THR-001` | Radiators in vacuum reject heat by radiation, and heat rejection scales with the fourth power of absolute temperature. | `certified` | Supporting source claim | [NASA thermal control references](https://www.nasa.gov/); Stefan-Boltzmann law in standard thermal texts | Governing physics layer for the radiator model. |
+| `THR-002` | The solar constant is about `1361 W/m2`. | `certified` | Supporting source claim | [NASA solar irradiance](https://science.nasa.gov/) | Use before array efficiency, attitude, degradation, and packing losses. |
+| `THR-003` | Hot-loop operation at `70-80 C` radiator surface can materially reduce radiator area and mass. | `derived_estimate` | Supporting source claim | [node_design/hot_chip_thermal_trajectory.md](node_design/hot_chip_thermal_trajectory.md) | Model-derived result from radiative physics and assumed sink/areal-density values. |
+| `THR-004` | A `130 kW` node radiator can fall from about `2.36t` at `40 C` to about `1.16t` at `80 C`. | `derived_estimate` | Supporting source claim | [node_design/hot_chip_thermal_trajectory.md](node_design/hot_chip_thermal_trajectory.md); [node_design/node_mass_model.md](node_design/node_mass_model.md) | Quote with assumptions for sink temperature, emissivity, and radiator areal density. |
+| `THR-005` | Effective sink temperature around `250 K`. | `sourced_estimate` | Supporting source claim | [node_design/hot_chip_thermal_trajectory.md](node_design/hot_chip_thermal_trajectory.md); [orbital/thermal_analysis.md](orbital/thermal_analysis.md) | Thermal-model assumption for LEO view factors; must be tested in a dedicated orbit/attitude model. |
+| `THR-006` | Solar array mass at `150 W/kg` for near-term deployable arrays. | `sourced_estimate` | Supporting source claim | [NASA power state-of-the-art](https://www.nasa.gov/); [Redwire ROSA](https://redwirespace.com/) | Planning assumption using ROSA-class public data, not a Rocket Lab silicon-array specification. |
+| `THR-007` | Rocket Lab silicon solar arrays are relevant to vertical integration. | `certified` | Supporting source claim | [Rocket Lab solar products](https://www.rocketlabusa.com/space-systems/solar/) | Public materials do not provide the full W/kg, W/m2, or dollar-per-watt set needed for this model. |
+| `THR-008` | Five-year GPU service life is the project base case. | `scenario` | Supporting source claim; model input support | [node_design/reliability_failure_handling.md](node_design/reliability_failure_handling.md) | Design target or base-case assumption; public heavy-use data more strongly supports shorter replacement windows unless derating, redundancy, and qualification prove otherwise. |
+| `THR-009` | `7-9%` annual GPU failure rate. | `sourced_estimate` | Supporting source claim | [Meta Llama 3 paper](https://ai.meta.com/research/publications/the-llama-3-herd-of-models/); [Data Center Dynamics coverage](https://www.datacenterdynamics.com/) | Planning estimate inferred from interruption data and datacenter evidence, not a vendor-certified permanent AFR. |
+| `THR-010` | Burn-in of `1-2` days catches about `90%` of defects. | `stale` | Historical source claim | NASA/Aerospace burn-in guidance summarized in [node_design/reliability_failure_handling.md](node_design/reliability_failure_handling.md) | Do not use. Space-acceptance framing should be `1-3` weeks or at least `100-200` hours of tailored stress screening, depending on mission risk. |
+| `THR-011` | Baseline flyable node power around `200-250 kW` on reusable Neutron. | `derived_estimate` | Supporting source claim | [node_design/node_mass_model.md](node_design/node_mass_model.md); [orbital/thermal_analysis.md](orbital/thermal_analysis.md) | Model-derived from Neutron SSO estimate, rack mass, thermal assumptions, and solar/radiator mass. |
+| `THR-012` | A `600 kW` single intact rack remains hard or unflyable on baseline reusable Neutron. | `derived_estimate` | Supporting source claim | [node_design/node_mass_model.md](node_design/node_mass_model.md); [node_design/hot_chip_thermal_trajectory.md](node_design/hot_chip_thermal_trajectory.md) | Revisit when Neutron SSO, rack mass, and radiator areal density are confirmed. |
+| `THR-013` | A 2036 solar cost-down sensitivity of `$20k/kW` is plausible for high-volume Rocket Lab silicon orbital infrastructure, but not certified. | `scenario` | Model sensitivity support | [node_design/space_solar_costdown_2030_2036.md](node_design/space_solar_costdown_2030_2036.md); [Rocket Lab silicon-array announcement](https://rocketlabcorp.com/updates/rocket-lab-introduces-advanced-silicon-solar-arrays-to-power-space-based-data-centers/); [Rocket Lab Solar Solutions](https://rocketlabcorp.com/space-systems/solar/) | Do not quote as Rocket Lab cost. Keep `$40k/kW` default until integrated cost/performance is sourced. |
+| `THR-014` | A hot-loop radiator mass sensitivity of roughly `0.006-0.008 t/kW` is useful for 2036 if higher radiator surface temperature, lower areal density, and chip-to-panel thermal resistance all work. | `scenario` | Model sensitivity support | [node_design/radiator_costdown_2030_2036.md](node_design/radiator_costdown_2030_2036.md); [node_design/gpu_temperature_cooling_limits.md](node_design/gpu_temperature_cooling_limits.md); [node_design/gpu_hotter_operation_reliability_2030_2036.md](node_design/gpu_hotter_operation_reliability_2030_2036.md); [NASA thermal control](https://www.nasa.gov/smallsat-institute/sst-soa/thermal-control/) | Mass-down is not the same as cost-down. Requires chip-to-coolant-to-panel modeling before changing defaults. |
+| `THR-015` | Public evidence supports warmer coolant-loop trajectories more strongly than it supports a certified increase in future GPU junction limits. | `sourced_estimate` | Public wording guard; thermal-model support | [node_design/gpu_temperature_cooling_limits.md](node_design/gpu_temperature_cooling_limits.md); [node_design/gpu_hotter_operation_reliability_2030_2036.md](node_design/gpu_hotter_operation_reliability_2030_2036.md); ASHRAE liquid-cooling guidance cited there; NVIDIA/OEM public materials cited there | Facility water, coolant return, radiator surface, and chip junction temperature must not be conflated. |
+| `THR-016` | A 2036 radiator cost-down sensitivity of `$20k/kW` is plausible but weakly sourced; `$40k/kW` remains the cautious default. | `scenario` | Model sensitivity support | [node_design/radiator_costdown_2030_2036.md](node_design/radiator_costdown_2030_2036.md); [Redwire ODC thermal white paper](https://rdw.com/wp-content/uploads/2026/05/RDW26-053-ODC-Power-Thermal-Study-White-Paper-R11-Digital.pdf); [ThermAvant OHP radiators](https://www.thermavant.com/thermavant-products/oscillating-heat-pipe-radiators) | Public `$ / kW` radiator cost data is weak; use as upside sensitivity only pending vendor quote or bottom-up BOM. |
+| `THR-017` | H100 PCIe public thermal qualification includes `GPU TAVG = 87 deg C` and `HBM THBM = 95 deg C`, with slowdown/shutdown expressed as margins to `TLIMIT`. | `certified` | Supporting source claim | [NVIDIA H100 PCIe product brief](https://www.nvidia.com/content/dam/en-zz/Solutions/gtcs22/data-center/h100/PB-11133-001_v01.pdf); [node_design/gpu_hotter_operation_reliability_2030_2036.md](node_design/gpu_hotter_operation_reliability_2030_2036.md) | Applies to H100 PCIe, not all future GPU packages or orbital five-year service. |
+| `THR-018` | Public evidence supports warmer liquid-cooling classes up to `45 deg C` facility water and above-45 classes, but facility water, cold-plate inlet, coolant return, and radiator surface are distinct. | `certified` | Thermal-model support | [ASHRAE liquid-cooling reference card](https://www.ashrae.org/file%20library/technical%20resources/bookstore/supplemental%20files/therm-gdlns-5th-r-e-refcard.pdf); [Dallas ASHRAE 2025 presentation](https://dallas-ashrae.org/images/meeting/041625/the_ashrae_thermal_guidelines_for_data_centers_____past__present_and_future.pdf); [node_design/gpu_hotter_operation_reliability_2030_2036.md](node_design/gpu_hotter_operation_reliability_2030_2036.md) | Do not infer radiator surface temperature directly from facility-water class. |
+| `THR-019` | HBM thermal-resistance improvements are a credible 2030-2036 direction; SK hynix announced an iHBM approach claiming `30%` lower thermal resistance for next-generation HBM products. | `sourced_estimate` | Thermal-trajectory support | [SK hynix newsroom](https://news.skhynix.com/ihbm-solution/); [Samsung HBM3E](https://semiconductor.samsung.com/dram/hbm/hbm3e/); [Micron HBM3E product brief](https://www.micron.com/content/dam/micron/global/public/documents/products/product-flyer/hbm3e-product-brief.pdf); [node_design/gpu_hotter_operation_reliability_2030_2036.md](node_design/gpu_hotter_operation_reliability_2030_2036.md) | Supports lower thermal resistance, not a certified hotter GPU junction default. |
+| `THR-020` | A sustained `+10 deg C` or `+20 deg C` GPU junction increase materially accelerates temperature-sensitive reliability mechanisms and should not be a default assumption without vendor data. | `sourced_estimate` | Public wording guard and sensitivity support | [Electronics Cooling 10 deg C rule](https://www.electronics-cooling.com/2017/08/10c-increase-temperature-really-reduce-life-electronics-half/); [Cadence Black's equation explainer](https://resources.system-analysis.cadence.com/blog/msa2020-blacks-equation-for-mttf-due-to-electromigration); [node_design/gpu_hotter_operation_reliability_2030_2036.md](node_design/gpu_hotter_operation_reliability_2030_2036.md) | The rule is heuristic and mechanism-specific; total GPU annual failure rate needs a separate model. |
+
+## Claims To Repair Before Quoting Externally
+
+The following wordings are specifically unsafe if quoted without context:
+
+- "validated against two independent sources" for Rocket Lab LEO payload numbers
+  when one source is Rocket Lab and the second merely repeats Rocket Lab.
+- "Neutron SSO payload is 9.5 t" without `sourced_estimate` or "working
+  figure."
+- "`$10-20M` internal launch cost" as a single fact instead of a
+  cadence-specific estimate range.
+- "GB300 rack mass is `1,360 kg`" as a fixed value.
+- "Vera Rubin NVL144" as the standard rack name.
+- "Rubin CPX is `370 kW`" without a public source.
+- "`$6M` GB300 rack cost is verified" without source-date qualification.
+- "`$15-20B/GW-year`" or "`$25-50B/GW-year`" without distinguishing gross IaaS
+  planning math from inference-service scenarios.
+- "5-year GPU service life" as a confirmed field life rather than a design
+  target.
+- "The default proves orbital tokens are at parity with ground tokens." The
+  current default implies about a `90%` token premium. The ground research basis
+  is documented in this ledger and the promoted ground JSON now carries
+  per-input source fields.
+- "The 50 percent premium is the default." It is a solar-plus-radiator
+  cost-down sensitivity, not the promoted default.
+- "Future GPUs can safely run `20 deg C` hotter for five years" without
+  vendor reliability data and explicit derating/redundancy assumptions.
+- "`80 deg C` radiator service means GPU/HBM junctions can run `80 deg C` or
+  hotter without a reliability penalty."
+- "`1-2` day burn-in catches `90%` of defects."
+- "`~40 MW/year` versus `~100 GW`" framed as a market-share thesis rather than
+  a scale sanity check.
+
+## Maintenance Rules
+
+When a research doc introduces a new hard number:
+
+1. Add a stable claim ID here.
+2. Mark it with one of the exact source statuses:
+   `certified`, `sourced_estimate`, `derived_estimate`, `projection`,
+   `extrapolation`, `scenario`, `placeholder`, or `stale`.
+3. Cite sources inline in the topic doc and in this ledger.
+4. State whether the claim is a model input, model output, public doc claim, or
+   open research question.
+5. Add uncertainty notes.
+6. If the value is model-generated, link the model path or generated output, but
+   keep the status as `derived_estimate` unless an external source verifies the
+   final claim.
+7. Update [LIBRARY.md](LIBRARY.md) and [RESEARCH_TRACKER.md](RESEARCH_TRACKER.md).
