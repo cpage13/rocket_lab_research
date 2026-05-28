@@ -5,12 +5,9 @@
 **Scope:** source-backed ground infrastructure and electricity basis for the
 2036 deployed-year cohort in the Rocket Lab Research data-center investigation.
 **Research-wiki process note:** this document is the canonical research output
-for this focused pass. The May 26 `.agent` validation notes were used as
-historical context, but the research result belongs here under `research/`.
-Process note: the original focused ground-research pass did not edit the shared
-indexes. This document is now cataloged in `LIBRARY.md` and
-`RESEARCH_TRACKER.md`; `SOURCE_INDEX.md` now carries per-input ground
-source-status entries, and the promoted ground JSON now points to those entries.
+for this focused pass. It is cataloged in `LIBRARY.md` and `RESEARCH_TRACKER.md`;
+`SOURCE_INDEX.md` carries per-input ground source-status entries, and the
+promoted ground JSON points to those entries.
 
 ## Central Finding
 
@@ -26,11 +23,10 @@ turn point back to `data_center/models/space/default.json` paths
 `.physical.years."2036".kw_per_node`, and
 `.inputs.config.fleet.service_life_years`.
 
-The promoted ground JSON computes a five-year ground total of
-`$3.676910824584B` and an orbital build-plus-launch reference of
-`$7.047859639805533B`, so the current orbital/ground ratio is
-`1.9167882975793729x`; all three values are derived directly from
-`data_center/models/ground/default.json` paths
+The promoted ground JSON computes a five-year ground total of about `$3.68B`
+and an orbital build-plus-launch reference of about `$7.05B`, so the current
+orbital/ground ratio is about `1.92x`. All three values are derived directly
+from `data_center/models/ground/default.json` paths
 `.ground.total_five_year_cost.value`,
 `.orbital_reference.five_year_cost_view.value`, and
 `.comparison.orbit_to_ground_ratio.value`.
@@ -41,13 +37,13 @@ The delicate public interpretation is:
   scenario.
 - It does not support "orbital is cheaper than ground."
 - If both sides target comparable margins and throughput, the current default
-  implies an orbital token-price requirement about `91.7%` above the ground
-  reference, derived as `1.9167882975793729 - 1`.
-- The five-year electricity bill is only `$150.229036584M`, or `4.1%` of the
+  implies an orbital token-price requirement about `92%` above the ground
+  reference (the `1.92x` ratio minus one).
+- The five-year electricity bill is only about `$150M`, or `4.1%` of the
   full ground reference. Electricity is not the main offset.
-- The sensitive orbital cost lines are solar and radiator: `$1.51911936B` each,
-  `$3.03823872B` combined, from
-  `.orbital_reference.component_costs[]` in the ground JSON.
+- The sensitive orbital cost lines are solar and radiator: about `$1.52B` each,
+  `$3.04B` combined, from `.orbital_reference.component_costs[]` in the ground
+  JSON.
 
 The current repaired baseline is source status plus arithmetic. All nine ground
 input cells now carry per-input source IDs in the promoted JSON instead of one
@@ -66,12 +62,12 @@ cohort source path.
 | Anchor basis | `.anchor.basis` | `deployed_this_year` | comparison design choice |
 | Nodes deployed | `.anchor.nodes` | `90` | `derived_estimate` from space model |
 | GPU packages | `.anchor.gpu_packages` | `3330` | `derived_estimate` from `90 * 37` |
-| IT load | `.anchor.kw` | `37977.984 kW` | `derived_estimate` from `90 * 421.9776 kW` |
+| IT load | `.anchor.kw` | `~37,978 kW` (≈37.98 MW) | `derived_estimate` from `90 * 421.98 kW` |
 | Comparison period | `.anchor.service_life_years` and `.inputs.assumption_index["inputs.config.comparison_period_years"].value` | `5 years` | `scenario`, aligned to service life |
-| Ground five-year total | `.ground.total_five_year_cost.value` | `3676.910824584 MUSD` | `derived_estimate` from source-linked and scenario inputs |
-| Orbital five-year reference | `.orbital_reference.five_year_cost_view.value` | `7047.859639805533 MUSD` | `derived_estimate` from space model cost lines |
-| Ground/orbit ratio | `.comparison.ground_to_orbit_ratio.value` | `0.5217060231757757` | `derived_estimate` |
-| Orbit/ground ratio | `.comparison.orbit_to_ground_ratio.value` | `1.9167882975793729` | `derived_estimate` |
+| Ground five-year total | `.ground.total_five_year_cost.value` | `~3,677 MUSD` (≈$3.68B) | `derived_estimate` from source-linked and scenario inputs |
+| Orbital five-year reference | `.orbital_reference.five_year_cost_view.value` | `~7,048 MUSD` (≈$7.05B) | `derived_estimate` from space model cost lines |
+| Ground/orbit ratio | `.comparison.ground_to_orbit_ratio.value` | `~0.52` | `derived_estimate` |
+| Orbit/ground ratio | `.comparison.orbit_to_ground_ratio.value` | `~1.92` | `derived_estimate` |
 | Conclusion label | `.comparison.conclusion_label` | `same_order_of_magnitude` | interpretation label, not a parity claim |
 | Ground components | `.ground.component_costs[]` | listed below | mixed status |
 | Orbital components | `.orbital_reference.component_costs[]` | listed below | `derived_estimate` |
@@ -80,166 +76,59 @@ Ground component values from `.ground.component_costs[]`:
 
 | Component | Path selector | Current value | Current JSON source status |
 |---|---|---:|---|
-| GPU/package acquisition | `select(.name == "gpu_package_acquisition").cost.value` | `2139.9312600000003 MUSD` | `derived_estimate` |
-| Facility shell / fit-out | `select(.name == "facility_shell_fitout").cost.value` | `683.6037119999999 MUSD` | `derived_estimate` |
+| GPU/package acquisition | `select(.name == "gpu_package_acquisition").cost.value` | `~2,140 MUSD` | `derived_estimate` |
+| Facility shell / fit-out | `select(.name == "facility_shell_fitout").cost.value` | `~684 MUSD` | `derived_estimate` |
 | Racked power and networking | `select(.name == "racked_power_networking").cost.value` | `266.4 MUSD` | `derived_estimate` |
-| Five-year energy | `select(.name == "energy").cost.value` | `150.22903658399997 MUSD` | `derived_estimate` |
-| Cooling infrastructure | `select(.name == "cooling").cost.value` | `151.91193599999997 MUSD` | `derived_estimate` |
-| Operations, maintenance, and labor | `select(.name == "operations_maintenance_labor").cost.value` | `284.83487999999994 MUSD` | `derived_estimate` |
+| Five-year energy | `select(.name == "energy").cost.value` | `~150 MUSD` | `derived_estimate` |
+| Cooling infrastructure | `select(.name == "cooling").cost.value` | `~152 MUSD` | `derived_estimate` |
+| Operations, maintenance, and labor | `select(.name == "operations_maintenance_labor").cost.value` | `~285 MUSD` | `derived_estimate` |
 
 Orbital reference values from `.orbital_reference.component_costs[]`:
 
 | Component | Current value | Source status |
 |---|---:|---|
-| Compute hardware | `2139.9312600000003 MUSD` | `derived_estimate` |
-| Bus/platform | `618.2884985039999 MUSD` | `derived_estimate` |
-| Solar/power | `1519.1193599999995 MUSD` | `derived_estimate` |
-| Radiator/thermal | `1519.1193599999995 MUSD` | `derived_estimate` |
-| Launch allocation | `1251.4011613015343 MUSD` | `derived_estimate` |
+| Compute hardware | `~2,140 MUSD` | `derived_estimate` |
+| Bus/platform | `~618 MUSD` | `derived_estimate` |
+| Solar/power | `~1,519 MUSD` | `derived_estimate` |
+| Radiator/thermal | `~1,519 MUSD` | `derived_estimate` |
+| Launch allocation | `~1,251 MUSD` | `derived_estimate` |
 
-## Commands Run
+## Reproducing These Numbers
 
-These commands were run from the repository root
-on 2026-05-28.
+Every value above is read from the promoted JSON, not entered by hand. The
+intent here is traceability: each command below regenerates a slice of the
+numbers from the repository root, and the raw output simply reproduces the
+rounded tables shown earlier.
+
+The comparison summary (anchor, ground and orbital totals, ratios, and the
+component breakdowns) comes from one query:
 
 ```sh
 jq '{anchor: .anchor, ground_total_musd: .ground.total_five_year_cost.value, orbital_total_musd: .orbital_reference.five_year_cost_view.value, ground_to_orbit: .comparison.ground_to_orbit_ratio.value, orbit_to_ground: .comparison.orbit_to_ground_ratio.value, ground_components: [.ground.component_costs[] | {name, value_musd: .cost.value}], orbital_components: [.orbital_reference.component_costs[] | {name, value_musd: .cost.value}]}' data_center/models/ground/default.json
 ```
 
-Result:
-
-```json
-{
-  "anchor": {
-    "space_model_path": "data_center/models/space/default.json",
-    "year": 2036,
-    "basis": "deployed_this_year",
-    "nodes": 90,
-    "gpu_packages": 3330,
-    "kw": 37977.98399999999,
-    "service_life_years": 5,
-    "note": "Annual deployment cohort, not living fleet market share.",
-    "source_paths": [
-      "business.years.\"2036\".nodes_deployed_this_year",
-      "physical.years.\"2036\".gpus_per_node",
-      "physical.years.\"2036\".kw_per_node",
-      "inputs.config.fleet.service_life_years"
-    ]
-  },
-  "ground_total_musd": 3676.910824584,
-  "orbital_total_musd": 7047.859639805533,
-  "ground_to_orbit": 0.5217060231757757,
-  "orbit_to_ground": 1.9167882975793729,
-  "ground_components": [
-    {"name": "gpu_package_acquisition", "value_musd": 2139.9312600000003},
-    {"name": "facility_shell_fitout", "value_musd": 683.6037119999999},
-    {"name": "racked_power_networking", "value_musd": 266.4},
-    {"name": "energy", "value_musd": 150.22903658399997},
-    {"name": "cooling", "value_musd": 151.91193599999997},
-    {"name": "operations_maintenance_labor", "value_musd": 284.83487999999994}
-  ],
-  "orbital_components": [
-    {"name": "compute", "value_musd": 2139.9312600000003},
-    {"name": "bus", "value_musd": 618.2884985039999},
-    {"name": "solar", "value_musd": 1519.1193599999995},
-    {"name": "radiator", "value_musd": 1519.1193599999995},
-    {"name": "launch", "value_musd": 1251.4011613015343}
-  ]
-}
-```
+The nine ground input dials, with units and source status, come from
+`.inputs.assumption_index`. They are tabulated under
+[Input Audit And Implemented Source Statuses](#input-audit-and-implemented-source-statuses):
 
 ```sh
 jq -r '.inputs.assumption_index | to_entries[] | [.key, (.value.value|tostring), (.value.unit // ""), .value.source_status] | @tsv' data_center/models/ground/default.json
 ```
 
-Result:
+The per-node 2036 orbital cost breakdown that rolls up into the orbital
+reference comes from the space model. Rounded, it is:
 
-```text
-inputs.config.gpu_package_cost_multiplier	1	ratio	scenario
-inputs.config.facility_shell_fitout_musd_per_mw	18	MUSD/MW	sourced_estimate
-inputs.config.racked_power_network_musd_per_gpu_package	0.08	MUSD/package	scenario
-inputs.config.energy_price_usd_per_mwh	85	USD/MWh	sourced_estimate
-inputs.config.pue	1.25	ratio	scenario
-inputs.config.utilization	0.85	fraction	scenario
-inputs.config.operations_maintenance_musd_per_mw_year	1.5	MUSD/MW-year	scenario
-inputs.config.cooling_cost_musd_per_mw	4	MUSD/MW	scenario
-inputs.config.comparison_period_years	5	years	scenario
-```
+| Per-node line (2036) | Value |
+|---|---:|
+| Compute | `~23.78 MUSD` |
+| Bus | `~6.87 MUSD` |
+| Solar | `~16.88 MUSD` |
+| Radiator | `~16.88 MUSD` |
+| Launch | `~13.90 MUSD` |
+| Node total | `~78.31 MUSD` |
 
 ```sh
-jq -r '.ground.component_costs[] | [.name, .label, (.cost.value|tostring), (.cost.unit // ""), .cost.source_status, .cost.formula_name] | @tsv' data_center/models/ground/default.json
-```
-
-Result:
-
-```text
-gpu_package_acquisition	GPU/package acquisition	2139.9312600000003	MUSD	derived_estimate	ground_gpu_acquisition_from_space_package_cost
-facility_shell_fitout	Facility shell / fit-out allocation	683.6037119999999	MUSD	derived_estimate	ground_facility_cost_from_mw
-racked_power_networking	Racked power and networking	266.4	MUSD	derived_estimate	ground_racked_power_network_from_package_count
-energy	Five-year energy	150.22903658399997	MUSD	derived_estimate	ground_energy_cost_from_kw_pue_utilization
-cooling	Cooling infrastructure	151.91193599999997	MUSD	derived_estimate	ground_cooling_cost_from_mw
-operations_maintenance_labor	Operations, maintenance, and labor	284.83487999999994	MUSD	derived_estimate	ground_operations_cost_from_mw_year
-```
-
-```sh
-jq '{anchor_inputs: {nodes: .business.years."2036".nodes_deployed_this_year.value, packages_per_node: .physical.years."2036".gpus_per_node.value, kw_per_node: .physical.years."2036".kw_per_node.value, service_life_years: .inputs.config.fleet.service_life_years.value}, cost_breakdown_per_node: .physical.years."2036".cost_breakdown}' data_center/models/space/default.json
-```
-
-Result:
-
-```json
-{
-  "anchor_inputs": {
-    "nodes": 90,
-    "packages_per_node": 37,
-    "kw_per_node": 421.9775999999999,
-    "service_life_years": 5
-  },
-  "cost_breakdown_per_node": {
-    "compute": {"value": 23.777014, "unit": "MUSD"},
-    "bus": {"value": 6.869872205599999, "unit": "MUSD"},
-    "solar": {"value": 16.879103999999995, "unit": "MUSD"},
-    "radiator": {"value": 16.879103999999995, "unit": "MUSD"},
-    "launch": {"value": 13.904457347794825, "unit": "MUSD"},
-    "node_total": {"value": 78.30955155339481, "unit": "MUSD"}
-  }
-}
-```
-
-```sh
-cd code && uv run python - <<'PY' 2>&1 | tee /tmp/rklb_ground_yaml_audit.txt
-from pathlib import Path
-import yaml
-
-path = Path("scenarios/ground_default.yaml")
-data = yaml.safe_load(path.read_text())
-for key in [
-    "gpu_package_cost_multiplier",
-    "facility_shell_fitout_musd_per_mw",
-    "racked_power_network_musd_per_gpu_package",
-    "energy_price_usd_per_mwh",
-    "pue",
-    "utilization",
-    "operations_maintenance_musd_per_mw_year",
-    "cooling_cost_musd_per_mw",
-    "comparison_period_years",
-]:
-    print(f"{key}\t{data[key]}")
-PY
-```
-
-Result, omitting `uv` package-build chatter:
-
-```text
-gpu_package_cost_multiplier	1.0
-facility_shell_fitout_musd_per_mw	18.0
-racked_power_network_musd_per_gpu_package	0.08
-energy_price_usd_per_mwh	85.0
-pue	1.25
-utilization	0.85
-operations_maintenance_musd_per_mw_year	1.5
-cooling_cost_musd_per_mw	4.0
-comparison_period_years	5
+jq '{nodes: .business.years."2036".nodes_deployed_this_year.value, packages_per_node: .physical.years."2036".gpus_per_node.value, kw_per_node: .physical.years."2036".kw_per_node.value, cost_breakdown_per_node: .physical.years."2036".cost_breakdown}' data_center/models/space/default.json
 ```
 
 ## Current Ground Math
@@ -263,18 +152,18 @@ Using the promoted model:
 
 | Calculation | Result | Source |
 |---|---:|---|
-| `90 * 37` packages | `3330` | ground JSON `.anchor` and space JSON 2036 paths |
-| `90 * 421.9776 kW` | `37.977984 MW` | ground JSON `.anchor.kw` |
-| `23.777014 MUSD / 37` | `0.642622 MUSD/package` | space JSON 2036 compute and package paths |
-| `3330 * 0.642622 MUSD` | `2139.93126 MUSD` | ground JSON `.ground.component_costs[]` |
-| `37.977984 MW * 18 MUSD/MW` | `683.603712 MUSD` | ground JSON and ground YAML |
-| `3330 * 0.08 MUSD/package` | `266.4 MUSD` | ground JSON and ground YAML |
-| `37977.984 kW * 1.25 * 0.85 * 8760 * 5 / 1000 * 85 / 1000000` | `150.229036584 MUSD` | ground JSON and ground YAML |
-| `37.977984 MW * 4 MUSD/MW` | `151.911936 MUSD` | ground JSON and ground YAML |
-| `37.977984 MW * 1.5 MUSD/MW-year * 5` | `284.83488 MUSD` | ground JSON and ground YAML |
-| Sum of ground components | `3676.910824584 MUSD` | ground JSON `.ground.total_five_year_cost.value` |
-| Sum of orbital build/launch components | `7047.859639805533 MUSD` | ground JSON `.orbital_reference.five_year_cost_view.value` |
-| `7047.859639805533 / 3676.910824584` | `1.9167882975793729x` | ground JSON `.comparison.orbit_to_ground_ratio.value` |
+| `90 * 37` packages | `3,330` | ground JSON `.anchor` and space JSON 2036 paths |
+| `90 * 421.98 kW` | `~37.98 MW` | ground JSON `.anchor.kw` |
+| `23.78 MUSD / 37` | `~0.643 MUSD/package` | space JSON 2036 compute and package paths |
+| `3,330 * 0.643 MUSD` | `~2,140 MUSD` | ground JSON `.ground.component_costs[]` |
+| `37.98 MW * 18 MUSD/MW` | `~684 MUSD` | ground JSON and ground YAML |
+| `3,330 * 0.08 MUSD/package` | `266.4 MUSD` | ground JSON and ground YAML |
+| `37,978 kW * 1.25 * 0.85 * 8760 * 5 / 1000 * 85 / 1e6` | `~150 MUSD` | ground JSON and ground YAML |
+| `37.98 MW * 4 MUSD/MW` | `~152 MUSD` | ground JSON and ground YAML |
+| `37.98 MW * 1.5 MUSD/MW-year * 5` | `~285 MUSD` | ground JSON and ground YAML |
+| Sum of ground components | `~3,677 MUSD` | ground JSON `.ground.total_five_year_cost.value` |
+| Sum of orbital build/launch components | `~7,048 MUSD` | ground JSON `.orbital_reference.five_year_cost_view.value` |
+| `~7,048 / ~3,677` | `~1.92x` | ground JSON `.comparison.orbit_to_ground_ratio.value` |
 
 This is the reason the current ground total is close to the May 26 sidecar
 research central estimate. The arithmetic and the source-backed central read
@@ -447,14 +336,14 @@ The current electricity calculation is:
 / 1,000 kWh/MWh
 * $85/MWh
 / 1,000,000 USD/MUSD
-= $150.229M
+= ~$150M
 ```
 
-That `$150.229M` is only `4.1%` of the `$3.676911B` ground total. Removing the
-electricity line still leaves `$3.526682B` of ground cost. The ground side is
-not free: non-GPU ground infrastructure and support are `$1.536980B`, or
+That `~$150M` is only `4.1%` of the `~$3.68B` ground total. Removing the
+electricity line still leaves about `$3.53B` of ground cost. The ground side is
+not free: non-GPU ground infrastructure and support are about `$1.54B`, or
 `41.8%` of the full ground reference. But the utility bill alone is small
-because GPU/package acquisition is `$2.139931B` and facility/infrastructure
+because GPU/package acquisition is about `$2.14B` and facility/infrastructure
 capex is large.
 
 This agrees with Epoch AI's external model. Epoch says energy is the largest
@@ -471,19 +360,19 @@ In the current 2036 cohort:
 
 | Orbital line | Current value | Source |
 |---|---:|---|
-| Solar/power | `$1.51911936B` | ground JSON `.orbital_reference.component_costs[]` |
-| Radiator/thermal | `$1.51911936B` | ground JSON `.orbital_reference.component_costs[]` |
-| Solar plus radiator | `$3.03823872B` | sum of the two lines |
-| Launch | `$1.251401161B` | ground JSON `.orbital_reference.component_costs[]` |
-| Solar plus radiator as share of orbital total | `43.1%` | `$3.03823872B / $7.04785964B` |
-| Solar plus radiator as share of solar/radiator/launch burden | `70.8%` | `$3.03823872B / ($3.03823872B + $1.251401161B)` |
+| Solar/power | `~$1.52B` | ground JSON `.orbital_reference.component_costs[]` |
+| Radiator/thermal | `~$1.52B` | ground JSON `.orbital_reference.component_costs[]` |
+| Solar plus radiator | `~$3.04B` | sum of the two lines |
+| Launch | `~$1.25B` | ground JSON `.orbital_reference.component_costs[]` |
+| Solar plus radiator as share of orbital total | `43.1%` | `~$3.04B / ~$7.05B` |
+| Solar plus radiator as share of solar/radiator/launch burden | `70.8%` | `~$3.04B / (~$3.04B + ~$1.25B)` |
 
-Ground electricity is therefore not what makes the `1.9168x` ratio delicate.
+Ground electricity is therefore not what makes the `~1.92x` ratio delicate.
 The delicate part is whether the orbital model can defend the solar and
 radiator cost dials. If solar and radiator were both halved from the current
 `$40k/kW` dials to `$20k/kW`, the orbital total would fall by about
-`$1.519B`, from `$7.048B` to about `$5.529B`, and the ratio would fall from
-`1.9168x` to about `1.50x` against the current ground reference. That is a
+`$1.52B`, from about `$7.05B` to about `$5.53B`, and the ratio would fall from
+`~1.92x` to about `1.50x` against the current ground reference. That is a
 sensitivity, not the default.
 
 ## Likely Omissions And Double-Count Risks
@@ -548,8 +437,8 @@ What cannot be claimed publicly yet:
 | Operations/maintenance/labor, `$1.5M/MW-year` | `scenario` | "Combined facility operations plus hardware maintenance/support allowance; not pure labor/O&M." |
 | Cooling, `$4M/MW` | `scenario` | "Liquid-cooling infrastructure allowance; scope must avoid overlap with facility fit-out." |
 | Comparison period, `5 years` | `scenario` | "Service-life-aligned comparison period, not a depreciation schedule." |
-| Ground five-year total, `$3.6769B` | `derived_estimate` | "Derived from the current source-backed/scenario ground inputs." |
-| Orbit/ground ratio, `1.9168x` | `derived_estimate` | "Cost ratio under current default assumptions; not market validation." |
+| Ground five-year total, `~$3.68B` | `derived_estimate` | "Derived from the current source-backed/scenario ground inputs." |
+| Orbit/ground ratio, `~1.92x` | `derived_estimate` | "Cost ratio under current default assumptions; not market validation." |
 
 ## Sources
 
@@ -560,8 +449,6 @@ Local project sources:
 - `code/scenarios/ground_default.yaml`
 - `code/src/data_center/ground.py`
 - `research/SOURCE_INDEX.md`
-- `.agent/lifecycle/validation_05_26.md`, targeted ground sections only
-- `.agent/other/ground_cost_validation_05_26.md`, historical context only
 
 External sources verified on 2026-05-28:
 
