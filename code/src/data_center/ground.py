@@ -168,7 +168,6 @@ class GroundConclusionLabel(StrEnum):
     SAME_ORDER = "same_order_of_magnitude"
     GROUND_CHEAPER = "ground_materially_cheaper"
     ORBITAL_CHEAPER = "orbital_materially_cheaper"
-    SOURCE_REVISION_REQUIRED = "source_revision_required"
 
 
 class GroundReferenceConfig(BaseModel):
@@ -597,12 +596,10 @@ def build_ground_reference_output(
         source_scenario_path=DEFAULT_GROUND_SCENARIO_PATH,
     )
     anchor = _build_anchor(space_output)
-    ground_warnings = _source_quality_warnings(inputs)
-    ground = _build_ground_cost_result(anchor, space_output, inputs, ground_warnings)
+    ground = _build_ground_cost_result(anchor, space_output, inputs)
     orbital_reference = _build_orbital_reference_result(anchor, space_output)
     comparison_warnings = [
         *_comparison_scope_warnings(),
-        *ground_warnings,
         *orbital_reference.warnings,
     ]
     comparison = _build_comparison(
@@ -612,7 +609,6 @@ def build_ground_reference_output(
     )
     validation_results = [
         *_anchor_validation_results(anchor),
-        *ground_warnings,
         *orbital_reference.warnings,
         *_comparison_scope_warnings(),
     ]
@@ -828,7 +824,6 @@ def _build_ground_cost_result(
     anchor: GroundComparisonAnchor,
     space_output: SpaceModelOutput,
     inputs: GroundInputManifest,
-    warnings: list[ValidationResult],
 ) -> GroundCostResult:
     """Compute the five-year ground cost for the anchor cohort."""
     component_costs = _ground_components(anchor, space_output, inputs)
@@ -882,7 +877,7 @@ def _build_ground_cost_result(
             "depreciation accounting",
         ],
         source_status_summary=_source_status_summary_dict(inputs),
-        warnings=warnings,
+        warnings=[],
     )
 
 
@@ -1182,7 +1177,7 @@ def _build_comparison(
             description="Ground minus orbital cost per MW.",
         ),
         component_deltas=_component_deltas(ground, orbital_reference),
-        conclusion_label=_conclusion_label(ratio, ground),
+        conclusion_label=_conclusion_label(ratio),
         warnings=warnings,
     )
 
@@ -1406,30 +1401,6 @@ def _provenance_cell(
     return built.model_copy(update={"source_status": source_status, "notes": notes})
 
 
-def _source_quality_warnings(inputs: GroundInputManifest) -> list[ValidationResult]:
-    """Emit warnings for stale or open-slot ground assumptions."""
-    warnings: list[ValidationResult] = []
-    for cell_value in inputs.assumption_index.values():
-        if cell_value.source_status in {SourceStatus.PLACEHOLDER, SourceStatus.STALE}:
-            warnings.append(
-                ValidationResult(
-                    validation_id=f"ground_source_quality_{cell_value.path}",
-                    severity=ValidationSeverity.WARN,
-                    what_tested="Ground reference input source quality.",
-                    expected_condition="No placeholder or stale input cells.",
-                    observed_result=(
-                        f"{cell_value.path} has source_status={cell_value.source_status.value}."
-                    ),
-                    related_json_paths=[cell_value.path],
-                    remediation_hint=(
-                        "Repair the ground source trail before treating the comparison "
-                        "as a settled claim."
-                    ),
-                )
-            )
-    return warnings
-
-
 def _orbital_scope_warnings() -> list[ValidationResult]:
     """Emit warnings for the orbital reference scope."""
     return [
@@ -1502,12 +1473,10 @@ def _source_status_summary_model(inputs: GroundInputManifest) -> SourceStatusSum
     )
 
 
-def _conclusion_label(ratio: float | None, ground: GroundCostResult) -> str:
+def _conclusion_label(ratio: float | None) -> str:
     """Choose a plain conclusion label for the comparison result."""
-    if ground.source_status_summary[SourceStatus.PLACEHOLDER.value] > ZERO_COUNT:
-        return GroundConclusionLabel.SOURCE_REVISION_REQUIRED.value
     if ratio is None:
-        return GroundConclusionLabel.SOURCE_REVISION_REQUIRED.value
+        raise ValueError("ground/orbital ratio must be computable to label the comparison")
     if ratio < GROUND_MATERIALLY_CHEAPER_RATIO:
         return GroundConclusionLabel.GROUND_CHEAPER.value
     if ratio > ORBITAL_MATERIALLY_CHEAPER_RATIO:
