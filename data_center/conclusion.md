@@ -94,7 +94,7 @@ deployment moment. The active on-orbit base is the annual revenue run-rate.
 | Central revenue multiple anchored at 1.5x cost, tapering to 1.40x by 2036 | Scenario input | `RLDC-REVENUE-MULTIPLE-1_5X` |
 | No separate secure-compute premium in the default conclusion | Narrative boundary | Default conclusion uses the central cost-multiple path, not a separate premium scenario |
 
-The central **2036** output is roughly **29 percent gross margin**. Low and
+The central **2036** output is roughly **29.3 percent gross margin**. Low and
 high revenue bands remain sensitivity outputs, not the public default story.
 
 ## Ground Reference
