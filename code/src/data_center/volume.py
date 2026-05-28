@@ -13,12 +13,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Final
 
 from data_center.config import BindingConstraint
 from data_center.constants import NODE_VOLUME_FIXED_M3, SOLAR_CONSTANT_W_M2
 from data_center.provenance import FieldPath, ProvenanceCell, cell
 
 logger = logging.getLogger(__name__)
+
+# An envelope (mass or volume) is treated as binding once utilization reaches
+# this percent — i.e. within 1% of the envelope ceiling.
+ENVELOPE_BINDING_UTILIZATION_PCT: Final[float] = 99.0
 
 
 @dataclass(frozen=True)
@@ -199,8 +204,8 @@ def compute_binding_constraint(
         A :class:`ProvenanceCell` whose value is a :class:`BindingConstraint`
         enum string.
     """
-    mass_bound = mass_util_pct >= 99.0  # within 1% of envelope
-    volume_bound = volume_util_pct >= 99.0
+    mass_bound = mass_util_pct >= ENVELOPE_BINDING_UTILIZATION_PCT
+    volume_bound = volume_util_pct >= ENVELOPE_BINDING_UTILIZATION_PCT
     if mass_bound and volume_bound:
         val = BindingConstraint.BOTH.value
     elif mass_bound:
