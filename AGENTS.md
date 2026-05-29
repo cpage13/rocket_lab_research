@@ -21,5 +21,8 @@ orientation, stale-conclusion checks, and guardrails for public claims.
 Any research change or research-agent run must follow the Research Wiki skill
 rules summarized there.
 
+Writing convention (repo-wide, applies to every file you write or edit): do not
+use em-dashes anywhere. Use commas, colons, or parentheses instead.
+
 Do not treat this file as a domain tutorial or a second source of truth. It is
 only a routing document so agents can find the right files quickly.
