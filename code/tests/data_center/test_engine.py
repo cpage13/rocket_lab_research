@@ -458,8 +458,12 @@ def test_compute_fleet_trajectory_cumulative_revenue_monotonic() -> None:
         assert b >= a
 
 
-def test_compute_fleet_trajectory_margin_tracks_r_band() -> None:
-    """Fleet central margin is positive and declines as the R band drifts down."""
+def test_compute_fleet_trajectory_margin_flat_under_flat_r_band() -> None:
+    """Fleet central margin is positive and flat across the trajectory.
+
+    The default R band is flat at 1.50, so every cohort earns the same 33.3%
+    gross margin and the fleet margin does not drift year to year.
+    """
     cfg = ValuationConfig()
     gens = _default_gens()
     years = [compute_year(i, cfg, gens) for i in range(11)]
@@ -471,7 +475,7 @@ def test_compute_fleet_trajectory_margin_tracks_r_band() -> None:
     margin_last = _num(fleet[-1].margin_central_pct.value)
     assert margin_first > 0
     assert margin_last > 0
-    assert margin_last < margin_first
+    assert margin_last == pytest.approx(margin_first)
 
 
 # ---------------------------------------------------------------------------

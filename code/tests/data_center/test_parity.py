@@ -29,9 +29,10 @@ FY2026 has zero deployed nodes and FY2036 stays pinned to the 90-launch
 anchor. The cadence output is an integer mission count. The 12.5 t default
 is explicitly a block-upgrade scenario, not a published SSO payload.
 
-**Margin-floor re-freeze (2026-05-25).** The default central R band now decays
-from 1.50 to 1.40, not 1.30, so the five-year operating plan remains above
-the 25% active-fleet gross-margin floor.
+**Flat-R re-freeze (2026-05-29).** The default central R band is flat at 1.50
+with no taper, so each cohort earns a constant 33.3% gross margin across its
+five-year life. The central-revenue reference values below are recorded from
+the flat default.
 
 The v8 output is keyed by JSON-string fiscal year in
 ``physical.years`` / ``business.years``; every leaf is a
@@ -106,34 +107,34 @@ REFERENCE_PHYSICAL: tuple[dict[str, float], ...] = (
     {"kw_per_node": 421.978, "mass_per_node_t": 12.4482, "pf_per_node": 25799.7314},
 )
 
-# Per-year per-node annualized economics — central R band.
+# Per-year per-node annualized economics, central R band (flat 1.50x cost).
 REFERENCE_NODE_ECONOMICS: tuple[dict[str, float], ...] = (
     {"cost_annual_per_node_musd": 13.43280, "revenue_annual_per_node_musd_central": 20.14920},
-    {"cost_annual_per_node_musd": 13.05720, "revenue_annual_per_node_musd_central": 19.45523},
-    {"cost_annual_per_node_musd": 14.82576, "revenue_annual_per_node_musd_central": 21.94212},
-    {"cost_annual_per_node_musd": 15.77028, "revenue_annual_per_node_musd_central": 23.18231},
-    {"cost_annual_per_node_musd": 15.27519, "revenue_annual_per_node_musd_central": 22.30178},
-    {"cost_annual_per_node_musd": 15.75768, "revenue_annual_per_node_musd_central": 22.84863},
-    {"cost_annual_per_node_musd": 15.78050, "revenue_annual_per_node_musd_central": 22.72392},
-    {"cost_annual_per_node_musd": 15.42402, "revenue_annual_per_node_musd_central": 22.05636},
-    {"cost_annual_per_node_musd": 15.63182, "revenue_annual_per_node_musd_central": 22.19718},
-    {"cost_annual_per_node_musd": 15.85486, "revenue_annual_per_node_musd_central": 22.35535},
-    {"cost_annual_per_node_musd": 15.66191, "revenue_annual_per_node_musd_central": 21.92667},
+    {"cost_annual_per_node_musd": 13.05720, "revenue_annual_per_node_musd_central": 19.58580},
+    {"cost_annual_per_node_musd": 14.82576, "revenue_annual_per_node_musd_central": 22.23864},
+    {"cost_annual_per_node_musd": 15.77028, "revenue_annual_per_node_musd_central": 23.65542},
+    {"cost_annual_per_node_musd": 15.27519, "revenue_annual_per_node_musd_central": 22.91279},
+    {"cost_annual_per_node_musd": 15.75768, "revenue_annual_per_node_musd_central": 23.63651},
+    {"cost_annual_per_node_musd": 15.78050, "revenue_annual_per_node_musd_central": 23.67075},
+    {"cost_annual_per_node_musd": 15.42402, "revenue_annual_per_node_musd_central": 23.13604},
+    {"cost_annual_per_node_musd": 15.63182, "revenue_annual_per_node_musd_central": 23.44773},
+    {"cost_annual_per_node_musd": 15.85486, "revenue_annual_per_node_musd_central": 23.78229},
+    {"cost_annual_per_node_musd": 15.66191, "revenue_annual_per_node_musd_central": 23.49287},
 )
 
-# Per-year fleet rollup reference — living fleet + central-R fleet revenue.
+# Per-year fleet rollup reference, living fleet + central-R fleet revenue (flat).
 REFERENCE_FLEET: tuple[dict[str, float], ...] = (
     {"living_fleet": 0, "revenue_annual_fleet_musd_central": 0.0000},
-    {"living_fleet": 2, "revenue_annual_fleet_musd_central": 38.9105},
-    {"living_fleet": 5, "revenue_annual_fleet_musd_central": 104.7368},
-    {"living_fleet": 10, "revenue_annual_fleet_musd_central": 220.6484},
-    {"living_fleet": 19, "revenue_annual_fleet_musd_central": 421.3644},
-    {"living_fleet": 33, "revenue_annual_fleet_musd_central": 741.2452},
-    {"living_fleet": 53, "revenue_annual_fleet_musd_central": 1202.2609},
-    {"living_fleet": 85, "revenue_annual_fleet_musd_central": 1908.4070},
-    {"living_fleet": 131, "revenue_annual_fleet_musd_central": 2924.5516},
-    {"living_fleet": 192, "revenue_annual_fleet_musd_central": 4288.7102},
-    {"living_fleet": 268, "revenue_annual_fleet_musd_central": 5942.2301},
+    {"living_fleet": 2, "revenue_annual_fleet_musd_central": 39.1716},
+    {"living_fleet": 5, "revenue_annual_fleet_musd_central": 105.8875},
+    {"living_fleet": 10, "revenue_annual_fleet_musd_central": 224.1646},
+    {"living_fleet": 19, "revenue_annual_fleet_musd_central": 430.3797},
+    {"living_fleet": 33, "revenue_annual_fleet_musd_central": 761.2908},
+    {"living_fleet": 53, "revenue_annual_fleet_musd_central": 1242.8757},
+    {"living_fleet": 85, "revenue_annual_fleet_musd_central": 1985.9211},
+    {"living_fleet": 131, "revenue_annual_fleet_musd_central": 3063.4780},
+    {"living_fleet": 192, "revenue_annual_fleet_musd_central": 4522.0231},
+    {"living_fleet": 268, "revenue_annual_fleet_musd_central": 6305.4699},
 )
 
 

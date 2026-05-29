@@ -144,7 +144,7 @@ def test_rband_default_central_starts_at_1_50() -> None:
     assert rb.central[0].fy == 2026
     assert rb.central[0].r == pytest.approx(1.50)
     assert rb.central[-1].fy == 2036
-    assert rb.central[-1].r == pytest.approx(1.40)
+    assert rb.central[-1].r == pytest.approx(1.50)
 
 
 def test_rband_default_high_above_central_above_low() -> None:
