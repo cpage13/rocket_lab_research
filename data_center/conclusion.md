@@ -67,21 +67,20 @@ than a comparable ground token.
 
 ## Context: What The Model Is, And Is Not
 
-The modeled product is orbital AI inference, not frontier-model training. The
-default translates public terrestrial hardware assumptions into a
-Neutron-centered orbital scenario; it is not a claim that Rocket Lab has
-announced the project or already optimized the hardware for space. That
-conservative translation is the point: even without a space-native stack, the
-case lands close enough to ground cost to study seriously.
+The modeled product is orbital AI inference, not frontier-model training, and
+none of this stack has been designed or iterated for space yet. The default
+translates public terrestrial hardware assumptions into a Neutron-centered
+orbital scenario. That conservative translation is the point: even without a
+space-native design, the case already lands close enough to ground cost to study
+seriously, and it has room to improve. Production and iteration historically
+surface gains no one anticipated, so it would not be surprising if the costs
+here came down over the next decade. That upside is noted, not modeled.
 
 Read it with a vertical-integration lens that the baseline does not pay for.
 Many cost lines behave like external buy prices, but in a Rocket Lab-operated
 program Rocket Lab would supply most of them to itself: bus, solar, radiator and
-thermal hardware, integration, launch, and operations. Laser communications
-belongs on that list too: Rocket Lab completed its acquisition of Mynaric, a
-laser optical communications terminal maker, in April 2026, so the laser links
-between nodes are in-house as well. GPUs and some networking are the clearest
-outside purchases. That internal-customer effect is upside the model leaves on
+thermal hardware, integration, launch, operations, and laser communications.
+GPUs and some networking are the clearest outside purchases. That internal-customer effect is upside the model leaves on
 the table, not a freebie baked in.
 
 ## Core Default Assumptions
