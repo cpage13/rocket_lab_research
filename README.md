@@ -1,47 +1,44 @@
 # Rocket Lab Research
 
-Rocket Lab Research is an independent feasibility program. The method is the
-same every time: take an orbital application Rocket Lab could plausibly build,
-model it honestly against public evidence, and find out whether it pencils out.
-Each investigation is a **case**.
+Rocket Lab Research studies Rocket Lab and the new applications it could pursue.
+Each application gets its own honest, source-linked feasibility study that leans
+toward a clear answer.
 
-The first case is a Neutron-launched orbital AI-inference data center. Under
-deliberately conservative, source-linked assumptions, it models to roughly
-**$5.94B in annual revenue** at about **29.3% gross margin** by **2036**, for
-about **1.92x** the cost of an equivalent ground build. That is not parity, but
-it is close enough to take seriously, and the baseline likely understates it:
-the model pays market price for the launch, bus, and spacecraft hardware that
-Rocket Lab would supply to itself.
+The first application is a Neutron-launched orbital AI-inference data center.
+Under deliberately conservative assumptions, it models to roughly **$5.94B in
+annual revenue** at about **29.3% gross margin** by **2036**, for about
+**1.92x** the cost of an equivalent ground build. Not parity, but close enough
+to take seriously.
 
-## Cases
+## Applications
 
-| # | Application | Vehicle | Status |
-|---|---|---|---|
-| **1** | Orbital AI-inference data center | Neutron | **Modeled, current** |
-| 2 | Communications | (TBD) | Planned |
+| Application | Vehicle | Status |
+|---|---|---|
+| Orbital AI-inference data center | Neutron | Modeled (current) |
+| Communications | (TBD) | Planned |
 
-**Case 1, the orbital data center,** is the only modeled case today. Read it in
-three depths: the [conclusion](data_center/conclusion.md) for the verdict, the
+The data center is the only modeled application today. Read it in three depths:
+the [conclusion](data_center/conclusion.md) for the verdict, the
 [data-center guide](data_center/README.md) for how it works, and
 [`models/space/default.json`](data_center/models/space/default.json) for every
 number with its provenance.
 
-**Case 2, communications,** is a reserved workstream. It makes no model claims
-in this release.
+Communications is a reserved workstream; it makes no model claims in this
+release.
 
 ## Repository Map
 
 ```text
 rklb_space_data_center/
-├── README.md            # this file: the program and its cases
-├── data_center/         # Case 1: conclusion, assumptions, model artifacts
-├── communications/      # Case 2: reserved, not yet modeled
+├── README.md            # this file: the program and its applications
+├── data_center/         # data center: conclusion, assumptions, model artifacts
+├── communications/      # communications: reserved, not yet modeled
 ├── research/            # shared evidence wiki and source ledger
 ├── code/                # the model engine (rklb-value)
 └── docs/                # architecture intent, ADRs, agent guide
 ```
 
-- **Case 1, Data Center,** lives in [data_center/](data_center/): start with the
+- **Data Center** lives in [data_center/](data_center/): start with the
   [conclusion](data_center/conclusion.md), then the
   [guide](data_center/README.md) and
   [assumptions ledger](data_center/assumptions.md).
