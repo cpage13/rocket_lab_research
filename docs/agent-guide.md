@@ -231,7 +231,7 @@ Keep these boundaries visible in public docs:
 - When writing the public 2036 headline, lead with cadence and scale: 90
   launches, 90 new nodes, and about 38 MW newly deployed that year. Then, in a
   separate sentence or section, describe the active on-orbit revenue run-rate:
-  about $5.94B revenue and $1.74B gross profit. Do not weave back and forth
+  about $6.31B revenue and $2.10B gross profit. Do not weave back and forth
   between launch cadence and active-base revenue.
 - When writing the vertical-integration story, say the strong version: the
   default uses many external buy-price/customer-facing cost lines, while a
@@ -242,3 +242,5 @@ Keep these boundaries visible in public docs:
 - Public-facing prose should use human labels and `RLDC-*` claim IDs. Raw JSON
   paths belong in code documentation, query examples, and agent diagnostics.
 - Do not use old large-capacity language as the current default.
+- Do not use em-dashes anywhere in the public documentation; use commas,
+  colons, or parentheses instead.
