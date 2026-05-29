@@ -136,11 +136,12 @@ default):
 | Solar and radiator at $20k/kW | 37 | ~112 MW | 1.50x | ~50% |
 | Plus ~25% lighter solar and radiator | 49 | ~149 MW | 1.38x | ~38% |
 
-In the aggressive case the same 90 launches and 268-node fleet carry about a
+In the ambitious case the same 90 launches and 268-node fleet carry about a
 third more compute (49 packages per node instead of 37, about 149 MW of living
-power instead of 112) at the same roughly 29% margin, and the premium over
-ground falls from about 90% to about 38%. Revenue is slightly lower because it
-is coupled to cost, but the token is far more competitive.
+power instead of 112) at the same roughly 29% margin, and the premium a customer
+would pay over a comparable ground token falls from about 90% to about 38%.
+Revenue is slightly lower because it is coupled to cost, but the token is far
+more competitive.
 
 Launch is not where the leverage is. It is only about 18% of total system cost,
 against roughly 30% for compute and about 22% each for solar and radiator. Even
