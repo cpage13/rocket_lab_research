@@ -53,30 +53,31 @@ volume:
   neutron_fairing_usable_volume_m3: 80.0
 
 r_band:
-  # The three R trajectories — scenario assumptions tied to SOURCE_INDEX REV-008.
-  # R is revenue / annualized cost. R=1.50 implies 33.3% gross margin;
-  # R=1.40 implies 28.6%, keeping the default above the 25% active-fleet floor.
+  # The three R trajectories (scenario assumptions tied to SOURCE_INDEX REV-008).
+  # R is revenue / annualized cost. Flat by design: each cohort launches fresh,
+  # so within the 5-year window the multiple does not taper. R=1.50 implies a
+  # 33.3% gross margin. Kept as a dial so any band can be re-shaped per year.
   central:
     - { fy: 2026, r: 1.50 }
-    - { fy: 2028, r: 1.48 }
-    - { fy: 2030, r: 1.46 }
-    - { fy: 2032, r: 1.44 }
-    - { fy: 2034, r: 1.42 }
-    - { fy: 2036, r: 1.40 }
+    - { fy: 2028, r: 1.50 }
+    - { fy: 2030, r: 1.50 }
+    - { fy: 2032, r: 1.50 }
+    - { fy: 2034, r: 1.50 }
+    - { fy: 2036, r: 1.50 }
   low:
     - { fy: 2026, r: 1.20 }
     - { fy: 2028, r: 1.20 }
-    - { fy: 2030, r: 1.15 }
-    - { fy: 2032, r: 1.15 }
-    - { fy: 2034, r: 1.15 }
-    - { fy: 2036, r: 1.15 }
+    - { fy: 2030, r: 1.20 }
+    - { fy: 2032, r: 1.20 }
+    - { fy: 2034, r: 1.20 }
+    - { fy: 2036, r: 1.20 }
   high:
     - { fy: 2026, r: 1.80 }
     - { fy: 2028, r: 1.80 }
-    - { fy: 2030, r: 1.75 }
-    - { fy: 2032, r: 1.70 }
-    - { fy: 2034, r: 1.65 }
-    - { fy: 2036, r: 1.65 }
+    - { fy: 2030, r: 1.80 }
+    - { fy: 2032, r: 1.80 }
+    - { fy: 2034, r: 1.80 }
+    - { fy: 2036, r: 1.80 }
 
 launch_cost:
   # Cadence-indexed launch cost (log-linear curve) — SOURCE_INDEX NTR-009.

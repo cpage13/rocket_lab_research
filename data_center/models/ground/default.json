@@ -8,7 +8,7 @@
     "operator_model": "b2b_dedicated_optical_rf",
     "radiator_architecture": "single_face_co_mounted",
     "deployment_philosophy": "ground_validated_before_launch",
-    "generated_at": "2026-05-28T17:29:27.889716+00:00",
+    "generated_at": "2026-05-29T14:16:48.755208+00:00",
     "model_package": "rklb-value",
     "model_version": "0.1.0",
     "artifact_role": "promoted_ground_default",

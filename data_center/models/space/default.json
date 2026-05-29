@@ -8,7 +8,7 @@
     "operator_model": "b2b_dedicated_optical_rf",
     "radiator_architecture": "single_face_co_mounted",
     "deployment_philosophy": "ground_validated_before_launch",
-    "generated_at": "2026-05-28T17:29:27.889716+00:00",
+    "generated_at": "2026-05-29T14:16:48.755208+00:00",
     "model_package": "rklb-value",
     "model_version": "0.1.0",
     "artifact_role": "promoted_default",
@@ -788,7 +788,7 @@
           {
             "path": "inputs.config.revenue.central.2028",
             "label": "central R anchor 2028",
-            "value": 1.48,
+            "value": 1.5,
             "unit": "ratio",
             "description": "Revenue-to-cost multiple anchor for one fiscal year.",
             "assumption_role": "default",
@@ -813,7 +813,7 @@
           {
             "path": "inputs.config.revenue.central.2030",
             "label": "central R anchor 2030",
-            "value": 1.46,
+            "value": 1.5,
             "unit": "ratio",
             "description": "Revenue-to-cost multiple anchor for one fiscal year.",
             "assumption_role": "default",
@@ -838,7 +838,7 @@
           {
             "path": "inputs.config.revenue.central.2032",
             "label": "central R anchor 2032",
-            "value": 1.44,
+            "value": 1.5,
             "unit": "ratio",
             "description": "Revenue-to-cost multiple anchor for one fiscal year.",
             "assumption_role": "default",
@@ -863,7 +863,7 @@
           {
             "path": "inputs.config.revenue.central.2034",
             "label": "central R anchor 2034",
-            "value": 1.42,
+            "value": 1.5,
             "unit": "ratio",
             "description": "Revenue-to-cost multiple anchor for one fiscal year.",
             "assumption_role": "default",
@@ -888,7 +888,7 @@
           {
             "path": "inputs.config.revenue.central.2036",
             "label": "central R anchor 2036",
-            "value": 1.4,
+            "value": 1.5,
             "unit": "ratio",
             "description": "Revenue-to-cost multiple anchor for one fiscal year.",
             "assumption_role": "default",
@@ -965,7 +965,7 @@
           {
             "path": "inputs.config.revenue.low.2030",
             "label": "low R anchor 2030",
-            "value": 1.15,
+            "value": 1.2,
             "unit": "ratio",
             "description": "Revenue-to-cost multiple anchor for one fiscal year.",
             "assumption_role": "sensitivity",
@@ -990,7 +990,7 @@
           {
             "path": "inputs.config.revenue.low.2032",
             "label": "low R anchor 2032",
-            "value": 1.15,
+            "value": 1.2,
             "unit": "ratio",
             "description": "Revenue-to-cost multiple anchor for one fiscal year.",
             "assumption_role": "sensitivity",
@@ -1015,7 +1015,7 @@
           {
             "path": "inputs.config.revenue.low.2034",
             "label": "low R anchor 2034",
-            "value": 1.15,
+            "value": 1.2,
             "unit": "ratio",
             "description": "Revenue-to-cost multiple anchor for one fiscal year.",
             "assumption_role": "sensitivity",
@@ -1040,7 +1040,7 @@
           {
             "path": "inputs.config.revenue.low.2036",
             "label": "low R anchor 2036",
-            "value": 1.15,
+            "value": 1.2,
             "unit": "ratio",
             "description": "Revenue-to-cost multiple anchor for one fiscal year.",
             "assumption_role": "sensitivity",
@@ -1117,7 +1117,7 @@
           {
             "path": "inputs.config.revenue.high.2030",
             "label": "high R anchor 2030",
-            "value": 1.75,
+            "value": 1.8,
             "unit": "ratio",
             "description": "Revenue-to-cost multiple anchor for one fiscal year.",
             "assumption_role": "sensitivity",
@@ -1142,7 +1142,7 @@
           {
             "path": "inputs.config.revenue.high.2032",
             "label": "high R anchor 2032",
-            "value": 1.7,
+            "value": 1.8,
             "unit": "ratio",
             "description": "Revenue-to-cost multiple anchor for one fiscal year.",
             "assumption_role": "sensitivity",
@@ -1167,7 +1167,7 @@
           {
             "path": "inputs.config.revenue.high.2034",
             "label": "high R anchor 2034",
-            "value": 1.65,
+            "value": 1.8,
             "unit": "ratio",
             "description": "Revenue-to-cost multiple anchor for one fiscal year.",
             "assumption_role": "sensitivity",
@@ -1192,7 +1192,7 @@
           {
             "path": "inputs.config.revenue.high.2036",
             "label": "high R anchor 2036",
-            "value": 1.65,
+            "value": 1.8,
             "unit": "ratio",
             "description": "Revenue-to-cost multiple anchor for one fiscal year.",
             "assumption_role": "sensitivity",
@@ -6465,7 +6465,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 19.455227999999998,
+          "value": 19.5858,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -6516,7 +6516,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 6.398027999999998,
+          "value": 6.528599999999999,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -6893,7 +6893,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 21.9421248,
+          "value": 22.238639999999997,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -6944,7 +6944,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 7.1163647999999995,
+          "value": 7.412879999999998,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -7321,7 +7321,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 23.182306896,
+          "value": 23.6554152,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -7338,7 +7338,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 18.530075239999995,
+          "value": 18.92433216,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -7355,7 +7355,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 27.992241319999998,
+          "value": 28.386498239999998,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -7372,7 +7372,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 7.4120300960000005,
+          "value": 7.885138400000001,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -7389,7 +7389,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 2.7597984399999955,
+          "value": 3.154055359999999,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -7406,7 +7406,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 12.221964519999998,
+          "value": 12.616221439999999,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -7749,7 +7749,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 22.30177750992561,
+          "value": 22.91278511293727,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -7766,7 +7766,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 17.56646858658524,
+          "value": 18.330228090349816,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -7783,7 +7783,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 26.73158263176015,
+          "value": 27.49534213552473,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -7800,7 +7800,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 7.026587434634095,
+          "value": 7.637595037645756,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -7817,7 +7817,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 2.2912785112937257,
+          "value": 3.055038015058301,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -7834,7 +7834,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 11.456392556468636,
+          "value": 12.220152060233215,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -8177,7 +8177,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 22.848628763781512,
+          "value": 23.636512514256736,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -8194,7 +8194,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 18.121326260930164,
+          "value": 18.90921001140539,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -8211,7 +8211,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 27.181989391395252,
+          "value": 28.363815017108088,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -8228,7 +8228,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 7.09095375427702,
+          "value": 7.878837504752244,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -8245,7 +8245,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 2.3636512514256722,
+          "value": 3.1515350019008963,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -8262,7 +8262,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 11.42431438189076,
+          "value": 12.606140007603596,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -8605,7 +8605,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 22.72391917263319,
+          "value": 23.67074913815958,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -8622,7 +8622,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 18.147574339255673,
+          "value": 18.93659931052766,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -8639,7 +8639,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 26.82684902324752,
+          "value": 28.404898965791492,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -8656,7 +8656,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 6.943419747193474,
+          "value": 7.890249712719861,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -8673,7 +8673,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 2.367074913815955,
+          "value": 3.1560998850879436,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -8690,7 +8690,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 11.0463495978078,
+          "value": 12.624399540351774,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9033,7 +9033,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 22.056355292838763,
+          "value": 23.136037020460243,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9050,7 +9050,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 17.737628382352852,
+          "value": 18.508829616368192,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9067,7 +9067,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 25.835241339513935,
+          "value": 27.763244424552294,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9084,7 +9084,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 6.632330612531934,
+          "value": 7.712012340153414,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9101,7 +9101,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 2.3136037020460236,
+          "value": 3.0848049360613636,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9118,7 +9118,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 10.411216659207106,
+          "value": 12.339219744245465,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9461,7 +9461,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 22.19717969809296,
+          "value": 23.44772503319679,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9478,7 +9478,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 17.976589192117537,
+          "value": 18.75818002655743,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9495,7 +9495,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 25.792497536516464,
+          "value": 28.137270039836146,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9512,7 +9512,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 6.565363009295101,
+          "value": 7.815908344398931,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9529,7 +9529,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 2.3447725033196782,
+          "value": 3.126363337759571,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9546,7 +9546,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 10.160680847718606,
+          "value": 12.505453351038287,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9889,7 +9889,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 22.35535145795553,
+          "value": 23.782288785059073,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9906,7 +9906,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 18.23308806854529,
+          "value": 19.025831028047257,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9923,7 +9923,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 26.16051766356498,
+          "value": 28.53874654207089,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9940,7 +9940,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 6.500492267916146,
+          "value": 7.9274295950196905,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9957,7 +9957,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 2.3782288785059063,
+          "value": 3.1709718380078744,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9974,7 +9974,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 10.305658473525598,
+          "value": 12.683887352031507,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -10317,7 +10317,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 21.926674434950545,
+          "value": 23.492865466018443,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -10334,7 +10334,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 18.011196857280805,
+          "value": 18.794292372814756,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -10351,7 +10351,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 25.842152012620286,
+          "value": 28.19143855922213,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -10368,7 +10368,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 6.264764124271583,
+          "value": 7.830955155339481,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -10385,7 +10385,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 2.349286546601842,
+          "value": 3.132382062135793,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -10402,7 +10402,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 10.180241701941323,
+          "value": 12.52952824854317,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -10986,7 +10986,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 38.910455999999996,
+          "value": 39.1716,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11040,7 +11040,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 38.910455999999996,
+          "value": 39.1716,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11085,7 +11085,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 12.796055999999997,
+          "value": 13.057199999999998,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11133,7 +11133,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 32.88590604026845,
+          "value": 33.33333333333333,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -11365,7 +11365,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 104.73683039999999,
+          "value": 105.88751999999998,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11419,7 +11419,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 143.64728639999998,
+          "value": 145.05911999999998,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11464,7 +11464,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 34.14515039999999,
+          "value": 35.295839999999984,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11512,7 +11512,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 32.60090101027154,
+          "value": 33.33333333333333,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -11744,7 +11744,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 220.64836487999997,
+          "value": 224.16459599999996,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11762,7 +11762,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 177.36039219999998,
+          "value": 179.3316768,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11780,7 +11780,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 267.02623059999996,
+          "value": 268.99751519999995,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11798,7 +11798,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 364.29565127999996,
+          "value": 369.22371599999997,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11813,7 +11813,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 293.40768819999994,
+          "value": 295.3789728,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11828,7 +11828,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 441.09717459999996,
+          "value": 443.06845919999995,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11843,7 +11843,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 71.20530087999998,
+          "value": 74.72153199999997,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11859,7 +11859,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 27.917328199999986,
+          "value": 29.888612800000004,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11875,7 +11875,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 117.58316659999997,
+          "value": 119.55445119999996,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11891,7 +11891,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 32.27093974556536,
+          "value": 33.33333333333333,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -11907,7 +11907,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 15.74045245035266,
+          "value": 16.666666666666668,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -11923,7 +11923,7 @@
           "notes": null
         },
         "margin_high_pct": {
-          "value": 44.03431315934547,
+          "value": 44.444444444444436,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -12123,7 +12123,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 421.3643624693305,
+          "value": 430.3796620164354,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12141,7 +12141,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 335.4586094792671,
+          "value": 344.30372961314833,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12159,7 +12159,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 507.61047428584135,
+          "value": 516.4555944197225,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12177,7 +12177,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 785.6600137493305,
+          "value": 799.6033780164354,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12192,7 +12192,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 628.8662976792671,
+          "value": 639.6827024131483,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12207,7 +12207,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 948.7076488858413,
+          "value": 959.5240536197225,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12222,7 +12222,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 134.4445877917069,
+          "value": 143.45988733881182,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12238,7 +12238,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 48.53883480164353,
+          "value": 57.38395493552474,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12254,7 +12254,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 220.69069960821776,
+          "value": 229.5358197420989,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12270,7 +12270,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 31.90696693090475,
+          "value": 33.333333333333336,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -12286,7 +12286,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 14.469396053656347,
+          "value": 16.66666666666667,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -12302,7 +12302,7 @@
           "notes": null
         },
         "margin_high_pct": {
-          "value": 43.47638805497624,
+          "value": 44.44444444444445,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -12502,7 +12502,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 741.2451651622716,
+          "value": 761.2908372160298,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12520,7 +12520,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 589.1571771322895,
+          "value": 609.0326697728237,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12538,7 +12538,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 888.1583257653749,
+          "value": 913.5490046592358,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12556,7 +12556,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 1526.905178911602,
+          "value": 1560.8942152324653,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12571,7 +12571,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 1218.0234748115565,
+          "value": 1248.715372185972,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12586,7 +12586,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 1836.8659746512162,
+          "value": 1873.0730582789583,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12601,7 +12601,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 233.71794035158513,
+          "value": 253.76361240534328,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12617,7 +12617,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 81.62995232160296,
+          "value": 101.50544496213723,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12633,7 +12633,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 380.6311009546884,
+          "value": 406.02177984854933,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12649,7 +12649,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 31.53045056292814,
+          "value": 33.333333333333336,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -12665,7 +12665,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 13.855377731106508,
+          "value": 16.666666666666657,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -12681,7 +12681,7 @@
           "notes": null
         },
         "margin_high_pct": {
-          "value": 42.856221679471126,
+          "value": 44.44444444444445,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -12881,7 +12881,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 1202.260930960202,
+          "value": 1242.8757182555405,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12899,7 +12899,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 957.0665325959143,
+          "value": 994.3005746044323,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12917,7 +12917,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 1431.3430842768203,
+          "value": 1491.4508619066487,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12935,7 +12935,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 2729.166109871804,
+          "value": 2803.769933488006,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12950,7 +12950,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 2175.0900074074707,
+          "value": 2243.015946790404,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12965,7 +12965,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 3268.2090589280365,
+          "value": 3364.523920185607,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12980,7 +12980,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 373.67711878984164,
+          "value": 414.29190608518024,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12996,7 +12996,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 128.48272042555402,
+          "value": 165.71676243407205,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13012,7 +13012,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 602.75927210646,
+          "value": 662.8670497362884,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13028,7 +13028,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 31.081199527244003,
+          "value": 33.333333333333336,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -13044,7 +13044,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 13.424638314022111,
+          "value": 16.666666666666664,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -13060,7 +13060,7 @@
           "notes": null
         },
         "margin_high_pct": {
-          "value": 42.111446146470286,
+          "value": 44.44444444444445,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -13260,7 +13260,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 1908.4069918095586,
+          "value": 1985.921093971649,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -13278,7 +13278,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 1524.5107899782643,
+          "value": 1588.736875177319,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -13296,7 +13296,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 2255.517427159808,
+          "value": 2383.105312765979,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -13314,7 +13314,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 4637.5731016813625,
+          "value": 4789.691027459655,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -13329,7 +13329,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 3699.600797385735,
+          "value": 3831.7528219677233,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -13344,7 +13344,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 5523.726486087844,
+          "value": 5747.629232951585,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -13359,7 +13359,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 584.4595958284592,
+          "value": 661.9736979905497,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13375,7 +13375,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 200.5633939971649,
+          "value": 264.78947919621965,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13391,7 +13391,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 931.5700311787086,
+          "value": 1059.1579167848795,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13407,7 +13407,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 30.62552161760173,
+          "value": 33.33333333333333,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -13423,7 +13423,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 13.155918299536893,
+          "value": 16.666666666666654,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -13439,7 +13439,7 @@
           "notes": null
         },
         "margin_high_pct": {
-          "value": 41.30183256228527,
+          "value": 44.44444444444444,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -13639,7 +13639,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 2924.5516219322994,
+          "value": 3063.4779946646854,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -13657,7 +13657,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 2348.6664625762587,
+          "value": 2450.782395731748,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -13675,7 +13675,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 3430.9735949221476,
+          "value": 3676.1735935976226,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -13693,7 +13693,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 7562.124723613662,
+          "value": 7853.169022124341,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -13708,7 +13708,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 6048.267259961994,
+          "value": 6282.535217699471,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -13723,7 +13723,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 8954.700081009993,
+          "value": 9423.802826549208,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -13738,7 +13738,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 882.2329588225093,
+          "value": 1021.1593315548953,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13754,7 +13754,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 306.3477994664686,
+          "value": 408.46373262195766,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13770,7 +13770,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 1388.6549318123575,
+          "value": 1633.8549304878325,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13786,7 +13786,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 30.16643482051459,
+          "value": 33.333333333333336,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -13802,7 +13802,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 13.043478260869568,
+          "value": 16.666666666666654,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -13818,7 +13818,7 @@
           "notes": null
         },
         "margin_high_pct": {
-          "value": 40.47407808289669,
+          "value": 44.44444444444445,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -14018,7 +14018,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 4288.710226399856,
+          "value": 4522.023143602385,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -14036,7 +14036,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 3466.8844100951615,
+          "value": 3617.6185148819077,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -14054,7 +14054,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 5021.625587685855,
+          "value": 5426.427772322862,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -14072,7 +14072,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 11850.83495001352,
+          "value": 12375.192165726727,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -14087,7 +14087,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 9515.151670057156,
+          "value": 9900.153732581379,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -14102,7 +14102,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 13976.325668695848,
+          "value": 14850.230598872071,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -14117,7 +14117,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 1274.0281306649326,
+          "value": 1507.3410478674618,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -14133,7 +14133,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 452.20231436023823,
+          "value": 602.9364191469845,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -14149,7 +14149,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 2006.9434919509317,
+          "value": 2411.745676587939,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -14165,7 +14165,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 29.70655659649012,
+          "value": 33.333333333333336,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -14181,7 +14181,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 13.04347826086956,
+          "value": 16.666666666666664,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -14197,7 +14197,7 @@
           "notes": null
         },
         "margin_high_pct": {
-          "value": 39.966012139025345,
+          "value": 44.44444444444445,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -14397,7 +14397,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 5942.230122852464,
+          "value": 6305.46986034445,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -14415,7 +14415,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 4834.193559597412,
+          "value": 5044.37588827556,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -14433,7 +14433,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 6966.871417342148,
+          "value": 7566.563832413341,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -14451,7 +14451,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 17793.065072865982,
+          "value": 18680.66202607118,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -14466,7 +14466,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 14349.345229654567,
+          "value": 14944.529620856938,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -14481,7 +14481,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 20943.197086037995,
+          "value": 22416.794431285412,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -14496,7 +14496,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 1738.5835492894967,
+          "value": 2101.823286781483,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -14512,7 +14512,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 630.5469860344447,
+          "value": 840.7293147125929,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -14528,7 +14528,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 2763.2248437791804,
+          "value": 3362.9172588503734,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -14544,7 +14544,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 29.258098615253896,
+          "value": 33.33333333333333,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -14560,7 +14560,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 13.043478260869556,
+          "value": 16.666666666666657,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -14576,7 +14576,7 @@
           "notes": null
         },
         "margin_high_pct": {
-          "value": 39.66234882562748,
+          "value": 44.44444444444444,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -14617,7 +14617,7 @@
           "name": "positive_margin_floor",
           "what_it_tests": "every active year's business.margin_central_pct >= 25.0 (25% floor means R >= 1.333...)",
           "expected": "all active revenue years >= 25.0",
-          "computed": "all 10 active years central margin in [29.26%, 32.89%]",
+          "computed": "all 10 active years central margin in [33.33%, 33.33%]",
           "pass_check": true,
           "severity": "critical"
         },
@@ -14657,7 +14657,7 @@
           "name": "revenue_above_cost_per_node",
           "what_it_tests": "every year's revenue_annual_per_node_musd_central > cost_annual_per_node_musd (D9 R > 1 floor on a per-node basis)",
           "expected": "all years rev/node > cost/node",
-          "computed": "all 11 years rev/cost ratio in [1.400, 1.500]",
+          "computed": "all 11 years rev/cost ratio in [1.500, 1.500]",
           "pass_check": true,
           "severity": "critical"
         },
@@ -16356,7 +16356,7 @@
         "severity": "pass",
         "what_tested": "every active year's business.margin_central_pct >= 25.0 (25% floor means R >= 1.333...)",
         "expected_condition": "all active revenue years >= 25.0",
-        "observed_result": "all 10 active years central margin in [29.26%, 32.89%]",
+        "observed_result": "all 10 active years central margin in [33.33%, 33.33%]",
         "related_json_paths": [],
         "remediation_hint": null
       },
@@ -16401,7 +16401,7 @@
         "severity": "pass",
         "what_tested": "every year's revenue_annual_per_node_musd_central > cost_annual_per_node_musd (D9 R > 1 floor on a per-node basis)",
         "expected_condition": "all years rev/node > cost/node",
-        "observed_result": "all 11 years rev/cost ratio in [1.400, 1.500]",
+        "observed_result": "all 11 years rev/cost ratio in [1.500, 1.500]",
         "related_json_paths": [],
         "remediation_hint": null
       },
