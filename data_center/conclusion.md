@@ -119,17 +119,34 @@ the exact package basis.
 
 ## Cost-Down And Thermal Sensitivities
 
-Solar and radiator cost dials are the sensitive lines. The default uses
-`$40k/kW` for each (`RLDC-SOLAR-RADIATOR-COST`). If both move toward `$20k/kW`,
-the orbital/ground ratio falls to about **1.50x**, roughly a 50% token premium
-(`RLDC-SOLAR-RADIATOR-COSTDOWN-SENSITIVITY`). That is a sensitivity, not the
-default.
+The base case is deliberately conservative, and there is real room to close the
+gap to ground. Two levers do most of the work, and both show up in the 2036
+cohort. The first is cost: the default pays `$40k/kW` for solar and `$40k/kW`
+for radiator, where research supports `$20k/kW` for solar and treats it as a
+weaker but plausible target for radiator. The second is mass: a lighter solar
+and radiator design frees envelope mass for more GPU packages per node, so the
+same 90 launches carry more compute.
 
-Thermal-path improvements are a separate lever. If a hotter radiator path can
-preserve GPU/HBM reliability, the freed mass supports more packages: a rough
-2036 sensitivity adds three to four packages per node, lifting the 90-node
-cohort from 3,330 packages to about 3,600 to 3,690
-(`RLDC-THERMAL-PACKAGE-DENSITY-SENSITIVITY`). Useful upside, not booked.
+Stacked against the 2036 base case (illustrative sensitivities, not the promoted
+default):
+
+| 2036 case | Packages/node | Living power | Orbital / ground | Token premium |
+|---|---:|---:|---:|---:|
+| Base (default) | 37 | ~112 MW | 1.92x | ~90% |
+| Solar and radiator at $20k/kW | 37 | ~112 MW | 1.50x | ~50% |
+| Plus ~25% lighter solar and radiator | 49 | ~149 MW | 1.38x | ~38% |
+
+In the aggressive case the same 90 launches and 268-node fleet carry about a
+third more compute (49 packages per node instead of 37, about 149 MW of living
+power instead of 112) at the same roughly 29% margin, and the premium over
+ground falls from about 90% to about 38%. Revenue is slightly lower because it
+is coupled to cost, but the token is far more competitive.
+
+Launch is not where the leverage is. It is only about 18% of total system cost,
+against roughly 30% for compute and about 22% each for solar and radiator. Even
+halving the launch price moves the orbital-to-ground ratio only from 1.92x to
+about 1.75x, roughly a 9% cut in cost per token. The levers that matter are
+solar, radiator, and how much compute each launch carries, not the rocket.
 
 ## Why The Scale Is Not Outlandish
 
