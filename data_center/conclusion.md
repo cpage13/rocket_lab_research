@@ -20,9 +20,6 @@ improve the whole stack through repeated cadence.
 | Space model | `data_center/models/space/default.json` |
 | Ground reference | `data_center/models/ground/default.json` |
 | Default scenario | `code/scenarios/default.yaml` |
-| Space schema | `v8` |
-| Space validation | No validation failures |
-| Ground comparison label | `same_order_of_magnitude` |
 
 ## The 2036 Model
 
@@ -32,24 +29,23 @@ as two separate stories.
 
 **Cadence**, what Rocket Lab launches and deploys that year:
 
-| Cadence signal | Value | Source marker |
-|---|---:|---|
-| Launches in the year | **90** | `RLDC-CADENCE-90` |
-| New orbital nodes deployed | **90** | Promoted 2036 output |
-| New node power added | **37,978 kW** (about **38 MW**) | `RLDC-DEPLOYED-CAPACITY-2036-40MW` |
+| Cadence signal | Value |
+|---|---:|
+| Neutron launches, one node each | **90** |
+| New orbital compute power added | about **38 MW** (37,978 kW) |
 
 **Active base**, the installed fleet producing the revenue run-rate (keep it
 separate from cadence):
 
-| Active-base signal | Value | Source marker |
-|---|---:|---|
-| Active on-orbit base | **268 nodes** | `RLDC-SPACE-2036-LIVING-FLEET` |
-| Active node power | **112,318 kW** (about **112 MW**) | `RLDC-SPACE-2036-ON-ORBIT-POWER` |
-| Annual revenue run-rate | **$5.94B** | `RLDC-SPACE-2036-REVENUE-CENTRAL` |
-| Annual gross profit run-rate | **$1.74B** | Promoted 2036 output |
-| Gross margin | **29.3%** | `RLDC-SPACE-2036-MARGIN-CENTRAL` |
-| Revenue per GPU package | about **$0.59M** | Promoted 2036 per-package output |
-| Cost per GPU package | about **$0.42M** | Promoted 2036 per-package output |
+| Active-base signal | Value |
+|---|---:|
+| Active on-orbit nodes | **268** |
+| Active node power | about **112 MW** (112,318 kW) |
+| Annual revenue run-rate | **$5.94B** |
+| Annual gross profit run-rate | **$1.74B** |
+| Gross margin | **29.3%** |
+| Revenue per GPU package | about **$0.59M** |
+| Cost per GPU package | about **$0.42M** |
 
 The 90-launch year is the production and deployment moment; the 268-node active
 base is the revenue run-rate. Do not collapse them into one number.
