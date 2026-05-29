@@ -5,20 +5,13 @@ same every time: take an orbital application Rocket Lab could plausibly build,
 model it honestly against public evidence, and find out whether it pencils out.
 Each investigation is a **case**.
 
-The first case pencils out. Under deliberately conservative, source-linked
-assumptions, a Neutron-launched orbital AI-inference data center models to
-roughly **$5.94B in annual revenue** at about **29.3% gross margin** by
-**2036**, for about **1.92x** the cost of an equivalent ground build. Not
-parity, but close enough to take seriously.
-
-What makes it worth modeling is who would build it. Rocket Lab already makes and
-launches spacecraft, so for an orbital business it would supply most of the
-stack to itself: the Neutron launch, the bus, solar, radiators, thermal,
-integration, and operations. Only the GPUs and some networking are outside
-purchases. Any other entrant has to buy launch, spacecraft, and integration at
-market price; Rocket Lab turns those into internal cost, manufacturing learning,
-and a steady book of Neutron launches. Each case pressure-tests that advantage
-against one real application.
+The first case is a Neutron-launched orbital AI-inference data center. Under
+deliberately conservative, source-linked assumptions, it models to roughly
+**$5.94B in annual revenue** at about **29.3% gross margin** by **2036**, for
+about **1.92x** the cost of an equivalent ground build. That is not parity, but
+it is close enough to take seriously, and the baseline likely understates it:
+the model pays market price for the launch, bus, and spacecraft hardware that
+Rocket Lab would supply to itself.
 
 ## Cases
 
