@@ -49,9 +49,9 @@ year**. The shape is the point: launches run 2, 3, 5, 9, 14, 22, 35, 51, 70, 90,
 and the next year pushes past 100 toward the cadence ceiling. 2036 is the
 inflection, not the end.
 
-If you do add up every cohort still alive, the 2036 living fleet is 268 nodes
-earning about **$6.31B a year** at the same 33% margin. That aggregate is the
-sum of the cohort build-out, not a separate headline.
+If you add up every cohort still alive, you get the installed fleet, which the
+Fleet Snapshot at the end tracks. That aggregate is a side effect of the cohort
+build-out, not the headline.
 
 ## How The Numbers Are Built
 
@@ -66,7 +66,9 @@ what produces the **33.3%** gross margin. The ground reference uses the same
 multiple, so both sides target the same margin. That is what makes the
 comparison fair: with margins held equal, the **1.92x** orbital-to-ground cost
 gap is also the price gap, so an orbital token would cost about **90% more**
-than a comparable ground token.
+than a comparable ground token. The multiple itself is just a dial anyone can
+change in the model: it moves every margin together but not the 1.92x cost gap,
+which is set by cost alone.
 
 ## Context: What The Model Is, And Is Not
 
@@ -181,3 +183,21 @@ GPU/package definition tracking, and market-scale updates
 (`RLDC-MARKET-100GW-2036`). Thermal and resilience work continues too:
 hotter-operation physics, long-life reliability, and radiation-shielding mass
 against the solar and radiator stack.
+
+## Fleet Snapshot
+
+The living fleet is only the cohorts still inside their five-year window: nodes
+older than five years stop earning and drop out of the count, the power, and the
+revenue. Tracked every three years, the installed base grows like this:
+
+| Year | Launched to date | Living fleet | Living power | Annual revenue | Annual gross profit |
+|---|---:|---:|---:|---:|---:|
+| 2030 | 19 | 19 | ~7 MW | $0.43B | $0.14B |
+| 2033 | 90 | 85 | ~35 MW | $1.99B | $0.66B |
+| 2036 | 301 | 268 | ~112 MW | $6.31B | $2.10B |
+
+By 2036, 301 nodes have launched but only 268 are live: the 2027 to 2031 cohorts
+have aged past five years and no longer count toward power or revenue. Each
+living node carries about 420 kW, and the whole fleet runs at the same flat 33%
+margin. The point of this view is the slope, not the single-year total: the
+installed base roughly doubles every two to three years as cadence compounds.
