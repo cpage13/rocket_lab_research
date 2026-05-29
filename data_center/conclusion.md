@@ -77,9 +77,12 @@ case lands close enough to ground cost to study seriously.
 Read it with a vertical-integration lens that the baseline does not pay for.
 Many cost lines behave like external buy prices, but in a Rocket Lab-operated
 program Rocket Lab would supply most of them to itself: bus, solar, radiator and
-thermal hardware, integration, launch, and operations. GPUs and some networking
-are the clear outside purchases. That internal-customer effect is upside the
-model leaves on the table, not a freebie baked in.
+thermal hardware, integration, launch, and operations. Laser communications
+belongs on that list too: Rocket Lab completed its acquisition of Mynaric, a
+laser optical communications terminal maker, in April 2026, so the laser links
+between nodes are in-house as well. GPUs and some networking are the clearest
+outside purchases. That internal-customer effect is upside the model leaves on
+the table, not a freebie baked in.
 
 ## Core Default Assumptions
 
