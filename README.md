@@ -5,49 +5,50 @@ same every time: take an orbital application Rocket Lab could plausibly build,
 model it honestly against public evidence, and find out whether it pencils out.
 Each investigation is a **case**.
 
-The first case pencils out. A Neutron-launched orbital AI-inference data center
-models — under deliberately conservative, source-linked assumptions — to roughly
-**$5.94B in annual revenue** at about **29.3% gross margin** by **2036**, for
-about **1.92x** the cost of an equivalent ground build. Not parity, but close
-enough to take seriously.
+The first case pencils out. Under deliberately conservative, source-linked
+assumptions, a Neutron-launched orbital AI-inference data center models to
+roughly **$5.94B in annual revenue** at about **29.3% gross margin** by
+**2036**, for about **1.92x** the cost of an equivalent ground build. Not
+parity, but close enough to take seriously.
 
-The reason to even ask is that Rocket Lab is unusual: it owns the launch vehicle
-*and* most of the spacecraft stack — bus, solar, radiators, thermal,
-integration, operations. That vertical integration lets it become its own
-infrastructure customer, so the same program that earns compute revenue also
-fills its own factory and books its own launches. Few companies could credibly
-attempt this. Each case pressure-tests that advantage against one real
-application.
+What makes it worth modeling is who would build it. Rocket Lab already makes and
+launches spacecraft, so for an orbital business it would supply most of the
+stack to itself: the Neutron launch, the bus, solar, radiators, thermal,
+integration, and operations. Only the GPUs and some networking are outside
+purchases. Any other entrant has to buy launch, spacecraft, and integration at
+market price; Rocket Lab turns those into internal cost, manufacturing learning,
+and a steady book of Neutron launches. Each case pressure-tests that advantage
+against one real application.
 
 ## Cases
 
 | # | Application | Vehicle | Status |
 |---|---|---|---|
-| **1** | Orbital AI-inference data center | Neutron | **Modeled — current** |
-| 2 | Communications | — | Planned |
+| **1** | Orbital AI-inference data center | Neutron | **Modeled, current** |
+| 2 | Communications | (TBD) | Planned |
 
-**Case 1 — orbital data center** is the only modeled case today. Read it in
+**Case 1, the orbital data center,** is the only modeled case today. Read it in
 three depths: the [conclusion](data_center/conclusion.md) for the verdict, the
 [data-center guide](data_center/README.md) for how it works, and
 [`models/space/default.json`](data_center/models/space/default.json) for every
 number with its provenance.
 
-**Case 2 — communications** is a reserved workstream. It makes no model claims
+**Case 2, communications,** is a reserved workstream. It makes no model claims
 in this release.
 
 ## Repository Map
 
 ```text
 rklb_space_data_center/
-├── README.md            # this file — the program and its cases
+├── README.md            # this file: the program and its cases
 ├── data_center/         # Case 1: conclusion, assumptions, model artifacts
 ├── communications/      # Case 2: reserved, not yet modeled
-├── research/            # shared evidence wiki + source ledger
+├── research/            # shared evidence wiki and source ledger
 ├── code/                # the model engine (rklb-value)
 └── docs/                # architecture intent, ADRs, agent guide
 ```
 
-- **Case 1 — Data Center** lives in [data_center/](data_center/): start with the
+- **Case 1, Data Center,** lives in [data_center/](data_center/): start with the
   [conclusion](data_center/conclusion.md), then the
   [guide](data_center/README.md) and
   [assumptions ledger](data_center/assumptions.md).
