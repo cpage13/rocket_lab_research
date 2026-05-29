@@ -50,6 +50,21 @@ separate from cadence):
 The 90-launch year is the production and deployment moment; the 268-node active
 base is the revenue run-rate. Do not collapse them into one number.
 
+## How The Numbers Are Built
+
+The cost is bottom-up. Each node's build-and-launch cost is the sum of its
+parts: compute, bus, solar, radiator, and launch. Multiply by the fleet
+deployed or living in a given year and that is the annual cost. None of it is a
+top-down market estimate.
+
+Revenue is tied to that cost, not guessed on its own. The model prices at a
+multiple of cost, about **1.5x** tapering toward **1.40x** by 2036, which is
+what produces the roughly **29.3%** gross margin. The ground reference uses the
+same multiple, so both sides target the same margin. That is what makes the
+comparison fair: with margins held equal, the **1.92x** orbital-to-ground cost
+gap is also the price gap, so an orbital token would cost about **90% more**
+than a comparable ground token.
+
 ## Context: What The Model Is, And Is Not
 
 The modeled product is orbital AI inference, not frontier-model training. The
@@ -93,12 +108,12 @@ deployed-year cohort as the space model (**90 nodes**, **3,330 GPU packages**,
 | Orbital build plus launch | about **$7.05B** |
 | Orbital / ground ratio | about **1.92x** |
 
-If both providers target similar margins, that ratio implies an orbital token
-costing roughly **90% more** than a comparable ground token. The costs are in
-the same order of magnitude, but this is not parity. Each ground input traces to
-the research ledger under `RLDC-GROUND-COST-BASIS`. Still to refine on the
-ground side: energy price, PUE, utilization, facility shell and fit-out,
-cooling, operations, maintenance, and the exact package basis.
+The costs are in the same order of magnitude, but this is not parity (see
+[How The Numbers Are Built](#how-the-numbers-are-built) for why this cost ratio
+is also the price ratio). Each ground input traces to the research ledger under
+`RLDC-GROUND-COST-BASIS`. Still to refine on the ground side: energy price, PUE,
+utilization, facility shell and fit-out, cooling, operations, maintenance, and
+the exact package basis.
 
 ## Cost-Down And Thermal Sensitivities
 
