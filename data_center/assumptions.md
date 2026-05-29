@@ -41,7 +41,7 @@ evidence.
 | `RLDC-CADENCE-90` | The target case uses 90 launches per year in 2036. | `scenario` | Model input, public doc claim | `inputs.config.cadence.launches_at_year_10`; `business.years."2036".launches` | Venture-model target, not Rocket Lab guidance. |
 | `RLDC-NODE-POWER-400KW` | The current simplification is one roughly 400 kW node per launch. | `derived_estimate` | Model output, public doc claim | `physical.years."2036".kw_per_node` | The promoted output reports about 422 kW per node in 2036. Node is not the spacecraft bus. |
 | `RLDC-SERVICE-LIFE-5Y` | Service life is five years in the default model. | `scenario` | Model input, public doc claim | `inputs.config.fleet.service_life_years`; `research/SOURCE_INDEX.md` `THR-008` | Design target and base-case assumption, not field-proven GPU service life. |
-| `RLDC-REVENUE-MULTIPLE-1_5X` | The central default revenue band is anchored at 1.5x annualized cost and tapers to 1.40x by 2036. | `scenario` | Model input, public doc claim | `inputs.config.revenue.central`; `business.years."2036".margin_central_pct` | The 2036 promoted output is roughly 29.3 percent gross margin. Low and high R variants are sensitivities. |
+| `RLDC-REVENUE-MULTIPLE-1_5X` | The central default revenue band is flat at 1.5x annualized cost, with no taper. | `scenario` | Model input, public doc claim | `inputs.config.revenue.central`; `business.years."2036".margin_central_pct` | The promoted output is a flat 33.3 percent gross margin. Low and high R variants are sensitivities. |
 | `RLDC-MARKET-100GW-2036` | The rough mid-2030s AI data-center market reference is order-of-100 GW. | `projection` | Public scale sanity check | `research/economics/ai_datacenter_tam.md`; McKinsey 2030 AI-related capacity projection | This is context for scale, not a market-share thesis. |
 | `RLDC-GROUND-COST-BASIS` | The ground comparison asks whether a five-year equivalent ground data-center cohort is in the same order of magnitude as the orbital cohort. | `derived_estimate` | Ground reference boundary, public doc claim | `data_center/models/ground/default.json`; `research/SOURCE_INDEX.md`; `research/economics/ground_infrastructure_electricity_costs_2036.md` | Current ground output labels the comparison `same_order_of_magnitude`. It supports a cost-scale screen, not parity or market validation. |
 | `RLDC-SOLAR-RADIATOR-COST` | The current model uses solar and radiator cost dials of $0.04M/kW each. | `scenario` | Model input, open research question | `inputs.config.physical.solar_cost_musd_per_kw`; `inputs.config.physical.radiator_cost_musd_per_kw` | Treat this as unresolved until better sourced. |
@@ -59,8 +59,8 @@ These values are derived from the promoted default JSON, not external facts.
 | `RLDC-SPACE-2036-GPU-PACKAGES-PER-NODE` | 37 GPU packages per node in 2036 | `derived_estimate` | `physical.years."2036".gpus_per_node` |
 | `RLDC-SPACE-2036-LIVING-FLEET` | 268 living nodes in 2036 | `derived_estimate` | `business.years."2036".living_fleet` |
 | `RLDC-SPACE-2036-ON-ORBIT-POWER` | About 112 MW active on-orbit node power in 2036 | `derived_estimate` | `business.years."2036".kw_living_fleet` |
-| `RLDC-SPACE-2036-REVENUE-CENTRAL` | About $5.94B annual living-fleet revenue in 2036, central R band | `derived_estimate` | `business.years."2036".revenue_annual_fleet_musd_central` |
-| `RLDC-SPACE-2036-MARGIN-CENTRAL` | About 29.3 percent gross margin in 2036, central R band | `derived_estimate` | `business.years."2036".margin_central_pct` |
+| `RLDC-SPACE-2036-REVENUE-CENTRAL` | About $6.31B annual living-fleet revenue in 2036, central R band | `derived_estimate` | `business.years."2036".revenue_annual_fleet_musd_central` |
+| `RLDC-SPACE-2036-MARGIN-CENTRAL` | A flat 33.3 percent gross margin, central R band | `derived_estimate` | `business.years."2036".margin_central_pct` |
 
 ## Ground Reference Boundary
 
