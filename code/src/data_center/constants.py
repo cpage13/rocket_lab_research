@@ -237,38 +237,36 @@ volume. NOT RKLB-published; needs follow-up source."""
 
 R_BAND_CENTRAL_ANCHORS_DEFAULT: Final[tuple[tuple[int, float], ...]] = (
     (2026, 1.50),
-    (2028, 1.48),
-    (2030, 1.46),
-    (2032, 1.44),
-    (2034, 1.42),
-    (2036, 1.40),
+    (2028, 1.50),
+    (2030, 1.50),
+    (2032, 1.50),
+    (2034, 1.50),
+    (2036, 1.50),
 )
 """ESTIMATE/SCENARIO (REV-008). Central R trajectory anchors (6
-anchors). Engine linearly interpolates between adjacent anchors. This is a
-mild decay from 33.3% gross margin at R=1.50 to 28.6% at R=1.40, keeping
-the modeled five-year operating plan above the 25% active-fleet margin
-floor."""
+anchors). Engine linearly interpolates between adjacent anchors. Flat at
+R=1.50 with no taper: each cohort launches fresh and earns a constant 33.3%
+gross margin across its five-year life. Kept as six anchors so any year can
+be re-shaped per scenario (see scenarios/default.yaml)."""
 
 R_BAND_LOW_ANCHORS_DEFAULT: Final[tuple[tuple[int, float], ...]] = (
     (2026, 1.20),
     (2028, 1.20),
-    (2030, 1.15),
-    (2032, 1.15),
-    (2034, 1.15),
-    (2036, 1.15),
+    (2030, 1.20),
+    (2032, 1.20),
+    (2034, 1.20),
+    (2036, 1.20),
 )
-"""ESTIMATE/SCENARIO (REV-008). Low R trajectory (6 anchors; flat
-1.20 until 2030 step to 1.15). Bear case approaches neocloud
-post-depreciation survival floor."""
+"""ESTIMATE/SCENARIO (REV-008). Low R trajectory (6 anchors, flat at
+1.20). Bear case sits near the neocloud post-depreciation survival floor."""
 
 R_BAND_HIGH_ANCHORS_DEFAULT: Final[tuple[tuple[int, float], ...]] = (
     (2026, 1.80),
     (2028, 1.80),
-    (2030, 1.75),
-    (2032, 1.70),
-    (2034, 1.65),
-    (2036, 1.65),
+    (2030, 1.80),
+    (2032, 1.80),
+    (2034, 1.80),
+    (2036, 1.80),
 )
-"""ESTIMATE/SCENARIO (REV-008). High R trajectory (6 anchors; declines
-slower than central). Bull case still feels commoditization (R4 finding)
-but later and less steeply."""
+"""ESTIMATE/SCENARIO (REV-008). High R trajectory (6 anchors, flat at
+1.80). Bull case holds a durable premium with no modeled taper."""
