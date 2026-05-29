@@ -23,8 +23,8 @@ mass assumptions.
 
 The promoted default 2036 block-upgrade central case is mass-bound, with 37 GPU
 packages per node, about 422 kW per node, 90 launches in the year, 268 living
-nodes, about $5.94B in annual living-fleet revenue, and about 29.3 percent gross
-margin. Treat those as traceable model outputs from
+nodes, about $6.31B in annual living-fleet revenue, and a flat 33.3 percent
+gross margin. Treat those as traceable model outputs from
 `data_center/models/space/default.json`, not a final recommendation.
 
 The ground reference is an order-of-magnitude check for the same 2036

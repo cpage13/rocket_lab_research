@@ -28,11 +28,11 @@ The model ramps for years, but **2036** is the takeoff. That year Rocket Lab
 launches **90 Neutron missions**, deploys **90 new orbital nodes**, and adds
 about **38 MW** of new orbital compute power. That is the cadence story.
 
-The revenue run-rate is separate. By 2036 the active on-orbit base reaches
-**268 nodes** and about **112 MW**, producing roughly **$5.94B** in annual
-revenue and **$1.74B** in annual gross profit, about **29.3%** gross margin. The
-build-and-launch program runs about **1.92x** the cost of an equivalent ground
-data center: not parity, but close enough to take seriously.
+Each cohort then earns a flat **33% gross margin** for its full five-year life,
+and the cohorts compound. The 2036 launches alone earn about **$2.1B a year** in
+revenue and about **$700M of gross profit a year**. The build-and-launch program
+runs about **1.92x** the cost of an equivalent ground data center: not parity,
+but close enough to take seriously.
 
 ## Where To Read It
 
