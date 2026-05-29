@@ -105,22 +105,22 @@ revenue bands are sensitivity outputs, not the public default.
 
 ## Ground Reference
 
-The ground comparison is deliberately cautious. It anchors to the same 2036
-deployed-year cohort as the space model (**90 nodes**, **3,330 GPU packages**,
-**37,978 kW**), not to the 112 MW active base.
+As a sanity check, the model builds the same 2036 cohort on the ground: the same
+90 nodes, 3,330 GPU packages, and 38 MW of compute, but in a terrestrial data
+center instead of orbit. Over five years:
 
-| Reference (five-year) | Value |
+| Same 2036 cohort, five-year cost | Value |
 |---|---:|
-| Ground build | about **$3.68B** |
-| Orbital build plus launch | about **$7.05B** |
-| Orbital / ground ratio | about **1.92x** |
+| Built on the ground | about **$3.68B** |
+| Built and launched to orbit | about **$7.05B** |
+| Orbital vs ground | about **1.92x** |
 
-The costs are in the same order of magnitude, but this is not parity (see
-[How The Numbers Are Built](#how-the-numbers-are-built) for why this cost ratio
-is also the price ratio). Each ground input traces to the research ledger under
-`RLDC-GROUND-COST-BASIS`. Still to refine on the ground side: energy price, PUE,
-utilization, facility shell and fit-out, cooling, operations, maintenance, and
-the exact package basis.
+In plain terms: orbital costs about **1.92x** what ground costs for the same
+compute, so a buyer pays roughly **90% more** for an orbital token than a ground
+token. That is not parity, but it is the same order of magnitude, which is the
+surprising part: a brand-new orbital build lands within about 2x of mature
+ground infrastructure. The ground figure is a rough cost screen, not a
+site-specific quote.
 
 ## Cost-Down And Thermal Sensitivities
 
