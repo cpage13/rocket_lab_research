@@ -57,3 +57,11 @@ static conclusion are the current data-center output.
 - If communications or other Rocket Lab workstreams gain runnable scenarios,
   a project-level scenario runner should include them alongside data-center
   scenarios.
+- The orbital communications architecture is only partly defined. Inter-node
+  links are optical (laser) and in-house, and that is what "laser-linked orbital
+  compute" in these docs refers to: nodes talking to each other. The
+  ground-to-orbit link (constellation to Earth) is still TBD, either narrowband
+  RF or a ground-to-orbit laser via optical ground stations. Treat it as an open
+  research item for the future communications workstream, to settle once the
+  link architecture is chosen. Do not let "laser-linked" be read as the ground
+  link.
