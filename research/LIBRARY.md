@@ -117,6 +117,7 @@ docs behind any claim you want to inspect:
 | [node_design/radiator_costdown_2030_2036.md](node_design/radiator_costdown_2030_2036.md) | Radiator cost-down and hot-loop trajectory. | `$40k/kW` remains a cautious default; `$20k/kW` and `0.006-0.008 t/kW` are useful 2036 upside sensitivities, but cost evidence remains weak and GPU temperature limits require a chip-to-panel thermal model. |
 | [node_design/gpu_temperature_cooling_limits.md](node_design/gpu_temperature_cooling_limits.md) | GPU/package temperature, liquid-cooling, and orbital radiator-temperature research. | Warmer coolant and hotter radiator operation are plausible high-leverage levers, but junction temperature, coolant temperature, and radiator surface temperature must be kept separate. |
 | [node_design/gpu_hotter_operation_reliability_2030_2036.md](node_design/gpu_hotter_operation_reliability_2030_2036.md) | GPU/HBM hotter-operation and reliability research for 2030-2036. | Public evidence supports warmer coolant, lower thermal resistance, and hotter radiator surfaces more strongly than it supports a literal `+10-20 deg C` sustained GPU junction lift; `+20 deg C` should remain unsafe for the default five-year orbital model. |
+| [node_design/electric_propulsion_stationkeeping_5v7yr.md](node_design/electric_propulsion_stationkeeping_5v7yr.md) | Electric-propulsion station-keeping mass for 5 vs 7 years at low SSO. | About `150 kg` (5 yr) to `184 kg` (7 yr) for an 8 t node, roughly 2 to 3% of mass and inside the existing 250 to 550 kg propulsion line; the marginal 5-to-7-year cost is only ~25 to 35 kg and power is a non-issue. Exploratory (2026-05-29). |
 
 ### Orbital
 
@@ -125,6 +126,8 @@ docs behind any claim you want to inspect:
 | [orbital/orbit_types_primer.md](orbital/orbit_types_primer.md) | Orbit primer. | SSO is a LEO subtype; relay layers change contact time. |
 | [orbital/orbits_environment.md](orbital/orbits_environment.md) | SSO, radiation, and debris environment. | Dawn-dusk SSO reduces eclipse; SSO payload remains estimated. |
 | [orbital/thermal_analysis.md](orbital/thermal_analysis.md) | Early thermal sizing. | Historical; later mass/lint work supersedes radiator-area numbers. |
+| [orbital/leo_lifetime_large_node_5v7yr.md](orbital/leo_lifetime_large_node_5v7yr.md) | LEO natural lifetime vs altitude for a large high-drag node (5 vs 7 yr). | The huge deployed area gives a very low ballistic coefficient (~3.6 to 7.3 vs ~45 kg/m2), so the node decays 6 to 13x faster; 500 to 600 km lasts only ~1.3 to 5 yr (~0.4 to 2 yr through solar max); a 5-yr natural life needs ~700 km and 7 yr needs ~720 to 750 km. Exploratory (2026-05-29). |
+| [orbital/higher_orbit_tradeoffs_lifetime.md](orbital/higher_orbit_tradeoffs_lifetime.md) | Higher-orbit tradeoffs for a 7-year natural life. | Delta-v is not binding (~160 m/s to 800 km); the binding side effect is radiation (rising TID and an un-shieldable GPU/HBM single-event-upset rate that climbs with altitude); above ~600 to 650 km a mandatory active deorbit system is required; 7-yr natural life put at ~800 to 900 km. Exploratory (2026-05-29). |
 
 ### Peer Review
 
@@ -149,6 +152,7 @@ docs behind any claim you want to inspect:
 | [rocket_lab/neutron/launch_cost_economics.md](rocket_lab/neutron/launch_cost_economics.md) | Internal Neutron launch-cost estimate. | Internal marginal cost is estimated and remains a key uncertainty. |
 | [rocket_lab/neutron/neutron_specs.md](rocket_lab/neutron/neutron_specs.md) | Neutron specs. | Published LEO/fairing data are known; SSO payload is not published. |
 | [rocket_lab/neutron/payload_and_block_upgrade.md](rocket_lab/neutron/payload_and_block_upgrade.md) | SSO payload and block-upgrade estimate. | Working SSO payload and block-upgrade values are estimates, not RL-published facts. |
+| [rocket_lab/neutron/neutron_payload_vs_orbit.md](rocket_lab/neutron/neutron_payload_vs_orbit.md) | Neutron payload vs orbit (LEO, SSO, higher SSO). | About 13 t reusable to LEO; the LEO-to-SSO penalty is ~25 to 30% (~9.5 t to SSO, matching the deep docs), not the 10 to 20% headline; higher SSO is cheap (~5% to 700 to 800 km); "halve the payload" is refuted and the 12.5 t figure is expendable/block-upgrade, not baseline reusable. Exploratory (2026-05-29). |
 | [rocket_lab/overview.md](rocket_lab/overview.md) | Rocket Lab company overview. | Rocket Lab is unusually vertically integrated for this thesis. |
 | [rocket_lab/space_hardware_capabilities.md](rocket_lab/space_hardware_capabilities.md) | Rocket Lab hardware capabilities. | Launch, bus, solar, mechanisms, and comms are strong; deployable radiators are the gap. |
 
@@ -168,6 +172,7 @@ docs behind any claim you want to inspect:
 | [synthesis/preliminary_findings.md](synthesis/preliminary_findings.md) | Wave-1 synthesis. | No physics wall found, but many numbers later changed. |
 | [synthesis/wave4_synthesis.md](synthesis/wave4_synthesis.md) | Wave-4 synthesis. | Establishes payback/GPU-obsolescence as the crux; launch-cost framing is historical. |
 | [synthesis/wave5_synthesis.md](synthesis/wave5_synthesis.md) | Wave-5 synthesis. | Latest full synthesis: flyability crossover resolves at the favorable generation, conditionally. |
+| [synthesis/orbital_lifetime_5v7yr_synthesis.md](synthesis/orbital_lifetime_5v7yr_synthesis.md) | Synthesis of the 5-vs-7-year orbital-lifetime study (4 docs). | The mass/payload cost of longevity is single-digit percent on every lever; 5 years is not free at low SSO (needs ~700 km or propulsion) but 7 years is cheap either way; the real trade is radiation plus mandatory deorbit (fly high) vs continuous station-keeping (stay low); design life is likely revenue-limited (aging silicon), not orbit-limited; the 7-yr natural-life altitude is a band ~720 to 900 km pending a numerical propagation. Exploratory (2026-05-29). |
 
 ### Valuation
 
@@ -218,6 +223,16 @@ data-center thesis.
 
 **SSO** — Sun-synchronous orbit. Dawn-dusk SSO is the enabling orbit because it
 reduces eclipse and battery burden.
+
+**Ballistic coefficient (BC):** mass per unit drag area (kg/m2) of a spacecraft.
+A low BC means high drag relative to mass, so the node decays faster; the large
+deployed area of a data-center node gives an unusually low BC and a short natural
+orbital lifetime at low altitude.
+
+**Single-event upset (SEU):** a transient bit-level error caused by an energetic
+particle striking electronics (GPU/HBM logic or memory). The SEU rate rises with
+altitude and is largely un-shieldable, which makes it a binding cost of flying
+higher rather than a mass problem.
 
 **Hot-loop radiator** — a thermal architecture that runs coolant/radiator
 surfaces hotter so the radiator can reject more heat per square meter.
