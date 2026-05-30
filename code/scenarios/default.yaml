@@ -95,7 +95,7 @@ gospel:
   # are the metadata block. node_mass_fixed_t stays 2.5 (cycle-1 value).
   # Block-upgraded reusable SSO scenario (SOURCE_INDEX NTR-007), not an
   # official Rocket Lab SSO payload figure.
-  mass_envelope_t: 12.5
+  mass_envelope_t: 12.5            # block-upgrade SSO baseline (ALWAYS the baseline; 12.5 t to SSO, RLDC-PAYLOAD-SSO-UPGRADE / NTR-007)
   node_mass_fixed_t: 2.5
   node_volume_fixed_m3: 5.0
   tjmax_lift_year: 5

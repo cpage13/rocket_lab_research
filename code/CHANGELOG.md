@@ -3,6 +3,43 @@
 All notable changes to the `rklb-value` orbital data-center valuation
 calculator. Versions track the output JSON **schema version**.
 
+## v8, Cycle 4 (2026-05-30), service-life cliff fix + 7-year flat-R scenario
+
+Schema is unchanged (still v8); this is a bug fix plus a scenario change. The
+promoted default (5-year life, flat R 1.50) is byte-identical: the same 268
+living nodes and about $6.31B 2036 central revenue.
+
+### Fixed
+
+- **Service-life cliff now tracks the scenario.** The living-fleet cliff in
+  `fleet.py` called `is_alive_at(year)` without the configured life, so it
+  always used the hardcoded 5-year `SERVICE_LIFE_YEARS` even when a scenario set
+  `fleet.service_life_years` to another value. Per-node cost already used the
+  scenario value, so a 7-year scenario lowered cost but did not grow the fleet
+  (the opposite of the real upside). `compute_fleet_year` now takes a required
+  `service_life_years`, threaded from `config.fleet.service_life_years` in
+  `engine.py`, and `is_alive_at`'s `service_life` is required (no silent
+  default), so this class of bug cannot recur. The 5-year default is unchanged
+  (5 equals the old constant).
+
+### Changed
+
+- **7-year upside scenario uses a flat 1.47 central R.** `upside_7yr.yaml`
+  carried a leftover central taper (1.50 down to 1.40); it is now flat at 1.47,
+  about 2% below the 5-year 1.50, the discount for locking a fixed long-term
+  contract. R is kept (not removed) and stays a flat per-cohort multiple with no
+  in-life decay curve, because a fixed contract fixes the price. The low / high
+  brackets are the flat default 1.20 / 1.80.
+
+### Added
+
+- **Block-upgrade baseline comment.** `default.yaml`'s `mass_envelope_t: 12.5`
+  is annotated as the always-on block-upgrade SSO baseline
+  (RLDC-PAYLOAD-SSO-UPGRADE, NTR-007).
+- **Two 7-year tests.** One asserts the 2036 living fleet grows beyond the
+  default's 268 and matches the 7-year cohort window; the other asserts the flat
+  1.47 central margin holds at about 31.97% across the trajectory.
+
 ## v8, Cycle 3 (2026-05-29), R band flattened (no taper)
 
 Schema is unchanged from cycle 2 (still v8); this is a default-scenario and
