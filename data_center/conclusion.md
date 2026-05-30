@@ -154,6 +154,17 @@ halving the launch price moves the orbital-to-ground ratio only from 1.92x to
 about 1.75x, roughly a 9% cut in cost per token. The levers that matter are
 solar, radiator, and how much compute each launch carries, not the rocket.
 
+A further lever is service life. The base case amortizes each node over five
+years; building the node to last seven (not assumed in the default) spreads the
+same build cost over seven years instead of five, about a 30% lower annual cost.
+The operator can pass that through as roughly a 30% lower annual price at the
+same margin and still recover the node, which narrows the token premium, but
+through pricing rather than cheaper hardware: the orbital build-cost ratio
+itself does not move. Reaching seven years is not a significant ask of Neutron
+or the flight; it mainly takes a bit more on-orbit hardware (station-keeping and
+shielding), single-digit-percent on payload. See
+`research/synthesis/orbital_lifetime_5v7yr_synthesis.md`.
+
 ## Why The Scale Is Not Outlandish
 
 The 2036 deployed-year capacity is about **38 MW** (rounded elsewhere to about
