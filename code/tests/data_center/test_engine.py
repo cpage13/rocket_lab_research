@@ -587,6 +587,41 @@ def test_upside_7yr_scenario_overrides_service_life() -> None:
     assert cfg.fleet.service_life_years == 7
 
 
+def test_upside_7yr_grows_living_fleet_beyond_default() -> None:
+    """The cliff fix makes a 7-year scenario keep cohorts alive two years
+    longer, so the 2036 living fleet exceeds the 5-year default's 268. The
+    living set now tracks config.fleet.service_life_years, not a hardcoded 5.
+    """
+    default_out = run_valuation(load_config(str(_SCENARIOS / "default.yaml")))
+    upside_out = run_valuation(load_config(str(_SCENARIOS / "upside_7yr.yaml")))
+    default_2036 = int(_num(default_out.business.years["2036"].living_fleet.value))
+    upside_2036 = int(_num(upside_out.business.years["2036"].living_fleet.value))
+    assert default_2036 == 268
+    assert upside_2036 > default_2036
+    # 7-year window: 2036 living == launches over FY2030..FY2036 (vs FY2032..FY2036
+    # at the 5-year default); the extra living cohorts are FY2030 and FY2031.
+    upside_years = upside_out.business.years
+    window_launches = sum(upside_years[str(fy)].launches.value for fy in range(2030, 2037))
+    assert upside_2036 == window_launches
+
+
+def test_upside_7yr_central_margin_flat_at_1_47() -> None:
+    """The 7-year scenario holds a flat 1.47 central R, so the central gross
+    margin is constant at (1.47 - 1) / 1.47, about 31.97%, across the
+    trajectory (no taper, no in-life decay: a locked contract fixes the price).
+    """
+    out = run_valuation(load_config(str(_SCENARIOS / "upside_7yr.yaml")))
+    margins = [
+        _num(by.margin_central_pct.value)
+        for by in out.business.years.values()
+        if _num(by.launches.value) > 0
+    ]
+    expected_margin_pct = (1.47 - 1.0) / 1.47 * 100.0
+    assert margins  # at least one active year
+    for margin in margins:
+        assert margin == pytest.approx(expected_margin_pct, abs=0.05)
+
+
 def test_run_valuation_uses_known_gens_by_default() -> None:
     """With no generation override, run_valuation uses the bundled KNOWN_GENS."""
     out = run_valuation(ValuationConfig())

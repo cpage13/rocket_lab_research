@@ -1,14 +1,20 @@
 # =============================================================================
-# rklb-value — 7-YEAR SERVICE-LIFE UPSIDE scenario (v8 cycle-2)
+# rklb-value, 7-YEAR SERVICE-LIFE UPSIDE scenario (v8)
 # =============================================================================
 #
-# The v8 default dial set with `fleet.service_life_years` raised to 7 — the
-# upside end of the honest 3.5-7-year service-life band. Everything else is
-# identical to the default scenario.
+# The v8 default dial set with two changes from the default scenario:
+#   1. fleet.service_life_years raised to 7 (the upside end of the honest
+#      3.5 to 7 year service-life band).
+#   2. the central R multiple set to a flat 1.47 (a locked 7-year contract,
+#      about 2% below the 5-year 1.50). R is kept, not removed; it stays a
+#      flat per-cohort multiple with no in-life decay, because a fixed
+#      long-term contract fixes the price.
+# The low / high R brackets and every other dial are identical to the default.
 #
-# Why this scenario: a 7-year cohort life keeps each node revenue-bearing
-# two years longer before the cliff, so the living fleet is larger. It
-# tests the service-life sensitivity.
+# Why this scenario: a 7-year cohort life keeps each node revenue-bearing two
+# years longer before the cliff, so the living fleet is larger; the flat 1.47
+# central multiple is the price discount for locking the longer contract. It
+# tests the service-life (and locked-rate) sensitivity.
 #
 # To run:   uv run rklb-value scenarios/upside_7yr.yaml
 # =============================================================================
@@ -42,27 +48,31 @@ volume:
   neutron_fairing_usable_volume_m3: 80.0
 
 r_band:
+  # Flat, no taper (matches the default's flat-R design). The 7-year term is a
+  # locked long-term contract, so the central multiple is held flat at 1.47,
+  # about 2% below the 5-year 1.50. No in-life decay curve: a fixed contract
+  # fixes the price. Low / high are the same flat brackets as the default.
   central:
-    - { fy: 2026, r: 1.50 }
-    - { fy: 2028, r: 1.48 }
-    - { fy: 2030, r: 1.46 }
-    - { fy: 2032, r: 1.44 }
-    - { fy: 2034, r: 1.42 }
-    - { fy: 2036, r: 1.40 }
+    - { fy: 2026, r: 1.47 }
+    - { fy: 2028, r: 1.47 }
+    - { fy: 2030, r: 1.47 }
+    - { fy: 2032, r: 1.47 }
+    - { fy: 2034, r: 1.47 }
+    - { fy: 2036, r: 1.47 }
   low:
     - { fy: 2026, r: 1.20 }
     - { fy: 2028, r: 1.20 }
-    - { fy: 2030, r: 1.15 }
-    - { fy: 2032, r: 1.15 }
-    - { fy: 2034, r: 1.15 }
-    - { fy: 2036, r: 1.15 }
+    - { fy: 2030, r: 1.20 }
+    - { fy: 2032, r: 1.20 }
+    - { fy: 2034, r: 1.20 }
+    - { fy: 2036, r: 1.20 }
   high:
     - { fy: 2026, r: 1.80 }
     - { fy: 2028, r: 1.80 }
-    - { fy: 2030, r: 1.75 }
-    - { fy: 2032, r: 1.70 }
-    - { fy: 2034, r: 1.65 }
-    - { fy: 2036, r: 1.65 }
+    - { fy: 2030, r: 1.80 }
+    - { fy: 2032, r: 1.80 }
+    - { fy: 2034, r: 1.80 }
+    - { fy: 2036, r: 1.80 }
 
 launch_cost:
   low_cadence_cost_musd: 25.0

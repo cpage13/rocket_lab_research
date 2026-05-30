@@ -1,8 +1,8 @@
-"""Fleet rollup: cohort vintaging under 5-year cliff + R-band aggregation.
+"""Fleet rollup: cohort vintaging under the service-life cliff + R-band aggregation.
 
 A cohort is the set of nodes launched in a given calendar year. Each
 cohort carries its launch-year gen-mix (frontier_generation),
-per-node revenue/cost, and lifetime (5 years per D1).
+per-node revenue/cost, and lifetime (service_life_years, default 5 per D1).
 
 See `research/SOURCE_INDEX.md` for claim IDs and the code README for the
 current algorithmic contract.
@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from pydantic import BaseModel, ConfigDict
 
 from data_center.config import RBand, YearRValue
-from data_center.constants import SERVICE_LIFE_YEARS
 from data_center.provenance import FieldPath, ProvenanceCell, cell
 
 logger = logging.getLogger(__name__)
@@ -50,12 +49,15 @@ class Cohort(BaseModel):
     rev_per_node_musd_low: float
     rev_per_node_musd_high: float
 
-    def is_alive_at(self, year: int, service_life: int = SERVICE_LIFE_YEARS) -> bool:
-        """True iff this cohort is still within the 5y cliff at ``year``.
+    def is_alive_at(self, year: int, service_life: int) -> bool:
+        """True iff this cohort is still within the service-life cliff at ``year``.
 
         Args:
             year: The calendar year to test.
-            service_life: Node operating life in years (hard cliff, D1).
+            service_life: Node operating life in years (the hard cliff, D1).
+                Required, no default: callers pass the scenario's
+                ``fleet.service_life_years`` so the cliff tracks the configured
+                life and cannot silently fall back to a constant.
 
         Returns:
             ``True`` if ``launch_year <= year < launch_year + service_life``.
@@ -169,12 +171,14 @@ def compute_fleet_year(
     prev_cumulative_revenue_low_musd: float = 0.0,
     prev_cumulative_revenue_high_musd: float = 0.0,
     *,
+    service_life_years: int,
     year_path: FieldPath,
 ) -> FleetYear:
     """Compose fleet rollup for one calendar year.
 
-    Living cohorts are those with launch_year in ``[year - 4, year]``
-    under the 5-year hard cliff (D1). Per-cohort kW / PFLOPS / cost /
+    Living cohorts are those with launch_year in
+    ``[year - (service_life_years - 1), year]`` under the service-life hard
+    cliff (D1). Per-cohort kW / PFLOPS / cost /
     revenue are summed over the living set; gross profit and margin
     follow; cumulative revenue extends the prior-year running total.
 
@@ -191,6 +195,10 @@ def compute_fleet_year(
             prior year, low R.
         prev_cumulative_revenue_high_musd: Cumulative revenue through the
             prior year, high R.
+        service_life_years: Node operating life in years (the hard cliff, D1),
+            threaded from ``config.fleet.service_life_years``. Passed
+            explicitly (no default) so the living set tracks the configured
+            life.
         year_path: JSON path of this fleet-year block.
 
     Returns:
@@ -199,7 +207,7 @@ def compute_fleet_year(
     if isinstance(launches_this_year, bool) or not isinstance(launches_this_year, int):
         raise TypeError("launches_this_year must be an integer mission count")
 
-    living = [c for c in cohorts if c.is_alive_at(year)]
+    living = [c for c in cohorts if c.is_alive_at(year, service_life_years)]
     deployed = [c for c in cohorts if c.launch_year == year]
     living_count = sum(c.nodes_deployed for c in living)
 

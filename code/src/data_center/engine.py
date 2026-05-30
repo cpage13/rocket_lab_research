@@ -1080,6 +1080,7 @@ def compute_fleet_trajectory(
             cumul_central,
             cumul_low,
             cumul_high,
+            service_life_years=config.fleet.service_life_years,
             year_path=f'business.years."{year.fy}"',
         )
         fleet_years.append(fleet_year)
