@@ -126,6 +126,7 @@ Intentionally excluded:
 | [node_design/radiator_costdown_2030_2036.md](node_design/radiator_costdown_2030_2036.md) | draft | Tests whether radiator cost/mass can fall enough by 2030-2036 to narrow the orbital premium. | Physics and mass ranges are source-supported; `$ / kW` remains scenario-only pending vendor quote or bottom-up BOM. |
 | [node_design/gpu_temperature_cooling_limits.md](node_design/gpu_temperature_cooling_limits.md) | draft | Clarifies GPU junction/coolant/radiator temperature definitions and tests whether hotter operation can reduce orbital radiator mass/cost by 2030. | Public evidence supports warmer liquid-cooling loops and T^4 radiator leverage; exact future GPU junction limits and chip-to-radiator thermal resistance remain unresolved. |
 | [node_design/gpu_hotter_operation_reliability_2030_2036.md](node_design/gpu_hotter_operation_reliability_2030_2036.md) | draft | Tests whether future AI GPU/HBM packages can safely run `10-20 deg C` hotter for sustained orbital service and what that would mean for radiator sizing. | Public sources support warmer liquid cooling and HBM thermal-resistance improvements; exact future GPU/HBM sustained junction limits are not public, and `+20 deg C` hotter junction operation should be a stress sensitivity, not a default. |
+| [node_design/electric_propulsion_stationkeeping_5v7yr.md](node_design/electric_propulsion_stationkeeping_5v7yr.md) | draft | Sizes electric-propulsion station-keeping mass for 5 vs 7 years at low SSO: ~150 kg (5 yr) to ~184 kg (7 yr) for an 8 t node, inside the existing 250 to 550 kg propulsion line, with only ~25 to 35 kg marginal 5-to-7-year cost. | Added 2026-05-29 from the exploratory orbital-lifetime study; propellant/mass figures are derived estimates pending a node-specific propulsion design. |
 
 ### Orbital
 
@@ -134,6 +135,8 @@ Intentionally excluded:
 | [orbital/orbit_types_primer.md](orbital/orbit_types_primer.md) | reviewed | Primer for orbit types, relays, satellites, and launch. | Has source section; reference doc. |
 | [orbital/orbits_environment.md](orbital/orbits_environment.md) | draft | Dawn-dusk SSO reduces eclipse and keeps radiation manageable. | Has source section and external citations. |
 | [orbital/thermal_analysis.md](orbital/thermal_analysis.md) | stale | Early thermal sizing; later mass-model/lint work supersedes radiator-area numbers. | Source-status banner added 2026-05-25; historical sizing remains superseded. |
+| [orbital/leo_lifetime_large_node_5v7yr.md](orbital/leo_lifetime_large_node_5v7yr.md) | draft | LEO natural lifetime vs altitude for a large high-drag node: a very low ballistic coefficient decays it 6 to 13x faster, so 500 to 600 km lasts only ~1.3 to 5 yr (~0.4 to 2 yr through solar max); a 5-yr natural life needs ~700 km and 7 yr needs ~720 to 750 km. | Added 2026-05-29 from the exploratory orbital-lifetime study; lifetime figures are first-order estimates pending a numerical orbit propagation. |
+| [orbital/higher_orbit_tradeoffs_lifetime.md](orbital/higher_orbit_tradeoffs_lifetime.md) | draft | Higher-orbit tradeoffs for a 7-year natural life: delta-v is not binding (~160 m/s to 800 km); radiation (rising TID and an un-shieldable GPU/HBM SEU rate) is binding, and above ~600 to 650 km a mandatory active deorbit system is required; 7-yr natural life put at ~800 to 900 km. | Added 2026-05-29 from the exploratory orbital-lifetime study; radiation and altitude bands are estimates pending a SPENVIS/CREME96 run. |
 
 ### Peer Review
 
@@ -158,6 +161,7 @@ Intentionally excluded:
 | [rocket_lab/neutron/launch_cost_economics.md](rocket_lab/neutron/launch_cost_economics.md) | draft | Internal launch-cost estimate for Rocket Lab flying its own payloads. | Source-status banner added 2026-05-25; cadence-specific internal cost is an estimate. |
 | [rocket_lab/neutron/neutron_specs.md](rocket_lab/neutron/neutron_specs.md) | draft | Neutron specs and published payload/fairing facts. | Source-status banner added 2026-05-25; LEO/polar values vs SSO estimates are separated. |
 | [rocket_lab/neutron/payload_and_block_upgrade.md](rocket_lab/neutron/payload_and_block_upgrade.md) | draft | Re-baselines SSO payload estimate and block-upgrade envelope. | Source-status banner added 2026-05-25; SSO/block-upgrade figures remain estimates/scenarios. |
+| [rocket_lab/neutron/neutron_payload_vs_orbit.md](rocket_lab/neutron/neutron_payload_vs_orbit.md) | draft | Neutron payload vs orbit: ~13 t reusable to LEO, a ~25 to 30% LEO-to-SSO penalty (~9.5 t to SSO), and cheap higher SSO (~5% to 700 to 800 km); refutes "halve the payload" and treats 12.5 t as expendable/block-upgrade, not baseline reusable. | Added 2026-05-29 from the exploratory orbital-lifetime study; payload-vs-orbit figures are estimates consistent with the existing deep Neutron docs. |
 | [rocket_lab/overview.md](rocket_lab/overview.md) | draft | Rocket Lab company overview and vertical integration. | Has source section and external citations. |
 | [rocket_lab/space_hardware_capabilities.md](rocket_lab/space_hardware_capabilities.md) | draft | Rocket Lab has much of the stack; deployable radiators remain the gap. | Has source section and external citations. |
 
@@ -177,6 +181,7 @@ Intentionally excluded:
 | [synthesis/preliminary_findings.md](synthesis/preliminary_findings.md) | stale | Wave-1 synthesis; no physics wall, but numbers later changed. | Superseded snapshot; hard numbers need source-doc trace rather than standalone sourcing. |
 | [synthesis/wave4_synthesis.md](synthesis/wave4_synthesis.md) | stale | Wave-4 economics synthesis; baseline-Neutron payback problem. | Superseded launch-cost/service-life basis. |
 | [synthesis/wave5_synthesis.md](synthesis/wave5_synthesis.md) | stale | Latest full research synthesis in `research/`, resolving flyability crossover. | Physics/flyability findings stand, but launch-cost basis is superseded. |
+| [synthesis/orbital_lifetime_5v7yr_synthesis.md](synthesis/orbital_lifetime_5v7yr_synthesis.md) | draft | Synthesizes the 5-vs-7-year orbital-lifetime study: longevity costs single-digit percent on every lever; 5 years is conditional on ~700 km or propulsion while 7 years is cheap either way; the real trade is radiation plus mandatory deorbit (fly high) vs continuous station-keeping (stay low); design life is likely revenue-limited, not orbit-limited. | Added 2026-05-29 as the synthesis of the exploratory orbital-lifetime study; the 7-yr natural-life band (~720 to 900 km) is unresolved pending a numerical propagation and radiation run. |
 
 ### Valuation
 
@@ -209,6 +214,24 @@ Intentionally excluded:
 - The peer-review folder is valuable as a historical QA record, not as the
   current live repo map.
 - `research/LIBRARY.md` now mirrors this tracker’s research-only boundary.
+- Exploratory orbital-lifetime study (2026-05-29), not a model change: a 5-year
+  natural life is conditional, not free, at low SSO. The node's large deployed
+  area gives a very low ballistic coefficient, so it needs ~700 km of altitude
+  or continuous electric-propulsion station-keeping to reach 5 years.
+- Exploratory orbital-lifetime study (2026-05-29): extending from 5 to 7 years
+  is single-digit-percent cheap on both paths. Station-keeping adds only ~25 to
+  35 kg (about 0.4% of an 8 t node), and the natural-life path costs only modest
+  extra altitude.
+- Exploratory orbital-lifetime study (2026-05-29): the binding cost of flying
+  higher is radiation, not mass. Delta-v stays small (~160 m/s to 800 km), but
+  rising TID and an un-shieldable GPU/HBM single-event-upset rate, plus a
+  mandatory active deorbit system above ~600 to 650 km, are what constrain
+  altitude.
+- Exploratory orbital-lifetime study (2026-05-29): Neutron's LEO-to-SSO payload
+  penalty is ~25 to 30% (~13 t LEO to ~9.5 t SSO), matching the deep Neutron
+  docs and refuting the 10 to 20% headline; higher SSO is cheap (~5% to 700 to
+  800 km). The node's design life is therefore likely revenue-limited (aging
+  silicon), not orbit-limited.
 
 ## Stakeholder Input Trail
 
@@ -257,6 +280,12 @@ Highest-priority research gaps:
   unit; the current default ledger uses GPU package.
 - AI data-center capacity projection around 2036. Keep the `~100 GW`
   comparison as a scale sanity check only, sourced through `RLDC-MARKET-100GW-2036`.
+- Exploratory orbital-lifetime study (2026-05-29): the 7-year natural-life
+  altitude band (~720 to 900 km) differs between the two lifetime docs
+  (`orbital/leo_lifetime_large_node_5v7yr.md` puts it at ~720 to 750 km,
+  `orbital/higher_orbit_tradeoffs_lifetime.md` at ~800 to 900 km) because of
+  differing drag-area assumptions. Resolving it needs a numerical orbit
+  propagation plus a radiation (SPENVIS/CREME96) run.
 
 Tracker hygiene backlog:
 
