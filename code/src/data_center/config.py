@@ -300,7 +300,7 @@ class GospelInputs(BaseModel):
         default=MASS_ENVELOPE_T,
         description=(
             "Neutron block-upgrade reusable SSO payload scenario, tonnes "
-            "(SOURCE_INDEX NTR-007) — the model's hard physical constraint "
+            "(SOURCE_INDEX NTR-007), the model's hard physical constraint "
             "on the node, not a published Rocket Lab SSO payload."
         ),
         gt=0.0,
@@ -309,15 +309,15 @@ class GospelInputs(BaseModel):
         default=NODE_MASS_FIXED_T,
         description=(
             "Fixed-per-node mass overhead (bus + propulsion + structure), "
-            "tonnes — subtracted from the envelope before packing GPUs."
+            "tonnes, subtracted from the envelope before packing GPUs."
         ),
         ge=0.0,
     )
     node_volume_fixed_m3: float = Field(
         default=NODE_VOLUME_FIXED_M3,
         description=(
-            "Fixed-per-node stowed volume overhead (bus + structure), m3 "
-            "— added to the stowed package-array volume in the cycle-2 "
+            "Fixed-per-node stowed volume overhead (bus + structure) in m3, "
+            "added to the stowed package-array volume in the cycle-2 "
             "volume-envelope check. New in v8; cycle-1 had no volume term."
         ),
         ge=0.0,
@@ -368,7 +368,7 @@ class GospelInputs(BaseModel):
     radiator_t_per_kw_pre: float = Field(
         default=RADIATOR_T_PER_KW_PRE,
         description=(
-            "Radiator t/kW before the Tjmax lift (pre 'tjmax_lift_year') — "
+            "Radiator t/kW before the Tjmax lift (pre 'tjmax_lift_year'), "
             "the conservative t/kW (D11)."
         ),
         gt=0.0,
@@ -376,7 +376,7 @@ class GospelInputs(BaseModel):
     radiator_t_per_kw_post: float = Field(
         default=RADIATOR_T_PER_KW_POST,
         description=(
-            "Radiator t/kW after the Tjmax lift (post 'tjmax_lift_year') — "
+            "Radiator t/kW after the Tjmax lift (post 'tjmax_lift_year'), "
             "the hot-loop coolant arrives and lowers t/kW (D11). Cycle-2 "
             "lifts this to 0.012 (central of the R1 0.010-0.014 band) for "
             "the single-face co-mounted architecture (D16/D17); cycle-1's "
