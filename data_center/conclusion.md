@@ -17,9 +17,9 @@ improve the whole stack through repeated cadence.
 
 | Item | Current source |
 |---|---|
-| Space model | `data_center/models/space/default.json` |
-| Ground reference | `data_center/models/ground/default.json` |
-| Default scenario | `code/scenarios/default.yaml` |
+| Space model | [`data_center/models/space/default.json`](models/space/default.json) |
+| Ground reference | [`data_center/models/ground/default.json`](models/ground/default.json) |
+| Default scenario | [`code/scenarios/default.yaml`](../code/scenarios/default.yaml) |
 
 ## The Build-Out, Year By Year
 
@@ -68,7 +68,7 @@ comparison fair: with margins held equal, the **1.92x** orbital-to-ground cost
 gap is also the price gap, so an orbital token would cost about **90% more**
 than a comparable ground token. The 1.5x multiple is not arbitrary: it is set to match where comparable cloud
 and GPU operators actually run their margins (see
-`research/economics/operating_margins_and_revenue_multiple_2026.md`). It is
+[`research/economics/operating_margins_and_revenue_multiple_2026.md`](../research/economics/operating_margins_and_revenue_multiple_2026.md)). It is
 still a dial, and changing it moves every margin together but not the 1.92x
 cost gap, which is set by cost alone.
 
@@ -165,7 +165,7 @@ through pricing rather than cheaper hardware: the orbital build-cost ratio
 itself does not move. Reaching seven years is not a significant ask of Neutron
 or the flight; it mainly takes a bit more on-orbit hardware (station-keeping and
 shielding), single-digit-percent on payload. See
-`research/synthesis/orbital_lifetime_5v7yr_synthesis.md`.
+[`research/synthesis/orbital_lifetime_5v7yr_synthesis.md`](../research/synthesis/orbital_lifetime_5v7yr_synthesis.md).
 
 ## Why The Scale Is Not Outlandish
 
