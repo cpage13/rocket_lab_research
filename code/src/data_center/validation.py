@@ -647,7 +647,7 @@ def check_operator_r_consistency(output: ValuationOutput) -> ValidationCheck:
             f"{base_year} = {r_central_base:.3f} (>= {B2B_R_CENTRAL_FLOOR} floor)"
         )
     else:
-        computed = f"operator_model={operator.value} — B2B floor not applicable"
+        computed = f"operator_model={operator.value}: B2B floor not applicable"
     return ValidationCheck(
         name="operator_r_consistency",
         what_it_tests=(
@@ -894,7 +894,7 @@ def check_volume_fits_horizon(output: ValuationOutput) -> ValidationCheck:
         name="volume_fits_horizon",
         what_it_tests=(
             "every year's physical.binding_constraint is one of "
-            "{mass, both, neither} — sole 'volume' is forbidden (D6: "
+            "{mass, both, neither}; sole 'volume' is forbidden (D6: "
             "mass-only binding)"
         ),
         expected="no year is volume-only-bound",
@@ -1010,7 +1010,7 @@ def check_radiator_dial_arch_consistency(output: ValuationOutput) -> ValidationC
             f"(>= {RADIATOR_T_PER_KW_CO_MOUNTED_MIN} floor)"
         )
     else:
-        computed = f"radiator_architecture={architecture.value} — co-mounted floor not applicable"
+        computed = f"radiator_architecture={architecture.value}: co-mounted floor not applicable"
     return ValidationCheck(
         name="radiator_dial_matches_architecture",
         what_it_tests=(

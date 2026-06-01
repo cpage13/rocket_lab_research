@@ -283,11 +283,11 @@ class CostBreakdownBlock(BaseModel):
 
     compute: ProvenanceCell = Field(
         ...,
-        description="Per-node compute build cost — all packages, $M.",
+        description="Per-node compute build cost, all packages, $M.",
     )
     bus: ProvenanceCell = Field(
         ...,
-        description="Per-node bus build cost — declines then flattens (D12), $M.",
+        description="Per-node bus build cost, declines then flattens (D12), $M.",
     )
     solar: ProvenanceCell = Field(
         ...,
@@ -299,11 +299,11 @@ class CostBreakdownBlock(BaseModel):
     )
     launch: ProvenanceCell = Field(
         ...,
-        description="Per-node launch cost — cadence-indexed, $M.",
+        description="Per-node launch cost, cadence-indexed, $M.",
     )
     node_total: ProvenanceCell = Field(
         ...,
-        description="Total per-node build + launch cost — sum of the five lines, $M.",
+        description="Total per-node build + launch cost, the sum of the five lines, $M.",
     )
 
 
@@ -375,7 +375,7 @@ class PhysicalYear(BaseModel):
     )
     cost_breakdown: CostBreakdownBlock = Field(
         ...,
-        description="Per-node cost decomposition — the five build/launch lines + total.",
+        description="Per-node cost decomposition: the five build/launch lines + total.",
     )
     cost_annual_per_node_musd: ProvenanceCell = Field(
         ...,
@@ -581,7 +581,7 @@ class DataDictEntry(BaseModel):
     )
     source_class: str = Field(
         ...,
-        description=("Provenance class of the field — INPUT / CONSTANT / DERIVED."),
+        description=("Provenance class of the field: INPUT / CONSTANT / DERIVED."),
     )
 
 
@@ -671,7 +671,7 @@ class MetaBlock(BaseModel):
     data_dictionary: list[DataDictEntry] = Field(
         ...,
         description=(
-            "One entry per emitted leaf field — built by the introspection "
+            "One entry per emitted leaf field, built by the introspection "
             "helper from this module's `Field(description=...)` metadata."
         ),
     )
@@ -732,7 +732,7 @@ class SpaceModelOutput(BaseModel):
 
     metadata: RunMetadata = Field(
         ...,
-        description="The run's identity — schema version, base year, horizon, the enum locks.",
+        description="The run's identity: schema version, base year, horizon, the enum locks.",
     )
     inputs: InputManifest = Field(
         ...,

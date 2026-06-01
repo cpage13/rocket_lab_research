@@ -128,7 +128,7 @@ class GenerationSlopes(BaseModel):
     kw_growth_per_gen: float = Field(
         0.20,
         description=(
-            "kW/pkg growth per generation. 0.20 — per-package power "
+            "kW/pkg growth per generation. 0.20, per-package power "
             "growth/gen; corrected from 0.30 (assembly-rate misapplied) "
             "per validation V-A, sourcing_audit_05_21.md. The 0.30 figure "
             "was the historical assembly-level package-power growth rate, "
