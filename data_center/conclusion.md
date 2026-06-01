@@ -66,9 +66,11 @@ what produces the **33.3%** gross margin. The ground reference uses the same
 multiple, so both sides target the same margin. That is what makes the
 comparison fair: with margins held equal, the **1.92x** orbital-to-ground cost
 gap is also the price gap, so an orbital token would cost about **90% more**
-than a comparable ground token. The multiple itself is just a dial anyone can
-change in the model: it moves every margin together but not the 1.92x cost gap,
-which is set by cost alone.
+than a comparable ground token. The 1.5x multiple is not arbitrary: it is set to match where comparable cloud
+and GPU operators actually run their margins (see
+`research/economics/operating_margins_and_revenue_multiple_2026.md`). It is
+still a dial, and changing it moves every margin together but not the 1.92x
+cost gap, which is set by cost alone.
 
 ## Context: What The Model Is, And Is Not
 
