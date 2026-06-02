@@ -7,11 +7,11 @@
 
 ## Summary
 
-Rocket Lab has assembled, largely through acquisition, an unusually deep in-house space-hardware stack. For a compute-satellite node it **already owns**: space-grade solar cells and arrays (SolAero — the only fully vertically integrated solar supplier in the industry), a new silicon solar-array product line explicitly aimed at gigawatt-scale orbital data centers, satellite buses (Photon, Flatellite), reaction wheels and star trackers (Sinclair Interplanetary), separation systems (Planetary Systems Corp), software-defined radios (Frontier), EO/IR and laser-comms payloads (Geost), laser inter-satellite terminals (Mynaric/CONDOR), composite structures, and — pending a Q2 2026 close — solar array drive assemblies, gimbals, actuators and robotic arms (Motiv → "Rocket Lab Robotics").
+Rocket Lab has assembled, largely through acquisition, an unusually deep in-house space-hardware stack. For a compute-satellite node it **already owns**: space-grade solar cells and arrays (SolAero, the only fully vertically integrated solar supplier in the industry), a new silicon solar-array product line explicitly aimed at gigawatt-scale orbital data centers, satellite buses (Photon, Flatellite), reaction wheels and star trackers (Sinclair Interplanetary), separation systems (Planetary Systems Corp), software-defined radios (Frontier), EO/IR and laser-comms payloads (Geost), laser inter-satellite terminals (Mynaric/CONDOR), composite structures, and (acquisition completed 26 May 2026) solar array drive assemblies, gimbals, actuators and robotic arms (Motiv → "Rocket Lab Robotics").
 
-The **one clear gap** for a compute node is **deployable thermal radiators** — heat rejection is the single hardest problem for orbital compute, and there is no public evidence Rocket Lab builds large deployable radiators today. Its composite-structures and roll-out/flexible-substrate know-how are adjacent but not equivalent. Power management electronics (PCDU/PMAD at data-center scale) is a partial gap. The "end-to-end prime" claim is strong for launch + bus + power + comms + mechanisms; it is **not yet complete** for the thermal subsystem, which is the critical-path technology for a compute satellite.
+The **hardest single piece** for a compute node is **deployable thermal radiators**: heat rejection is the single hardest problem for orbital compute (the critical path), and there is no public large-scale deployable-radiator product from Rocket Lab today. This is best read as **pending in-house development (expected; in their wheelhouse)** rather than a capability gap: Rocket Lab already flies its own thermal control on its satellites and owns the composite, mechanism, and solar know-how a node-scale radiator draws on, so it is a question of timing and scale, not a missing competency, and Rocket Lab would develop it in-house (or acquire it). Power management electronics (PCDU/PMAD at data-center scale) is similarly **pending scale-up**, not a capability gap. The "end-to-end prime" claim is strong for launch + bus + power + comms + mechanisms; the thermal subsystem, the critical-path technology for a compute satellite, is the one piece **still pending in-house development**.
 
-**Overall confidence: Medium-High.** Solar, mechanisms, comms, bus and components capabilities are well-documented. The data-center silicon array is real but early-stage (announced Feb 2026, no datasheet, no named customer order). The radiator gap is an inference from absence of evidence, not a confirmed exclusion.
+**Overall confidence: Medium-High.** Solar, mechanisms, comms, bus and components capabilities are well-documented. The data-center silicon array is real but early-stage (announced Feb 2026, no datasheet, no named customer order). That Rocket Lab has no large-scale deployable-radiator product on the shelf today is an inference from absence of a public product, not a confirmed exclusion, and the underlying thermal-control competency is in-house.
 
 ---
 
@@ -67,7 +67,7 @@ Rocket Lab supplies **both rigid PVA panels and flexible PVA panels**, plus pane
 
 - **Composite structures in-house:** Rocket Lab manufactures CFRP facesheet and aluminum-honeycomb panel substrates and satellite panel structures, plus carbon-composite tanks and structures shared with its launch-vehicle composites heritage ([Rocket Lab — Solar Panels & Substrates](https://rocketlabcorp.com/space-systems/solar/substrates-and-panels/), [Rocket Lab — Spacecraft](https://rocketlabcorp.com/space-systems/spacecraft/)).
 - **Deployable solar arrays:** STARRAY ships in deployable configurations; the silicon data-center array is explicitly designed for "a variety of stowage and deployment methods." This is the closest Rocket Lab gets to "pack a large array into a small fairing and unfold it."
-- **Robotic deployment / mechanisms (Motiv):** The **Motiv Space Systems** acquisition (announced 7 May 2026, **$40M cash**, expected to close **Q2 2026**) adds **multi-degree-of-freedom robotic arms, actuators and drive electronics**, to be rebranded **Rocket Lab Robotics** ([Rocket Lab](https://rocketlabcorp.com/updates/rocket-lab-to-acquire-robotics-leader-motiv-space-systems/), [Aviation Week](https://aviationweek.com/space/space-exploration/rocket-lab-buy-motiv-space-40m-adding-robotics-solar-drives), [GlobeNewswire](https://www.globenewswire.com/news-release/2026/05/07/3290619/0/en/rocket-lab-to-acquire-robotics-leader-motiv-space-systems.html)). Motiv robotics flew on Mars **Perseverance** and the **CADRE** lunar rovers. Robotic arms are relevant to on-orbit assembly / deployment of very large structures.
+- **Robotic deployment / mechanisms (Motiv):** The **Motiv Space Systems** acquisition (signed 6 May 2026, **completed 26 May 2026**, ~$60M total: **$40M cash plus a contingent equity earnout**) adds **multi-degree-of-freedom robotic arms, actuators and drive electronics**, rebranded **Rocket Lab Robotics** ([Rocket Lab](https://rocketlabcorp.com/updates/rocket-lab-to-acquire-robotics-leader-motiv-space-systems/), [Aviation Week](https://aviationweek.com/space/space-exploration/rocket-lab-buy-motiv-space-40m-adding-robotics-solar-drives), [GlobeNewswire](https://www.globenewswire.com/news-release/2026/05/07/3290619/0/en/rocket-lab-to-acquire-robotics-leader-motiv-space-systems.html)). Motiv robotics flew on Mars **Perseverance** and the **CADRE** lunar rovers. Robotic arms are relevant to on-orbit assembly / deployment of very large structures.
 
 **Gap flag:** No evidence Rocket Lab builds a *dedicated* large expandable/deployable boom or truss product (analogous to Northrop's ROSA or large deployable-boom systems). Deployment is handled via STARRAY hinges/SADAs and, prospectively, robotics — adequate for satellite-scale arrays, unproven for kilometer-scale structures.
 
@@ -77,17 +77,17 @@ Rocket Lab supplies **both rigid PVA panels and flexible PVA panels**, plus pane
 
 | Capability | Source company | Status | Notes |
 |---|---|---|---|
-| **Solar Array Drive Assemblies (SADAs)** | Motiv | Pending close Q2 2026 | "Closes one of the final gaps in vertical integration" — Rocket Lab's own words |
-| **Antenna & propulsion gimbals** | Motiv | Pending close Q2 2026 | Precision pointing mechanisms |
-| **Precision drive electronics, filter wheels, actuators** | Motiv | Pending close Q2 2026 | Mars-proven motion-control heritage |
-| **Robotic arms (multi-DOF)** | Motiv | Pending close Q2 2026 | Perseverance, CADRE rover heritage |
+| **Solar Array Drive Assemblies (SADAs)** | Motiv | Closed 26 May 2026 | "Closes one of the final gaps in vertical integration" (Rocket Lab's own words) |
+| **Antenna & propulsion gimbals** | Motiv | Closed 26 May 2026 | Precision pointing mechanisms |
+| **Precision drive electronics, filter wheels, actuators** | Motiv | Closed 26 May 2026 | Mars-proven motion-control heritage |
+| **Robotic arms (multi-DOF)** | Motiv | Closed 26 May 2026 | Perseverance, CADRE rover heritage |
 | **Separation systems** | Planetary Systems Corp (acq. Dec 2021, ~$81.4M) | In-house, flying | Maryland; satellite/payload separation, dispensers |
 | **Reaction wheels** | Sinclair Interplanetary (acq. April 2020) | In-house, flying | On 200+ satellites incl. BlackSky, Kepler; dedicated high-volume reaction-wheel production facility |
 | **Star trackers** | Sinclair Interplanetary | In-house, flying | Best-in-class small-sat attitude sensing |
 
 Sources: [SpaceNews — Sinclair](https://spacenews.com/rocket-lab-to-acquire-smallsat-component-manufacturer/), [Rocket Lab — Sinclair close](https://rocketlabcorp.com/updates/rocket-lab-closes-acquisition-of-satellite-hardware-manufacturer-sinclair-interplanetary/), [Wikipedia — Rocket Lab](https://en.wikipedia.org/wiki/Rocket_Lab), [Aviation Week — Motiv](https://aviationweek.com/space/space-exploration/rocket-lab-buy-motiv-space-40m-adding-robotics-solar-drives), [GovConWire — Motiv](https://www.govconwire.com/articles/rocket-lab-acquisition-motiv-space-systems).
 
-**Assessment:** With Motiv, Rocket Lab's mechanism portfolio is essentially complete for a satellite — attitude control (wheels/trackers), array articulation (SADAs), pointing (gimbals), separation, and robotic manipulation are all in-house or imminently so. SADAs in particular were a known supply-constrained bottleneck the company is now eliminating.
+**Assessment:** With Motiv now closed (26 May 2026), Rocket Lab's mechanism portfolio is essentially complete for a satellite: attitude control (wheels/trackers), array articulation (SADAs), pointing (gimbals), separation, and robotic manipulation are all in-house. SADAs in particular were a known supply-constrained bottleneck the company has now eliminated.
 
 ---
 
@@ -132,31 +132,31 @@ A compute satellite node needs, at minimum: **(a) large deployable solar power, 
 | Space-grade solar cells | **Yes — owns** | Very strong | SolAero; only fully vertically integrated supplier; up to ~34% efficiency |
 | Deployable / large-area solar arrays | **Yes — owns** | Strong | STARRAY (rigid + deployable); new silicon arrays for GW-scale data centers (early-stage) |
 | Compact-stow / roll-out / flexible arrays | **Partial** | Moderate | Flexible PVA panels + silicon modules claimed deployment-flexible; no flight-proven large roll-out array |
-| **Deployable thermal radiators** | **No / not evident** | **Gap** | No public radiator product; composite + robotics adjacent but not equivalent. Critical-path risk |
-| Actuators / SADAs / gimbals | **Yes — pending close** | Strong | Motiv (Q2 2026 close), "Rocket Lab Robotics" |
+| **Deployable thermal radiators** | **Pending in-house build** | **Pending (in their wheelhouse)** | No large-scale radiator product on the shelf today, but Rocket Lab flies its own thermal control and owns the composite + mechanism + solar know-how; expected in-house development. Critical-path item |
+| Actuators / SADAs / gimbals | **Yes, owns** | Strong | Motiv (closed 26 May 2026), "Rocket Lab Robotics" |
 | Reaction wheels / star trackers | **Yes — owns** | Very strong | Sinclair; on 200+ satellites |
 | Separation systems / dispensers | **Yes — owns** | Strong | Planetary Systems Corp |
-| Robotic arms / on-orbit manipulation | **Yes — pending close** | Strong | Motiv; Mars/lunar heritage |
+| Robotic arms / on-orbit manipulation | **Yes, owns** | Strong | Motiv (closed 26 May 2026); Mars/lunar heritage |
 | Satellite bus / platform | **Yes — owns** | Moderate–Strong | Photon (small/med); Flatellite (high-power, stackable, Neutron-matched) — power/mass unpublished |
 | RF radios | **Yes — owns** | Very strong | Frontier, multi-band, deep flight heritage |
 | Laser inter-satellite comms | **Yes — owns** | Strong | Mynaric CONDOR Mk3; ~2.5 Gbps as-delivered, 100 Gbps on the Mk3.1 roadmap |
 | EO/IR & optical payload electronics | **Yes — owns** | Strong | Geost |
-| Power management / distribution (PCDU/PMAD) at scale | **Partial / unclear** | Moderate | Bus-level power electronics exist; data-center-scale PMAD not a published product |
+| Power management / distribution (PCDU/PMAD) at scale | **Pending scale-up** | Moderate | Bus-level power electronics exist; data-center-scale PMAD is a scale-up of an existing competency, not yet a published product |
 | Compute payload (servers/silicon) | **No** | Out of scope | Rocket Lab is not a compute-hardware maker; would integrate a third-party payload |
 | Launch vehicle (Neutron) | **Yes — owns** | Strong (pre-flight) | Sized to deploy stacked Flatellites; maiden flight Q4 2026 |
 
 ### Verdict on the "end-to-end prime" claim
 
-**Strong but not yet complete.** Rocket Lab genuinely owns or is closing on nearly every *spacecraft-bus and power* subsystem a compute node needs — solar (best-in-class, vertically integrated), mechanisms (post-Motiv), attitude control, structures, RF and laser comms, and the launch vehicle. The $816M SDA prime contract proves it can deliver as a satellite prime. For the "build the satellite + power it + link it + launch it" scope, the claim holds up well.
+**Strong, with two pieces still pending in-house build-out.** Rocket Lab genuinely owns nearly every *spacecraft-bus and power* subsystem a compute node needs: solar (best-in-class, vertically integrated), mechanisms (post-Motiv, closed 26 May 2026), attitude control, structures, RF and laser comms, and the launch vehicle. The $816M SDA prime contract proves it can deliver as a satellite prime. For the "build the satellite + power it + link it + launch it" scope, the claim holds up well.
 
-**The two real gaps for a compute node specifically:**
+**The two pieces still pending in-house development for a compute node specifically:**
 
-1. **Deployable thermal radiators (critical).** Heat rejection is the gating problem for orbital compute, and there is no public evidence Rocket Lab builds large deployable radiators. This would have to be **developed in-house or bought**. Its composite-structures and (post-Motiv) deployment-mechanism capabilities make in-house development plausible, but it is not a current product.
-2. **Data-center-scale power management electronics (PMAD/PCDU).** Bus-level power electronics exist; managing hundreds of kW to MW for a compute payload is not a demonstrated product.
+1. **Deployable thermal radiators (critical path, in their wheelhouse).** Heat rejection is the gating problem for orbital compute, and Rocket Lab has no large-scale deployable-radiator product on the shelf today. But this is a pending in-house item, not a missing competency: Rocket Lab already flies its own thermal control on its satellites, and its composite-structures and (post-Motiv) deployment-mechanism capabilities feed directly into a node-scale radiator. It is a question of timing and scale, and the company would **develop it in-house (or acquire it)**.
+2. **Data-center-scale power management electronics (PMAD/PCDU).** Bus-level power electronics exist; managing hundreds of kW to MW for a compute payload is a scale-up of that existing competency, pending rather than absent.
 
-The **compute payload itself** (server silicon) is outside Rocket Lab's domain by design — it would integrate a partner's hardware, consistent with its stated role as a *power/infrastructure supplier* to the orbital-data-center market rather than an operator.
+The **compute payload itself** (server silicon) is outside Rocket Lab's domain by design: it would integrate a partner's hardware, consistent with its stated role as a *power/infrastructure supplier* to the orbital-data-center market rather than an operator.
 
-**Bottom line:** Rocket Lab could credibly be the prime for the *satellite platform, power, comms, mechanisms and launch* of a compute node today. To be a true end-to-end prime for an AI-inference data center, it would still need to develop or source the **deployable radiator / thermal-rejection subsystem** and scale up **power management** — both adjacent to existing competencies but not yet in the catalog.
+**Bottom line:** Rocket Lab could credibly be the prime for the *satellite platform, power, comms, mechanisms and launch* of a compute node today. To be a true end-to-end prime for an AI-inference data center, it would still develop in-house (or acquire) the **deployable radiator / thermal-rejection subsystem** and scale up **power management**: both sit squarely within existing competencies (its own satellite thermal control and bus power electronics), pending the timing and scale, rather than being gaps in the catalog.
 
 ---
 
@@ -207,11 +207,11 @@ The **compute payload itself** (server silicon) is outside Rocket Lab's domain b
 
 ## Open Questions / Uncertainties
 
-- **Deployable radiators** — No public evidence Rocket Lab builds large deployable thermal radiators. Confirm directly whether any in-house thermal-subsystem capability exists; this is the single most important gap for a compute node.
+- **Deployable radiators:** No public large-scale deployable-radiator product from Rocket Lab today. Confirm the scope of its existing in-house thermal-control capability and the path to a node-scale radiator; this is the single most important pending in-house item for a compute node (critical path), and it sits in their wheelhouse rather than being a capability gap.
 - **Silicon data-center array specs** — No datasheet: efficiency, cost-per-watt, areal mass, deployment mechanism, and TRL are all unpublished. "Gigawatt-scale" is marketing framing, not a delivered capability.
 - **Silicon array customer** — No confirmed order. The Meta connection is analyst speculation; verify before relying on it.
 - **Flatellite power & mass** — Officially unpublished. ~800 kg is a third-party estimate; "high-power" is undefined. Whether Flatellite can host a high-power compute payload is unconfirmed.
 - **Roll-out array maturity** — Rocket Lab makes flexible PVA panels but has not demonstrated a flight-proven large roll-out/compact-stow array; the compact-stow claim for the silicon line is design intent, not demonstrated hardware.
-- **Power management at scale** — Whether Rocket Lab has PMAD/PCDU electronics suitable for data-center-class loads (hundreds of kW–MW) is unclear from public sources.
-- **Motiv close** — The Motiv (SADA/robotics) acquisition had not yet closed as of May 2026 (expected Q2 2026); SADA/gimbal in-house status is contingent on close.
+- **Power management at scale:** Whether Rocket Lab has PMAD/PCDU electronics suitable for data-center-class loads (hundreds of kW–MW) is unclear from public sources; bus-level power electronics exist, so this is a pending scale-up of an existing competency.
+- **Motiv close:** The Motiv (SADA/robotics) acquisition is closed (signed 6 May 2026, completed 26 May 2026, ~$60M total: $40M cash plus a contingent equity earnout); SADA/gimbal capability is now in-house.
 - **On-orbit assembly** — Whether Rocket Lab Robotics (Motiv) capability extends to assembling kilometer-scale structures, vs. satellite-scale manipulation, is unconfirmed.

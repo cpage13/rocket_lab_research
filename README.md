@@ -44,6 +44,7 @@ The full data-center case, with every number traced to a source:
 - [data_center/structural_case.md](data_center/structural_case.md): the structural case, why Rocket Lab is uniquely positioned to build this and why the numbers are a floor.
 - [data_center/README.md](data_center/README.md): how the application works and how to run the model.
 - [`models/space/default.json`](data_center/models/space/default.json): every number with its formula, units, and source.
+- [Rocket Lab Primer](rocket_lab_primer.md): a one-page catch-up on Rocket Lab, Electron, and Neutron for readers new to the company.
 
 ## Repository Map
 
