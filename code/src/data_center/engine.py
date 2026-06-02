@@ -814,6 +814,7 @@ def compute_year(
         radiator_dial_path="inputs.config.physical.radiator_t_per_kw_post",
     )
     mass_per_pkg_t = _cell_float(mass_per_pkg_cell)
+    # mass_per_pkg_t = effective per-pkg mass (gen+solar+radiator); paths below tag raw kg_per_pkg
     mass_budget_t = gospel.mass_envelope_t - gospel.node_mass_fixed_t
     n_cell = compute_n_packages(
         mass_budget_t,
