@@ -13,7 +13,7 @@
 | Founded | June 2006 (New Zealand); re-domiciled to US 2013 | — | High |
 | Founder / CEO | Peter Beck (founder, President, CEO) | May 2026 | High |
 | Headquarters | Long Beach, California, USA | 2020–present | High |
-| Employees | ~2,600 (rising with pending acquisitions) | May 2026 | Med-High |
+| Employees | ~2,600 (rising as recent acquisitions integrate, incl. Motiv, closed 26 May 2026) | May 2026 | Med-High |
 | Market capitalization | ~$72–73 billion | 13 May 2026 | Med (volatile) |
 | FY2025 revenue | $602 million (+38% YoY) | FY2025 | High |
 | Q1 2026 revenue | $200.3 million (+63.5% YoY), record quarter | Q1 2026 | High |
@@ -91,7 +91,7 @@ Solar arrays (STARRAY family / SolAero space-grade solar cells), reaction wheels
 ### Recent acquisitions deepening vertical integration
 - **Geost** — ~$275M, announced May 2025: EO/IR sensor payloads for missile warning, tracking, space domain awareness. Moves Rocket Lab into the **payload** business.
 - **Mynaric AG** (Munich) — completed **April 2026**: CONDOR-class **laser optical communications terminals** (inter-satellite links). Directly relevant to high-bandwidth orbital networking.
-- **Motiv Space Systems** (Pasadena) — agreement announced May 2026, expected to close Q2 2026: Mars-proven **robotics**, precision mechanisms, solar array drive assemblies (SADAs).
+- **Motiv Space Systems** (Pasadena), signed 6 May 2026, **completed 26 May 2026** (~$60M total: $40M cash plus a contingent equity earnout): Mars-proven **robotics**, precision mechanisms, solar array drive assemblies (SADAs), now in-house as "Rocket Lab Robotics".
 - Plus smaller bolt-ons (e.g., machining/optics capacity).
 
 The cumulative effect: Rocket Lab now manufactures laser terminals, thrusters, optics, solar power, structures, and robotic mechanisms in-house — closing most gaps between "launch company" and "full-stack space company."
@@ -130,7 +130,7 @@ Note the positioning: in that announcement Rocket Lab cast itself as a **supplie
 ## Open Questions / Uncertainties
 
 - **Market cap** is highly volatile; the ~$72–73B figure is a 13 May 2026 snapshot and the valuation is far ahead of current revenue. Verify against a live quote before use.
-- **Employee count** (~2,600) is approximate and moves with each acquisition close (Motiv, Geost integration).
+- **Employee count** (~2,600) is approximate and moves as acquisitions integrate (Motiv closed 26 May 2026, plus Geost and Mynaric integration).
 - **Space Systems FY revenue split** — some third-party estimates put Space Systems at 58–65% of FY2025 revenue; the cleanest hard figure here is the Q1 2026 segment split ($136.7M / $63.7M). Treat full-year segment percentages as estimates.
 - **Flatellite specs** — mass (~800 kg), power output, and per-launch stacking (~16) are largely unofficial / render-derived. Rocket Lab has not published a full Flatellite datasheet.
 - **Neutron schedule** — Q4 2026 maiden flight is the current target after the Jan 2026 tank failure; first-flight slips are common in this industry.
