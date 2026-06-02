@@ -2,7 +2,7 @@
 
 This folder holds the data-center application of Rocket Lab Research: a
 Neutron-launched orbital AI-inference data center, modeled end to end. For the
-verdict and the numbers, read the [conclusion](conclusion.md). This page is the
+verdict and the numbers, read the [conclusion](conclusion.md); for why those numbers are a floor and why Rocket Lab is uniquely positioned to build this, read [the structural case](structural_case.md). This page is the
 guide to what is here and how to use it.
 
 ## Operating Picture
@@ -39,6 +39,7 @@ sensitivities, and why a premium customer might care.
 | Path | What it is |
 |---|---|
 | [conclusion.md](conclusion.md) | The verdict and the headline numbers. Start here. |
+| [structural_case.md](structural_case.md) | The structural case: why Rocket Lab is uniquely positioned to build this, and why the numbers are a floor. |
 | [assumptions.md](assumptions.md) | The default-assumption ledger and source-status taxonomy. |
 | [models/space/default.json](models/space/default.json) | The promoted space model: every number with formula, units, and source. |
 | [models/ground/default.json](models/ground/default.json) | The ground reference for the same 2036 cohort. |
