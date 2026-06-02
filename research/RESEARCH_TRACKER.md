@@ -168,6 +168,8 @@ Intentionally excluded:
 | [rocket_lab/neutron/sso_us_launch_site_options.md](rocket_lab/neutron/sso_us_launch_site_options.md) | draft | Best US SSO launch site: Wallops is good enough to start (only built Neutron pad) but not SSO-optimal (dogleg ~5 to 15% penalty, droneship-biased recovery); Vandenberg/West Coast is the performance-optimal relocation (direct south, no dogleg, RTLS), though Rocket Lab has no public West Coast Neutron plan. Corrects "south toward the equator" (backwards for SSO; an unobstructed retrograde azimuth over open ocean is what matters). | Added 2026-05-30. Treats Wallops as the start assumption and relocation as the likely future move; no precise payload math (single-digit-percent reasoning only). Open: Rocket Lab has not announced a West Coast Neutron pad. |
 | [rocket_lab/overview.md](rocket_lab/overview.md) | draft | Rocket Lab company overview and vertical integration. | Has source section and external citations. |
 | [rocket_lab/space_hardware_capabilities.md](rocket_lab/space_hardware_capabilities.md) | draft | Rocket Lab has much of the stack; deployable radiators remain the gap. | Has source section and external citations. |
+| [rocket_lab/vertical_integration_stack_2026.md](rocket_lab/vertical_integration_stack_2026.md) | draft | What Rocket Lab builds in-house vs buys across the satellite-bus stack, with acquisition statuses and the in-house electric propulsion (Gauss); margin-capture implication for a node. | Added 2026-06-01. 2+ sources per hard claim, CLOSED/PENDING stated per deal; margin capture kept qualitative (no invented percentage). |
+| [rocket_lab/manufacturing_capability_2026.md](rocket_lab/manufacturing_capability_2026.md) | draft | Rocket Lab's demonstrated manufacturing competency (Rutherford additive, Rosie composites, Neutron AFP, Flatellite) and its transfer to node production. | Added 2026-06-01. Sourced; explicit boundaries (no node built, Neutron-class line installed but not flight-proven, node costs unproven). |
 
 ### Strategy
 
@@ -175,6 +177,7 @@ Intentionally excluded:
 |---|---|---|---|
 | [strategy/README.md](strategy/README.md) | reviewed | Rules for the Engineer/CFO strategy loop. | Process doc; no external source burden. |
 | [strategy/optimized_strategy.md](strategy/optimized_strategy.md) | stale | Historical converged strategy loop. | Root-conclusion links were converted to historical plain-text citations on 2026-05-25; strategy remains historical. |
+| [strategy/self_launch_cadence_and_manufacturing_advantage_2026.md](strategy/self_launch_cadence_and_manufacturing_advantage_2026.md) | draft | Self-launch as a supply guarantee, fixed-cost amortization, the manufacturing learning curve, and the production-line-vs-ground-megaproject contrast. | Added 2026-06-01. Cadence/fixed-cost faithfully sourced to launch_cost_economics.md; learning-rate figures tagged as external analogues with the honest "not guaranteed" caveat. |
 
 ### Synthesis
 
