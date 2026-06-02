@@ -13,6 +13,8 @@ ground, package them into rack-like orbital nodes, attach them to a Rocket Lab
 bus with solar, radiator, thermal, and communications, launch on Neutron, and
 improve the whole stack through repeated cadence.
 
+That machine is the subject of a companion document, [the structural case](structural_case.md): the argument for why Rocket Lab, almost alone, already owns the parts, the rocket, and the production lines to build this, and why the numbers here read as a floor rather than a ceiling. This document is the numbers; the structural case is the why. Read them in either order.
+
 ## Source Snapshot
 
 | Item | Current source |

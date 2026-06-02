@@ -39,6 +39,7 @@ but close enough to take seriously.
 The full data-center case, with every number traced to a source:
 
 - [conclusion.md](data_center/conclusion.md): the verdict and the headline numbers.
+- [data_center/structural_case.md](data_center/structural_case.md): the structural case, why Rocket Lab is uniquely positioned to build this and why the numbers are a floor.
 - [data_center/README.md](data_center/README.md): how the application works and how to run the model.
 - [`models/space/default.json`](data_center/models/space/default.json): every number with its formula, units, and source.
 
@@ -47,7 +48,7 @@ The full data-center case, with every number traced to a source:
 ```text
 rklb_space_data_center/
 ├── README.md            # this file: the program and its applications
-├── data_center/         # the data-center application (conclusion, guide, models)
+├── data_center/         # the data-center application (conclusion, structural case, guide, models)
 ├── communications/      # reserved, not yet modeled
 ├── research/            # shared evidence wiki and source ledger
 ├── code/                # the model engine (rklb-value)
