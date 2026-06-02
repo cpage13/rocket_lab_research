@@ -4,6 +4,8 @@ Rocket Lab Research asks one practical question: what new orbital business could
 Rocket Lab build with the rockets and spacecraft it already makes? Each
 candidate application gets its own honest, source-linked feasibility study.
 
+New to Rocket Lab, Electron, or Neutron? Start with the [primer](rocket_lab_primer.md), a one-page catch-up on the company and its rockets.
+
 ## Applications
 
 | Application | Vehicle | Status |
