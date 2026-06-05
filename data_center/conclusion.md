@@ -22,7 +22,6 @@ That machine is the subject of a companion document, [the structural case](struc
 | Space model | [`data_center/models/space/default.json`](models/space/default.json) |
 | Ground reference | [`data_center/models/ground/default.json`](models/ground/default.json) |
 | Default scenario | [`code/scenarios/default.yaml`](../code/scenarios/default.yaml) |
-| Assumptions ledger | [`data_center/assumptions.md`](assumptions.md) |
 
 ## The Build-Out, Year By Year
 
@@ -217,3 +216,7 @@ have aged past five years and no longer count toward power or revenue. Each
 living node carries about 420 kW, and the whole fleet runs at the same flat 33%
 margin. The point of this view is the slope, not the single-year total: the
 installed base roughly doubles every two to three years as cadence compounds.
+
+---
+
+Assumptions and source status behind every figure above: [`assumptions.md`](assumptions.md)
