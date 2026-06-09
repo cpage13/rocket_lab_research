@@ -55,7 +55,7 @@ docs behind any claim you want to inspect:
 | File | What it is | Key takeaway |
 |---|---|---|
 | [competitors/starcloud.md](competitors/starcloud.md) | Starcloud and orbital data-center competitors. | Competitors validate demand; heavy lift changes economics and timing. |
-| [competitors/starship_addendum.md](competitors/starship_addendum.md) | Starship competitive addendum. | The real near-term risk is capital/customer capture by Starship-gated rivals. |
+| [competitors/starship_addendum.md](competitors/starship_addendum.md) | Starship competitive addendum, with a dated 2026-06-09 update on the SpaceX AI-1 reveal. | The real near-term risk is capital/customer capture by Starship-gated rivals; the June 2026 AI-1 design reveal is the latest such signal. |
 
 ### Debate
 

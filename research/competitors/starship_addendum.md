@@ -12,13 +12,93 @@
 > Status: deep-research pass, completed 2026-05-17. Hard numbers cross-checked
 > against 2+ independent sources where possible. **Confirmed/demonstrated** facts
 > are sharply separated from **projected/announced** claims throughout.
+>
+> **Updated 2026-06-09** with a dated section (immediately below) on SpaceX's
+> June 8, 2026 AI-1 satellite reveal. The numbered body sections otherwise still
+> reflect the 2026-05-17 pass.
+
+---
+
+## Update (2026-06-09): SpaceX reveals the AI-1 satellite design
+
+On **June 8, 2026**, three days before SpaceX's IPO (press-reported target
+valuation **~$1.75T**; exact figures vary across outlets), Musk revealed the
+design of **AI-1** (written "AI1" in most press coverage), SpaceX's first
+orbital AI data-center satellite, in a ~30-minute video filmed at the Bastrop,
+TX factory ([Yahoo Finance: SpaceX reveals its first orbital data center](https://finance.yahoo.com/sectors/technology/article/spacex-reveals-its-first-orbital-data-center-much-simpler-than-a-starlink-satellite-musk-says-141110185.html), [Tom Tunguz: SpaceX S-1 analysis](https://tomtunguz.com/spacex-s1-analysis/)).
+
+**The load-bearing caveat first: AI-1 is a design/render. Nothing has been
+built or flown, and SpaceX made no timing or scale commitments** (Musk made
+"no promises about when or how large the deployment would be", per Yahoo
+Finance). In this document's vocabulary, every AI-1 number is
+**announced, not demonstrated**. Each item below is tagged **confirmed**
+(SpaceX-stated at the reveal; a design figure for an unbuilt satellite),
+**derived** (arithmetic from the confirmed figures), or **press** (reporting
+around the reveal, not a SpaceX commitment).
+
+**Confirmed (SpaceX-stated design figures):**
+
+- **70 kW per tonne** specific power ([Yahoo Finance](https://finance.yahoo.com/sectors/technology/article/spacex-reveals-its-first-orbital-data-center-much-simpler-than-a-starlink-satellite-musk-says-141110185.html)).
+- **120 kW average / 150 kW peak** compute payload power ([Tom's Hardware: AI1 compute payload is 120 kW, peaks at 150 kW](https://www.tomshardware.com/tech-industry/spacex-details-its-ai1-compute-satellite), [Yahoo Finance](https://finance.yahoo.com/sectors/technology/article/spacex-reveals-its-first-orbital-data-center-much-simpler-than-a-starlink-satellite-musk-says-141110185.html)).
+- **250 W/m2** solar-array areal power ([Yahoo Finance](https://finance.yahoo.com/sectors/technology/article/spacex-reveals-its-first-orbital-data-center-much-simpler-than-a-starlink-satellite-musk-says-141110185.html)).
+- A **deployable liquid radiator** with redundant pumping loops, named as a
+  design feature, with no SpaceX-stated area figure ([Yahoo Finance](https://finance.yahoo.com/sectors/technology/article/spacex-reveals-its-first-orbital-data-center-much-simpler-than-a-starlink-satellite-musk-says-141110185.html)).
+- Initial compute chips are **NVIDIA**, per SpaceX CFO Bret Johnsen, with the
+  compute provider interchangeable by design ([Benzinga: Musk breaks down what goes into an AI satellite](https://www.benzinga.com/markets/tech/26/06/53078245/elon-musk-breaks-down-ai-satellite-design-ahead-of-spacex-ipo)).
+
+**Derived (arithmetic from the confirmed figures, not SpaceX-stated):**
+
+- **~1.7-2.1 t per satellite**: 120-150 kW at 70 kW per tonne. Consistent with
+  press descriptions of "1-2 ton AI satellites."
+- **~600 m2 of solar array**: 150 kW peak at 250 W/m2.
+
+**Press (projections and characterizations from reveal coverage, not SpaceX
+commitments)** ([Yahoo Finance](https://finance.yahoo.com/sectors/technology/article/spacex-reveals-its-first-orbital-data-center-much-simpler-than-a-starlink-satellite-musk-says-141110185.html), [Tom's Hardware](https://www.tomshardware.com/tech-industry/spacex-details-its-ai1-compute-satellite), [Benzinga](https://www.benzinga.com/markets/tech/26/06/53078245/elon-musk-breaks-down-ai-satellite-design-ahead-of-spacex-ipo), [Analytics India Magazine: "a rack of compute in space"](https://analyticsindiamag.com/deep-tech/inside-spacexs-ai1-satellite-that-musk-calls-a-rack-of-compute-in-space), [Billionaires.Africa: Musk unveils AI1 satellite design](https://www.billionaires.africa/2026/06/09/elon-musk-unveils-ai1-satellite-design-to-power-spacexs-orbital-data-centers/)):
+
+- Compute is roughly **one NVIDIA GB300 NVL72 rack** per satellite: reporter
+  math from the ~120 kW figure. Musk's own framing is "a rack of compute in
+  space"; SpaceX has stated no FLOPS number.
+- **Up to ~110 m2** of deployable radiator: press/derived sizing of the
+  SpaceX-stated radiator system.
+- Deployment by **Starship to ~600 km**.
+- **First deployments ~2028**: press projection, explicitly not a commitment.
+- Bastrop **"Gigasat" factory producing by end-2027**: press, with the factory
+  target attributed to SpaceX.
+
+**Regulatory background (filed; already covered in Section 3):** the reveal
+puts a published per-satellite design behind the **Jan 30, 2026 FCC
+application** (SAT-LOA-20260108-00016, "Orbital Data Center System") for up to
+1,000,000 satellites at 500-2,000 km, accepted for review **Feb 4, 2026**
+(DA-26-113) ([FCC Space Bureau DA-26-113](https://docs.fcc.gov/public/attachments/DA-26-113A1.pdf)).
+
+**Skeptical coverage exists:** Morningstar assigns **~7% probability** to
+SpaceX's aggressive orbital-AI scenario (analyst estimate;
+[Stocktwits: analyst says the odds are just 7%](https://stocktwits.com/news-articles/markets/equity/rklb-lunr-rdw-rise-musk-ai-satellite-vision/cZ0Ud6JR7bl)), and TechCrunch ran a
+detailed critique of orbital-AI economics in February 2026
+([TechCrunch: Why the economics of orbital AI are so brutal](https://techcrunch.com/2026/02/11/why-the-economics-of-orbital-ai-are-so-brutal/)).
+
+**What this changes in this addendum, and what it does not:**
+
+- It **supersedes, as a statement of SpaceX's posture**, the Musk hedge quoted
+  in the Summary and Section 3 ("not next year and certainly not in three
+  years"): SpaceX now publicly promotes a concrete satellite design. The quote
+  is kept below, labeled as historical. The reveal itself made **no timing
+  commitments**, so it demonstrates intent, not a near-term operational
+  capability.
+- It does **not** change the READ THIS FIRST framing. The core question stays
+  **competitor-blind**, and this addendum stays context for timing, urgency,
+  and positioning. AI-1 is a design whose deployment press coverage places on
+  Starship (~600 km, first deployments ~2028): behind the same Starship
+  cadence/reuse gate analyzed in Section 2.
+- A **dedicated AI-1 competitor analysis is planned as its own document** in
+  this competitors folder; this dated update is the placeholder until it lands.
 
 ---
 
 ## Summary
 
-As of May 2026, **Starship is still a developmental vehicle, not an operational
-one.** It has flown **11 integrated test flights, 6 successes / 5 failures**, and
+As of the May 2026 research pass, **Starship is still a developmental vehicle,
+not an operational one.** It has flown **11 integrated test flights, 6 successes / 5 failures**, and
 **Flight 12 — the maiden flight of the new Block 3 (V3) vehicle — has not yet
 flown** (targeted ~May 19, 2026). The Super Heavy **booster has been reused** and
 caught by tower; the **upper stage ("Ship") has never been recovered or reused**,
@@ -37,7 +117,10 @@ cadence; getting to multi-launch-per-week tempo "will take years."
 SpaceX **has** announced orbital-compute ambitions — a January 2026 FCC filing
 for **up to 1,000,000 "orbital data center" satellites**, and **reported (WSJ,
 May 2026) talks with Google** — but Musk himself said a competitive space data
-center is **"not next year and certainly not in three years."**
+center is **"not next year and certainly not in three years."** (**Historical,
+2026-06-09:** that hedge predates the June 8, 2026 AI-1 design reveal and is
+superseded as a statement of SpaceX posture; it is kept here as the May 2026
+record. See the update section above.)
 
 **Net read on the founder's ~5–8-year-runway thesis: directionally sound, with
 real caveats.** Cheap, high-cadence Starship lift is genuinely gated on a
@@ -134,7 +217,7 @@ This is the most important *new* finding versus the existing Starcloud file.
 - **SPECULATIVE / aspirational:** the "AI Sat Mini" Musk showed (100 kW/sat) is a
   to-scale *illustration*, not flight hardware. Musk's own feasibility framing is
   notably hedged — space DCs cost-competitive **"not next year and certainly not
-  in three years"** ([NPR](https://www.npr.org/2026/04/03/nx-s1-5718416/ai-data-centers-in-space-spacex-elon-musk), [Astronomy.com](https://www.astronomy.com/science/musk-sets-sights-on-data-center-megaconstellation-but-is-it-possible/)). There is **no public evidence of SpaceX-designed space-optimized AI silicon** — the compute is assumed to be COTS GPU/accelerator payloads.
+  in three years"** ([NPR](https://www.npr.org/2026/04/03/nx-s1-5718416/ai-data-centers-in-space-spacex-elon-musk), [Astronomy.com](https://www.astronomy.com/science/musk-sets-sights-on-data-center-megaconstellation-but-is-it-possible/)). There is **no public evidence of SpaceX-designed space-optimized AI silicon** — the compute is assumed to be COTS GPU/accelerator payloads. (**Superseded 2026-06-09, kept as history:** the June 8, 2026 AI-1 reveal replaced this illustration-stage posture with a published satellite design, still unbuilt and unflown, and SpaceX's CFO named NVIDIA as the initial compute supplier, consistent with the COTS assumption. See the update section above.)
 
 **Read:** SpaceX is **serious and committed on paper** (FCC filing + xAI merger +
 a GW-scale narrative), but its orbital-compute program is **as gated on Starship
@@ -159,7 +242,10 @@ space-optimized silicon exists yet.
 2. **SpaceX and its analogues admit it.** Musk's "not in three years," the FCC
    filing's "once Starship is operational and reusable" conditional, and
    Starcloud's commercial spacecraft (S-3) being explicitly **2028–2029** all
-   point at the same horizon. The competitor-blind window is corroborated by
+   point at the same horizon. (The Musk hedge is historical as of the June 8,
+   2026 AI-1 reveal, but the reveal made no timing commitments, and press
+   projections put first AI-1 deployments at ~2028: the same horizon. See the
+   2026-06-09 update.) The competitor-blind window is corroborated by
    the competitors themselves.
 3. **No space-optimized silicon exists.** Confirmed: every announced program
    (Starcloud, Suncatcher, SpaceX) flies **COTS terrestrial accelerators**
@@ -215,7 +301,10 @@ Neutron effort must race, not ignore.
   2027**. Now also **reportedly in talks with SpaceX** (and other launchers) on
   orbital DCs ([TechCrunch](https://techcrunch.com/2026/05/12/report-google-and-spacex-in-talks-to-put-data-centers-into-orbit/)). Well-capitalized, not yet a commercial product.
 - **SpaceX (xAI) itself:** the 1M-satellite FCC filing (Section 3) — the
-  largest-stated ambition, fully gated on Starship.
+  largest-stated ambition, fully gated on Starship. **Update 2026-06-09:**
+  there is now a published per-satellite design, AI-1 (120 kW average compute,
+  SpaceX-stated; design/render only, nothing built or flown). See the update
+  section above.
 - **Aetherflux / "Cowboy Space Corporation":** $50M Series A; "Galactic Brain"
   LEO compute node targeted Q1 2027; expanding from space-based solar power.
 - **Aethero:** rad-tolerant edge-compute *hardware* vendor — a supplier/reference
@@ -285,6 +374,18 @@ not the GW-scale fight.
 - [NPR — Will data centers in space work? Elon Musk says yes](https://www.npr.org/2026/04/03/nx-s1-5718416/ai-data-centers-in-space-spacex-elon-musk)
 - [Astronomy.com — Musk sets sights on data center megaconstellation](https://www.astronomy.com/science/musk-sets-sights-on-data-center-megaconstellation-but-is-it-possible/)
 
+Added with the 2026-06-09 update (AI-1 reveal):
+
+- [Yahoo Finance: SpaceX reveals its first orbital data center, "much simpler than a Starlink satellite," Musk says](https://finance.yahoo.com/sectors/technology/article/spacex-reveals-its-first-orbital-data-center-much-simpler-than-a-starlink-satellite-musk-says-141110185.html)
+- [Tom's Hardware: SpaceX details its AI1 compute satellite (120 kW average, 150 kW peak)](https://www.tomshardware.com/tech-industry/spacex-details-its-ai1-compute-satellite)
+- [Benzinga: Musk breaks down what goes into an AI satellite ahead of the SpaceX IPO](https://www.benzinga.com/markets/tech/26/06/53078245/elon-musk-breaks-down-ai-satellite-design-ahead-of-spacex-ipo)
+- [Analytics India Magazine: Inside SpaceX's AI1 satellite, "a rack of compute in space"](https://analyticsindiamag.com/deep-tech/inside-spacexs-ai1-satellite-that-musk-calls-a-rack-of-compute-in-space)
+- [Billionaires.Africa: Musk unveils AI1 satellite design ahead of the SpaceX IPO](https://www.billionaires.africa/2026/06/09/elon-musk-unveils-ai1-satellite-design-to-power-spacexs-orbital-data-centers/)
+- [Tom Tunguz: SpaceX S-1 analysis](https://tomtunguz.com/spacex-s1-analysis/)
+- [FCC Space Bureau DA-26-113: acceptance of the SpaceX Orbital Data Center System application (SAT-LOA-20260108-00016)](https://docs.fcc.gov/public/attachments/DA-26-113A1.pdf)
+- [Stocktwits: Morningstar puts ~7% odds on the aggressive SpaceX AI-satellite scenario](https://stocktwits.com/news-articles/markets/equity/rklb-lunr-rdw-rise-musk-ai-satellite-vision/cZ0Ud6JR7bl)
+- [TechCrunch: Why the economics of orbital AI are so brutal](https://techcrunch.com/2026/02/11/why-the-economics-of-orbital-ai-are-so-brutal/)
+
 ## Open questions
 
 - **Flight 12 outcome:** Block 3's maiden flight had not flown at the time of
@@ -300,7 +401,10 @@ not the GW-scale fight.
   miss again? The 2025 5× miss argues for skepticism; track actual flight count.
 - **SpaceX orbital-DC concreteness:** the 1M-satellite filing is a regulatory
   placeholder. Is there *funded* hardware, a real first-launch date, or
-  space-optimized silicon? None visible yet.
+  space-optimized silicon? None visible yet. (**Partially answered
+  2026-06-09:** the AI-1 design is now public, NVIDIA is named as the initial
+  silicon, and press puts the Bastrop factory at end-2027; still no built
+  hardware and no committed first-launch date. See the update section above.)
 - **Google's launcher choice:** if Google signs with a non-SpaceX launcher (it is
   reportedly shopping), does that create a Starship-independent competitor — or
   a potential Rocket Lab customer?
