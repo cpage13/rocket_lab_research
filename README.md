@@ -37,10 +37,12 @@ runs about **1.92x** the cost of an equivalent ground data center: not parity,
 but close enough to take seriously.
 
 And that 1.92x is the deliberately conservative floor. Run the same model at
-the specs SpaceX revealed for its own AI-1 satellite (June 2026) and it reads
-**about even with ground, potentially better**, with roughly **3x the compute
-per launch** and the 2036 cohort earning about **$3.3B a year** in revenue and
-**$1.1B in gross profit**. See [the AI-1 comparison](data_center/ai1_comparison.md).
+the specs SpaceX revealed for its own AI-1 satellite (June 2026) and the 1.92x
+falls to about **1.3x**. Apply the cost-downs the model already tracks and it
+reads **0.91x, slightly cheaper than ground**. Each launch carries roughly
+**3x the compute**, and the 2036 cohort alone earns about **$3.3B a year** in
+revenue and **$1.1B in gross profit**, both still conservative. See
+[the AI-1 comparison](data_center/ai1_comparison.md).
 
 ## Where To Read It
 
