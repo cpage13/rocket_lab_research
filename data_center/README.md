@@ -40,6 +40,7 @@ sensitivities, and why a premium customer might care.
 |---|---|
 | [conclusion.md](conclusion.md) | The verdict and the headline numbers. Start here. |
 | [structural_case.md](structural_case.md) | The structural case: why Rocket Lab is uniquely positioned to build this, and why the numbers are a floor. |
+| [ai1_comparison.md](ai1_comparison.md) | The AI-1 comparison: SpaceX's June 2026 design run through this model. The gap to ground closes, leaning to par or better. |
 | [assumptions.md](assumptions.md) | The default-assumption ledger and source-status taxonomy. |
 | [models/space/default.json](models/space/default.json) | The promoted space model: every number with formula, units, and source. |
 | [models/ground/default.json](models/ground/default.json) | The ground reference for the same 2036 cohort. |
