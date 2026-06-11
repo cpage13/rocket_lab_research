@@ -64,7 +64,7 @@ Intentionally excluded:
 | File | Status | Key finding / purpose | Source audit note |
 |---|---|---|---|
 | [competitors/starcloud.md](competitors/starcloud.md) | draft | Starcloud validates demand and sets the closest comparable orbital-DC competitor. | Has source section and external citations. |
-| [competitors/starship_addendum.md](competitors/starship_addendum.md) | draft | Heavy-lift competition changes timing and scale, not the near-term Neutron learning case. | Has source section and external citations. Updated 2026-06-09 with a dated section on the SpaceX AI-1 design reveal (confirmed/derived/press tagging); the Musk timing hedge is now marked historical, and a dedicated AI-1 analysis is planned as its own document. |
+| [competitors/starship_addendum.md](competitors/starship_addendum.md) | draft | Heavy-lift competition changes timing and scale, not the near-term Neutron learning case. | Has source section and external citations. Updated 2026-06-09 with a dated section on the SpaceX AI-1 design reveal (confirmed/derived/press tagging); the Musk timing hedge is now marked historical, and the dedicated AI-1 analysis has landed as `data_center/ai1_comparison.md` (2026-06-10). |
 
 ### Debate
 

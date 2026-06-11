@@ -2,7 +2,7 @@
 
 *Companion to the [conclusion](conclusion.md) (the numbers) and the [structural case](structural_case.md) (the why), source-linked through the [assumptions](assumptions.md). On June 8, 2026, SpaceX revealed AI-1, its orbital AI data-center satellite. This document makes one assumption, once: AI-1's specs are real, and a Neutron node is built to them. AI-1 is an unflown design revealed three days before SpaceX's IPO; every AI-1 figure here comes from that reveal ([sources](../research/competitors/starship_addendum.md)). Said once, not repeated.*
 
-**The short version: AI-1 makes the Neutron case stronger.** It matches our model where the model is well grounded (silicon, solar) and beats it in exactly one place (the radiator). Built to its specs, a Neutron node carries about 3x the compute per launch at today's silicon, the cost premium over ground falls from about 90 percent to about 30 percent, and revenue rises about 60 percent at the same margin. Turn the cost dials we already track and the orbital build comes out cheaper than ground. One bet decides all of it: the radiator.
+**The short version: AI-1 makes the Neutron case stronger.** It matches our model where the model is well grounded (silicon, solar area) and beats it in exactly one place (the radiator). Built to its specs, a Neutron node carries about 3x the compute per launch at today's silicon, the cost premium over ground falls from about 90 percent to about 30 percent, and revenue rises about 60 percent at the same margin. Turn the cost dials we already track and the orbital build comes out cheaper than ground. One bet decides all of it: the radiator.
 
 ## The Numbers
 
@@ -65,9 +65,9 @@ The mass win buys a 3x head start; advancing silicon takes over by the end of th
 | Silicon | about one GB300 NVL72 rack; NVIDIA first, interchangeable bay | NVIDIA + bay confirmed; one-rack yardstick press |
 | Throughput | about 1.1 to 1.44 exaFLOPS dense FP4 | derived (no official FLOPS) |
 | Radiator | up to 110 m2, deployable liquid, double-sided knife-edge, redundant pumps | press; orientation pending confirmation |
-| Launch | Starship to about 600 km; prototypes early 2027 | press |
+| Launch | Starship to about 600 km; first deployments as early as 2028, factory targeted end-2027 | press |
 
-Two readings matter. The headline power is compute power, the same basis as our node: solar output sits about equal to peak compute, so cell efficiency sets array area, not delivered watts. And the silicon is our FY2026 model year: 72 packages at 15 PF reproduce the rack's throughput, and our compute mass matches a real NVL72. Their satellite is the first column of our model, not the last.
+Two readings matter. The headline power is compute power, the same basis as our node: solar output sits about equal to peak compute, so cell efficiency sets array area, not delivered watts. That match is the area spec; AI-1's array mass is far lighter than our conservative dial, and that is part of its bet. And the silicon is our FY2026 model year: 72 packages at 15 PF reproduce the rack's throughput, and our compute mass matches a real NVL72. Their satellite is the first column of our model, not the last.
 
 ## Where We Were Wrong, and the One Bet
 
@@ -82,4 +82,4 @@ Our node-mass write-up assumed the radiator co-mounts on the back of the solar a
 
 Same panel mass class on both sides (theirs implies 3.6 to 5.5 kg per square meter, ours 4.2 to 5.0): the advantage is temperature, not material, and not a heat pump (studied for decades, never flown as a primary spacecraft thermal system, and mass-negative on our dials). Redwire's May 2026 study independently shows 757 W/m2 at a 48 C interface, so the regime is engineering, not magic. Our model defers the same bet to its FY2031 thermal step; AI-1 takes it on day one.
 
-That is the whole dispute, and the model polices it: the AI-1-spec run trips two validation flags on purpose (pinned silicon; a radiator dial below the co-mounted floor), the upper bracket labeling itself. **If AI-1 flies at spec, the existing THR-014 sensitivity (0.006 to 0.008 t/kW) is the dial that moves toward central; until then the conservative dial stays.** Mass remains the binding lever and the 2x-miss cliff stands (`RLDC-SOLAR-RADIATOR-MASS`). A literal AI-1 does not fit Neutron (a 70 m span built for a 9 m fairing): the mass ratios carry over, the form factor does not, and volume stays comfortable below about 1 MW (`RLDC-FAIRING-VOLUME-80M3`).
+That is the whole dispute, and the model polices it: the AI-1-spec run trips three validation flags. Two fire on purpose (pinned silicon; a radiator dial below the co-mounted floor), the upper bracket labeling itself. The third is a default-calibration check (the deployed-capacity rule) that fires only because this scenario is not the default. **If AI-1 flies at spec, the existing THR-014 sensitivity (0.006 to 0.008 t/kW) is the dial that moves toward central; until then the conservative dial stays.** Mass remains the binding lever and the 2x-miss cliff stands (`RLDC-SOLAR-RADIATOR-MASS`). A literal AI-1 does not fit Neutron (a 70 m span built for a 9 m fairing): the mass ratios carry over, the form factor does not, and volume stays comfortable below about 1 MW (`RLDC-FAIRING-VOLUME-80M3`).
