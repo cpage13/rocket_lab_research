@@ -18,8 +18,10 @@
 # CAVEAT: AI1's figures are optimistic, unflown, IPO-timed vendor claims, flagged
 # ~2-6x more aggressive than our conservative central dials. This is the
 # AGGRESSIVE UPPER BRACKET, not a replacement for the default. Running it trips
-# two INTENDED validation flags (pinned silicon; radiator dial below the
-# co-mounted floor): the model labeling its own AI1 bet. See
+# three validation flags: the two INTENDED brackets (pinned silicon; radiator
+# dial below the co-mounted floor), the model labeling its own AI1 bet, plus
+# the default-calibration deployed-capacity check, which fires on any
+# non-default scenario. See
 # data_center/ai1_comparison.md and the RLDC-AI1-EQUIVALENT ledger row.
 #
 # To run: uv run rklb-value scenarios/ai1_equivalent.yaml --json

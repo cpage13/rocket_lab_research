@@ -40,7 +40,7 @@ And that 1.92x is the deliberately conservative floor. Run the same model at
 the specs SpaceX revealed for its own AI-1 satellite (June 2026) and the 1.92x
 falls to about **1.3x**. Apply the cost-downs the model already tracks and it
 reads **0.91x, slightly cheaper than ground**. Each launch carries roughly
-**3x the compute**, and the 2036 cohort alone earns about **$3.3B a year** in
+**3x the compute at today's silicon**, and the 2036 cohort alone earns about **$3.3B a year** in
 revenue and **$1.1B in gross profit**, both still conservative. See
 [the AI-1 comparison](data_center/ai1_comparison.md).
 
