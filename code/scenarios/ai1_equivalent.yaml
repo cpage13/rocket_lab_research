@@ -1,0 +1,107 @@
+# =============================================================================
+# rklb-value: AI1-EQUIVALENT scenario (SpaceX AI1 mass/thermal specs)
+# =============================================================================
+# Replaces the default's possibility-only mass/thermal dials with SpaceX AI1's
+# confirmed/derived specs (unveiled 8 Jun 2026): ~0.0143 t/kW whole-satellite
+# (70 kW/ton), light V3-derived bus, light purpose-built solar, small hot 110 m2
+# radiator, on AI1's stated silicon (one GB300 NVL72 = B300 GPUs).
+#
+# UNCHANGED from default: mass_envelope_t (12.5 t SSO), launch_cost, cadence,
+# fleet.service_life_years (5 y), r_band (central 1.50x). Only mass/thermal
+# dials + the pinned silicon change.
+#
+# AI1's 0.0143 t/kW is a WHOLE-SATELLITE ratio (its own light bus included), so
+# we REDUCE node_mass_fixed_t to 0.10 t (do not stack our heavy 2.5 t dedicated
+# bus on top) and set light solar + small hot radiator. Emergent whole-system
+# intensity = 0.01383 t/kW (72.3 kW/t) ~= AI1's 70 kW/t.
+#
+# CAVEAT: AI1's figures are optimistic, unflown, IPO-timed vendor claims, flagged
+# ~2-6x more aggressive than our conservative central dials. This is the
+# AGGRESSIVE UPPER BRACKET, not a replacement for the default. Running it trips
+# two INTENDED validation flags (pinned silicon; radiator dial below the
+# co-mounted floor): the model labeling its own AI1 bet. See
+# data_center/ai1_comparison.md and the RLDC-AI1-EQUIVALENT ledger row.
+#
+# To run: uv run rklb-value scenarios/ai1_equivalent.yaml --json
+# (never --promote a what-if; the default JSON is the only promoted artifact)
+# =============================================================================
+
+scenario_name: "AI1-equivalent scenario (SpaceX AI1 mass/thermal specs, B300 silicon)"
+
+metadata:
+  workload_type: inference
+  operator_model: b2b_dedicated_optical_rf
+  radiator_architecture: single_face_co_mounted
+  deployment_philosophy: ground_validated_before_launch
+  base_year: 2026
+  horizon_years: 10
+
+cadence:            # UNCHANGED from default
+  cadence_ceiling: 150
+  launches_at_year_5: 14
+  launches_at_year_10: 90
+  first_launch_year: 1
+
+fleet:
+  service_life_years: 5            # UNCHANGED from default
+
+volume:             # UNCHANGED from default (note: model volume math never binds;
+  si_areal_density_kg_m2: 2.0      # the real AI1 limit is fairing GEOMETRY, not modeled)
+  si_bol_efficiency: 0.20
+  fold_ratio: 80.0
+  stowed_pitch_mm: 6.0
+  radiator_solar_area_ratio: 0.70
+  mounting_overhead_pct: 0.30
+  neutron_fairing_usable_volume_m3: 80.0
+
+r_band:             # UNCHANGED from default (central 1.50x => 33.3% gross margin)
+  central:
+    - { fy: 2026, r: 1.50 }
+    - { fy: 2036, r: 1.50 }
+  low:
+    - { fy: 2026, r: 1.20 }
+    - { fy: 2036, r: 1.20 }
+  high:
+    - { fy: 2026, r: 1.80 }
+    - { fy: 2036, r: 1.80 }
+
+launch_cost:        # UNCHANGED from default
+  low_cadence_cost_musd: 25.0
+  high_cadence_cost_musd: 13.5
+  low_cadence_launches: 5.0
+  high_cadence_launches: 100.0
+
+gospel:
+  mass_envelope_t: 12.5            # UNCHANGED: Neutron block-upgrade SSO baseline
+  node_mass_fixed_t: 0.10          # AI1-EQUIV: light V3-derived bus folded into 70 kW/t (was 2.5)
+  node_volume_fixed_m3: 5.0
+  tjmax_lift_year: 5               # inert here (pre == post radiator dial)
+  radiator_t_per_kw_pre: 0.0015    # AI1-EQUIV: small hot 110 m2 radiator (was 0.013)
+  radiator_t_per_kw_post: 0.0015   # AI1-EQUIV: held flat, AI1 claims hot radiator now (was 0.012)
+  solar_mass_t_per_kw: 0.003       # AI1-EQUIV: light purpose-built array (was 0.011)
+  bus_base_musd: 8.0               # cost dial UNCHANGED (scenario scopes mass/thermal, not cost)
+  bus_flatten_after_yr: 5
+  bus_growth_pre: -0.03
+  solar_cost_musd_per_kw: 0.04     # cost dial UNCHANGED
+  radiator_cost_musd_per_kw: 0.04  # cost dial UNCHANGED
+  release_cadence_yr: 1.5
+
+slopes:             # AI1-EQUIV: ZEROED so frontier silicon stays B300/GB300 every year
+  usd_growth_per_gen: 0.0          # (AI1 = fixed near-term design point = one GB300 NVL72)
+  kw_growth_per_gen: 0.0
+  kg_growth_per_gen: 0.0
+  pf_growth_per_gen: 0.0
+
+generations:        # Pin to ONLY B300/GB300 (AI1's stated "one NVIDIA GB300 rack")
+  - name: "B300/GB300"
+    year_available: 2025.5
+    usd_per_pkg: 70000
+    kw_per_pkg: 2.05
+    kg_per_pkg: 18.9
+    pf_per_pkg: 15.0
+    die_count: 2
+    source:
+      doc_path: "research/ai_hardware/gpu_generational_roadmap.md"
+      anchor: null
+      quoted_figure: null
+      sourcing: "fact"
