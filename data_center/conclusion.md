@@ -23,7 +23,7 @@ improve the whole stack through repeated cadence.
 
 That machine is the subject of a companion document, [the structural case](structural_case.md): the argument for why Rocket Lab, almost alone, already owns the parts, the rocket, and the production lines to build this, and why the numbers here read as a floor rather than a ceiling. This document is the numbers; the structural case is the why. Read them in either order.
 
-Since this was written, the comparison gained an external benchmark: SpaceX revealed its AI-1 satellite design in June 2026. Run this same model at AI-1's specs and the results lean toward parity with ground, potentially better; the numbers below stay the conservative floor. That test is its own companion, [the AI-1 comparison](ai1_comparison.md).
+Since this was written, the comparison gained an external benchmark: SpaceX revealed its AI-1 satellite design in June 2026. Run this same model at AI-1's specs and the 1.92x falls to about **1.3x**. Add the cost-downs already tracked below and it reads **0.91x**, slightly cheaper than ground. Even these stay conservative (AI-1's own cost structure is credited nothing), and the numbers below remain the floor. That test is its own companion, [the AI-1 comparison](ai1_comparison.md).
 
 ## Source Snapshot
 
