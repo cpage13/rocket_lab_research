@@ -15,6 +15,8 @@ improve the whole stack through repeated cadence.
 
 That machine is the subject of a companion document, [the structural case](structural_case.md): the argument for why Rocket Lab, almost alone, already owns the parts, the rocket, and the production lines to build this, and why the numbers here read as a floor rather than a ceiling. This document is the numbers; the structural case is the why. Read them in either order.
 
+Since this was written, the comparison gained an external benchmark: SpaceX revealed its AI-1 satellite design in June 2026. Run this same model at AI-1's specs and the results lean toward parity with ground, potentially better; the numbers below stay the conservative floor. That test is its own companion, [the AI-1 comparison](ai1_comparison.md).
+
 ## Source Snapshot
 
 | Item | Current source |
@@ -84,7 +86,8 @@ orbital scenario. That conservative translation is the point: even without a
 space-native design, the case already lands close enough to ground cost to study
 seriously, and it has room to improve. Production and iteration historically
 surface gains no one anticipated, so it would not be surprising if the costs
-here came down over the next decade. That upside is noted, not modeled.
+here came down over the next decade. That upside is noted, not modeled. The
+baseline also predates SpaceX's June 2026 AI-1 reveal.
 
 Read it with a vertical-integration lens that the baseline does not pay for.
 Many cost lines behave like external buy prices, but in a Rocket Lab-operated
@@ -145,6 +148,8 @@ default):
 | Base (default) | 37 | ~112 MW | 1.92x | ~90% |
 | Solar and radiator at $20k/kW | 37 | ~112 MW | 1.50x | ~50% |
 | Plus ~25% lighter solar and radiator | 49 | ~149 MW | 1.38x | ~38% |
+| AI-1-spec node (mass dials, conservative costs) | 440 | ~242 MW | 1.29x | ~29% |
+| AI-1-spec node + solar and radiator at $20k/kW | 440 | ~242 MW | 0.91x | below ground |
 
 In the ambitious case the same 90 launches and 268-node fleet carry about a
 third more compute (49 packages per node instead of 37, about 149 MW of living
@@ -152,6 +157,10 @@ power instead of 112) at the same roughly 33% margin, and the premium a customer
 would pay over a comparable ground token falls from about 90% to about 38%.
 Revenue is slightly lower because it is coupled to cost, but the token is far
 more competitive.
+
+The last two rows are the external bracket: SpaceX's AI-1 design (June 2026)
+run through this same model, the labeled upper bound, not the default; see
+[the AI-1 comparison](ai1_comparison.md).
 
 Launch is not where the leverage is. It is only about 18% of total system cost,
 against roughly 30% for compute and about 22% each for solar and radiator. Even
@@ -198,7 +207,9 @@ sensitivity (`RLDC-LAUNCH-COST-2036`), payload-case comparisons
 GPU/package definition tracking, and market-scale updates
 (`RLDC-MARKET-100GW-2036`). Thermal and resilience work continues too:
 hotter-operation physics, long-life reliability, and radiation-shielding mass
-against the solar and radiator stack.
+against the solar and radiator stack. One new watch item: if AI-1 flies at its
+published radiator spec, the THR-014 hot-loop sensitivity (0.006 to
+0.008 t/kW) moves toward central.
 
 ## Fleet Snapshot
 

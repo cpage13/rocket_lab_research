@@ -90,8 +90,10 @@ detailed critique of orbital-AI economics in February 2026
   and positioning. AI-1 is a design whose deployment press coverage places on
   Starship (~600 km, first deployments ~2028): behind the same Starship
   cadence/reuse gate analyzed in Section 2.
-- A **dedicated AI-1 competitor analysis is planned as its own document** in
-  this competitors folder; this dated update is the placeholder until it lands.
+- The **dedicated AI-1 analysis has landed** as
+  [`data_center/ai1_comparison.md`](../../data_center/ai1_comparison.md): AI-1's
+  specs run through the project's own model, with the cohort, cost-ladder, and
+  ten-year results. This dated update remains the sourced spec record behind it.
 
 ---
 
