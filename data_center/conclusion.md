@@ -7,6 +7,14 @@ a **33% gross margin** across its five-year life, at about **1.92x** the cost of
 an equivalent ground build. This is not a precision forecast or a DCF. It is a
 bounded feasibility exercise built from visible, source-linked assumptions.
 
+In plain terms: the 33% margin means each year's nodes sell their computing at
+1.5 times their own cost, and the 1.92x means that cost, building, launching,
+and running the nodes for five years, is about twice what the same computing
+power costs on the ground. With both sides priced at the same margin, a
+customer would pay about 90% more per unit of orbital AI work than for the
+ground equivalent. The rest of this document builds those numbers from their
+parts.
+
 The interesting part is not "a data center in space" as a slogan. It is the
 machine Rocket Lab could build around it: integrate GPUs and networking on the
 ground, package them into rack-like orbital nodes, attach them to a Rocket Lab
@@ -19,12 +27,19 @@ Since this was written, the comparison gained an external benchmark: SpaceX reve
 
 ## Source Snapshot
 
-| Item | Current source |
-|---|---|
-| Space model | [`data_center/models/space/default.json`](models/space/default.json) |
-| Ground reference | [`data_center/models/ground/default.json`](models/ground/default.json) |
-| Default scenario | [`code/scenarios/default.yaml`](../code/scenarios/default.yaml) |
-| Assumptions ledger | [`data_center/assumptions.md`](assumptions.md) |
+Three of these files are named "default", which deserves a word: the scenario
+YAML is the single set of input dials, and promoting it produces the two model
+outputs, the space model and the ground reference. They are different models
+that share a filename, not copies.
+
+| Item | File | What it is |
+|---|---|---|
+| Space model | [`data_center/models/space/default.json`](models/space/default.json) | The promoted orbital model: every number in this document, with formula, units, and source per cell. |
+| Ground reference | [`data_center/models/ground/default.json`](models/ground/default.json) | A separate model: the same 2036 cohort costed as a terrestrial build, the denominator of the 1.92x. |
+| Default scenario | [`code/scenarios/default.yaml`](../code/scenarios/default.yaml) | The input dials that produce both models; copy, edit, and re-run to test alternatives. |
+| Assumptions ledger | [`data_center/assumptions.md`](assumptions.md) | Every default assumption, its source status, and where it comes from. |
+| The structural case | [`data_center/structural_case.md`](structural_case.md) | The companion argument: why Rocket Lab specifically, and why these numbers read as a floor. |
+| The AI-1 comparison | [`data_center/ai1_comparison.md`](ai1_comparison.md) | SpaceX's June 2026 satellite design run through this same model. |
 
 ## The Build-Out, Year By Year
 
