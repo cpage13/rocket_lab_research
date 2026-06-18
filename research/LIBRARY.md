@@ -102,6 +102,9 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) | Sizes the satellite-addressable rural/remote fringe in dollars, bottoms-up from household counts and region-specific ARPU (comms wave 2). | The fringe is ~$40-55B/yr conservative to ~$95-130B/yr optimistic (ex-China, ILLUSTRATIVE), ~2.5-8% of the cited $1.6T and bracketing Morningstar's ~$129B; the structural finding is sharper than the number, the dollars are in the developed-world rural fringe and the high-ARPU mobility/enterprise verticals, NOT in the ~3.1B-person usage gap (an income problem satellite supply does not fix). Starlink's blended ARPU fell 33% in two years chasing that emerging-market tail. |
 | [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) | Sizes the premium/sovereign niche in dollars, separating the gross spend pool from the slice open to a new commercial entrant (comms wave 2). | A ~$75-95B/yr gross premium/sovereign pool (ex-China, ESTIMATE), but only ~$8-30B/yr is OPEN to a new commercial-services entrant (ILLUSTRATIVE): the cited flagship programs (IRIS2 EUR 10.6B, SDA tranches, the $2.29B SpaceX SDN award, GOVSATCOM) are closed prime/consortium builds, demand proof not addressable revenue. The niche trades addressable size (small) for margin and durability (high). Rocket Lab uniquely already sits on the closed-prime side (>$1.3B in SDA awards), a different business from the commercial niche sized here. |
 | [economics/comms_addressable_sizing.md](economics/comms_addressable_sizing.md) | Consolidation: reconciles the rural/remote fringe and the premium/sovereign pools against the $1.6T and $129B anchors, de-duplicating the shared mobility/enterprise verticals (comms wave 2). | The two pools share the mobility/enterprise verticals, so they are reconciled (five non-overlapping buckets), not summed. The de-duplicated new-entrant-addressable pool is ~$45-60B/yr conservative to ~$110-150B/yr optimistic (ex-China, ILLUSTRATIVE): ~3-9% of the cited $1.6T and in the same band as the ~$129B realistic served estimate. Two independent methods (this bottoms-up consolidation and Morningstar's top-down rebuild) landing in the same band is the load-bearing cross-check; no verdict, no supply-side economics, no single-operator capture rate. |
+| [economics/comms_space_supply_cost.md](economics/comms_space_supply_cost.md) | The space supply-side cost stack to DELIVER communications, built from the disclosed Starlink S-1 (comms wave 3). | The mature incumbent delivers for ~$480-680/subscriber/yr all-in (space-specific satellite+launch replacement ~$200-260/sub/yr) at a disclosed ~38.6% segment operating / ~63% segment EBITDA margin on $11.4B of 2025 Starlink revenue; network-average ~$0.05-0.30/GB but RISING with user density (the opposite of fiber, the permanent structural ceiling). The cost is dominated by the satellite fleet on a 5-year replacement treadmill (~$6-8B/yr, single-lineage flag), then launch (20-70% of system capital), then a small but availability-critical optical ground segment. Scale is the whole game: the same fixed stack is cheap per subscriber only at SpaceX scale. No verdict. |
+| [economics/comms_incumbent_margins_competitive_floor.md](economics/comms_incumbent_margins_competitive_floor.md) | Ground incumbents' margins and the marginal-cost price floor a space entrant must beat in served markets (comms wave 3). | US carriers/cable run ~36-41% EBITDA margins and ~80-90% broadband gross margins, so in a SERVED market the incumbent defends an existing subscriber not at its list price but at its marginal cash cost: ~10-20% of ARPU (~$7-15/mo, ~$84-180/sub/yr) for fixed broadband and ~$0.50-1.50/GB for mobile (single-source flag), with ~30-40 points of EBITDA headroom to absorb the cut. The asymmetry versus the data-center 1.92x: that ground side is a fresh build paying full freight, while the comms served-market competitor has already sunk its plant. In the unserved fringe there is no such floor, which is exactly where the addressable dollars sit. No verdict. |
+| [economics/comms_ground_vs_space_cost_ratio.md](economics/comms_ground_vs_space_cost_ratio.md) | The headline ground-vs-space delivery-cost ratio, the realistic-for-SpaceX cost level, and the competitive verdict (comms wave 3). | Communications has not one ratio but TWO that point in opposite directions, split by whether the ground plant already exists (the two-flavor asymmetry). Flavor (a), space vs a fresh ground build (unserved): space is CHEAPER by ~1.3-3.2x rural and ~65-90x in the extreme tail, the opposite direction to the data-center 1.92x. Flavor (b), space vs the incumbent's marginal cost (served): space is COSTLIER by ~3-8x. The ~$480-680/sub/yr cost level that earns the addressable pool at ~38% op / ~63% EBITDA is not aspirational, it is Starlink's disclosed 2025 actual, already achieved at SpaceX scale but unreachable for a small constellation (denominator-driven). Space wins on cost exactly where the wave-2 demand sits (the fringe and the premium/sovereign layer) and nowhere else; two independent lines (revenue and cost) land on the same map. No business verdict. |
 
 ### Direct Communication
 
@@ -352,7 +355,32 @@ headline.
 (government/defense satcom, maritime and aero, critical-infrastructure, finance/
 low-latency, orbital-DC backhaul) that sells on sovereignty, security posture,
 dedicated capacity, resilience, and latency rather than bandwidth or price. Comms
-wave 2 sizes it at a ~$75-95B/yr gross pool, of which only ~$8-30B/yr is OPEN to a
+wave 2 sizes it at a ~$60-95B/yr gross pool (lead-reconciled down from ~$75-95B as
+the components roll up nearer the low end), of which only ~$8-30B/yr is OPEN to a
 new commercial-services entrant; the rest is closed prime/consortium programs (IRIS2,
 SDA/SDN, GOVSATCOM) that are demand proof, not contestable revenue. It trades
 addressable size (far smaller than the mass market) for margin and durability.
+
+**Marginal cost / defend floor:** the cash cost an entrenched incumbent actually
+avoids by losing one already-connected subscriber, and therefore the lowest price it
+will rationally cut to in order to defend that customer. Because the plant is sunk,
+this floor is far below both the incumbent's all-in cost and its list price: comms
+wave 3 puts it at ~10-20% of ARPU (~$7-15/sub/month, ~$84-180/sub/yr) for fixed
+broadband and ~$0.50-1.50/GB for mobile. The distinction that matters: a space
+entrant cheaper than the incumbent's all-in or list price has won nothing in a served
+market, because the incumbent will price down to this defend floor (soaking the cut
+out of ~30-40 points of EBITDA headroom) and the entrant must beat the floor, not the
+sticker. In the unserved fringe there is no sunk plant, so there is no defend floor,
+which is why the space-addressable dollars concentrate there.
+
+**Two-flavor cost ratio:** the comms-track finding that the ground-vs-space cost to
+deliver has not one ratio but two, pointing in opposite directions, split entirely by
+whether the ground plant already exists at that location. Flavor (a), space vs a
+fresh ground build (the unserved comparison, the true mirror of the data-center
+track's 1.92x), has space CHEAPER by ~1.3-3.2x in ordinary rural areas and tens-fold
+in the remote tail. Flavor (b), space vs the incumbent's marginal/defend cost (the
+served comparison the data-center track never faces), has space COSTLIER by ~3-8x.
+The asymmetry is the headline: space wins on cost where there is no sunk-plant floor
+(the unserved/remote fringe and the premium/sovereign layer) and loses where there is
+one (dense served markets), which is exactly the map the demand-side addressable
+sizing independently found.
