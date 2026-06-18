@@ -50,7 +50,7 @@ Intentionally excluded:
 | [RESEARCH_TRACKER.md](RESEARCH_TRACKER.md) | reviewed | Research Wiki tracker and file coverage audit. | Tracks every current file under `research/` and intentionally excludes generated outputs. |
 | [SOURCE_INDEX.md](SOURCE_INDEX.md) | reviewed | Claim-level hard-number ledger. | Uses the public source-status taxonomy and records stable `RLDC-*` IDs for default assumptions and public model outputs. |
 | [vision/initial_thesis.md](vision/initial_thesis.md) | reviewed | Append-only thesis and belief history. | Rev 7 preserves historical conclusion references as history while moving live outputs to `data_center/`. |
-| [vision/comms_thesis.md](vision/comms_thesis.md) | draft | Communications thesis Revision 1: starting belief record for the comms track (four working hypotheses plus the open questions that test them); no verdict for or against a Rocket Lab space-comms business. | Added 2026-06-11, comms wave-1 ingest. Belief record only; carries no external source burden of its own, pointing to `synthesis/comms_baseline_synthesis.md` for the sourced base. |
+| [vision/comms_thesis.md](vision/comms_thesis.md) | draft | Communications thesis: starting belief record for the comms track (four working hypotheses plus the open questions that test them); no verdict for or against a Rocket Lab space-comms business. | Added 2026-06-11, comms wave-1 ingest. Revision 2 appended (2026-06-11): the two missing dollar numbers are now sized (rural/remote fringe and premium/sovereign niche), updating the confirm/break notes for Hypotheses 2 and 4; Revision 1 unchanged, still no verdict, the sizes are demand-side and ILLUSTRATIVE. Belief record only; carries no external source burden of its own, pointing to `synthesis/comms_baseline_synthesis.md` and the three wave-2 `economics/comms_*_sizing.md` docs for the sourced base. |
 | [direct_communication/README.md](direct_communication/README.md) | draft | Communications workstream front door. | Navigation doc; no external source burden. |
 
 ### AI Hardware
@@ -100,6 +100,9 @@ Intentionally excluded:
 | [economics/comms_cellular_5g_deployment_economics.md](economics/comms_cellular_5g_deployment_economics.md) | draft | Mobile-network capex is ~14-19% of service revenue and declining; site upgrade ~$20-50K vs new macro ~$100-300K; C-band auction ~$81B; ~8-10 year payback and no 5G ARPU premium. | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. Capex intensity and auction totals well-corroborated; per-component cost splits and the 8-10 year payback are aggregator/single-source. |
 | [economics/comms_broadband_deployment_economics.md](economics/comms_broadband_deployment_economics.md) | draft | A cable incumbent defends a passed home for ~$100-300 vs ~$1,000+ fiber overbuild; the space value is in the unserved/remote tail ($3,000-6,000 rural up to ~$200,000+), not served markets. | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. Per-foot/cable-upgrade/FWA/take-rate are multi-source; the ~$200K extreme-rural passing and ~4% overbuild ROI rest on single primary sources. |
 | [economics/comms_space_tam_claims.md](economics/comms_space_tam_claims.md) | draft | Cited connectivity TAMs (SpaceX $1.6T, AST ~$1.1T) and the bottoms-up served market are ~2 orders of magnitude apart; Morningstar realistic Starlink ~$129B; default prior is a ~90% haircut (served ~5-10% of cited). | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. Cited figures are primary filings; the ~90% haircut is corroborated by four analysts; the $15.4B ASTS model and $200B combined-bank figure are flagged single-source. |
+| [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) | draft | Sizes the satellite-addressable rural/remote fringe at ~$40-55B/yr conservative to ~$95-130B/yr optimistic (ex-China), ~2.5-8% of the cited $1.6T and bracketing Morningstar's ~$129B; the dollars are in the developed-world rural fringe and high-ARPU mobility/enterprise verticals, NOT in the ~3.1B-person usage gap. | Added 2026-06-11, wave-2 sizing, multi-source, illustrative flagged. Bottoms-up on sourced household counts and region-specific ARPU; the dollar cases are explicitly ILLUSTRATIVE and the value is the structure plus the four-anchor cross-checked band (Starlink $11.39B revenue, Morningstar ~$129B, Quilty 25-30M cap, Oxford 78M-421M users). Single-source flags: the ~$2,000/yr residential ARPU, the Value Add VC developed-vs-emerging split, the Quilty cap, the Oxford range, and the Morningstar ~$10B US-Niche sub-figure. Carries internal COMM-057..081, reconciled into SOURCE_INDEX by the lead. |
+| [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) | draft | Sizes the premium/sovereign niche at a ~$75-95B/yr gross pool but only ~$8-30B/yr OPEN to a new commercial entrant (ex-China); the flagship programs (IRIS2 EUR 10.6B, SDA tranches, $2.29B SpaceX SDN, GOVSATCOM) are closed prime/consortium builds, demand proof not addressable revenue. | Added 2026-06-11, wave-2 sizing, multi-source, illustrative flagged. The ~$50B government+military envelope is the load-bearing total (2-firm corroboration within ~4%); the served open slice is a reasoned haircut, not a bid model, flagged ILLUSTRATIVE. Single-source/scope flags: the enterprise-satcom umbrella, the finance/low-latency attributable spend (dated TABB 2010), the open-government annual-outlay estimate (ceiling-vs-outlay trap), and orbital-DC backhaul (assumption-set fraction). Rocket Lab's >$1.3B SDA prime position recorded as context, not scored. Carries internal COMM-057..078 (collides with the rural doc), reconciled by the lead. |
+| [economics/comms_addressable_sizing.md](economics/comms_addressable_sizing.md) | draft | Consolidation: the de-duplicated new-entrant-addressable pool is ~$45-60B/yr conservative to ~$110-150B/yr optimistic (ex-China), ~3-9% of the cited $1.6T and in the same band as the ~$129B realistic served estimate; the two pools share the mobility/enterprise verticals and are reconciled (five non-overlapping buckets), not summed. | Added 2026-06-11, wave-2 sizing, multi-source, illustrative flagged. Reconciles the two sizing docs against the $1.6T and $129B anchors; the consolidated band inherits both inputs' ILLUSTRATIVE status plus a reasoned (not modeled) overlap de-duplication. Load-bearing cross-check: two independent methods (this bottoms-up consolidation and Morningstar's top-down rebuild) landing in the same band. No verdict, no supply-side economics, no single-operator capture rate. Carries internal COMM-082..090, remapped into the continuous global sequence by the lead. |
 
 ### Direct Communication
 
@@ -321,18 +324,37 @@ Highest-priority research gaps:
     ex-China Asia (India plus Southeast Asia plus developed Asia) figure is not
     directly published and needs a bottom-up build
     (`economics/comms_global_regional_market.md`).
-  - Dollar size of the satellite-addressable rural/remote fringe. The realistic
-    space-addressable slice is "coverage gap (~300M people) plus underserved
-    rural," not the whole pool; sizing that fringe in dollars (where ARPU is low),
-    not just people, is the missing number that would make the founder framings
-    actionable (`economics/comms_global_regional_market.md`,
-    `economics/comms_broadband_deployment_economics.md`).
-  - Premium/sovereign niche size. The scoped Rocket Lab opportunity (defense,
-    sovereign, finance, critical-infrastructure, orbital-DC backhaul) is
-    referenced from `laser_comms/comms_business_case.md` (EUR 10.6B IRIS2, $1.3B
-    SDA optical-mesh, $14.8B LEO-satcom forecast) but is not sized in dollars;
-    this is the central unanswered business number for the comms thesis
-    (`economics/comms_space_tam_claims.md`, `vision/comms_thesis.md`).
+  - Dollar size of the satellite-addressable rural/remote fringe. ANSWERED in
+    wave 2 (2026-06-11): sized at ~$40-55B/yr conservative to ~$95-130B/yr
+    optimistic (ex-China, ILLUSTRATIVE), with the structural finding that the
+    dollars are in the developed-world rural fringe and high-ARPU mobility/
+    enterprise verticals, not the ~3.1B-person usage gap. See
+    `economics/comms_rural_fringe_sizing.md` and the consolidation
+    `economics/comms_addressable_sizing.md`.
+  - Premium/sovereign niche size. ANSWERED in wave 2 (2026-06-11): a ~$75-95B/yr
+    gross spend pool, of which only ~$8-30B/yr is open to a new commercial
+    entrant once the closed flagship programs (IRIS2 EUR 10.6B, SDA tranches,
+    $2.29B SpaceX SDN, GOVSATCOM) are removed as demand proof rather than
+    addressable revenue. See `economics/comms_premium_sovereign_sizing.md` and
+    the consolidation `economics/comms_addressable_sizing.md`.
+  - Communications wave 2 (2026-06-11), the new open questions the consolidation
+    surfaced, carried for later comms waves:
+    - Single-operator capture rate. The consolidated ~$45-60B to ~$110-150B/yr is
+      the all-operators contestable pie; what share a specific new entrant wins
+      against Starlink/Starshield, Eutelsat/OneWeb, SES, Viasat, Amazon Leo, and
+      Kepler is a competitive-share question neither sizing doc answers
+      (`economics/comms_addressable_sizing.md`).
+    - Supply-side space economics. The wave-2 pools are demand-side only; whether
+      the constellation capex, optical ground network, and launch cadence close
+      against these revenues is a separate workstream, explicitly not assumed.
+      This is now the load-bearing gate on Hypothesis 2
+      (`economics/comms_addressable_sizing.md`, `vision/comms_thesis.md` Rev 2).
+    - Whether carrier direct-to-cell belongs in a space-comms addressable number
+      at all. It is a bolt-on across the general mobile base, not rural-fringe
+      broadband; it carries ~$20-30B of the optimistic case (stripping it gives a
+      rural-plus-premium-proper optimistic ceiling of ~$90-120B). This is a
+      definitional call for the lead (`economics/comms_rural_fringe_sizing.md`,
+      `economics/comms_addressable_sizing.md`).
   - Direct-to-cell revenue per user. Starlink reports 16M D2D users but no clean
     per-user revenue for the D2D layer, and AST is pre-scale (~$70.9M FY2025
     against a ~$1.1T cited TAM); the unit economics of "fill the dead zones"

@@ -93,8 +93,54 @@ This is explicitly the founder's comparison to the data-center track, where the 
 
 ---
 
+## Revision 2 (the two missing dollar numbers are now sized)
+
+*June 2026. Still a belief record. No verdict.*
+
+Revision 1 named two missing dollar numbers as the gate on Hypotheses 2 and 4 (open question 2: "What is the dollar size of the satellite-addressable rural/remote fringe, and of the premium/sovereign niche?"). Wave 2 sized both. This revision records what landed and updates the confirm/break notes for the two hypotheses those numbers gate. It does NOT change Hypotheses 1 or 3, and it does NOT render a verdict: the sizes are demand-side and ILLUSTRATIVE, and the supply economics and the competitive-share question remain open.
+
+### What landed (the now-sized numbers)
+
+- **The satellite-addressable rural/remote fringe (ex-China): ~$40-55B/yr conservative, ~$95-130B/yr optimistic** [ILLUSTRATIVE]. Sized bottoms-up from sourced household counts and region-specific ARPU. The structural finding underneath it is sharper than the number: the dollars are made in the developed-world rural fringe and the high-value mobility/enterprise verticals, NOT in the billions of unconnected people (the ~3.1B usage gap is an income problem satellite supply does not fix; it adds headcount, not revenue). Source: [comms_rural_fringe_sizing.md](../economics/comms_rural_fringe_sizing.md).
+- **The premium/sovereign niche (ex-China): a ~$75-95B/yr total spend pool, of which ~$8-30B/yr is OPEN to a new commercial entrant** [ILLUSTRATIVE on the served range]. The biggest single line items (IRIS2 EUR 10.6B, the SDA tranches, the $2.29B SpaceX SDN award, GOVSATCOM) are closed prime/consortium builds and are demand proof, not addressable revenue; only the commercial-augmentation layer is contestable. The niche trades addressable size (far smaller than the mass market) for margin and durability (far better). Source: [comms_premium_sovereign_sizing.md](../economics/comms_premium_sovereign_sizing.md).
+- **The consolidated, de-duplicated new-entrant-addressable pool: ~$45-60B/yr conservative, ~$110-150B/yr optimistic** [ILLUSTRATIVE] (the two pools share the mobility/enterprise verticals, so they are reconciled, not summed). That is **~3-9% of the cited $1.6T** and **in the same band as the ~$129B realistic served estimate** the base established. Two independent methods (this bottoms-up consolidation and Morningstar's top-down rebuild) landing in the same band is the load-bearing cross-check. Source: [comms_addressable_sizing.md](../economics/comms_addressable_sizing.md).
+
+### Hypothesis 2 (space as a possible step change): confirm/break notes updated
+
+Revision 1 said Hypothesis 2 "depends on (a) the economics closing for the places ground cannot reach, and (b) new use cases that value what space uniquely offers," and that what would confirm it was "a dollar-sized rural/remote fringe (and premium/sovereign niche) where the space supply economics close."
+
+**Updated read:** the *demand-side* half of the confirmation has now partly landed. There IS a dollar-sized rural/remote fringe (~$40-55B to ~$95-130B/yr) and a dollar-sized premium/sovereign niche (~$8-30B/yr open), and together they are a real, low-tens-to-low-hundreds-of-billions market, not a rounding error. So the "is there a there there" part of Hypothesis 2 is now supported in dollars, not just in direction. **But the confirmation is only half-complete, and the unfinished half is the load-bearing one:**
+
+- **What would now confirm it (revised):** the space *supply* economics closing against these specific revenue pools (the demand size is no longer the open question; the cost stack is), plus evidence that a specific entrant can win a real share of the shared pie rather than the whole pool.
+- **What would now break it (revised and sharpened):** (i) the supply-side space economics not closing even against a ~$45-150B addressable pool (still a separate workstream, still not assumed); (ii) the realistic figure being mostly the *developed-world fringe and mobility verticals* that incumbents (Starlink especially) already serve, so a new entrant competes head-on rather than into open space; or (iii) the optimistic end being an artifact of the carrier direct-to-cell add-on and a price-driven emerging-market expansion that compresses ARPU as fast as it adds users (the exact dynamic that pulled Starlink's blended ARPU down 33% in two years). The honest center of gravity is the conservative-to-mid band, and even that is a *shared* pie with a capacity-gated ramp.
+
+Net: Hypothesis 2 moves from "direction supported, scale unknown" to "direction and demand-scale supported; the open question narrows to supply economics and competitive share." It is NOT confirmed; the gate has simply moved one step downstream.
+
+### Hypothesis 4 (security/sovereignty as a differentiator): confirm/break notes updated
+
+Revision 1 said what would confirm Hypothesis 4 was "a sized premium/sovereign/defense niche (the central missing dollar number) and evidence that buyers actually pay for the security/sovereignty edge at a margin," and what would break it was "the sovereign demand being captured by closed national programs (IRIS2-style) a new commercial entrant cannot win."
+
+**Updated read:** the niche is now sized, and the sizing cuts both ways, landing close to the break condition Revision 1 anticipated.
+
+- **The confirming half:** the premium/sovereign niche is real money (~$75-95B/yr gross), it is structurally higher-margin than mass-market connectivity (it sells on sovereignty, security posture, dedicated capacity, resilience, and latency, the attributes the value curve rewards), and government/defense contracts are long, sticky, and price-insensitive. The demand the hypothesis rests on is quantified and durable.
+- **The breaking half (and it largely materialized):** the sizing confirms Revision 1's specific fear. A large majority of the niche is CLOSED to a new commercial-services entrant: the EUR 10.6B IRIS2 is an EU-industry consortium build, GOVSATCOM pools member-state assets, and the SDA/SDN programs (>$300 sats; $2.29B SDN to SpaceX) are defense-prime awards. Only the ~$3-8B/yr commercial-augmentation layer is open. So the sovereign demand IS substantially "captured by closed national programs," exactly the break condition Revision 1 named, leaving a much smaller open slice than the gross pool suggests.
+- **What would now confirm it (revised):** evidence that the *open* commercial-augmentation layer (the pLEO IDIQ, allied managed-service buys, augmentation demos) is both growing and pays a genuine security/sovereignty premium at a margin, AND that a new entrant can win a share of it beside the incumbents (Starshield is already the dominant buyer of the open layer to date).
+- **What would now break it (revised):** the open layer staying small and incumbent-captured (Starshield-dominated), or the security/sovereignty edge proving to be a feature buyers expect inside a managed-service contract rather than a separately-priced premium. The closed-program risk is no longer a hypothetical; it is a measured fact that shrinks the addressable slice.
+
+A neutral note recorded for context, not scored: Rocket Lab uniquely sits on the *closed-prime* side already (>$1.3B in SDA awards), which is a different business from the commercial-managed-service niche sized here. That is relevant to any later verdict but does not change this belief record.
+
+### What Revision 2 deliberately does not do
+
+- It does not render a verdict. The two numbers are demand-side and ILLUSTRATIVE; the supply economics, the single-operator capture rate, and the per-segment margin remain open (now the top open questions, replacing "what is the dollar size").
+- It does not change Hypothesis 1 (diminishing returns) or Hypothesis 3 (laser weather-limited / fiber-adjacent); no wave-2 evidence bore on them.
+- It does not pick a product. The sizing shows the rural fringe, the mobility/enterprise verticals, the open government layer, and direct-to-cell are different (and partly overlapping) pools; choosing which the comms track targets is still a later-wave decision.
+- It does not assume the space supply economics. That remains a separate workstream and is the gate that Hypothesis 2's confirmation now waits on.
+
+---
+
 ## Revision history
 
 | Revision | Date | What it records | Verdict? |
 |---|---|---|---|
 | **Revision 1** | June 2026 | Initial working hypotheses (diminishing returns past baseline broadband; space as a possible step change whose value depends on economics and new use cases; laser high-bandwidth but weather-limited and possibly fiber-dependent; security as a differentiator) and the open questions that test them. Built on [comms_baseline_synthesis.md](../synthesis/comms_baseline_synthesis.md). | **No.** Belief record only. |
+| **Revision 2** | June 2026 | Records that the two central missing dollar numbers are now sized (rural/remote fringe ~$40-55B to ~$95-130B/yr; premium/sovereign niche ~$75-95B/yr gross pool, ~$8-30B/yr open to a new entrant; consolidated de-duplicated new-entrant-addressable ~$45-60B to ~$110-150B/yr, ~3-9% of the cited $1.6T and in the same band as the ~$129B served estimate). Updates the confirm/break notes for Hypothesis 2 (space as a step change) and Hypothesis 4 (security/sovereignty differentiator). Built on [comms_rural_fringe_sizing.md](../economics/comms_rural_fringe_sizing.md), [comms_premium_sovereign_sizing.md](../economics/comms_premium_sovereign_sizing.md), [comms_addressable_sizing.md](../economics/comms_addressable_sizing.md). | **No.** Belief record only; the dollar sizes are demand-side and ILLUSTRATIVE, and the supply economics and competitive share remain unresolved. |

@@ -41,9 +41,12 @@ or by topic prefix:
 - `THR` - thermal, solar, reliability, burn-in, and model-derived spacecraft mass.
 - `COMM` - communications-track market sizes, carrier financials, spectrum and
   band economics, deployment costs, space-comms TAM, terrestrial laser, and the
-  Falcon 9 cadence analogue (comms wave 1, ingested 2026-06-11). This is the
-  master reconciliation of the ten ingest docs' colliding `COMM-###` namespaces
-  plus the synthesis `COMM-S##` namespace into one global, non-colliding ledger.
+  Falcon 9 cadence analogue (comms wave 1, ingested 2026-06-11), plus the wave-2
+  dollar sizing of the rural/remote fringe, the premium/sovereign niche, and the
+  consolidated new-entrant-addressable pool (ingested 2026-06-11). This is the
+  master reconciliation of the ingest docs' colliding `COMM-###` namespaces plus
+  the synthesis `COMM-S##` namespace into one global, non-colliding ledger. Wave 1
+  occupies `COMM-001`..`COMM-056`; wave 2 continues at `COMM-057`..`COMM-079`.
 
 The topic documents remain the source of narrative reasoning. This ledger is the
 fast pass/fail layer for source quality.
@@ -296,7 +299,87 @@ synthesis's own contribution rather than a re-statement of an ingest claim.
 | ID | Claim or value | Source status | Role | Source trail | Uncertainty notes |
 |---|---|---|---|---|---|
 | `COMM-055` | The founder's central comparison: data centers justify premium economics (demand outrunning supply, continual hardware upgrades, capacity expansion rewarded) precisely where communications does not (diminishing returns once users pass baseline broadband; capex a low-teens percent of revenue vs a multiple for AI DC). | `derived_estimate` | Load-bearing synthesis framing (stated as founder's working hypothesis) | [synthesis/comms_baseline_synthesis.md](synthesis/comms_baseline_synthesis.md) Section 4 (COMM-S27); [vision/comms_thesis.md](vision/comms_thesis.md) | Reconciles `comms_cellular_5g_deployment`/COMM-024 (capex intensity) with `comms_us_broadband_market`/COMM-005 (WTP curve). Recorded as the founder's working hypothesis to be tested in later waves, NOT a verdict; whether a space comms business escapes the trap by competing on reach/reliability/sovereignty/latency is the open thesis question. |
-| `COMM-056` | The communications base offers no verdict on the Rocket Lab comms business; the served space-comms slice is the realistic ceiling (~$129B for a mature broad LEO play; a smaller higher-margin premium/sovereign niche for Rocket Lab, referenced from comms_business_case but unsized). | `derived_estimate` | Synthesis scope boundary | [synthesis/comms_baseline_synthesis.md](synthesis/comms_baseline_synthesis.md) (COMM-S20, COMM-S21); cross-ref [laser_comms/comms_business_case.md](laser_comms/comms_business_case.md) | The synthesis is isolated to communications and offers no business verdict; the premium/sovereign niche dollar size is the central open number (see RESEARCH_TRACKER backlog). The synthesis-namespace COMM-S## claims are reconciled into COMM-001..COMM-054 above. |
+| `COMM-056` | The communications base offers no verdict on the Rocket Lab comms business; the served space-comms slice is the realistic ceiling (~$129B for a mature broad LEO play; a smaller higher-margin premium/sovereign niche for Rocket Lab, referenced from comms_business_case but unsized). | `derived_estimate` | Synthesis scope boundary | [synthesis/comms_baseline_synthesis.md](synthesis/comms_baseline_synthesis.md) (COMM-S20, COMM-S21); cross-ref [laser_comms/comms_business_case.md](laser_comms/comms_business_case.md) | The synthesis is isolated to communications and offers no business verdict; the premium/sovereign niche dollar size is the central open number (see RESEARCH_TRACKER backlog). The synthesis-namespace COMM-S## claims are reconciled into COMM-001..COMM-054 above. Wave 2 (below) closes this open number. |
+
+## COMM - Communications Claims (Wave 2: dollar sizing)
+
+This continues the master reconciliation for communications wave 2 (ingested
+2026-06-11), the three dollar-sizing docs that close the two open numbers the
+wave-1 thesis named (rural/remote fringe size; premium/sovereign niche size). The
+two sizing docs EACH restarted their own `COMM-###` numbering at `COMM-057`, so
+their internal IDs collide with each other, and the consolidation doc used its own
+`COMM-082`..`COMM-090`. This section assigns one continuous global range,
+`COMM-057`..`COMM-079`, with no gaps and no collision with the wave-1
+`COMM-001`..`COMM-056`. The ingest docs' own internal claim numbers are left
+unchanged; each row's note records the source doc and that doc's internal claim
+ID(s), and where a consolidation-doc internal ID was remapped, the note states the
+remap.
+
+Source-status mapping from the docs' reading-guide tags follows the wave-1 rule:
+doc `[FACT]` maps to `certified` when the source is a primary filing or official
+body and to `sourced_estimate` when the "fact" is a market-research sizing; doc
+`[ESTIMATE]` maps to `sourced_estimate`, or `derived_estimate` when it is the doc's
+own arithmetic over sourced inputs; doc `[PROJECTION]` maps to `projection`; doc
+`[ILLUSTRATIVE]` (an order-of-magnitude analytical framing, not an external
+forecast) maps to `scenario`. Every wave-2 figure is demand-side communications
+research context, not a data-center model input, unless a future cycle promotes it.
+The load-bearing numbers (the rural-fringe ranges, the premium/sovereign gross pool
+and open slice, the consolidated band, and the shares versus the $1.6T and $129B
+anchors) are itemized; each doc's remaining per-line items (the per-tier ARPU rows,
+the segment sub-totals, the per-program figures) are folded into one `long-tail`
+summary row per doc citing that doc's internal claim-ID range.
+
+### COMM rural/remote fringe sizing (wave 2)
+
+From [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md);
+internal namespace COMM-057..081, remapped to global COMM-057..065.
+
+| ID | Claim or value | Source status | Role | Source trail | Uncertainty notes |
+|---|---|---|---|---|---|
+| `COMM-057` | The satellite-addressable rural/remote fringe (ex-China) is about `$40-55B/yr` in the conservative case. | `scenario` | Load-bearing wave-2 sizing (rural fringe, conservative) | [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) Section 4; cross-check vs Morningstar ~$129B and SpaceX $1.6T | Internal claim COMM-057. `[ILLUSTRATIVE]` bottoms-up build on sourced household counts and region-specific ARPU; the value is the structure plus the cross-checked band, not a point. Tiers A+B+C of the build ($13-20B + $20-28B + $5-8B = ~$38-56B) reconcile to this band. |
+| `COMM-058` | The satellite-addressable rural/remote fringe (ex-China) is about `$95-130B/yr` in the optimistic case. | `scenario` | Load-bearing wave-2 sizing (rural fringe, optimistic) | [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) Section 5 | Internal claim COMM-058. `[ILLUSTRATIVE]`. Loosens penetration and ARPU and adds a carrier direct-to-cell add-on tier (~$20-30B); converges on Morningstar's independent ~$129B. The add-on is not rural-fringe broadband (see COMM-059). |
+| `COMM-059` | The rural-and-remote-proper optimistic ceiling, excluding the carrier direct-to-cell add-on, is about `$75-100B/yr`. | `scenario` | Wave-2 sizing (rural-proper, add-on stripped) | [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) Section 5 | Internal claim COMM-059. `[ILLUSTRATIVE]`. Strips the Tier D direct-to-cell bolt-on out of the optimistic case; whether to count direct-to-cell in a rural-fringe number is a definitional call flagged for the lead. |
+| `COMM-060` | The rural/remote fringe is about `30%` (conservative) to about `100%` (optimistic) of Morningstar's ~$129B realistic served market. | `derived_estimate` | Wave-2 cross-check vs served anchor | [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) Sections 6, vs [economics/comms_space_tam_claims.md](economics/comms_space_tam_claims.md) (Morningstar) | Internal claim COMM-060. Own arithmetic vs the base's $129B; the conservative case is the rural-and-mobility core without the full Add-on layer, the optimistic case converges on $129B. |
+| `COMM-061` | The rural/remote fringe is about `2.5%` (conservative) to about `8%` (optimistic) of the cited `$1.6T` connectivity TAM. | `derived_estimate` | Wave-2 cross-check vs cited TAM | [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) Section 6, vs [economics/comms_space_tam_claims.md](economics/comms_space_tam_claims.md) | Internal claim COMM-061. Consistent with the wave-1 ~90% haircut (served ~5-10% of cited); the conservative case sits a touch below that band because the fringe is a subset of the served market. |
+| `COMM-062` | Starlink actual connectivity revenue FY2025 was `$11.39B` (operating profit ~$4.42B) on ~9-10M subscribers; blended ARPU fell from `$99/mo` (2023) to `$66/mo` (Q1 2026), about `-33%` in two years. | `certified` | Load-bearing live cross-check / ARPU warning | [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) Sections 6-7; The Next Web, New Space Economy, The Information, IEEE ComSoc | Internal claims COMM-066, COMM-076, COMM-077. The largest LEO operator's reported figures; the ARPU fell because it chased the emerging-market rural tail (subs doubled, operating income barely moved), direct evidence for the conservative case. Revenue and ARPU each carry 2 sources; SpaceX is private so segment splits below are softer. |
+| `COMM-063` | The developed-vs-emerging residential ARPU asymmetry: developed-world residential pays ~$80-130/mo (~$1,000-2,000/yr) while emerging-market residential pays ~$10-40/mo, a similar headcount at one-quarter to one-eighth the ARPU. The people are in the emerging world; the dollars are in the developed world. | `sourced_estimate` | Load-bearing structural finding (the asymmetry) | [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) Section 2; Value Add VC (split, single-source, FLAG), Starlink country pricing, ABI Research (Africa ARPU) | Internal claims COMM-064, COMM-065, COMM-067..070. The ratio is corroborated by Starlink country pricing and African mobile ARPU; the exact ~$2,000/yr residential figure and the Value Add VC developed-vs-emerging split are single-source-ish and flagged. This is the ARPU-reality discount made concrete. |
+| `COMM-064` | Rural-fringe cross-check anchors: Morningstar ~$129B served (US Niche-broadband sub-figure ~$10B); Quilty profitable-capacity ceiling ~`25-30M` households without launch-cost reductions; Oxford Economics `78M-421M` global LEO users through 2035. | `sourced_estimate` | Wave-2 cross-check anchor set | [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) Section 6; Morningstar PDF, Via Satellite (Quilty), Oxford Economics/Telecompaper | Internal claims COMM-078, COMM-079, COMM-080. Four independent anchors (with Starlink revenue at COMM-062) land in the same tens-to-low-hundreds-of-billions band; the Quilty cap, the Oxford range, and the Morningstar PDF-excerpt $10B sub-figure are each single-source, flagged. Oxford is an Amazon-commissioned PROJECTION used only as an outer bracket. |
+| `COMM-065` | Rural-fringe long-tail (the gap split ~300M coverage / ~3.1B usage, the per-country pricing and affordability rows, the US broadband-desert ~6% / rural ~12% shares, the OECD ~78.5% rural-coverage figure, the Tier A ~30-45M-household count, the maritime ~$34k / aviation ~$300k vertical ARPUs, the emerging-market people-counts). | `sourced_estimate` | Rural-fringe detail (summary row) | [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) internal COMM-062, COMM-063, COMM-071..075, COMM-081 | Long-tail of `comms_rural_fringe_sizing`, itemized in that doc's claims table. The ~300M/~3.1B gap split traces to wave-1 COMM-021; the US-desert/rural shares (Via Satellite) and the developed-ex-US ~30-45M household count are single-source/own-arithmetic, flagged. The maritime/aviation vertical ARPUs are the overlap block reconciled by the consolidation (COMM-078). |
+
+### COMM premium/sovereign niche sizing (wave 2)
+
+From [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md);
+internal namespace COMM-057..078 (collides with the rural doc), remapped to global
+COMM-066..074.
+
+| ID | Claim or value | Source status | Role | Source trail | Uncertainty notes |
+|---|---|---|---|---|---|
+| `COMM-066` | The government + military satellite-communications market is a broad envelope of about `$50B/yr` (~$49.9-51.8B, 2024), with narrower scopes at ~$26B (MILSATCOM) and ~$6B (defense-sector services). | `sourced_estimate` | Load-bearing premium block (government total) | [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) Section 1.1; Verified Market Research, Valuates, SNS Insider, Mordor | Internal claims COMM-057..059. The ~$50B broad envelope is the load-bearing total, corroborated across two firms within ~4%; the overall research-firm spread is wide and scope-divergent outliers are excluded. A large share of this envelope is closed (see COMM-067). |
+| `COMM-067` | The cited sovereign flagship programs are CLOSED to a new commercial-services entrant and are demand proof, not addressable revenue: EU IRIS2 ~EUR 10.5-10.6B (290 sats); EU GOVSATCOM (operational, EUR 107M hub, member-state pooling); US SDA Transport Layer (>300 sats, Tranche 3 ~$3.5B to 4 primes); US SDN Backbone $2.29B to SpaceX. | `certified` | Load-bearing closed-program guard | [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) Section 1.2; Wikipedia/EUSPA (IRIS2), SpaceNews (GOVSATCOM, SDN), Spaceflight Now/Air & Space Forces (SDA) | Internal claims COMM-060..063. Each is a prime/consortium build won by being a defense prime or EU-industry member, not by selling commercial service; counting them as addressable would repeat the error the base warns against. The dollar figures are certified-as-awarded. |
+| `COMM-068` | The OPEN government/defense commercial-augmentation layer (the contestable slice inside the ~$50B envelope) is about `$3-8B/yr` today and growing: the pLEO services IDIQ has a $13B multi-year ceiling but only ~$660M spent to date (mostly Starshield), plus tens-to-low-hundreds-of-millions FY26 COMSATCOM/SATCOM budget lines and allied managed-service buys. | `sourced_estimate` | Load-bearing open-government slice | [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) Section 1.3; Payload, Breaking Defense, HigherGov, SpaceWar, SES, DefenseScoop | Internal claims COMM-064..066. The ceiling-vs-outlay distinction is the main trap (the $13B is a multi-year ceiling, not annual spend); the ~$3-8B/yr annual-contestable estimate is the doc's own reasoned figure, confidence medium-low, flagged. Starshield is the dominant buyer of the open layer to date. |
+| `COMM-069` | The premium enterprise verticals (maritime, aero/IFC, critical-infrastructure) sit inside one enterprise-satcom-services umbrella of about `$10-18B/yr` (umbrella ~$9.75B 2025 toward ~$17.5B 2030), with maritime ~$4.5-7B and aero IFC ~$6B as the largest named components. Essentially all of it is OPEN (no closed-program subtraction). | `sourced_estimate` | Premium enterprise envelope | [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) Sections 2.1-2.3; The Business Research Company (umbrella, single major source), Mordor/Fortune/Market Research Future (maritime), Precedence/openPR (aero) | Internal claims COMM-068..071. The umbrella is single-major-source but the maritime and aero components carry 2-3 sources each and corroborate the order of magnitude; maritime and aero are INSIDE the umbrella and must not be summed with it (the doc reconciles this). |
+| `COMM-070` | The total premium/sovereign spend pool (open and closed combined, ex-China) is about `$75-95B/yr`: the ~$50B government envelope, the ~$10-18B enterprise verticals, ~$0.2-0.5B finance/low-latency, and ~$0.1-1B emerging orbital-DC backhaul. | `sourced_estimate` | Load-bearing premium gross pool (ceiling) | [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) Section 4.1 | Internal claim COMM-074. This is the gross ceiling before removing closed programs, NOT the addressable revenue. NOTE: the summed components (~$60-70B) round UP to the stated ~$75-95B band; the gap is the upper-bound roll-up of the wide component ranges and is flagged in the wave-2 lint report. The finance line is single-source/dated (TABB 2010); orbital-DC backhaul is `[ILLUSTRATIVE]` on an author-set %-of-compute assumption. |
+| `COMM-071` | The premium/sovereign slice OPEN to a new commercial-services entrant (all operators' pie) is about `$8B/yr` conservative to `$30B/yr` optimistic, after removing closed national programs and applying a softer-than-base served haircut (30-60% of the open pools, not the full ~90%). | `scenario` | Load-bearing premium served slice | [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) Section 4.2 | Internal claim COMM-075. `[ILLUSTRATIVE]`, a reasoned haircut on sourced total-spend pools, NOT a bottoms-up bid model. The haircut is softer than the wave-1 90% because premium/government demand is inherently remote/mobile/sovereignty-driven (the part satellite serves well); it is the all-operators contestable slice, no single operator captures it. |
+| `COMM-072` | The premium/sovereign gross pool is about `6-7%` of the cited `$1.6T` connectivity TAM and about `60-75%` of the ~$129B realistic served estimate; the open slice alone is about `0.5-2%` of $1.6T and ~`6-23%` of $129B. | `derived_estimate` | Wave-2 cross-check vs anchors | [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) Sections 4.1, 4.3; vs base $1.6T and $129B | Internal claims COMM-076, COMM-077. Own arithmetic vs the base anchors; the premium niche is materially smaller than the mass market, its case rests on margin and durability, not size. |
+| `COMM-073` | Rocket Lab already sits on the CLOSED-prime side of the government block, holding >`$1.3B` in SDA contract value ($515M Tranche 2 Transport-Beta; $816M Tranche 3 Tracking), a manufacturing/prime position distinct from the commercial-managed-service niche this doc sizes. | `certified` | Premium-block context (not scored) | [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) Section 1.4; Rocket Lab, SDA | Internal claim COMM-067. Recorded neutrally as context for any later verdict; it is a different business from the commercial niche and is added to no served figure. |
+| `COMM-074` | Premium/sovereign long-tail (the MILSATCOM/defense-services scope ladder, the per-program closed-build details, the per-budget-line FY26 figures, the maritime/aero/critical-infra sub-segment sizings, the finance microwave/fiber spend, the supply-side sliver cap ~0.2-3 Gbps/beam). | `sourced_estimate` | Premium detail (summary row) | [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) internal COMM-072, COMM-073, COMM-078 and the per-row sub-figures | Long-tail of `comms_premium_sovereign_sizing`, itemized in that doc's claims table and section tables. The finance/low-latency spend (COMM-072 internal) is single-source/dated; the orbital-DC backhaul fraction (COMM-073 internal) is `[ILLUSTRATIVE]`; the supply-side cap (COMM-078 internal) cross-refs `rf_limited_service.md`. |
+
+### COMM consolidation (wave 2)
+
+From [economics/comms_addressable_sizing.md](economics/comms_addressable_sizing.md);
+internal namespace COMM-082..090, REMAPPED into the continuous global sequence as
+COMM-075..079 (internal COMM-082->COMM-075, 083->folded, 084->folded, 085->COMM-076,
+086/087->COMM-077, 088->COMM-078, 089->COMM-079, 090->folded). Internal COMM-083/084
+(pool A and pool B carried forward) duplicate COMM-057/058 and COMM-070/071 above and
+are not re-itemized; internal COMM-090 (closed programs) duplicates COMM-067 above.
+
+| ID | Claim or value | Source status | Role | Source trail | Uncertainty notes |
+|---|---|---|---|---|---|
+| `COMM-075` | The consolidated, de-duplicated new-entrant-addressable space-comms pool (ex-China) is about `$45-60B/yr` conservative to `$110-150B/yr` optimistic, built from five non-overlapping buckets (developed rural, emerging rural, the shared mobility/enterprise verticals counted once, premium/sovereign-specific additions, and an optimistic-only carrier direct-to-cell add-on). | `scenario` | Load-bearing wave-2 consolidated figure | [economics/comms_addressable_sizing.md](economics/comms_addressable_sizing.md) Sections 2-3 | Internal claims COMM-085 (and COMM-082 as the headline restatement). `[ILLUSTRATIVE]`; inherits both inputs' status plus a reasoned (not modeled) overlap de-duplication. Bucket sums reconcile: conservative buckets 1-4 ~$43-66B, optimistic buckets 1-5 ~$105-160B. Slightly above a naive A + B-open sum because bucket 4 adds the open government layer pool A never counted while bucket 3 removes the mobility double-count. |
+| `COMM-076` | The consolidated addressable pool is about `3%` (conservative) to about `9%` (optimistic) of the cited `$1.6T` connectivity TAM. | `derived_estimate` | Load-bearing placement vs cited TAM | [economics/comms_addressable_sizing.md](economics/comms_addressable_sizing.md) Section 4; vs base $1.6T | Internal claim COMM-086. Own arithmetic; two orders of magnitude below the headline, exactly consistent with the wave-1 ~90% haircut prior (served ~5-10% of cited). |
+| `COMM-077` | The consolidated addressable pool is about `35-45%` (conservative) of the ~$129B realistic served estimate, rising to roughly at-or-modestly-above it (optimistic). Two independent methods (this bottoms-up consolidation and Morningstar's top-down rebuild) landing in the same band is the load-bearing cross-check. | `derived_estimate` | Load-bearing placement vs served anchor (the convergence) | [economics/comms_addressable_sizing.md](economics/comms_addressable_sizing.md) Section 4; vs base ~$129B and [synthesis/comms_baseline_synthesis.md](synthesis/comms_baseline_synthesis.md) | Internal claims COMM-086, COMM-087. The optimistic overshoot is expected: the consolidation adds the premium/sovereign government layer Morningstar's broad-LEO rebuild only partly counts, so a modest overshoot is the government layer showing up, not an inconsistency. |
+| `COMM-078` | The mobility/enterprise verticals (maritime, aviation, energy, remote-government) appear in BOTH the rural-fringe build (its Tier B, ~$20-28B conservative) and the premium/sovereign build (its enterprise block), so the consolidation counts them ONCE; summing the two pools naively would double-count them. | `certified` | Load-bearing de-duplication rule (the overlap) | [economics/comms_addressable_sizing.md](economics/comms_addressable_sizing.md) Sections 2-3; Value Add VC segment mix (maritime ~$1.94B, enterprise ~$1.68B run-rate), Skift | Internal claim COMM-088. The overlap is verifiable from the segment data and from reading the two docs; the rule to count the shared block once (using pool A's Tier B sizing) is the core of the consolidation. The exact dollar attribution is reasoned, not modeled. |
+| `COMM-079` | Stripping the carrier direct-to-cell add-on (bucket 5, a bolt-on across the general mobile base, definitionally not rural-fringe broadband) out of the optimistic case leaves a rural-plus-premium-proper optimistic ceiling of about `$90-120B/yr`. | `scenario` | Wave-2 optimistic-ceiling caution | [economics/comms_addressable_sizing.md](economics/comms_addressable_sizing.md) Sections 3-4 | Internal claim COMM-089. `[ILLUSTRATIVE]`. The honest center of gravity is the conservative-to-mid band; the top end requires several favorable trends at once (price-driven emerging-market expansion that compresses ARPU, a meaningful direct-to-cell add-on, and allied governments buying managed service rather than building). |
 
 ## Claims To Repair Before Quoting Externally
 
@@ -358,6 +441,37 @@ Communications wave 1 (2026-06-11):
   ~$201B, AT&T cap ~$156B vs ~$160B, AT&T revenue $125.7B vs $125.6B, Verizon NI
   $17.2B vs $17.6B (`COMM-003`, `COMM-011`). Quote a single reconciled value, not
   both, and date it.
+
+Communications wave 2 (2026-06-11):
+
+- The wave-2 dollar bands are `[ILLUSTRATIVE]` (mapped to `scenario`), not
+  forecasts: the rural fringe ~$40-55B to ~$95-130B/yr (`COMM-057`, `COMM-058`),
+  the consolidated new-entrant-addressable ~$45-60B to ~$110-150B/yr (`COMM-075`),
+  and the premium open slice ~$8-30B/yr (`COMM-071`). Quote them as sized
+  demand-side pools with the conservative-to-mid band as the center of gravity,
+  never as expected revenue, and always ex-China.
+- "The premium/sovereign niche is a `$75-95B/yr` market" quoted as addressable.
+  That is the GROSS spend pool (`COMM-070`); only ~$8-30B/yr is open to a new
+  commercial entrant (`COMM-071`). The cited flagship programs (IRIS2 EUR 10.6B,
+  the SDA tranches, the $2.29B SpaceX SDN, GOVSATCOM) are CLOSED prime/consortium
+  builds, demand proof not contestable revenue (`COMM-067`); counting them as
+  addressable repeats the error the base warns against.
+- The wave-2 pools are the all-operators contestable pie, not one operator's
+  capture. Any single-entrant revenue is a SHARE of `COMM-075`, further gated by
+  the supply-side capacity limit and the unproven space-supply economics, none of
+  which these demand-side numbers assume.
+- "Add the rural fringe and the premium niche together." They OVERLAP on the
+  mobility/enterprise verticals (`COMM-078`); they must be de-duplicated (the
+  consolidation's five-bucket decomposition), not summed.
+- The premium/sovereign gross-pool roll-up (`COMM-070`) states ~$75-95B/yr while
+  its own component lines sum to ~$60-70B/yr; treat the headline band as an
+  upper-bound roll-up of wide component ranges, and prefer citing the components or
+  the ~$60-95B span rather than the ~$75-95B headline as if it were tight.
+- The carrier direct-to-cell add-on (~$20-30B of the optimistic case) is a bolt-on
+  across the general mobile base, not rural-fringe broadband; whether it belongs in
+  a space-comms addressable number is an open definitional call (`COMM-059`,
+  `COMM-079`). Stripping it gives a rural-plus-premium-proper optimistic ceiling of
+  ~$90-120B/yr.
 
 ## Maintenance Rules
 
