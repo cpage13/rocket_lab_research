@@ -50,6 +50,7 @@ Intentionally excluded:
 | [RESEARCH_TRACKER.md](RESEARCH_TRACKER.md) | reviewed | Research Wiki tracker and file coverage audit. | Tracks every current file under `research/` and intentionally excludes generated outputs. |
 | [SOURCE_INDEX.md](SOURCE_INDEX.md) | reviewed | Claim-level hard-number ledger. | Uses the public source-status taxonomy and records stable `RLDC-*` IDs for default assumptions and public model outputs. |
 | [vision/initial_thesis.md](vision/initial_thesis.md) | reviewed | Append-only thesis and belief history. | Rev 7 preserves historical conclusion references as history while moving live outputs to `data_center/`. |
+| [vision/comms_thesis.md](vision/comms_thesis.md) | draft | Communications thesis Revision 1: starting belief record for the comms track (four working hypotheses plus the open questions that test them); no verdict for or against a Rocket Lab space-comms business. | Added 2026-06-11, comms wave-1 ingest. Belief record only; carries no external source burden of its own, pointing to `synthesis/comms_baseline_synthesis.md` for the sourced base. |
 | [direct_communication/README.md](direct_communication/README.md) | draft | Communications workstream front door. | Navigation doc; no external source burden. |
 
 ### AI Hardware
@@ -65,6 +66,7 @@ Intentionally excluded:
 |---|---|---|---|
 | [competitors/starcloud.md](competitors/starcloud.md) | draft | Starcloud validates demand and sets the closest comparable orbital-DC competitor. | Has source section and external citations. |
 | [competitors/starship_addendum.md](competitors/starship_addendum.md) | draft | Heavy-lift competition changes timing and scale, not the near-term Neutron learning case. | Has source section and external citations. Updated 2026-06-09 with a dated section on the SpaceX AI-1 design reveal (confirmed/derived/press tagging); the Musk timing hedge is now marked historical, and the dedicated AI-1 analysis has landed as `data_center/ai1_comparison.md` (2026-06-10). |
+| [competitors/falcon9_cadence_ramp.md](competitors/falcon9_cadence_ramp.md) | draft | Falcon 9 cadence took ~14 years to reach 165/yr and bent up only once booster reuse was routine and Starlink filled the manifest; Starship must rerun a harder (upper-stage reuse) curve, so "at least about 5 years" to significant orbital data centers beats "about 3 years," with communications the credible near-term Starship payload. | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. Historical cadence is counted public fact (Wikipedia/ElonX/Data Explained); forward Starship inference is a reasoned projection consistent with `starship_addendum.md` (2028-2031 window, Starbase 25-launch cap). Builds on starship_addendum, launch_cost_economics, review_engineer. |
 
 ### Debate
 
@@ -92,6 +94,19 @@ Intentionally excluded:
 | [economics/revenue_economics_2026.md](economics/revenue_economics_2026.md) | stale | Re-grounds current rack revenue layers. | Source-backed market data stands; calculator-critique sections are stale against cycle 2. |
 | [economics/operating_margins_and_revenue_multiple_2026.md](economics/operating_margins_and_revenue_multiple_2026.md) | draft | Validates the 1.5x revenue multiple via the OPERATING-margin lens: orbital's near-zero opex makes its 33% over depreciation an operating-equivalent, matching hyperscaler cloud operating margins (33-45%) and far above compressed neocloud operating margins (~1%). Keeps gross/operating/net definitions; adds a depreciation-period section (our 5-year life vs operators' 6-year, so we do not flatter the margin). | Added 2026-05-30, revised same day. Multi-sourced (CoreWeave, Nebius, Oracle, AWS/Azure/GCP, NVIDIA; depreciation: Microsoft, Google, Oracle 8-K, Meta, Amazon 6->5 reversal); replaces the stale Oracle 30-40% figure; supports RLDC-REVENUE-MULTIPLE-1_5X / REV-008. |
 | [economics/revenue_per_watt.md](economics/revenue_per_watt.md) | draft | Reconciles revenue per GW/rack and distinguishes IaaS vs inference service. | Source-status banner added 2026-05-25; derived IaaS and inference-service bands are distinguished. |
+| [economics/comms_us_broadband_market.md](economics/comms_us_broadband_market.md) | draft | US fixed broadband is ~$70-95B/yr; the biggest broadband subscriber bases carry the smallest market caps; willingness-to-pay for speed is sharply concave (~$2.34/Mbps to ~$0.02/Mbps), so value rewards reach and reliability, not raw bandwidth. | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. Carrier financials from 2025-26 SEC filings; total-market revenue and Cox/AT&T-FWA figures flagged single-source. |
+| [economics/comms_us_cellular_market.md](economics/comms_us_cellular_market.md) | draft | US wireless service revenue ~$326B/yr (single major source); cable MVNOs prove a non-carrier can run 20M+ lines on rented capacity, the wholesale logic behind carrier-hosted direct-to-cell. | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. Carrier financials double-sourced; the ~$326B headline and the MVNO sizing are flagged single-source/methodology-dependent. |
+| [economics/comms_global_regional_market.md](economics/comms_global_regional_market.md) | draft | Global telecom services ~$2.0-2.1T/yr (mobile ~$1.19T, fixed broadband ~$360-390B); satellite ~0.5% of fixed broadband; the GSMA $7.6T is GDP contribution, not operator revenue. | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. Mobile/subscriptions/satellite-share are primary-body; regional dollar splits and the ex-China Asia figure are softer than the shares. |
+| [economics/comms_cellular_5g_deployment_economics.md](economics/comms_cellular_5g_deployment_economics.md) | draft | Mobile-network capex is ~14-19% of service revenue and declining; site upgrade ~$20-50K vs new macro ~$100-300K; C-band auction ~$81B; ~8-10 year payback and no 5G ARPU premium. | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. Capex intensity and auction totals well-corroborated; per-component cost splits and the 8-10 year payback are aggregator/single-source. |
+| [economics/comms_broadband_deployment_economics.md](economics/comms_broadband_deployment_economics.md) | draft | A cable incumbent defends a passed home for ~$100-300 vs ~$1,000+ fiber overbuild; the space value is in the unserved/remote tail ($3,000-6,000 rural up to ~$200,000+), not served markets. | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. Per-foot/cable-upgrade/FWA/take-rate are multi-source; the ~$200K extreme-rural passing and ~4% overbuild ROI rest on single primary sources. |
+| [economics/comms_space_tam_claims.md](economics/comms_space_tam_claims.md) | draft | Cited connectivity TAMs (SpaceX $1.6T, AST ~$1.1T) and the bottoms-up served market are ~2 orders of magnitude apart; Morningstar realistic Starlink ~$129B; default prior is a ~90% haircut (served ~5-10% of cited). | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. Cited figures are primary filings; the ~90% haircut is corroborated by four analysts; the $15.4B ASTS model and $200B combined-bank figure are flagged single-source. |
+
+### Direct Communication
+
+| File | Status | Key finding / purpose | Source audit note |
+|---|---|---|---|
+| [direct_communication/spectrum_fundamentals_economics.md](direct_communication/spectrum_fundamentals_economics.md) | draft | Mid-band is the contested sweet spot; US C-band ~$0.94/MHz-POP (~$81B) vs mmWave hundreds of times cheaper; terrestrial cellular spectrum is effectively closed to a new entrant, so the spectrum fight belongs in the satellite domain (ITU door, not cash auction). | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. US auction totals and the speed-vs-connections physics are well-sourced; several European per-MHz-POP decimals and the global $140B/$37.7B totals are flagged single-source. Builds on rf_satcom and rf_limited_service. |
+| [direct_communication/bands_and_enabling_hardware.md](direct_communication/bands_and_enabling_hardware.md) | draft | The silicon is not the bottleneck up through W-band (off-the-shelf Ka/V/E, emerging W-band, research-only sub-THz); the binding constraints are spectrum coordination, rain fade, and pointing; optical-primary-plus-RF-complement is the settled architecture. | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. Chip-availability mapping rests on catalog parts and NASA/peer-reviewed results; W-band PA numbers and the NTT 300 GHz record are single-demo/single-vendor. Extends rf_satcom's band table and space_hardware_capabilities. |
 
 ### Laser Communications
 
@@ -99,6 +114,7 @@ Intentionally excluded:
 |---|---|---|---|
 | [laser_comms/comms_business_case.md](laser_comms/comms_business_case.md) | draft | Direct communications can be a focused B2B/B2G line, not a Starlink clone. | Has source section; workstream spelling normalized to `direct_communication/` in the header. |
 | [laser_comms/constellation_mesh.md](laser_comms/constellation_mesh.md) | draft | Laser range does not bind; ground reach and service architecture do. | Has source section and external citations. |
+| [laser_comms/laser_terrestrial_interconnect.md](laser_comms/laser_terrestrial_interconnect.md) | draft | Terrestrial laser/FSO is a real shipping product class (Taara up to 25 Gbps over 10 km) but a gap-filler, not a fiber replacement; the same fog wall forces an RF backup for five-nines; strong where fiber is absent, conditional (security, latency, fast deploy) where it exists. | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. Product specs and weather/hybrid-FSO-RF physics are well-sourced and consistent with `optical_ground_stations.md`; market-size dollars and the DC-interconnect use are flagged nascent/single-vendor. |
 | [laser_comms/optical_comms.md](laser_comms/optical_comms.md) | draft | Optical is primary; terminal roadmap remains a gating risk. | Has source section and external citations. |
 | [laser_comms/optical_ground_stations.md](laser_comms/optical_ground_stations.md) | draft | Geographic diversity beats one large ground station. | Has source section and external citations. |
 | [laser_comms/rf_limited_service.md](laser_comms/rf_limited_service.md) | draft | A limited RF B2B backup/sliver may be attainable. | Has source section and external citations. |
@@ -189,6 +205,7 @@ Intentionally excluded:
 | [synthesis/wave4_synthesis.md](synthesis/wave4_synthesis.md) | stale | Wave-4 economics synthesis; baseline-Neutron payback problem. | Superseded launch-cost/service-life basis. |
 | [synthesis/wave5_synthesis.md](synthesis/wave5_synthesis.md) | stale | Latest full research synthesis in `research/`, resolving flyability crossover. | Physics/flyability findings stand, but launch-cost basis is superseded. |
 | [synthesis/orbital_lifetime_5v7yr_synthesis.md](synthesis/orbital_lifetime_5v7yr_synthesis.md) | draft | Synthesizes the 5-vs-7-year orbital-lifetime study: longevity costs single-digit percent on every lever; 5 years is conditional on ~700 km or propulsion while 7 years is cheap either way; the real trade is radiation plus mandatory deorbit (fly high) vs continuous station-keeping (stay low); design life is likely revenue-limited, not orbit-limited. | Added 2026-05-29 as the synthesis of the exploratory orbital-lifetime study; the 7-yr natural-life band (~720 to 900 km) is unresolved pending a numerical propagation and radiation run. |
+| [synthesis/comms_baseline_synthesis.md](synthesis/comms_baseline_synthesis.md) | draft | Neutral comms-track base: the market is enormous, mobile-dominated, mature, and barely growing; diminishing returns past baseline broadband is the most robust finding; the served space-comms market is ~5-10% of cited TAM; optical-primary-plus-RF is the settled architecture; no verdict offered. | Added 2026-06-11, comms wave-1 ingest, multi-source, estimates flagged. Pulls the ten ingest docs plus the existing comms corpus by path; tags every number FACT/ESTIMATE/PROJECTION; carries its own COMM-S## claims namespace reconciled into SOURCE_INDEX by the lead. |
 
 ### Valuation
 
@@ -260,6 +277,7 @@ in the linked docs and prior versioned artifacts.
 | Wave 11 | Radiator ownership preference; conservative plus ambition cases; buildout-limited framing. | `economics/ambition_case.md`, thesis Rev 5/6. |
 | Wave 12 | Valuation workstream grounded in reported financials; M5 superseded; labelled dials; 15-year view; economist/engineer review process. | `valuation/`, `peer_review/review_*`. |
 | GPU-grounding cycle | Model GPU packages and kW, not racks; question fixed 72; expensive silicon helps space; count GPUs as sold; R-band revenue framing. | `ai_hardware/gpu_generational_roadmap.md`, `economics/gpu_cost_trajectory.md`, `economics/gpu_hour_rental_rates.md`, calculator docs outside `research/`. |
+| Communications wave 1 (commissioned 2026-06; ingested 2026-06-11) | Founder commissioned an isolated communications research effort sharing the library: size the broadband/cellular/global markets ex-China; clarify the ASTS/SpaceX cited-vs-served TAM; test the diminishing-returns-past-baseline-broadband hypothesis and the data-center-vs-comms premium contrast; assess laser (weather-limited, possibly fiber-dependent) and security as a differentiator; supply a Falcon 9 cadence analogue for the Starship orbital-DC timeline. No verdict requested at this stage. | `economics/comms_*` (6 docs), `direct_communication/` (spectrum, bands/hardware), `laser_comms/laser_terrestrial_interconnect.md`, `competitors/falcon9_cadence_ramp.md`, `synthesis/comms_baseline_synthesis.md`, `vision/comms_thesis.md`. |
 
 ## Open Questions And Backlog
 
@@ -293,6 +311,32 @@ Highest-priority research gaps:
   `orbital/higher_orbit_tradeoffs_lifetime.md` at ~800 to 900 km) because of
   differing drag-area assumptions. Resolving it needs a numerical orbit
   propagation plus a radiation (SPENVIS/CREME96) run.
+- Communications wave 1 (2026-06-11), the biggest open numbers the base could
+  not close, carried for later comms waves:
+  - US-only fixed-broadband revenue boundary. The $63.6B (narrow) vs ~$92B
+    (broad) vs $100.5B (North America) spread needs one agreed definition
+    (access-only or access-plus-bundled-attach) before any comms TAM math
+    (`economics/comms_us_broadband_market.md`).
+  - Ex-China Asia split. Published Asia Pacific totals include China; a clean
+    ex-China Asia (India plus Southeast Asia plus developed Asia) figure is not
+    directly published and needs a bottom-up build
+    (`economics/comms_global_regional_market.md`).
+  - Dollar size of the satellite-addressable rural/remote fringe. The realistic
+    space-addressable slice is "coverage gap (~300M people) plus underserved
+    rural," not the whole pool; sizing that fringe in dollars (where ARPU is low),
+    not just people, is the missing number that would make the founder framings
+    actionable (`economics/comms_global_regional_market.md`,
+    `economics/comms_broadband_deployment_economics.md`).
+  - Premium/sovereign niche size. The scoped Rocket Lab opportunity (defense,
+    sovereign, finance, critical-infrastructure, orbital-DC backhaul) is
+    referenced from `laser_comms/comms_business_case.md` (EUR 10.6B IRIS2, $1.3B
+    SDA optical-mesh, $14.8B LEO-satcom forecast) but is not sized in dollars;
+    this is the central unanswered business number for the comms thesis
+    (`economics/comms_space_tam_claims.md`, `vision/comms_thesis.md`).
+  - Direct-to-cell revenue per user. Starlink reports 16M D2D users but no clean
+    per-user revenue for the D2D layer, and AST is pre-scale (~$70.9M FY2025
+    against a ~$1.1T cited TAM); the unit economics of "fill the dead zones"
+    remain unproven (`economics/comms_us_cellular_market.md`).
 
 Tracker hygiene backlog:
 

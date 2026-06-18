@@ -28,6 +28,14 @@ docs behind any claim you want to inspect:
   backlog.
 - Topic folders below — source research and historical review artifacts.
 
+For the communications workstream specifically (comms wave 1, ingested 2026-06-11),
+start with [synthesis/comms_baseline_synthesis.md](synthesis/comms_baseline_synthesis.md)
+(the neutral market-and-technology base) and the companion
+[vision/comms_thesis.md](vision/comms_thesis.md) (Revision 1 belief record, no verdict).
+The source docs sit under `economics/` (the `comms_*` market and deployment docs),
+`direct_communication/` (spectrum and bands/hardware), `laser_comms/` (terrestrial
+interconnect), and `competitors/` (the Falcon 9 cadence ramp).
+
 ---
 
 ## Complete Research Catalog
@@ -41,6 +49,7 @@ docs behind any claim you want to inspect:
 | [RESEARCH_TRACKER.md](RESEARCH_TRACKER.md) | Research Wiki tracker. | Status, stale notes, stakeholder input, and open questions. |
 | [SOURCE_INDEX.md](SOURCE_INDEX.md) | Claim-level hard-number source ledger. | Whether a number is `certified`, `sourced_estimate`, `derived_estimate`, `projection`, `extrapolation`, `scenario`, `placeholder`, or `stale`. |
 | [vision/initial_thesis.md](vision/initial_thesis.md) | Versioned thesis. | The belief history and current research/output boundary. |
+| [vision/comms_thesis.md](vision/comms_thesis.md) | Communications thesis, Revision 1 (belief record only; comms wave 1). | The starting belief record for the comms track: working hypotheses (diminishing returns past baseline broadband; space as a possible step change gated on economics and new use cases; laser high-bandwidth but weather-limited and possibly fiber-dependent; security as a differentiator) and the open questions that test them. No verdict; built on the comms baseline synthesis. |
 | [direct_communication/README.md](direct_communication/README.md) | Communications workstream front door. | The adjacent Rocket Lab communications thesis and its scope. |
 
 ### AI Hardware
@@ -56,6 +65,7 @@ docs behind any claim you want to inspect:
 |---|---|---|
 | [competitors/starcloud.md](competitors/starcloud.md) | Starcloud and orbital data-center competitors. | Competitors validate demand; heavy lift changes economics and timing. |
 | [competitors/starship_addendum.md](competitors/starship_addendum.md) | Starship competitive addendum, with a dated 2026-06-09 update on the SpaceX AI-1 reveal. | The real near-term risk is capital/customer capture by Starship-gated rivals; the June 2026 AI-1 design reveal is the latest such signal. |
+| [competitors/falcon9_cadence_ramp.md](competitors/falcon9_cadence_ramp.md) | Falcon 9 cadence ramp 2010-2026 and the Starship orbital-DC timeline read (comms wave 1). | Falcon 9 took ~14 years to reach a 165/yr record; high cadence arrived only once booster reuse was routine and Starlink filled the manifest. Starship must rerun a harder curve (upper-stage reuse), so "at least about 5 years" to significant orbital data centers is better supported than "about 3 years"; communications is the credible near-term Starship payload. |
 
 ### Debate
 
@@ -83,6 +93,20 @@ docs behind any claim you want to inspect:
 | [economics/revenue_economics_2026.md](economics/revenue_economics_2026.md) | 2026 frontier-compute revenue layers. | Market data stands; old calculator critique sections are stale. |
 | [economics/operating_margins_and_revenue_multiple_2026.md](economics/operating_margins_and_revenue_multiple_2026.md) | Operating vs gross margin, GPU-cloud operator margins and multiples, depreciation periods, and validation of the 1.5x revenue multiple. | R=1.5 is fair to mildly conservative. The right lens is the OPERATING margin: orbital's near-zero opex makes its 33% over depreciation an operating-equivalent, matching mature hyperscaler cloud operating margins (Google Cloud ~33%, AWS ~35-38%, Azure ~45%) and far above compressed neocloud operating margins (~1% or negative). R is still a markup over amortized cost (gross/operating/net definitions kept). We depreciate over 5 years, shorter and more conservative than operators' 6-year lives (Microsoft, Google, Oracle, Meta extensions; Amazon's 6->5 reversal), so the assumption does not flatter the margin. Replaces the stale Oracle 30-40% figure. |
 | [economics/revenue_per_watt.md](economics/revenue_per_watt.md) | Revenue per GW/rack. | Separates IaaS economics from integrated inference-service economics. |
+| [economics/comms_us_broadband_market.md](economics/comms_us_broadband_market.md) | US fixed-broadband market size, provider financials, and the diminishing-returns question (comms wave 1). | US fixed broadband is ~$70-95B/yr; the largest broadband subscriber bases (Comcast, Charter) carry the smallest market caps; willingness-to-pay for speed is sharply concave (~$2.34/Mbps at 4-10 Mbps to ~$0.02/Mbps at 100-1,000), so value rewards reach and reliability, not raw bandwidth. |
+| [economics/comms_us_cellular_market.md](economics/comms_us_cellular_market.md) | US wireless/cellular market, the big-three carrier financials, and the MVNO/wholesale layer (comms wave 1). | US wireless service revenue is ~$326B/yr (single major source); the cable MVNOs prove a non-carrier can build 20M+ lines on rented capacity, the same wholesale logic behind carrier-hosted direct-to-cell. |
+| [economics/comms_global_regional_market.md](economics/comms_global_regional_market.md) | Global and regional comms market (broadband plus cellular) by region, ex-China (comms wave 1). | Global telecom services are ~$2.0-2.1T/yr (mobile ~$1.19T, fixed broadband ~$360-390B); satellite is ~0.5% of fixed broadband; the GSMA $7.6T is GDP contribution, not operator revenue, and must not be summed with market-size lines. |
+| [economics/comms_cellular_5g_deployment_economics.md](economics/comms_cellular_5g_deployment_economics.md) | Cost and unit economics of deploying/upgrading cellular (5G) networks (comms wave 1). | Mobile-network capex is ~14-19% of service revenue and declining; a 5G site upgrade is ~$20-50K, a new macro ~$100-300K; the C-band auction alone was ~$81B; payback is ~8-10 years and 5G delivered no ARPU premium. |
+| [economics/comms_broadband_deployment_economics.md](economics/comms_broadband_deployment_economics.md) | Fixed-broadband deployment economics (fiber, cable, FWA) and the incremental-value question (comms wave 1). | A cable incumbent defends a passed home for ~$100-300 (vs ~$1,000+ fiber overbuild); the space value is in the unserved/remote tail ($3,000-6,000 rural up to ~$200,000+ extreme remote), not served markets. |
+| [economics/comms_space_tam_claims.md](economics/comms_space_tam_claims.md) | The space-comms TAM clarified: cited headline vs bottoms-up served market (comms wave 1). | Cited connectivity TAMs (SpaceX $1.6T, AST ~$1.1T) and the realistically served slice are separated by ~2 orders of magnitude; Morningstar's realistic Starlink market is ~$129B; the default prior is a ~90% haircut (served ~5-10% of cited). |
+
+### Direct Communication
+
+| File | What it is | Key takeaway |
+|---|---|---|
+| [direct_communication/README.md](direct_communication/README.md) | Communications workstream front door. | The adjacent Rocket Lab communications thesis and its scope. |
+| [direct_communication/spectrum_fundamentals_economics.md](direct_communication/spectrum_fundamentals_economics.md) | Spectrum fundamentals, the speed-versus-connections tradeoff, and auction cost today (comms wave 1). | Mid-band is the contested sweet spot; US C-band cost ~$0.94/MHz-POP (~$81B) while mmWave is hundreds of times cheaper; terrestrial cellular spectrum is effectively closed to a new entrant, so the spectrum fight belongs in the satellite domain (ITU door, not cash auction). |
+| [direct_communication/bands_and_enabling_hardware.md](direct_communication/bands_and_enabling_hardware.md) | The non-traditional band ladder, the enabling silicon band by band, and a consolidated RF-vs-laser comparison (comms wave 1). | The silicon is not the bottleneck up through W-band (off-the-shelf Ka/V/E parts, emerging W-band, research-only sub-THz); the binding constraints are spectrum coordination, rain fade, and pointing; the settled architecture is optical primary plus an upper-microwave RF complement. |
 
 ### Laser Communications
 
@@ -90,6 +114,7 @@ docs behind any claim you want to inspect:
 |---|---|---|
 | [laser_comms/comms_business_case.md](laser_comms/comms_business_case.md) | Communications business case. | A focused B2B/B2G private orbital network is plausible; it is not Starlink. |
 | [laser_comms/constellation_mesh.md](laser_comms/constellation_mesh.md) | Constellation and mesh design. | Laser range does not bind; service architecture and ground reach do. |
+| [laser_comms/laser_terrestrial_interconnect.md](laser_comms/laser_terrestrial_interconnect.md) | Terrestrial laser/free-space-optical links for ground and data-center interconnect (comms wave 1). | A real shipping product class (Taara up to 25 Gbps over 10 km) but a gap-filler, not a fiber replacement; the same fog wall as the space link forces an RF backup for five-nines; strong where fiber does not exist, conditional (security, latency, fast deploy) where it does. |
 | [laser_comms/optical_comms.md](laser_comms/optical_comms.md) | Optical comms baseline. | Optical is primary; terminal roadmap remains a gating risk. |
 | [laser_comms/optical_ground_stations.md](laser_comms/optical_ground_stations.md) | Optical ground stations. | Geographic diversity beats one large telescope. |
 | [laser_comms/rf_limited_service.md](laser_comms/rf_limited_service.md) | Limited RF B2B service. | A modest RF sliver can be a backup/complement, not the primary product. |
@@ -180,6 +205,7 @@ docs behind any claim you want to inspect:
 | [synthesis/wave4_synthesis.md](synthesis/wave4_synthesis.md) | Wave-4 synthesis. | Establishes payback/GPU-obsolescence as the crux; launch-cost framing is historical. |
 | [synthesis/wave5_synthesis.md](synthesis/wave5_synthesis.md) | Wave-5 synthesis. | Latest full synthesis: flyability crossover resolves at the favorable generation, conditionally. |
 | [synthesis/orbital_lifetime_5v7yr_synthesis.md](synthesis/orbital_lifetime_5v7yr_synthesis.md) | Synthesis of the 5-vs-7-year orbital-lifetime study (4 docs). | The mass/payload cost of longevity is single-digit percent on every lever; 5 years is not free at low SSO (needs ~700 km or propulsion) but 7 years is cheap either way; the real trade is radiation plus mandatory deorbit (fly high) vs continuous station-keeping (stay low); design life is likely revenue-limited (aging silicon), not orbit-limited; the 7-yr natural-life altitude is a band ~720 to 900 km pending a numerical propagation. Exploratory (2026-05-29). |
+| [synthesis/comms_baseline_synthesis.md](synthesis/comms_baseline_synthesis.md) | Communications baseline synthesis: markets and the current state of the technologies (comms wave 1). | The neutral base for the comms track: the market is enormous, mobile-dominated, mature, and barely growing; diminishing returns past baseline broadband is the most robust finding; the served space-comms market is ~5-10% of the cited TAM; optical-primary-plus-RF is the settled architecture. No verdict; the founder's DC-vs-comms comparison falls out of the diminishing-returns and TAM findings. |
 
 ### Valuation
 
@@ -258,3 +284,53 @@ not the initial workload.
 
 **Build-to-learn** — the staged approach where early nodes prove the hard
 subsystems and market premium before a scaled buildout.
+
+**MVNO (Mobile Virtual Network Operator):** a brand that sells mobile service
+to end users on rented wholesale capacity from a facilities-based carrier rather
+than owning a radio network. The cable MVNOs (Xfinity Mobile, Spectrum Mobile)
+prove a non-carrier can build tens of millions of lines on rented capacity, the
+same wholesale logic behind carrier-hosted satellite direct-to-cell.
+
+**ARPU (average revenue per user):** monthly revenue per subscriber line. The
+comms base treats it as a falling benchmark (cable broadband ARPU ~$74 and
+declining), not a static one. Distinct from ARPA (average revenue per account),
+which spans multiple lines and runs roughly 3x ARPU.
+
+**FWA (fixed wireless access):** home broadband delivered over a 5G radio link
+from a cell site to a rooftop/window receiver, no per-home trenching. The
+capex-light terrestrial option (~$300-800/subscriber) that is taking the majority
+of US broadband net adds at "good-enough" speed.
+
+**Direct-to-cell (D2D, direct-to-device):** letting an ordinary unmodified
+smartphone connect to a satellite when no terrestrial tower is in range, via a
+carrier wholesale/hosting arrangement (AST with AT&T/Verizon; Starlink with
+T-Mobile). Large user counts but thin per-user revenue so far.
+
+**Mid-band:** the 1-6 GHz spectrum tier (including C-band) that balances speed
+and reach and penetrates walls, making it the contested "sweet spot" and the most
+expensive cellular spectrum. Low-band (<1 GHz) buys reach and connection count;
+mmWave (24 GHz+) buys peak speed but little coverage.
+
+**Free-space optical (FSO):** a modulated laser beam (typically 1550 nm) sent
+through open air between line-of-sight terminals, the same physics as a fiber link
+with the glass removed. Used both space-to-ground and ground-to-ground; broken
+(not degraded) by cloud/fog, so it needs site diversity or an RF backup path.
+
+**Cited TAM vs served-addressable market:** the two non-comparable space-comms
+market figures. A cited (total-market) TAM is population times spend (hundreds of
+billions to trillions); the served-addressable (bottoms-up) market is the slice an
+operator can realistically win after physics and competition (single-digit to
+low-hundreds of billions). The comms base default prior is a ~90% haircut: the
+served market is roughly 5-10% of the cited total.
+
+**Diminishing returns past baseline broadband:** the comms base's most robust
+finding. Willingness-to-pay for speed is sharply concave (about $2.34/Mbps at 4-10
+Mbps collapsing to about $0.02/Mbps from 100 to 1,000 Mbps), so the value curve
+rewards reach and reliability, not raw bandwidth past a low-hundreds-of-Mbps
+threshold. It is the founder's contrast to data centers, where demand outruns
+supply and capacity expansion is rewarded.
+
+**Capex intensity:** network capex as a percent of service revenue, the most
+portable metric for comparing a terrestrial network to an alternative. Mobile runs
+~14-19% of service revenue and is declining; AI data-center capex is a multiple of
+current revenue, which is why the ratio is the axis the comms-vs-DC comparison uses.
