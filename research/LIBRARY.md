@@ -99,6 +99,9 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [economics/comms_cellular_5g_deployment_economics.md](economics/comms_cellular_5g_deployment_economics.md) | Cost and unit economics of deploying/upgrading cellular (5G) networks (comms wave 1). | Mobile-network capex is ~14-19% of service revenue and declining; a 5G site upgrade is ~$20-50K, a new macro ~$100-300K; the C-band auction alone was ~$81B; payback is ~8-10 years and 5G delivered no ARPU premium. |
 | [economics/comms_broadband_deployment_economics.md](economics/comms_broadband_deployment_economics.md) | Fixed-broadband deployment economics (fiber, cable, FWA) and the incremental-value question (comms wave 1). | A cable incumbent defends a passed home for ~$100-300 (vs ~$1,000+ fiber overbuild); the space value is in the unserved/remote tail ($3,000-6,000 rural up to ~$200,000+ extreme remote), not served markets. |
 | [economics/comms_space_tam_claims.md](economics/comms_space_tam_claims.md) | The space-comms TAM clarified: cited headline vs bottoms-up served market (comms wave 1). | Cited connectivity TAMs (SpaceX $1.6T, AST ~$1.1T) and the realistically served slice are separated by ~2 orders of magnitude; Morningstar's realistic Starlink market is ~$129B; the default prior is a ~90% haircut (served ~5-10% of cited). |
+| [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) | Sizes the satellite-addressable rural/remote fringe in dollars, bottoms-up from household counts and region-specific ARPU (comms wave 2). | The fringe is ~$40-55B/yr conservative to ~$95-130B/yr optimistic (ex-China, ILLUSTRATIVE), ~2.5-8% of the cited $1.6T and bracketing Morningstar's ~$129B; the structural finding is sharper than the number, the dollars are in the developed-world rural fringe and the high-ARPU mobility/enterprise verticals, NOT in the ~3.1B-person usage gap (an income problem satellite supply does not fix). Starlink's blended ARPU fell 33% in two years chasing that emerging-market tail. |
+| [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) | Sizes the premium/sovereign niche in dollars, separating the gross spend pool from the slice open to a new commercial entrant (comms wave 2). | A ~$75-95B/yr gross premium/sovereign pool (ex-China, ESTIMATE), but only ~$8-30B/yr is OPEN to a new commercial-services entrant (ILLUSTRATIVE): the cited flagship programs (IRIS2 EUR 10.6B, SDA tranches, the $2.29B SpaceX SDN award, GOVSATCOM) are closed prime/consortium builds, demand proof not addressable revenue. The niche trades addressable size (small) for margin and durability (high). Rocket Lab uniquely already sits on the closed-prime side (>$1.3B in SDA awards), a different business from the commercial niche sized here. |
+| [economics/comms_addressable_sizing.md](economics/comms_addressable_sizing.md) | Consolidation: reconciles the rural/remote fringe and the premium/sovereign pools against the $1.6T and $129B anchors, de-duplicating the shared mobility/enterprise verticals (comms wave 2). | The two pools share the mobility/enterprise verticals, so they are reconciled (five non-overlapping buckets), not summed. The de-duplicated new-entrant-addressable pool is ~$45-60B/yr conservative to ~$110-150B/yr optimistic (ex-China, ILLUSTRATIVE): ~3-9% of the cited $1.6T and in the same band as the ~$129B realistic served estimate. Two independent methods (this bottoms-up consolidation and Morningstar's top-down rebuild) landing in the same band is the load-bearing cross-check; no verdict, no supply-side economics, no single-operator capture rate. |
 
 ### Direct Communication
 
@@ -334,3 +337,22 @@ supply and capacity expansion is rewarded.
 portable metric for comparing a terrestrial network to an alternative. Mobile runs
 ~14-19% of service revenue and is declining; AI data-center capex is a multiple of
 current revenue, which is why the ratio is the axis the comms-vs-DC comparison uses.
+
+**Coverage gap vs usage gap:** the comms wave-2 distinction that decides what is
+space-addressable revenue. The coverage gap (~300M people, ~4%) is the genuinely
+unserved population with no terrestrial network in range; a satellite uniquely
+serves it, so it is space-addressable supply. The usage gap (~3.1B people) is
+people a network already covers but who do not buy service, an affordability and
+device problem a satellite does not fix; it is NOT space-addressable revenue, only
+headcount. The cited "billions of unconnected" TAMs are mostly the usage gap, which
+is why the honest addressable number lands two orders of magnitude below the
+headline.
+
+**Premium/sovereign niche:** the scoped, higher-margin space-comms opportunity
+(government/defense satcom, maritime and aero, critical-infrastructure, finance/
+low-latency, orbital-DC backhaul) that sells on sovereignty, security posture,
+dedicated capacity, resilience, and latency rather than bandwidth or price. Comms
+wave 2 sizes it at a ~$75-95B/yr gross pool, of which only ~$8-30B/yr is OPEN to a
+new commercial-services entrant; the rest is closed prime/consortium programs (IRIS2,
+SDA/SDN, GOVSATCOM) that are demand proof, not contestable revenue. It trades
+addressable size (far smaller than the mass market) for margin and durability.
