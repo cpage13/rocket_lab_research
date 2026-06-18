@@ -5,7 +5,7 @@
 **Builds on / does not duplicate:** this is the wave-2 CONSOLIDATION doc. It does not run new market research. It takes the two now-sized dollar numbers the wave-1 base named as missing, sets them against the cited TAM and the realistic served estimate that wave 1 established, and produces one clean "what a NEW entrant could realistically address" figure. Every underlying derivation lives in the docs cited by path; this doc reconciles them, it does not re-derive them. The load-bearing inputs are:
 
 - [research/economics/comms_rural_fringe_sizing.md](./comms_rural_fringe_sizing.md), which sized the satellite-addressable rural and remote fringe bottoms-up (conservative ~$40-55B/yr, optimistic ~$95-130B/yr, rural-and-remote-proper optimistic ceiling ~$75-100B/yr; all ILLUSTRATIVE).
-- [research/economics/comms_premium_sovereign_sizing.md](./comms_premium_sovereign_sizing.md), which sized the premium/sovereign niche (total spend pool ~$75-95B/yr; served-addressable for a new commercial entrant ~$8-30B/yr; all ILLUSTRATIVE on the served range).
+- [research/economics/comms_premium_sovereign_sizing.md](./comms_premium_sovereign_sizing.md), which sized the premium/sovereign niche (total spend pool ~$60-95B/yr; served-addressable for a new commercial entrant ~$8-30B/yr; all ILLUSTRATIVE on the served range).
 - [research/synthesis/comms_baseline_synthesis.md](../synthesis/comms_baseline_synthesis.md), the wave-1 base that set the ~$1.6T cited TAM, the ~$129B realistic served estimate, the ~90% haircut prior, the three structural discounts (density, ARPU-reality, shared-market), and the coverage-gap-vs-usage-gap distinction. Section 5 of that doc listed both missing numbers (items 4 and 6) that this consolidation now fills.
 - [research/vision/comms_thesis.md](../vision/comms_thesis.md), the belief record, for the open questions this consolidation answers. (Its Revision 2, appended separately, records the same fill.)
 
@@ -24,7 +24,7 @@
 The two central missing dollar numbers the wave-1 thesis named are now sized. Stated as headlines:
 
 - **The satellite-addressable rural and remote fringe (ex-China): ~$40-55B/yr conservative, ~$95-130B/yr optimistic** [ILLUSTRATIVE]. Bottoms-up on sourced household counts and region-specific ARPU. Source: [comms_rural_fringe_sizing.md](./comms_rural_fringe_sizing.md).
-- **The premium/sovereign niche (ex-China): a ~$75-95B/yr total spend pool, of which ~$8-30B/yr is realistically OPEN to a new commercial entrant** after closed national programs (IRIS2, SDA/SDN primes, GOVSATCOM) are removed [ILLUSTRATIVE on the served range]. Source: [comms_premium_sovereign_sizing.md](./comms_premium_sovereign_sizing.md).
+- **The premium/sovereign niche (ex-China): a ~$60-95B/yr total spend pool, of which ~$8-30B/yr is realistically OPEN to a new commercial entrant** after closed national programs (IRIS2, SDA/SDN primes, GOVSATCOM) are removed [ILLUSTRATIVE on the served range]. Source: [comms_premium_sovereign_sizing.md](./comms_premium_sovereign_sizing.md).
 
 **These two pools cannot be naively summed: they overlap.** The high-value mobility and enterprise verticals (maritime, aviation, energy, remote-government) sit in BOTH the rural-fringe build (its Tier B) and the premium-niche build (its premium-enterprise block). Section 3 removes that double-count. After reconciliation, the honest consolidated figure for **what a new entrant could realistically address across the whole space-communications opportunity, ex-China**, is:
 
@@ -45,7 +45,7 @@ The result is internally consistent in the way that matters: a bottoms-up consol
 **The three structural points that survive the consolidation (and dominate it):**
 
 1. **The dollars are in the developed-world rural fringe, the mobility/enterprise verticals, and the open government layer, NOT in the billions of unconnected people.** The ~3.1B usage-gap population is an income problem satellite supply does not fix; it adds headcount, not revenue. This is the single asymmetry both sizing docs were built to respect, and it is what keeps the honest number two orders of magnitude under the headline. [FACT on the gap split; ILLUSTRATIVE on the dollar consequence.]
-2. **A large majority of the most-cited sovereign spend is CLOSED to a new commercial entrant.** The programs that prove the sovereignty demand (IRIS2 at EUR 10.6B, the SDA tranches, the $2.29B SpaceX SDN award, GOVSATCOM) are captured prime/consortium builds. Only the commercial-augmentation layer (~$3-8B/yr open) is contestable. The open premium/sovereign slice is therefore a fraction of the ~$75-95B gross pool. [FACT on the closed programs; ESTIMATE on the open slice.]
+2. **A large majority of the most-cited sovereign spend is CLOSED to a new commercial entrant.** The programs that prove the sovereignty demand (IRIS2 at EUR 10.6B, the SDA tranches, the $2.29B SpaceX SDN award, GOVSATCOM) are captured prime/consortium builds. Only the commercial-augmentation layer (~$3-8B/yr open) is contestable. The open premium/sovereign slice is therefore a fraction of the ~$60-95B gross pool. [FACT on the closed programs; ESTIMATE on the open slice.]
 3. **The whole consolidated pool is split across many operators, and the early ramp is capacity-gated, not demand-gated.** The ~$45-150B is the contestable pie across Starlink/Starshield, Eutelsat/OneWeb, SES, Viasat, Amazon Leo, Kepler, and any new entrant combined. No single operator captures it. And a sliver-constrained entrant's first-years capture is bounded by how much capacity it can physically field (the supply side), far below even the conservative figure. [ESTIMATE.]
 
 **The honest one-line read (no verdict):** sized honestly and de-duplicated, the realistically space-addressable communications opportunity a new entrant could compete for is roughly **$45-60B/yr (conservative) to $110-150B/yr (optimistic), ex-China**: about **3-9% of the cited $1.6T**, and **in the same band as the independent ~$129B served estimate**. It is a real, durable, high-margin-at-the-premium-end market, and it is a niche of a niche of the trillion-dollar headline. Whether the space *supply* economics close in that pool, and what share a specific entrant wins, are separate questions this doc does not answer.
@@ -59,12 +59,12 @@ The wave-1 base ([comms_baseline_synthesis.md](../synthesis/comms_baseline_synth
 | Pool (ex-China) | Conservative | Optimistic | What it is | Status | Source |
 |---|---|---|---|---|---|
 | **A. Rural / remote fringe** | **~$40-55B/yr** | **~$95-130B/yr** | The coverage gap plus underserved-but-payable rural, at region-specific ARPU: developed-world rural fringe (high ARPU, small count) + mobility/enterprise verticals + a thin paying slice of emerging-market rural | [ILLUSTRATIVE] | [comms_rural_fringe_sizing.md](./comms_rural_fringe_sizing.md) S4-5 |
-| **B. Premium / sovereign niche (total pool)** | **~$75-95B/yr** | (same; this is the gross ceiling) | Government + military satcom envelope + premium enterprise verticals + finance/low-latency + orbital-DC backhaul, OPEN and CLOSED combined | [ESTIMATE] | [comms_premium_sovereign_sizing.md](./comms_premium_sovereign_sizing.md) S4.1 |
+| **B. Premium / sovereign niche (total pool)** | **~$60-95B/yr** | (same; this is the gross ceiling) | Government + military satcom envelope + premium enterprise verticals + finance/low-latency + orbital-DC backhaul, OPEN and CLOSED combined | [ESTIMATE] | [comms_premium_sovereign_sizing.md](./comms_premium_sovereign_sizing.md) S4.1 |
 | **B-open. Premium / sovereign, contestable** | **~$8B/yr** | **~$30B/yr** | Pool B after removing closed national programs (IRIS2, SDA/SDN primes, GOVSATCOM) and applying a served haircut: the slice OPEN to a new commercial entrant | [ILLUSTRATIVE] | [comms_premium_sovereign_sizing.md](./comms_premium_sovereign_sizing.md) S4.2 |
 
 Two things to read off this table before consolidating:
 
-- **For pool B, the right number to carry forward is B-open (~$8-30B/yr), not the gross ~$75-95B.** A new commercial-services entrant cannot win the closed flagship programs; counting them as addressable would repeat exactly the error the base warns against. The gross pool is the demand proof; the open slice is the addressable revenue. (The closed-prime channel is a different business; Rocket Lab's own >$1.3B in SDA prime awards sits there, recorded for context in the source doc, not scored here.)
+- **For pool B, the right number to carry forward is B-open (~$8-30B/yr), not the gross ~$60-95B.** A new commercial-services entrant cannot win the closed flagship programs; counting them as addressable would repeat exactly the error the base warns against. The gross pool is the demand proof; the open slice is the addressable revenue. (The closed-prime channel is a different business; Rocket Lab's own >$1.3B in SDA prime awards sits there, recorded for context in the source doc, not scored here.)
 - **Pool A already contains the mobility/enterprise verticals.** The rural-fringe build's Tier B (maritime ~$34k/yr/vessel, aviation ~$300k/yr/aircraft, energy/mining/remote-government) is ~$20-28B (conservative) to ~$30-40B (optimistic) of pool A. Those same verticals are a large part of pool B-open's premium-enterprise component. This is the overlap Section 3 must remove.
 
 ---
@@ -158,7 +158,7 @@ The wave-1 thesis asked for the two missing numbers set against the cited TAM an
 **Settled (the two missing numbers are now filled):**
 
 - The satellite-addressable rural/remote fringe is sized: ~$40-55B/yr conservative, ~$95-130B/yr optimistic [ILLUSTRATIVE].
-- The premium/sovereign niche is sized: ~$75-95B/yr gross pool, ~$8-30B/yr open to a new entrant [ILLUSTRATIVE].
+- The premium/sovereign niche is sized: ~$60-95B/yr gross pool, ~$8-30B/yr open to a new entrant [ILLUSTRATIVE].
 - The consolidated, de-duplicated new-entrant-addressable pool is ~$45-60B/yr (conservative) to ~$110-150B/yr (optimistic) [ILLUSTRATIVE], which is ~3-9% of the cited $1.6T and in the same band as the ~$129B realistic served estimate.
 - The structural shape is settled and robust: the dollars are in the developed-world fringe, the mobility/enterprise verticals, and the open government layer; the billions of unconnected people are headcount, not revenue; the closed sovereign programs are demand proof, not addressable revenue; the pool is shared across operators and the early ramp is capacity-gated.
 
@@ -215,7 +215,7 @@ Each consolidated figure traces to the two wave-2 sizing docs (which carry the u
 | COMM- id | Claim | Value | Status | Sources |
 |---|---|---|---|---|
 | COMM-082 | Satellite-addressable rural/remote fringe (pool A), consolidated headline | ~$40-55B/yr conservative; ~$95-130B/yr optimistic | [ILLUSTRATIVE] | [comms_rural_fringe_sizing.md](./comms_rural_fringe_sizing.md) |
-| COMM-083 | Premium/sovereign niche total spend pool (pool B, open + closed) | ~$75-95B/yr | [ESTIMATE] | [comms_premium_sovereign_sizing.md](./comms_premium_sovereign_sizing.md) |
+| COMM-083 | Premium/sovereign niche total spend pool (pool B, open + closed) | ~$60-95B/yr | [ESTIMATE] | [comms_premium_sovereign_sizing.md](./comms_premium_sovereign_sizing.md) |
 | COMM-084 | Premium/sovereign slice OPEN to a new commercial entrant (pool B-open) | ~$8-30B/yr | [ILLUSTRATIVE] | [comms_premium_sovereign_sizing.md](./comms_premium_sovereign_sizing.md) |
 | COMM-085 | Consolidated new-entrant-addressable space-comms pool (de-duplicated, ex-China) | ~$45-60B/yr conservative; ~$110-150B/yr optimistic | [ILLUSTRATIVE] | this doc, Section 3 |
 | COMM-086 | Consolidated addressable as a share of cited ~$1.6T connectivity TAM | ~3% (conservative) to ~9% (optimistic) | [ESTIMATE] | this doc vs [comms_baseline_synthesis.md](../synthesis/comms_baseline_synthesis.md) |

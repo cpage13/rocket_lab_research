@@ -50,7 +50,7 @@ Intentionally excluded:
 | [RESEARCH_TRACKER.md](RESEARCH_TRACKER.md) | reviewed | Research Wiki tracker and file coverage audit. | Tracks every current file under `research/` and intentionally excludes generated outputs. |
 | [SOURCE_INDEX.md](SOURCE_INDEX.md) | reviewed | Claim-level hard-number ledger. | Uses the public source-status taxonomy and records stable `RLDC-*` IDs for default assumptions and public model outputs. |
 | [vision/initial_thesis.md](vision/initial_thesis.md) | reviewed | Append-only thesis and belief history. | Rev 7 preserves historical conclusion references as history while moving live outputs to `data_center/`. |
-| [vision/comms_thesis.md](vision/comms_thesis.md) | draft | Communications thesis: starting belief record for the comms track (four working hypotheses plus the open questions that test them); no verdict for or against a Rocket Lab space-comms business. | Added 2026-06-11, comms wave-1 ingest. Revision 2 appended (2026-06-11): the two missing dollar numbers are now sized (rural/remote fringe and premium/sovereign niche), updating the confirm/break notes for Hypotheses 2 and 4; Revision 1 unchanged, still no verdict, the sizes are demand-side and ILLUSTRATIVE. Belief record only; carries no external source burden of its own, pointing to `synthesis/comms_baseline_synthesis.md` and the three wave-2 `economics/comms_*_sizing.md` docs for the sourced base. |
+| [vision/comms_thesis.md](vision/comms_thesis.md) | draft | Communications thesis: starting belief record for the comms track (four working hypotheses plus the open questions that test them); no verdict for or against a Rocket Lab space-comms business. | Added 2026-06-11, comms wave-1 ingest. Revision 2 appended (2026-06-11): the two missing dollar numbers are now sized (rural/remote fringe and premium/sovereign niche), updating the confirm/break notes for Hypotheses 2 and 4; Revision 1 unchanged, still no verdict, the sizes are demand-side and ILLUSTRATIVE. Revision 3 appended (2026-06-17): the cost side now has a test (the ground-vs-space cost ratio and the incumbent marginal-cost floor); updates Hypothesis 2's confirm/break notes (supply economics close for *scaled* space in the fringe and do not close in served markets; the gate narrows to whether a specific entrant at realistic scale reaches the cost level), leaving Hypotheses 1, 3, 4 unchanged; still no verdict, the entrant-specific cost stack is unmodeled. Belief record only; carries no external source burden of its own, pointing to `synthesis/comms_baseline_synthesis.md`, the three wave-2 `economics/comms_*_sizing.md` docs, and the three wave-3 `economics/comms_*` cost docs for the sourced base. |
 | [direct_communication/README.md](direct_communication/README.md) | draft | Communications workstream front door. | Navigation doc; no external source burden. |
 
 ### AI Hardware
@@ -103,6 +103,9 @@ Intentionally excluded:
 | [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) | draft | Sizes the satellite-addressable rural/remote fringe at ~$40-55B/yr conservative to ~$95-130B/yr optimistic (ex-China), ~2.5-8% of the cited $1.6T and bracketing Morningstar's ~$129B; the dollars are in the developed-world rural fringe and high-ARPU mobility/enterprise verticals, NOT in the ~3.1B-person usage gap. | Added 2026-06-11, wave-2 sizing, multi-source, illustrative flagged. Bottoms-up on sourced household counts and region-specific ARPU; the dollar cases are explicitly ILLUSTRATIVE and the value is the structure plus the four-anchor cross-checked band (Starlink $11.39B revenue, Morningstar ~$129B, Quilty 25-30M cap, Oxford 78M-421M users). Single-source flags: the ~$2,000/yr residential ARPU, the Value Add VC developed-vs-emerging split, the Quilty cap, the Oxford range, and the Morningstar ~$10B US-Niche sub-figure. Carries internal COMM-057..081, reconciled into SOURCE_INDEX by the lead. |
 | [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) | draft | Sizes the premium/sovereign niche at a ~$75-95B/yr gross pool but only ~$8-30B/yr OPEN to a new commercial entrant (ex-China); the flagship programs (IRIS2 EUR 10.6B, SDA tranches, $2.29B SpaceX SDN, GOVSATCOM) are closed prime/consortium builds, demand proof not addressable revenue. | Added 2026-06-11, wave-2 sizing, multi-source, illustrative flagged. The ~$50B government+military envelope is the load-bearing total (2-firm corroboration within ~4%); the served open slice is a reasoned haircut, not a bid model, flagged ILLUSTRATIVE. Single-source/scope flags: the enterprise-satcom umbrella, the finance/low-latency attributable spend (dated TABB 2010), the open-government annual-outlay estimate (ceiling-vs-outlay trap), and orbital-DC backhaul (assumption-set fraction). Rocket Lab's >$1.3B SDA prime position recorded as context, not scored. Carries internal COMM-057..078 (collides with the rural doc), reconciled by the lead. |
 | [economics/comms_addressable_sizing.md](economics/comms_addressable_sizing.md) | draft | Consolidation: the de-duplicated new-entrant-addressable pool is ~$45-60B/yr conservative to ~$110-150B/yr optimistic (ex-China), ~3-9% of the cited $1.6T and in the same band as the ~$129B realistic served estimate; the two pools share the mobility/enterprise verticals and are reconciled (five non-overlapping buckets), not summed. | Added 2026-06-11, wave-2 sizing, multi-source, illustrative flagged. Reconciles the two sizing docs against the $1.6T and $129B anchors; the consolidated band inherits both inputs' ILLUSTRATIVE status plus a reasoned (not modeled) overlap de-duplication. Load-bearing cross-check: two independent methods (this bottoms-up consolidation and Morningstar's top-down rebuild) landing in the same band. No verdict, no supply-side economics, no single-operator capture rate. Carries internal COMM-082..090, remapped into the continuous global sequence by the lead. |
+| [economics/comms_space_supply_cost.md](economics/comms_space_supply_cost.md) | draft | The space supply-side cost stack to deliver communications, from the disclosed Starlink S-1: mature incumbent ~$480-680/sub/yr all-in (~$200-260 space-specific) at ~38.6% segment op / ~63% segment EBITDA on $11.4B revenue; ~$0.05-0.30/GB network-average but rising with user density; dominated by the satellite fleet on a 5-year replacement treadmill (~$6-8B/yr), then launch, then a small availability-critical optical ground segment; scale is the whole game. | Added 2026-06-17, wave-3 cost stack, multi-source, derived ranges. Segment financials are audited S-1, cross-checked across three readers; the per-satellite unit costs are third-party estimates (V2 mini carries a ~2x source disagreement). Single-source/soft flags: the ~$6-8B/yr replacement capex and ~1,000 sats/yr rate (one 2024 Motley Fool lineage, arithmetically low against a ~10,000-sat fleet), the reconstructed ~$15-25B cumulative capex, and the utilization-dependent per-GB number. Carries internal COMM-080..108, reconciled into SOURCE_INDEX (global COMM-080..092) by the lead. |
+| [economics/comms_incumbent_margins_competitive_floor.md](economics/comms_incumbent_margins_competitive_floor.md) | draft | Ground incumbents' margins and the marginal-cost defend floor a space entrant must beat in served markets: US carriers/cable run ~36-41% EBITDA and ~80-90% broadband gross margins, so the served-market defend floor is the incumbent's marginal cash cost (~10-20% of ARPU, ~$7-15/mo, ~$84-180/sub/yr fixed; ~$0.50-1.50/GB mobile), not the list price, with ~30-40 points of EBITDA headroom to cut; no such floor exists in the unserved fringe, which is why the dollars sit there. | Added 2026-06-17, wave-3 cost ratio, multi-source, derived ranges. EBITDA margins are computed from each company's own FY2025 release and cross-checked. Single-source/soft flags: the ~80-90% broadband gross margin is triangulated across four press/operator outlets (some pre-2015), not one audited decomposition; the mobile ~$0.50-1.50/GB delivery cost is single-source (cross-checked only against MVNO wholesale logic). The asymmetry-vs-1.92x and the per-sub floors are interpretation grounded in the sourced margins. Carries internal COMM-080..103 (with gaps; collides with the supply-cost doc), reconciled into SOURCE_INDEX (global COMM-093..099) by the lead. |
+| [economics/comms_ground_vs_space_cost_ratio.md](economics/comms_ground_vs_space_cost_ratio.md) | draft | The headline ground-vs-space delivery-cost ratio: TWO opposed ratios split by whether ground plant exists (the two-flavor asymmetry). Flavor (a) space vs a fresh ground build (unserved): space CHEAPER ~1.3-3.2x rural to ~65-90x tail (opposite the data-center 1.92x). Flavor (b) space vs incumbent marginal (served): space COSTLIER ~3-8x. The ~$480-680/sub/yr level that earns the addressable pool is Starlink's disclosed actual, scale-dependent and unreachable for a small constellation. Space wins on cost exactly where the wave-2 demand sits. | Added 2026-06-17, wave-3 cost ratio, multi-source, derived ranges. The wave-3 CONSOLIDATION doc: no new cost build, it puts the space numerator and ground stacks on a common per-sub/yr basis. The asymmetry (the headline) is medium-high and corroborated by 2025-26 BEAD procurement choosing satellite in the high-cost tail; the point ratios are medium (arithmetic on sourced ranges, flavor (a) annualized at a stated ~25-yr fiber life / ~9% capital charge that is conservative against space). The realistic-for-SpaceX fact is high; the small-constellation scale caveat is carried from the supply-cost doc. No business verdict; the entrant-specific (non-Starlink) cost stack is unmodeled. Carries internal COMM-109..117, reconciled into SOURCE_INDEX (global COMM-100..103) by the lead. |
 
 ### Direct Communication
 
@@ -347,14 +350,54 @@ Highest-priority research gaps:
     - Supply-side space economics. The wave-2 pools are demand-side only; whether
       the constellation capex, optical ground network, and launch cadence close
       against these revenues is a separate workstream, explicitly not assumed.
-      This is now the load-bearing gate on Hypothesis 2
-      (`economics/comms_addressable_sizing.md`, `vision/comms_thesis.md` Rev 2).
+      This was the load-bearing gate on Hypothesis 2; PARTIALLY ADDRESSED in wave 3
+      (2026-06-11 commission, ingested 2026-06-17): the cost ratio favors space in
+      the fringe/premium layer and not in served markets, but only for SCALED
+      (Starlink-scale) space, so the gate narrows to the entrant-specific cost level
+      (`economics/comms_addressable_sizing.md`, `vision/comms_thesis.md` Rev 2-3,
+      and the wave-3 `economics/comms_*` cost docs below).
     - Whether carrier direct-to-cell belongs in a space-comms addressable number
       at all. It is a bolt-on across the general mobile base, not rural-fringe
       broadband; it carries ~$20-30B of the optimistic case (stripping it gives a
       rural-plus-premium-proper optimistic ceiling of ~$90-120B). This is a
       definitional call for the lead (`economics/comms_rural_fringe_sizing.md`,
       `economics/comms_addressable_sizing.md`).
+  - Communications wave 3 (commissioned 2026-06; ingested 2026-06-17), the new open
+    questions the ground-vs-space cost ratio surfaced, carried for later comms waves:
+    - The exact density crossover. The fresh-build-vs-space crossover sits around the
+      dense-suburban fringe (~$490/sub/yr annualized ground ~= ~$480-680 space), but
+      the precise homes-per-mile (or $/passing) at which a fresh ground build crosses
+      above the space cost is the single number that sizes the cost-advantaged fringe;
+      it needs the density-cost model both base docs flag
+      (`economics/comms_ground_vs_space_cost_ratio.md` OQ1,
+      `economics/comms_space_supply_cost.md` OQ4,
+      `economics/comms_broadband_deployment_economics.md`).
+    - A hard space cost-per-GB. The flavor-(b) per-GB ratio rests on the
+      ~$0.05-0.30/GB space figure, the softest (utilization-dependent) number in the
+      space stack; a disclosed Starlink throughput (petabytes/day) would tighten both
+      the per-GB ratio and the crossover point
+      (`economics/comms_space_supply_cost.md` OQ1,
+      `economics/comms_ground_vs_space_cost_ratio.md` OQ2).
+    - The NON-SpaceX (small-constellation) cost level. The wave-3 space numerator is
+      the MATURE incumbent (Starlink); a concrete small-constellation cost model (N
+      satellites, M subscribers, fixed-cost spread) would convert "multiples higher
+      per subscriber" into a number and let the ratios be re-run for a Rocket Lab-
+      scale entrant. This is the number the thesis ultimately needs and the narrowed
+      gate on Hypothesis 2 (`economics/comms_ground_vs_space_cost_ratio.md` OQ3,
+      `economics/comms_space_supply_cost.md` OQ5).
+    - How aggressively incumbents actually price to defend against satellite. The
+      flavor-(b) floor is the price the incumbent COULD cut to; whether it does so
+      against a LEO competitor (versus relying on latency/bundle defenses) is a
+      market-conduct question that bears on how much of the served market is truly
+      closed to space on price (`economics/comms_incumbent_margins_competitive_floor.md`
+      OQ4, `economics/comms_ground_vs_space_cost_ratio.md` OQ4).
+    - Mobile / direct-to-cell as the narrowest gap. The space network-average per-GB
+      can sit at or below the mobile ~$0.50-1.50/GB delivery cost, the one served
+      comparison where the gap nearly closes; whether direct-to-cell / mobile-
+      augmentation is therefore the served sub-market where space is least
+      disadvantaged on cost (distinct from fixed broadband, where it is 5-30x+ above)
+      is worth a dedicated pass, and ties to the direct-to-cell bucket in the
+      addressable doc (`economics/comms_ground_vs_space_cost_ratio.md` OQ5).
   - Direct-to-cell revenue per user. Starlink reports 16M D2D users but no clean
     per-user revenue for the D2D layer, and AST is pre-scale (~$70.9M FY2025
     against a ~$1.1T cited TAM); the unit economics of "fill the dead zones"

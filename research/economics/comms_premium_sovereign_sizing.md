@@ -16,7 +16,7 @@
 
 Five headline findings.
 
-1. **The premium/sovereign niche is real money but an order of magnitude smaller than the mass-market connectivity TAM.** Adding the relevant total-spend pools (government and military satcom, the premium enterprise verticals of maritime, aero, and critical-infrastructure/finance, plus the emerging orbital-DC backhaul) gives a **total premium/sovereign spend pool of roughly $75-95B/yr today** [ESTIMATE]. That is a real, durable, defense-and-government-anchored market, but it is about **6-7% the size of the ~$1.6T cited connectivity TAM** and roughly **60-75% the size of the ~$129B realistic broad-LEO served estimate** in the base. The premium niche is not bigger than the mass market; it is smaller, higher-margin, and harder to win.
+1. **The premium/sovereign niche is real money but an order of magnitude smaller than the mass-market connectivity TAM.** Adding the relevant total-spend pools (government and military satcom, the premium enterprise verticals of maritime, aero, and critical-infrastructure/finance, plus the emerging orbital-DC backhaul) gives a **total premium/sovereign spend pool of roughly $60-95B/yr today** [ESTIMATE]. That is a real, durable, defense-and-government-anchored market, but it is about **6-7% the size of the ~$1.6T cited connectivity TAM** and roughly **60-75% the size of the ~$129B realistic broad-LEO served estimate** in the base. The premium niche is not bigger than the mass market; it is smaller, higher-margin, and harder to win.
 
 2. **Most of the biggest single line items are CLOSED to a new commercial entrant and must be excluded from the served figure.** The headline sovereign programs that prove the demand are exactly the ones a fresh commercial player cannot win: the EU's **EUR 10.6B IRIS2** is an EU-industry-captured consortium build [FACT]; **GOVSATCOM** pools member-state satellites through a GMV-led hub [FACT]; the US **SDA Transport Layer** and the **$2.29B Space Data Network Backbone** are prime-contractor defense programs (Rocket Lab and SpaceX are the primes, not a generic new entrant) [FACT]. What is genuinely addressable to a commercial services entrant is the **commercial-augmentation and managed-service layer** sitting on top of those programs (the US **$13B-ceiling proliferated-LEO IDIQ**, allied commercial-LEO service buys, and the commercial enterprise verticals), not the closed flagship constellations.
 
@@ -26,7 +26,7 @@ Five headline findings.
 
 5. **The margin profile is structurally better than mass-market connectivity, which is the whole point of going premium.** Mass-market broadband sits on a concave value curve (the base's most robust finding: willingness-to-pay collapses from ~$2.34/Mbps to ~$0.02/Mbps past 100 Mbps, ~70% of US homes refuse the gigabit premium, ARPU is flat-to-falling). The premium/sovereign niche sells on attributes the curve DOES reward: sovereignty, security posture, dedicated non-contended capacity, resilience, and latency. Government and defense satcom carries higher and stickier margins (long contracts, low price-sensitivity, switching costs, mission-criticality), and premium enterprise (maritime, aero, finance, critical-infrastructure) commands multiples of consumer ARPU per terminal. The niche trades addressable SIZE (far smaller) for MARGIN and durability (far better).
 
-The honest one-line read: **the premium/sovereign niche is a roughly $75-95B/yr total spend pool, of which maybe $8-30B/yr is realistically open to a new commercial services entrant after closed national programs are removed, split across many operators, at margins materially better than mass-market connectivity but at a fraction of its size.**
+The honest one-line read: **the premium/sovereign niche is a roughly $60-95B/yr total spend pool, of which maybe $8-30B/yr is realistically open to a new commercial services entrant after closed national programs are removed, split across many operators, at margins materially better than mass-market connectivity but at a fraction of its size.**
 
 ---
 
@@ -139,9 +139,9 @@ Summing the *open and closed combined* total-spend pools (the gross size of the 
 | Premium enterprise verticals (maritime + aero + critical-infra umbrella) | **~$10-18B/yr** | [ESTIMATE] |
 | Finance / low-latency | **~$0.2-0.5B/yr** (satellite-attributable, generous) | [ESTIMATE, single-source/dated] |
 | Orbital-DC backhaul | **~$0.1-1B/yr** (emerging) | [ILLUSTRATIVE] |
-| **Total premium/sovereign spend pool** | **~$75-95B/yr** [rounded band, ex-China] | [ESTIMATE] |
+| **Total premium/sovereign spend pool** | **~$60-95B/yr** [rounded band, ex-China] | [ESTIMATE] |
 
-This ~$75-95B/yr is the *total* premium/sovereign pool. It is **~6-7% of the ~$1.6T cited connectivity TAM** and **~60-75% of the ~$129B realistic broad-LEO served estimate**. The premium niche is materially smaller than the mass market, not larger.
+This ~$60-95B/yr is the *total* premium/sovereign pool. It is **~6-7% of the ~$1.6T cited connectivity TAM** and **~60-75% of the ~$129B realistic broad-LEO served estimate**. The premium niche is materially smaller than the mass market, not larger.
 
 ### 4.2 The served-addressable range for a NEW commercial entrant (ILLUSTRATIVE)
 
@@ -166,9 +166,9 @@ Now remove what a fresh commercial-services entrant cannot win, and apply a serv
 
 | Reference | Value | This niche vs the reference |
 |---|---|---|
-| Cited connectivity TAM (SpaceX) | **~$1.6T** | Total premium pool (~$75-95B) is ~6-7%; served slice (~$8-30B) is ~0.5-2% |
+| Cited connectivity TAM (SpaceX) | **~$1.6T** | Total premium pool (~$60-95B) is ~6-7%; served slice (~$8-30B) is ~0.5-2% |
 | Realistic broad-LEO served estimate (Morningstar, base) | **~$129B** | Total premium pool is ~60-75%; served slice is ~6-23% |
-| This doc's premium/sovereign total pool | **~$75-95B** | (the ceiling) |
+| This doc's premium/sovereign total pool | **~$60-95B** | (the ceiling) |
 | This doc's served premium/sovereign slice | **~$8-30B** | (the open, contestable, all-operators slice) |
 
 The premium/sovereign niche is **not** an alternative path to a bigger number than the mass market. It is a *smaller, higher-margin* number. Its case rests on margin and durability, not size.
@@ -281,7 +281,7 @@ Each hard number carries 2+ inline sources in the body (single-source figures fl
 | COMM-071 | Critical-infrastructure satcom sub-segments (illustrative slices) | oil&gas to ~$8.8B by 2033; utility teleprotection ~$1.32B (2024); energy-infra monitoring ~$1.72B (2024) | [ESTIMATE/PROJECTION] | GrowthMarketReports; MarketIntelo |
 | COMM-072 | Finance / low-latency satellite-attributable spend | low-hundreds-of-$M (generous); ~$2.2B industry connectivity historically (TABB 2010) | [ESTIMATE] single-source/dated | McKay Brothers; WatersTechnology |
 | COMM-073 | Orbital-DC backhaul revenue pool (cross-ref DC track) | ~$0.1-1B/yr (emerging); illustrative fraction of ~$0.3B/$3B/$30B orbital-inference TAM | [ILLUSTRATIVE] | ai_datacenter_tam.md; comms_business_case.md |
-| COMM-074 | Total premium/sovereign spend pool (open + closed, ex-China) | ~$75-95B/yr | [ESTIMATE] | sum of COMM-057, 068-073 (this doc) |
+| COMM-074 | Total premium/sovereign spend pool (open + closed, ex-China) | ~$60-95B/yr | [ESTIMATE] | sum of COMM-057, 068-073 (this doc) |
 | COMM-075 | Served-addressable premium/sovereign niche, new commercial entrant (all-operators slice) | conservative ~$8B/yr; optimistic ~$30B/yr | [ILLUSTRATIVE] | reasoned haircut, this doc |
 | COMM-076 | Premium/sovereign total pool vs cited ~$1.6T connectivity TAM | ~6-7% of TAM (pool); ~0.5-2% (served slice) | [ESTIMATE] | this doc vs space_tam (base) |
 | COMM-077 | Premium/sovereign total pool vs ~$129B realistic broad-LEO served estimate | ~60-75% (pool); ~6-23% (served slice) | [ESTIMATE] | this doc vs comms_baseline_synthesis |
