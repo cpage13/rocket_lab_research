@@ -1,4 +1,4 @@
-# Library — Research Catalog & Glossary
+# Library: Research Catalog & Glossary
 
 This is the catalog for the `research/` corpus. It is intentionally
 research-only: it catalogs files that live under `research/` and does not
@@ -17,16 +17,16 @@ outputs live outside this catalog under `data_center/`.
 Start with the versioned thesis, then the latest synthesis, then the source
 docs behind any claim you want to inspect:
 
-- [vision/initial_thesis.md](vision/initial_thesis.md) — append-only thesis
+- [vision/initial_thesis.md](vision/initial_thesis.md): append-only thesis
   through Revision 7.
-- [synthesis/wave5_synthesis.md](synthesis/wave5_synthesis.md) — latest full
+- [synthesis/wave5_synthesis.md](synthesis/wave5_synthesis.md): latest full
   research synthesis in this folder; launch-cost framing is historical.
-- [README.md](README.md) — research-wiki front door and navigation rules.
-- [SOURCE_INDEX.md](SOURCE_INDEX.md) — claim-level source ledger for hard
+- [README.md](README.md): research-wiki front door and navigation rules.
+- [SOURCE_INDEX.md](SOURCE_INDEX.md): claim-level source ledger for hard
   numbers and scenario assumptions.
-- [RESEARCH_TRACKER.md](RESEARCH_TRACKER.md) — file status, audit notes, and
+- [RESEARCH_TRACKER.md](RESEARCH_TRACKER.md): file status, audit notes, and
   backlog.
-- Topic folders below — source research and historical review artifacts.
+- Topic folders below, source research and historical review artifacts.
 
 For the communications workstream specifically (comms wave 1, ingested 2026-06-11),
 start with [synthesis/comms_baseline_synthesis.md](synthesis/comms_baseline_synthesis.md)
@@ -66,6 +66,7 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [competitors/starcloud.md](competitors/starcloud.md) | Starcloud and orbital data-center competitors. | Competitors validate demand; heavy lift changes economics and timing. |
 | [competitors/starship_addendum.md](competitors/starship_addendum.md) | Starship competitive addendum, with a dated 2026-06-09 update on the SpaceX AI-1 reveal. | The real near-term risk is capital/customer capture by Starship-gated rivals; the June 2026 AI-1 design reveal is the latest such signal. |
 | [competitors/falcon9_cadence_ramp.md](competitors/falcon9_cadence_ramp.md) | Falcon 9 cadence ramp 2010-2026 and the Starship orbital-DC timeline read (comms wave 1). | Falcon 9 took ~14 years to reach a 165/yr record; high cadence arrived only once booster reuse was routine and Starlink filled the manifest. Starship must rerun a harder curve (upper-stage reuse), so "at least about 5 years" to significant orbital data centers is better supported than "about 3 years"; communications is the credible near-term Starship payload. |
+| [competitors/starlink_v3_specs.md](competitors/starlink_v3_specs.md) | Starlink V3 as the concrete cost-and-capacity benchmark for a modern RF broadband constellation at the frontier: per-satellite specs, the V2-to-V3 jump, the Gen2 broadband and dedicated direct-to-cell fleets, and the Starship/Neutron-fit handoff (comms wave 4). | V3 is a Starship-class satellite (~3.3x V2-mini mass, ~60 m wingspan) delivering ~1 Tbps/sat down and ~60 Tbps per Starship launch, but its capacity story is inseparable from the launch vehicle: the per-bit cost-down is bought with mass only a very large launcher can carry, and the direct-to-cell capacity leap is a spectrum-acquisition story first (~$17B EchoStar buy, ~65 MHz). Owns the V3 spec stack the Neutron-fit doc references. |
 
 ### Debate
 
@@ -100,11 +101,14 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [economics/comms_broadband_deployment_economics.md](economics/comms_broadband_deployment_economics.md) | Fixed-broadband deployment economics (fiber, cable, FWA) and the incremental-value question (comms wave 1). | A cable incumbent defends a passed home for ~$100-300 (vs ~$1,000+ fiber overbuild); the space value is in the unserved/remote tail ($3,000-6,000 rural up to ~$200,000+ extreme remote), not served markets. |
 | [economics/comms_space_tam_claims.md](economics/comms_space_tam_claims.md) | The space-comms TAM clarified: cited headline vs bottoms-up served market (comms wave 1). | Cited connectivity TAMs (SpaceX $1.6T, AST ~$1.1T) and the realistically served slice are separated by ~2 orders of magnitude; Morningstar's realistic Starlink market is ~$129B; the default prior is a ~90% haircut (served ~5-10% of cited). |
 | [economics/comms_rural_fringe_sizing.md](economics/comms_rural_fringe_sizing.md) | Sizes the satellite-addressable rural/remote fringe in dollars, bottoms-up from household counts and region-specific ARPU (comms wave 2). | The fringe is ~$40-55B/yr conservative to ~$95-130B/yr optimistic (ex-China, ILLUSTRATIVE), ~2.5-8% of the cited $1.6T and bracketing Morningstar's ~$129B; the structural finding is sharper than the number, the dollars are in the developed-world rural fringe and the high-ARPU mobility/enterprise verticals, NOT in the ~3.1B-person usage gap (an income problem satellite supply does not fix). Starlink's blended ARPU fell 33% in two years chasing that emerging-market tail. |
-| [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) | Sizes the premium/sovereign niche in dollars, separating the gross spend pool from the slice open to a new commercial entrant (comms wave 2). | A ~$75-95B/yr gross premium/sovereign pool (ex-China, ESTIMATE), but only ~$8-30B/yr is OPEN to a new commercial-services entrant (ILLUSTRATIVE): the cited flagship programs (IRIS2 EUR 10.6B, SDA tranches, the $2.29B SpaceX SDN award, GOVSATCOM) are closed prime/consortium builds, demand proof not addressable revenue. The niche trades addressable size (small) for margin and durability (high). Rocket Lab uniquely already sits on the closed-prime side (>$1.3B in SDA awards), a different business from the commercial niche sized here. |
+| [economics/comms_premium_sovereign_sizing.md](economics/comms_premium_sovereign_sizing.md) | Sizes the premium/sovereign niche in dollars, separating the gross spend pool from the slice open to a new commercial entrant (comms wave 2). | A ~$60-95B/yr gross premium/sovereign pool (ex-China): ~$60-70B sourced bottom-up from the components, up to ~$95B as an estimated ceiling (ESTIMATE, not a sourced figure at the top). Only ~$8-30B/yr is OPEN to a new commercial-services entrant (ILLUSTRATIVE): the cited flagship programs (IRIS2 EUR 10.6B, SDA tranches, the $2.29B SpaceX SDN award, GOVSATCOM) are closed prime/consortium builds, demand proof not addressable revenue. The niche trades addressable size (small) for margin and durability (high). Rocket Lab uniquely already sits on the closed-prime side (>$1.3B in SDA awards), a different business from the commercial niche sized here. |
 | [economics/comms_addressable_sizing.md](economics/comms_addressable_sizing.md) | Consolidation: reconciles the rural/remote fringe and the premium/sovereign pools against the $1.6T and $129B anchors, de-duplicating the shared mobility/enterprise verticals (comms wave 2). | The two pools share the mobility/enterprise verticals, so they are reconciled (five non-overlapping buckets), not summed. The de-duplicated new-entrant-addressable pool is ~$45-60B/yr conservative to ~$110-150B/yr optimistic (ex-China, ILLUSTRATIVE): ~3-9% of the cited $1.6T and in the same band as the ~$129B realistic served estimate. Two independent methods (this bottoms-up consolidation and Morningstar's top-down rebuild) landing in the same band is the load-bearing cross-check; no verdict, no supply-side economics, no single-operator capture rate. |
 | [economics/comms_space_supply_cost.md](economics/comms_space_supply_cost.md) | The space supply-side cost stack to DELIVER communications, built from the disclosed Starlink S-1 (comms wave 3). | The mature incumbent delivers for ~$480-680/subscriber/yr all-in (space-specific satellite+launch replacement ~$200-260/sub/yr) at a disclosed ~38.6% segment operating / ~63% segment EBITDA margin on $11.4B of 2025 Starlink revenue; network-average ~$0.05-0.30/GB but RISING with user density (the opposite of fiber, the permanent structural ceiling). The cost is dominated by the satellite fleet on a 5-year replacement treadmill (~$6-8B/yr, single-lineage flag), then launch (20-70% of system capital), then a small but availability-critical optical ground segment. Scale is the whole game: the same fixed stack is cheap per subscriber only at SpaceX scale. No verdict. |
 | [economics/comms_incumbent_margins_competitive_floor.md](economics/comms_incumbent_margins_competitive_floor.md) | Ground incumbents' margins and the marginal-cost price floor a space entrant must beat in served markets (comms wave 3). | US carriers/cable run ~36-41% EBITDA margins and ~80-90% broadband gross margins, so in a SERVED market the incumbent defends an existing subscriber not at its list price but at its marginal cash cost: ~10-20% of ARPU (~$7-15/mo, ~$84-180/sub/yr) for fixed broadband and ~$0.50-1.50/GB for mobile (single-source flag), with ~30-40 points of EBITDA headroom to absorb the cut. The asymmetry versus the data-center 1.92x: that ground side is a fresh build paying full freight, while the comms served-market competitor has already sunk its plant. In the unserved fringe there is no such floor, which is exactly where the addressable dollars sit. No verdict. |
 | [economics/comms_ground_vs_space_cost_ratio.md](economics/comms_ground_vs_space_cost_ratio.md) | The headline ground-vs-space delivery-cost ratio, the realistic-for-SpaceX cost level, and the competitive verdict (comms wave 3). | Communications has not one ratio but TWO that point in opposite directions, split by whether the ground plant already exists (the two-flavor asymmetry). Flavor (a), space vs a fresh ground build (unserved): space is CHEAPER by ~1.3-3.2x rural and ~65-90x in the extreme tail, the opposite direction to the data-center 1.92x. Flavor (b), space vs the incumbent's marginal cost (served): space is COSTLIER by ~3-8x. The ~$480-680/sub/yr cost level that earns the addressable pool at ~38% op / ~63% EBITDA is not aspirational, it is Starlink's disclosed 2025 actual, already achieved at SpaceX scale but unreachable for a small constellation (denominator-driven). Space wins on cost exactly where the wave-2 demand sits (the fringe and the premium/sovereign layer) and nowhere else; two independent lines (revenue and cost) land on the same map. No business verdict. |
+| [economics/comms_4g_5g_transition_cost.md](economics/comms_4g_5g_transition_cost.md) | Isolates what the 4G-to-5G upgrade actually cost ground operators as a discrete cycle, per operator, defining the "X" a space alternative must beat on the next (6G) cycle (comms wave 4). | The cost "X" has three stacked layers, but the load-bearing one is the middle (deployment capex), because spectrum and already-sunk 4G plant are not what a new entrant displaces on the next cycle. The 5G cycle's deployment cost was carried overwhelmingly by new radio hardware on existing sites (US majors' incremental programs single-digit-to-low-double-digit billions: Verizon ~$10B, AT&T ~$6-8B, US Big-3 ~$26-35B), not by new sites, the core, or cash-capex spectrum. The forward 6G cycle repeats that shape, so X-on-the-next-cycle is roughly the next radio refresh per covered POP plus whatever new spectrum that generation demands. |
+| [economics/comms_6g_demand_value.md](economics/comms_6g_demand_value.md) | What 6G actually is and whether users will pay a premium for it, testing the thesis that 6G is a forced cost users will not pay extra for (comms wave 4). | 6G is real as a standards program (ITU IMT-2030, specs ~end-2028, commercial ~2030) but its targets are an incremental extension of 5G's, not a step change, and the demand evidence (McKinsey: two-thirds will not pay >5 euros/mo even for 10x speed; PwC: only ~one-third would pay extra for 5G at ~$4.40-5.06/mo) shows users do not pay a premium for "more G." The likely shape is a forced cost, not a demand pull: a build operators must do for capacity and parity against a user base that will not pay extra, the exact margin squeeze the founder's thesis predicts, which widens the cost-down window for a cheaper delivery method competing on reach and reliability. On the $10/mo test, a typical user would almost certainly not pay an extra $10/mo for 6G. |
+| [economics/comms_direct_to_cell.md](economics/comms_direct_to_cell.md) | The lead-market base doc on direct-to-cell (satellite-to-phone): market, spectrum, capacity limits, unit economics, and the home-broadband cannibalization question (comms wave 4). | The two pure-play benchmarks have diverged into opposite architectures (AST: few enormous satellites, Block 2 ~223 m2 arrays; Starlink: small payloads on many birds), with the same Shannon-and-beam-geometry ceiling; the spectrum model is shifting from "rent the carrier's spectrum" toward "own dedicated spectrum plus roam on the carrier's." The capacity ceiling is the whole story: satellite NTN delivery costs ~$5-9/GB versus ~$0.30/GB for terrestrial 5G (~20x, single named analyst), so D2C is the served sub-market where space is least disadvantaged but still well above the terrestrial floor, and it cannibalizes the thin rural/edge home connection, not the dense-market home-broadband line. On served revenue D2C is not yet larger than fixed broadband ex-China (~$12-14B by 2030 vs the ~$129B served slice), but on reach and 10-year optionality it is plausibly larger, contingent entirely on whether the per-GB capacity gap closes. |
 
 ### Direct Communication
 
@@ -113,6 +117,7 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [direct_communication/README.md](direct_communication/README.md) | Communications workstream front door. | The adjacent Rocket Lab communications thesis and its scope. |
 | [direct_communication/spectrum_fundamentals_economics.md](direct_communication/spectrum_fundamentals_economics.md) | Spectrum fundamentals, the speed-versus-connections tradeoff, and auction cost today (comms wave 1). | Mid-band is the contested sweet spot; US C-band cost ~$0.94/MHz-POP (~$81B) while mmWave is hundreds of times cheaper; terrestrial cellular spectrum is effectively closed to a new entrant, so the spectrum fight belongs in the satellite domain (ITU door, not cash auction). |
 | [direct_communication/bands_and_enabling_hardware.md](direct_communication/bands_and_enabling_hardware.md) | The non-traditional band ladder, the enabling silicon band by band, and a consolidated RF-vs-laser comparison (comms wave 1). | The silicon is not the bottleneck up through W-band (off-the-shelf Ka/V/E parts, emerging W-band, research-only sub-THz); the binding constraints are spectrum coordination, rain fade, and pointing; the settled architecture is optical primary plus an upper-microwave RF complement. |
+| [direct_communication/spectrum_generations_and_availability.md](direct_communication/spectrum_generations_and_availability.md) | What a cellular "generation" actually is, spectrum refarming/DSS portability, what is left for 5G/6G (FR3, WRC-27), the satellite-beam capacity ceiling, and the buy-vs-partner spectrum-access question (comms wave 4). | A "generation" is a standard and capability set, not a frequency; a satellite beam is Shannon-times-footprint gated and cannot densify (~300x to ~30,000x less area-capacity than a terrestrial macro), so satellite direct-to-cell is a coverage/fill-in layer, not a capacity layer; and the realistic spectrum path for an entrant is the FCC SCS partner/lease model (ride a carrier's band), not buying a cellular band (SpaceX's ~$17B EchoStar buy is the deep-pocketed exception). |
 
 ### Laser Communications
 
@@ -121,6 +126,7 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [laser_comms/comms_business_case.md](laser_comms/comms_business_case.md) | Communications business case. | A focused B2B/B2G private orbital network is plausible; it is not Starlink. |
 | [laser_comms/constellation_mesh.md](laser_comms/constellation_mesh.md) | Constellation and mesh design. | Laser range does not bind; service architecture and ground reach do. |
 | [laser_comms/laser_terrestrial_interconnect.md](laser_comms/laser_terrestrial_interconnect.md) | Terrestrial laser/free-space-optical links for ground and data-center interconnect (comms wave 1). | A real shipping product class (Taara up to 25 Gbps over 10 km) but a gap-filler, not a fiber replacement; the same fog wall as the space link forces an RF backup for five-nines; strong where fiber does not exist, conditional (security, latency, fast deploy) where it does. |
+| [laser_comms/laser_dc_interconnect_viability.md](laser_comms/laser_dc_interconnect_viability.md) | Whether a real direct laser (free-space-optical) data-center-to-data-center market exists, how it works, who pays, and the AI-buildout demand engine; a side track to the RF consumer model (comms wave 4). | A direct laser DC-to-DC market is real but narrow on the ground (a tens-of-Gbps supplement for gap-fill, redundancy, obstacle-hop, secure fast-deploy), explicitly NOT the petabit AI synchronous-training interconnect (FSO is 2-to-5 orders of magnitude short of the ~5 Pbit/s job, which belongs to trenched coherent fiber); the one arena where direct laser DC-to-DC links are the primary winning architecture is in orbit, where no fiber exists, the natural home for Rocket Lab's Mynaric optical terminals. Per-link, not per-subscriber. |
 | [laser_comms/optical_comms.md](laser_comms/optical_comms.md) | Optical comms baseline. | Optical is primary; terminal roadmap remains a gating risk. |
 | [laser_comms/optical_ground_stations.md](laser_comms/optical_ground_stations.md) | Optical ground stations. | Geographic diversity beats one large telescope. |
 | [laser_comms/rf_limited_service.md](laser_comms/rf_limited_service.md) | Limited RF B2B service. | A modest RF sliver can be a backup/complement, not the primary product. |
@@ -188,6 +194,7 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [rocket_lab/neutron/sso_recovery_cadence_falcon_analogue.md](rocket_lab/neutron/sso_recovery_cadence_falcon_analogue.md) | SSO launch and booster recovery for Neutron, via the Falcon 9 analogue. | SSO does not force expendable: Falcon recovers boosters on SSO/polar missions (RTLS for light-to-moderate, drone ship ~600 to 675 km for heavy), and Neutron's primary mode is RTLS at Wallops, so the ~25 to 30% SSO penalty already assumes recovery (no expendable surcharge); RTLS suits high cadence. Open question: whether Neutron can reach SSO from Wallops (~38 to 60 degree corridor) without a dogleg that adds to the penalty. Exploratory (2026-05-29). |
 | [rocket_lab/neutron/sso_from_virginia_feasibility.md](rocket_lab/neutron/sso_from_virginia_feasibility.md) | Can Neutron reach SSO from its Virginia (Wallops LC-3) site? | Probable-yes-with-a-dogleg, not a guarantee. LC-3 (MARS, Wallops, Virginia) confirmed as Neutron's pad (ribbon-cut Aug 2025). SSO (~98 degrees) is outside the standard 38 to 60 degree Wallops corridor, so it needs a southerly-Atlantic dogleg; the PUG and the Virginia Spaceport Authority say it is reachable, and Falcon's SAOCOM 1B flew ~98 degrees from the East Coast. Caveats: no orbital SSO has ever flown from Wallops (stated-but-unflown), and the dogleg adds an estimated ~5 to 15% payload on top of the ~25 to 30% SSO penalty (reusable Virginia-SSO budget ~8 to 9.5 t). Exploratory (2026-05-29). |
 | [rocket_lab/neutron/sso_us_launch_site_options.md](rocket_lab/neutron/sso_us_launch_site_options.md) | Best US launch site for a high-cadence Neutron SSO campaign: stay at Wallops or relocate, and where. | Wallops is good enough to START (near-term mandatory: LC-3 is the only built Neutron pad) but not SSO-optimal, since the East-Coast dogleg costs an estimated extra ~5 to 15% payload and biases recovery to a droneship. Vandenberg (West Coast) is the performance-optimal relocation (launches SSO straight south over open Pacific, no dogleg, RTLS re-enabled), though Rocket Lab has no public West Coast Neutron plan yet. Geography correction: "south toward the equator" helps eastward low-inclination launches, not SSO (~98 degrees regardless of latitude); what matters is an unobstructed retrograde azimuth over open ocean. Recovery tiers (15 t expendable / 13 t droneship / 8.5 t RTLS-to-LEO) make recovery mode a first-order payload driver. Exploratory (2026-05-30). |
+| [rocket_lab/neutron/neutron_comms_payload_fit.md](rocket_lab/neutron/neutron_comms_payload_fit.md) | Whether Neutron can carry a Starlink-V3-class broadband satellite and an AST-BlueBird-Block-2-class direct-to-cell satellite, how many fit per launch, and the launch-cost-per-satellite implication; Neutron only, no Starship-class vehicle assumed (comms wave 4). | Neutron can carry both classes but only a few of each: ~5 broadband V3-class per launch (mass-limited, ~$10-11M/sat) and ~1 direct-to-cell Block 2-class per launch (antenna-stow-limited at the ~223 m2 array, ~$50-55M/sat); for broadband it is out-scaled ~10x on $/satellite by a Starship-class batch lifter, and for the lead market (D2C) its 5.5 m fairing is the binding limit. Inherits the unresolved Neutron SSO-mass and usable-fairing-volume uncertainties. |
 | [rocket_lab/overview.md](rocket_lab/overview.md) | Rocket Lab company overview. | Rocket Lab is unusually vertically integrated for this thesis. |
 | [rocket_lab/space_hardware_capabilities.md](rocket_lab/space_hardware_capabilities.md) | Rocket Lab hardware capabilities. | Launch, bus, solar, mechanisms, and comms are strong; node-scale deployable radiators are pending in-house (no large-scale product yet, but thermal control already flies on its satellites). |
 | [rocket_lab/vertical_integration_stack_2026.md](rocket_lab/vertical_integration_stack_2026.md) | Which spacecraft subsystems Rocket Lab builds in-house vs buys, with acquisition status (Mynaric, Geost, Motiv, SolAero, Sinclair, ASI, Precision Components) and the in-house electric propulsion (Gauss). | Rocket Lab makes nearly the whole satellite bus in-house, so the supplier margins an outsider would pay are captured internally; node-scale radiators and large-scale power are a question of scale, not capability or intent. |
@@ -212,6 +219,11 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [synthesis/wave5_synthesis.md](synthesis/wave5_synthesis.md) | Wave-5 synthesis. | Latest full synthesis: flyability crossover resolves at the favorable generation, conditionally. |
 | [synthesis/orbital_lifetime_5v7yr_synthesis.md](synthesis/orbital_lifetime_5v7yr_synthesis.md) | Synthesis of the 5-vs-7-year orbital-lifetime study (4 docs). | The mass/payload cost of longevity is single-digit percent on every lever; 5 years is not free at low SSO (needs ~700 km or propulsion) but 7 years is cheap either way; the real trade is radiation plus mandatory deorbit (fly high) vs continuous station-keeping (stay low); design life is likely revenue-limited (aging silicon), not orbit-limited; the 7-yr natural-life altitude is a band ~720 to 900 km pending a numerical propagation. Exploratory (2026-05-29). |
 | [synthesis/comms_baseline_synthesis.md](synthesis/comms_baseline_synthesis.md) | Communications baseline synthesis: markets and the current state of the technologies (comms wave 1). | The neutral base for the comms track: the market is enormous, mobile-dominated, mature, and barely growing; diminishing returns past baseline broadband is the most robust finding; the served space-comms market is ~5-10% of the cited TAM; optical-primary-plus-RF is the settled architecture. No verdict; the founder's DC-vs-comms comparison falls out of the diminishing-returns and TAM findings. |
+| [synthesis/comms_framework_synthesis.md](synthesis/comms_framework_synthesis.md) | Communications framework synthesis: lays out the shape of the comms model in the same form as the data-center conclusion, with the wave-4 numbers in their slots; isolated to comms, renders no verdict (comms wave 4). | The comms model is space cost per subscriber (density-aware, rising with user density, the inverse of terrestrial) times 1.5 for ~30% regular margin, compared FORWARD against ground's NEXT-upgrade (6G) cost; the output is not a single ratio (the data-center 1.92x mirror does not exist for comms) but a map: space wins on the forward comparison in the unserved/fringe and premium/sovereign layers and loses in dense served markets. Direct-to-cell is the lead market (by optionality, not current revenue); the forced 6G upgrade users will not pay extra for is the catalyst. A structure, not a populated model; the entrant-specific cost per subscriber stays the open gate. |
+| [synthesis/comms_wave1_lint_report.md](synthesis/comms_wave1_lint_report.md) | Communications wave-1 lint pass: read-only QA over the wave-1 ingest docs, baseline synthesis, and thesis Rev 1. | Health snapshot for the comms wave-1 corpus (carrier-financial harmonization, post-Frontier subscriber reconciliation, the GSMA $7.6T GDP-vs-revenue guard); 0 blockers. |
+| [synthesis/comms_wave2_lint_report.md](synthesis/comms_wave2_lint_report.md) | Communications wave-2 lint pass: read-only QA over the wave-2 sizing docs and thesis Rev 2. | Health snapshot for the wave-2 dollar sizing (rural/remote fringe, premium/sovereign, consolidated addressable); flags the colliding internal COMM namespaces for lead reconciliation; 0 blockers. |
+| [synthesis/comms_wave3_lint_report.md](synthesis/comms_wave3_lint_report.md) | Communications wave-3 lint pass: read-only QA over the wave-3 cost docs and thesis Rev 3. | Health snapshot for the supply-side cost stack, the incumbent marginal-cost floor, and the ground-vs-space ratio; flags the single-lineage replacement-capex and single-source per-GB figures; resolves the $700-850 summary outlier and the gross-pool reconciliation to ~$60-95B. |
+| [synthesis/comms_wave4_lint_report.md](synthesis/comms_wave4_lint_report.md) | Communications wave-4 lint pass: read-only QA over the seven wave-4 source docs, the framework synthesis, and thesis Rev 4. | The wave-4 set is strong and well-disciplined (0 blockers, 192 internal links resolved); one material issue, a numeric contradiction on the AST BlueBird Block 2 antenna-array area (corrected to ~223 m2), plus single-source FACT flags to carry into the ledger (D2C ~$5-9/GB single-analyst, AST beam/cell figures, Starlink per-beam throughput). |
 
 ### Valuation
 
@@ -227,40 +239,40 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 
 ## Glossary
 
-**Research corpus** — the evidence base under `research/`: source research,
+**Research corpus**: the evidence base under `research/`: source research,
 synthesis, lint passes, debate, strategy, peer review, and thesis history.
 
-**Source index** — the claim-level ledger that records whether hard numbers are
+**Source index**: the claim-level ledger that records whether hard numbers are
 certified facts, sourced estimates, derived estimates, external projections,
 project extrapolations, scenarios, placeholders, or stale history.
 
-**Static conclusion** — the reviewed human-readable conclusion for the promoted
+**Static conclusion**: the reviewed human-readable conclusion for the promoted
 defaults. It does not live in `research/`; the default data-center conclusion
 lives under `data_center/`.
 
-**Model JSON** — machine-readable model output. It is generated/promoted outside
+**Model JSON**: machine-readable model output. It is generated/promoted outside
 `research/`, with the default data-center model under `data_center/models/`.
 
-**Node** — the project product unit: one orbital spacecraft carrying GPU
+**Node**: the project product unit: one orbital spacecraft carrying GPU
 packages plus bus, power, thermal, and comms. Older research sometimes says
 "rack" when it means the product unit; that is historical terminology.
 
-**Rack** — NVIDIA hardware terminology: a cabinet-scale compute product such as
+**Rack**: NVIDIA hardware terminology: a cabinet-scale compute product such as
 NVL72. Use "rack" for NVIDIA hardware, not for the project product.
 
-**Package** — the NVIDIA GPU package as sold and modelled, even when it carries
+**Package**: the NVIDIA GPU package as sold and modelled, even when it carries
 multiple compute dies.
 
-**R band** — the model's revenue-to-cost band: `revenue = R * cost`, with low,
+**R band**: the model's revenue-to-cost band: `revenue = R * cost`, with low,
 central, and high trajectories.
 
-**Neutron** — Rocket Lab's reusable medium-lift rocket; the assumed launcher for
+**Neutron**: Rocket Lab's reusable medium-lift rocket; the assumed launcher for
 the data-center node.
 
-**Electron** — Rocket Lab's operational small-lift rocket; context only for this
+**Electron**: Rocket Lab's operational small-lift rocket; context only for this
 data-center thesis.
 
-**SSO** — Sun-synchronous orbit. Dawn-dusk SSO is the enabling orbit because it
+**SSO**: Sun-synchronous orbit. Dawn-dusk SSO is the enabling orbit because it
 reduces eclipse and battery burden.
 
 **Ballistic coefficient (BC):** mass per unit drag area (kg/m2) of a spacecraft.
@@ -273,22 +285,22 @@ particle striking electronics (GPU/HBM logic or memory). The SEU rate rises with
 altitude and is largely un-shieldable, which makes it a binding cost of flying
 higher rather than a mass problem.
 
-**Hot-loop radiator** — a thermal architecture that runs coolant/radiator
+**Hot-loop radiator**: a thermal architecture that runs coolant/radiator
 surfaces hotter so the radiator can reject more heat per square meter.
 
-**Optical comms / laser comms** — free-space optical links used for high-rate
+**Optical comms / laser comms**: free-space optical links used for high-rate
 space-to-space or space-to-ground communication.
 
-**RF sliver** — a limited radio-frequency service path kept as backup or a
+**RF sliver**: a limited radio-frequency service path kept as backup or a
 focused B2B channel, not the main data-center product.
 
-**Inference** — serving a trained model. This is the compute workload the
+**Inference**: serving a trained model. This is the compute workload the
 project targets.
 
-**Training** — building a model. It is far more communication-intensive and is
+**Training**: building a model. It is far more communication-intensive and is
 not the initial workload.
 
-**Build-to-learn** — the staged approach where early nodes prove the hard
+**Build-to-learn**: the staged approach where early nodes prove the hard
 subsystems and market premium before a scaled buildout.
 
 **MVNO (Mobile Virtual Network Operator):** a brand that sells mobile service

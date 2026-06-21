@@ -25,9 +25,12 @@ Start with this path before editing or interpreting claims:
 - Relevant ADRs under `docs/adr/` before changing public artifact policy.
 
 The root repository is Rocket Lab Research. The current public artifact set is
-data-center first. Communications is reserved for a future researched workstream
-until it has its own research, model, source ledger, tests, and public artifact
-boundary.
+data-center first. Communications now has its own research and source ledger:
+research waves 1 through 4 live in the shared research wiki, with `COMM-*` claim
+IDs in `research/SOURCE_INDEX.md`. It still has no promoted model, tests, or
+public release artifact, so it stays a research-only workstream and must not be
+turned into a promoted model or a public claim until those remaining conditions
+are met.
 
 ## Research Wiki Map
 
@@ -223,8 +226,10 @@ Keep these boundaries visible in public docs:
 - Do not blur the default 90 percent token premium, the solar/radiator cost-down
   sensitivity toward 50 percent, and the separate thermal package-density
   sensitivity.
-- Do not turn communications into a real model without its own research,
-  source ledger, and tests.
+- Communications now has its own research (waves 1 through 4) and a `COMM-*`
+  source ledger in `research/SOURCE_INDEX.md`. It still has no promoted model,
+  tests, or public release artifact, so do not turn it into a promoted model or
+  a public claim until those remaining conditions are met.
 - Do not add Electron as a data-center path.
 - Do not present training as the modeled product.
 - Do not collapse deployed-year capacity into living-fleet capacity.

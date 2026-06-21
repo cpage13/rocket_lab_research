@@ -24,7 +24,7 @@
 
 The communications base has five headline findings.
 
-1. **The market is enormous, mobile-dominated, mature, and barely growing.** Global telecom service revenue (ex-China) is roughly **$2.0-2.1 trillion/year** [ESTIMATE]. It splits very unequally: **mobile/cellular ~$1.19T** [FACT, GSMA] versus **fixed broadband ~$360-390B** [ESTIMATE], with enterprise/wholesale/voice making up the rest. The US alone is about a quarter of the global market: **US wireless service ~$326B** [ESTIMATE, single major source] and **US fixed broadband ~$70-95B** [ESTIMATE]. Top-line growth is low single digits everywhere in the developed world.
+1. **The market is enormous, mobile-dominated, mature, and barely growing.** Consumer connectivity (mobile plus fixed broadband) is roughly **$1.55T/year global** / **~$1.2-1.3T ex-China** [ESTIMATE]; the broad all-services market (adding enterprise, wholesale, and voice) is roughly **$2.0-2.1 trillion/year global** / **~$1.6-1.7T ex-China** [ESTIMATE]. It splits very unequally: **mobile/cellular ~$1.19T** [FACT, GSMA, global series] versus **fixed broadband ~$360-390B** [ESTIMATE, global series], with enterprise/wholesale/voice making up the rest. The US alone is about a quarter of the global market: **US wireless service ~$326B** [ESTIMATE, single major source] and **US fixed broadband ~$70-95B** [ESTIMATE]. Top-line growth is low single digits everywhere in the developed world.
 
 2. **The ground carriers are huge but de-rated, and the largest subscriber bases carry the smallest market caps.** The investor value sits with the wireless balance sheets (T-Mobile ~$216B, Verizon ~$191-201B, AT&T ~$156-160B), while the pure-play broadband operators with the biggest subscriber counts are valued lowest (Charter ~$20B against ~$55B revenue and ~30M subscribers). A new entrant selling connectivity is entering a market whose incumbents' core product is flat-to-shrinking.
 
@@ -40,15 +40,16 @@ The founder's central comparison falls out of points 3 and 4: **data centers jus
 
 ## 1. Where the Communications Market Is Today
 
-### 1.1 The global picture, by product (ex-China)
+### 1.1 The global picture, by product
 
-The single most important structural fact is that **communications is mobile-dominated**: mobile is about 3x the revenue of fixed broadband and about 6x the connection count.
+The single most important structural fact is that **communications is mobile-dominated**: mobile is about 3x the revenue of fixed broadband and about 6x the connection count. The mobile and fixed-broadband lines below are global GSMA-class series (China included); the China-excluded counterparts are noted where they matter to the addressable math.
 
-| Product line (2025, ex-China) | Service revenue | Connections | Status | Source |
+| Product line (2025) | Service revenue | Connections | Status | Source |
 |---|---|---|---|---|
-| Mobile / cellular | **~$1.19 trillion** | ~9.2B subscriptions (~5.8B unique people) | [FACT] | [global_regional](../economics/comms_global_regional_market.md) (GSMA, ITU) |
-| Fixed broadband | **~$360-390 billion** | ~1.53B subscriptions | [FACT subs / ESTIMATE revenue] | [global_regional](../economics/comms_global_regional_market.md) (Point Topic, Grand View) |
-| Total telecom services (mobile + fixed + enterprise + wholesale + voice) | **~$2.0-2.1 trillion** | n/a | [ESTIMATE] | [global_regional](../economics/comms_global_regional_market.md) (Precedence, Grand View) |
+| Mobile / cellular (global) | **~$1.19 trillion** | ~9.2B subscriptions (~5.8B unique people) | [FACT] | [global_regional](../economics/comms_global_regional_market.md) (GSMA, ITU) |
+| Fixed broadband (global) | **~$360-390 billion** | ~1.53B subscriptions | [FACT subs / ESTIMATE revenue] | [global_regional](../economics/comms_global_regional_market.md) (Point Topic, Grand View) |
+| Consumer connectivity (mobile + fixed broadband) | **~$1.55 trillion** global / ~$1.2-1.3T ex-China | n/a | [ESTIMATE] | [global_regional](../economics/comms_global_regional_market.md) |
+| Total telecom services (mobile + fixed + enterprise + wholesale + voice) | **~$2.0-2.1 trillion** global / ~$1.6-1.7T ex-China | n/a | [ESTIMATE] | [global_regional](../economics/comms_global_regional_market.md) (Precedence, Grand View) |
 
 > **Do not double-count.** The widely quoted GSMA "$7.6 trillion" and "$11.3 trillion by 2030" are the **economic value mobile adds to GDP**, not operator revenue. They must never be summed with the market-size lines. The revenue the industry actually collects is the ~$1.19T mobile line. (Confirmed this distinction against GSMA directly; the €1.1T "Europe mobile" figure is likewise GDP-contribution, not revenue.)
 
@@ -131,11 +132,11 @@ The honest reading: the fixed-broadband pool (~$360-390B/yr) is the pool fixed s
 
 The size of the thing being displaced if space fully replaced terrestrial.
 
-| Scenario (2025, ex-China) | Market being substituted | Status |
+| Scenario (2025, global series) | Market being substituted | Status |
 |---|---|---|
-| Replace all fixed broadband | ~$360-390B/yr | [PROJECTION, illustrative] |
-| Replace all fixed broadband + all mobile | ~$1.5T+/yr | [PROJECTION, illustrative] |
-| Replace the entire telecom services market | ~$2.0-2.1T/yr | [PROJECTION, illustrative] |
+| Replace all fixed broadband | ~$360-390B/yr (global) | [PROJECTION, illustrative] |
+| Replace all fixed broadband + all mobile | ~$1.55T/yr (global; ~$1.2-1.3T ex-China) | [PROJECTION, illustrative] |
+| Replace the entire telecom services market | ~$2.0-2.1T/yr (global; ~$1.6-1.7T ex-China) | [PROJECTION, illustrative] |
 
 **Flagged strongly as illustrative.** No credible path has space replacing urban terrestrial at current cost structures: a satellite beam is capacity-constrained where users concentrate, which is the opposite of terrestrial economics (fiber/5G get cheaper per user in density). The figure is useful only as the outer wall and as the denominator against which real space share (~0.5% of fixed) is measured. The economically meaningful version is **the rural and unserved fringe**, sized by the coverage gap (~300M people with no mobile coverage) and the underserved rural base, not the whole figure. Source: [global_regional](../economics/comms_global_regional_market.md).
 
@@ -356,7 +357,8 @@ These are the headline synthesized claims. Each traces to an ingest doc (which h
 
 | COMM-S id | Claim | Value | Status | Source doc(s) |
 |---|---|---|---|---|
-| COMM-S01 | Global telecom service revenue (ex-China) | ~$2.0-2.1T/yr | [ESTIMATE] | global_regional |
+| COMM-S01 | Total telecom service revenue, all services (global; ~$1.6-1.7T ex-China) | ~$2.0-2.1T/yr | [ESTIMATE] | global_regional |
+| COMM-S01b | Consumer connectivity, mobile + fixed broadband (global; ~$1.2-1.3T ex-China) | ~$1.55T/yr | [ESTIMATE] | global_regional |
 | COMM-S02 | Global mobile/cellular service revenue | ~$1.19T/yr | [FACT] | global_regional (GSMA) |
 | COMM-S03 | Global fixed broadband service revenue | ~$360-390B/yr | [ESTIMATE] | global_regional |
 | COMM-S04 | US fixed broadband service revenue | ~$70-95B/yr | [ESTIMATE] | us_broadband |
