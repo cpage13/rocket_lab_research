@@ -352,6 +352,31 @@ monthly ARPU into the per-customer collectable revenue (arpu_usd_per_month x
 MONTHS_PER_YEAR x operator_revenue_share)."""
 
 # ============================================================
+# Schema / package / artifact-role constants (Phase 3)
+# ============================================================
+# The comms analog of the data-center output.py SCHEMA_VERSION and the
+# json_output.py MODEL_PACKAGE_NAME / artifact-role labels. Carried here as
+# named constants (the "no bare literals" rule) so the engine's metadata and
+# meta blocks stamp them without inline literals.
+
+SCHEMA_VERSION: Final[str] = "comms-v1"
+"""The comms output JSON schema version (the comms analog of the data-center
+output.py SCHEMA_VERSION = 'v8'); distinct so the comms artifact is
+unambiguously not the DC v8 artifact."""
+
+MODEL_PACKAGE_NAME: Final[str] = "rklb-comms"
+"""The comms model package / console-script name (the Phase-5 rklb-comms entry
+point), carried now so the metadata block can stamp it."""
+
+DEFAULT_ARTIFACT_ROLE: Final[str] = "draft"
+"""The default artifact-role label for an un-promoted run (the comms analog of
+the DC json_output.py DEFAULT_ARTIFACT_ROLE)."""
+
+PROMOTED_DEFAULT_ARTIFACT_ROLE: Final[str] = "promoted_default"
+"""The artifact-role label stamped on the promoted default space model (the
+comms analog of the DC json_output.py PROMOTED_DEFAULT_ARTIFACT_ROLE)."""
+
+# ============================================================
 # Validator tolerances
 # ============================================================
 
@@ -372,6 +397,7 @@ __all__ = [
     "BROADBAND_STOWED_VOLUME_M3_DEFAULT",
     "CADENCE_CEILING_DEFAULT",
     "COST_DOWN_REFERENCE_UNITS_DEFAULT",
+    "DEFAULT_ARTIFACT_ROLE",
     "DIRECT_TO_CELL_ANTENNA_COST_MUSD_DEFAULT",
     "DIRECT_TO_CELL_COMMS_ELECTRONICS_COST_MUSD_DEFAULT",
     "DIRECT_TO_CELL_PAYLOAD_POWER_KW_DEFAULT",
@@ -400,6 +426,7 @@ __all__ = [
     "MINOR_COMPONENT_PCT_DEFAULT",
     "MIN_FY",
     "MIN_HORIZON_YEARS",
+    "MODEL_PACKAGE_NAME",
     "MONTHS_PER_YEAR",
     "NEUTRON_FAIRING_VOLUME_M3_DEFAULT",
     "NEUTRON_MASS_ENVELOPE_T_DEFAULT",
@@ -407,9 +434,11 @@ __all__ = [
     "OVERSUBSCRIPTION_BAND_DEFAULT",
     "PER_BEAM_CAPACITY_ANCHOR_MBPS",
     "PER_BEAM_CAPACITY_ANCHOR_MHZ",
+    "PROMOTED_DEFAULT_ARTIFACT_ROLE",
     "RETAIL_REFERENCE_USD_PER_MONTH_DEFAULT",
     "REVENUE_MULTIPLE",
     "SATELLITE_LIFETIME_YEARS_DEFAULT",
+    "SCHEMA_VERSION",
     "SCOPE_WEIGHTS_DEFAULT",
     "SCOPE_WEIGHT_SUM_TOLERANCE",
     "SPECTRAL_EFFICIENCY_BPS_PER_HZ_DEFAULT",
