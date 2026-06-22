@@ -3,8 +3,9 @@
 These pin that the output round-trips JSON with every required leaf present
 (including the band leaves, the scalar ARPU cell, and the capability cells),
 that the customer-band leaf is three sibling cells, that the BusinessYear model
-carries NO verdict / ratio / capture-share fields, that the metadata carries NO
-DC-venture enums, and that the meta block is lean.
+carries NO verdict / ratio / capture-share fields, and that the metadata carries
+NO DC-venture enums. (The engine-lean vs Phase-5-enriched meta-block contract is
+pinned in test_json_output.py::test_engine_meta_is_lean_enrichment_fills_it.)
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import json
 
 from communications.config import CommsConfig
 from communications.engine import render_comms_json, run_comms_model
-from communications.output import BusinessYear, CustomerBandBlock, MetaBlock, RunMetadata
+from communications.output import BusinessYear, CustomerBandBlock, RunMetadata
 
 
 def test_comms_model_output_round_trips_json() -> None:
@@ -74,19 +75,5 @@ def test_metadata_has_no_dc_enums() -> None:
         "operator_model",
         "radiator_architecture",
         "deployment_philosophy",
-    }
-    assert field_names.isdisjoint(forbidden)
-
-
-def test_meta_block_is_lean() -> None:
-    """The comms MetaBlock has the three lean fields and none of the Phase-5 enrichment fields."""
-    field_names = set(MetaBlock.model_fields.keys())
-    assert field_names == {"validation", "source_status_summary", "schema_version_notes"}
-    forbidden = {
-        "data_dictionary",
-        "query_examples",
-        "formula_definitions",
-        "validation_results",
-        "generations_dictionary",
     }
     assert field_names.isdisjoint(forbidden)
