@@ -67,6 +67,8 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [competitors/starship_addendum.md](competitors/starship_addendum.md) | Starship competitive addendum, with a dated 2026-06-09 update on the SpaceX AI-1 reveal. | The real near-term risk is capital/customer capture by Starship-gated rivals; the June 2026 AI-1 design reveal is the latest such signal. |
 | [competitors/falcon9_cadence_ramp.md](competitors/falcon9_cadence_ramp.md) | Falcon 9 cadence ramp 2010-2026 and the Starship orbital-DC timeline read (comms wave 1). | Falcon 9 took ~14 years to reach a 165/yr record; high cadence arrived only once booster reuse was routine and Starlink filled the manifest. Starship must rerun a harder curve (upper-stage reuse), so "at least about 5 years" to significant orbital data centers is better supported than "about 3 years"; communications is the credible near-term Starship payload. |
 | [competitors/starlink_v3_specs.md](competitors/starlink_v3_specs.md) | Starlink V3 as the concrete cost-and-capacity benchmark for a modern RF broadband constellation at the frontier: per-satellite specs, the V2-to-V3 jump, the Gen2 broadband and dedicated direct-to-cell fleets, and the Starship/Neutron-fit handoff (comms wave 4). | V3 is a Starship-class satellite (~3.3x V2-mini mass, ~60 m wingspan) delivering ~1 Tbps/sat down and ~60 Tbps per Starship launch, but its capacity story is inseparable from the launch vehicle: the per-bit cost-down is bought with mass only a very large launcher can carry, and the direct-to-cell capacity leap is a spectrum-acquisition story first (~$17B EchoStar buy, ~65 MHz). Owns the V3 spec stack the Neutron-fit doc references. |
+| [competitors/starlink_v3_v4_spectrum_incorporation.md](competitors/starlink_v3_v4_spectrum_incorporation.md) | How much spectrum each Starlink generation actually incorporates: the band-by-band MHz/GHz inventory (broadband user link, gateway/backhaul, direct-to-cell) and the bandwidth-to-capacity link in a real platform (comms wave 5). | The user link is fixed and modest (~2 GHz Ku down, ~500 MHz Ku up, identical V1/V2/V3); the per-generation capacity leap is a beams-and-backhaul story (a V3 reuses the SAME 2 GHz across dozens of fully-digital beams at ~4-4.5 bits/Hz, fed by a wide Ka + E-band 10 GHz pipe, to reach ~1 Tbps), not a user-bandwidth story. The system incorporates >20 GHz of licensed RF (Ka+E+V) plus license-free optical ISLs. Direct-to-cell is two thin low-band slices: a 2x5 MHz SCS lease (entrant-realistic) and a ~65 MHz owned block costing ~$17B+ (the ~115 MHz often quoted is the full FCC deal; SpaceX got ~65 MHz, AT&T ~50 MHz). "V4" is not a disclosed spectrum generation. |
+| [competitors/large_array_folding_and_stow.md](competitors/large_array_folding_and_stow.md) | How much a Starlink V3 folds versus a folding direct-to-cell array: the deployed-to-stowed fold ratio, the modular-tile count, and the general RF-array packing rule that decides launch fit (comms wave 5). | "Fold it twice" is roughly right for the V3 broadband aperture (it barely folds: the RF aperture is the flat ~7-8 m x ~3.5 m satellite body, and the ~60 m span is solar-wing-dominated, so the fold ratio is ~1x and it is mass-bound, fairing-agnostic). It badly underestimates a direct-to-cell array: AST's BlueBird Block 2 ~223 m2 aperture is ~220-265 modular ~0.84 m2 "Micron" tiles folding "phone-booth to studio-apartment" (dozens of fold lines), so it is size-bound and the fold geometry is what fills the fairing. General rule: a solar membrane stows to ~0.01% volume but a populated RF phased array packs only to ~34-48%, so a handset-closing aperture cannot fold like a solar wing. Exact fold-line counts and Block 2 folded dimensions are unpublished (flagged). |
 
 ### Debate
 
@@ -118,6 +120,8 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [direct_communication/spectrum_fundamentals_economics.md](direct_communication/spectrum_fundamentals_economics.md) | Spectrum fundamentals, the speed-versus-connections tradeoff, and auction cost today (comms wave 1). | Mid-band is the contested sweet spot; US C-band cost ~$0.94/MHz-POP (~$81B) while mmWave is hundreds of times cheaper; terrestrial cellular spectrum is effectively closed to a new entrant, so the spectrum fight belongs in the satellite domain (ITU door, not cash auction). |
 | [direct_communication/bands_and_enabling_hardware.md](direct_communication/bands_and_enabling_hardware.md) | The non-traditional band ladder, the enabling silicon band by band, and a consolidated RF-vs-laser comparison (comms wave 1). | The silicon is not the bottleneck up through W-band (off-the-shelf Ka/V/E parts, emerging W-band, research-only sub-THz); the binding constraints are spectrum coordination, rain fade, and pointing; the settled architecture is optical primary plus an upper-microwave RF complement. |
 | [direct_communication/spectrum_generations_and_availability.md](direct_communication/spectrum_generations_and_availability.md) | What a cellular "generation" actually is, spectrum refarming/DSS portability, what is left for 5G/6G (FR3, WRC-27), the satellite-beam capacity ceiling, and the buy-vs-partner spectrum-access question (comms wave 4). | A "generation" is a standard and capability set, not a frequency; a satellite beam is Shannon-times-footprint gated and cannot densify (~300x to ~30,000x less area-capacity than a terrestrial macro), so satellite direct-to-cell is a coverage/fill-in layer, not a capacity layer; and the realistic spectrum path for an entrant is the FCC SCS partner/lease model (ride a carrier's band), not buying a cellular band (SpaceX's ~$17B EchoStar buy is the deep-pocketed exception). |
+| [direct_communication/leo_constellation_coverage_minimums.md](direct_communication/leo_constellation_coverage_minimums.md) | The minimum LEO satellite count for CONTINUOUS (24/7) coverage of a target area: the coverage FLOOR, before capacity matters (comms wave 5). | A single LEO satellite covers a ~1,300-1,900 km circle and is overhead only ~2-8 min/pass, so continuity needs a string per plane and multiple planes tiled across the target's longitude span (streets-of-coverage). Coverage-floor counts (single 24/7, SOC, slightly conservative vs optimized Walker, validated against Iridium 66): CONUS ~50-150 (low tens optimized), US+Europe ~130-450, near-global mid-latitude band ~290-960. The floor is altitude/elevation-driven (550 to 350 km or 10 to 25 degree mask each ~2-3x's it). Founder-hypothesis verdict: adding satellites buys COVERAGE (geometry) up to a floor, then CAPACITY (Shannon x beams) beyond it, CORRECT as an ordering, with the sharpening that real systems overshoot the floor for capacity and VLEO raises the floor itself, so flown counts are capacity-dominated. A continuity-only US+Europe service is a few-hundred-satellite problem, distinct from the ~1,584-30,000-satellite capacity build. |
+| [direct_communication/spectrum_purchase_and_6g.md](direct_communication/spectrum_purchase_and_6g.md) | Spectrum-purchase economics: how much MHz an operator must hold, the secondary-market price per MHz-POP, the total-dollar translation for a US+Europe footprint, and whether 6G/FR3 is decided-versus-open and accessible to a satellite entrant (comms wave 5). | GSMA benchmark is 80-100 MHz mid-band per operator to launch competitive 5G; US carriers actually hold ~280-375 MHz each, so the working quantities are ~100 MHz floor and ~200 MHz to match an incumbent. Mid-band trades at ~$0.65-1.03/MHz-POP on the secondary market (AT&T-UScellular ~$0.65, SpaceX-EchoStar ~$1.03), the same range as primary auctions with no entrant discount, which translates to ~$32-46B for 100 MHz US+Europe and ~$65-90B for 200 MHz, spectrum-only. 6G/FR3 (7.125-8.4 GHz golden band plus 4.4-4.8 and 14.8-15.35 GHz) is terrestrial greenfield, not yet allocated/auctioned/held, auctions ~2028-2032+, and a satellite NTN entrant should not count on accessing it (LEO-to-handset physics hostile; the satellite role is incumbent FSS coexistence). |
 
 ### Laser Communications
 
@@ -224,6 +228,7 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [synthesis/comms_wave2_lint_report.md](synthesis/comms_wave2_lint_report.md) | Communications wave-2 lint pass: read-only QA over the wave-2 sizing docs and thesis Rev 2. | Health snapshot for the wave-2 dollar sizing (rural/remote fringe, premium/sovereign, consolidated addressable); flags the colliding internal COMM namespaces for lead reconciliation; 0 blockers. |
 | [synthesis/comms_wave3_lint_report.md](synthesis/comms_wave3_lint_report.md) | Communications wave-3 lint pass: read-only QA over the wave-3 cost docs and thesis Rev 3. | Health snapshot for the supply-side cost stack, the incumbent marginal-cost floor, and the ground-vs-space ratio; flags the single-lineage replacement-capex and single-source per-GB figures; resolves the $700-850 summary outlier and the gross-pool reconciliation to ~$60-95B. |
 | [synthesis/comms_wave4_lint_report.md](synthesis/comms_wave4_lint_report.md) | Communications wave-4 lint pass: read-only QA over the seven wave-4 source docs, the framework synthesis, and thesis Rev 4. | The wave-4 set is strong and well-disciplined (0 blockers, 192 internal links resolved); one material issue, a numeric contradiction on the AST BlueBird Block 2 antenna-array area (corrected to ~223 m2), plus single-source FACT flags to carry into the ledger (D2C ~$5-9/GB single-analyst, AST beam/cell figures, Starlink per-beam throughput). |
+| [synthesis/comms_wave5_coverage_spectrum_synthesis.md](synthesis/comms_wave5_coverage_spectrum_synthesis.md) | Communications wave-5 synthesis: the coverage-floor satellite count, the V3 spectrum-incorporation and fold ratio, and the spectrum dollars, assembled for the COVERAGE-FIRST broadband model (comms wave 5). | Coverage is cheap and the cost is in the spectrum, not the count. The US+Europe continuous-coverage FLOOR is ~130-450 satellites (CONUS ~50-150, near-global mid-lat ~290-960), so full coverage is a few-hundred-satellite problem distinct from the ~1,584-30,000 capacity build. A V3 incorporates a fixed ~2 GHz Ku user link and folds ~1x (mass-bound), so spectrum and beams, not user bandwidth or stow, are the differentiators. The spectrum-to-buy line is now sourced: secondary-market mid-band is ~$0.65-1.03/MHz-POP, so ~$32-46B (100 MHz) to ~$65-90B (200 MHz) US+Europe if the model chooses OWNED spectrum, the alternative to the near-zero-capex SCS lease. Sources the coverage-floor count and the spectrum dollars that the .agent comms-model briefs previously asserted chat-only. |
 
 ### Valuation
 
@@ -396,3 +401,48 @@ The asymmetry is the headline: space wins on cost where there is no sunk-plant f
 (the unserved/remote fringe and the premium/sovereign layer) and loses where there is
 one (dense served markets), which is exactly the map the demand-side addressable
 sizing independently found.
+
+**Coverage floor (continuous-coverage floor):** the comms wave-5 term for the
+MINIMUM LEO satellite count that gives a target area continuous (24/7) single
+coverage, BEFORE capacity matters. A single LEO satellite covers a ~1,300-1,900 km
+circle and is overhead only ~2-8 minutes per pass, so continuity is bought with a
+string of satellites per orbital plane and enough planes to tile the target's
+longitude span (the streets-of-coverage construction). The floor is a few hundred
+satellites for the US-plus-Europe target (~130-450, with CONUS ~50-150 and a
+near-global mid-latitude band ~290-960), validated against Iridium's real 66. It is
+altitude- and elevation-driven: dropping 550 to 350 km or raising the mask 10 to 25
+degrees each roughly doubles-to-triples it. The load-bearing point for the model: full
+coverage is CHEAP (a few-hundred-satellite problem), distinct from the
+~1,584-to-30,000-satellite CAPACITY build, so what a satellite buys past the floor is
+capacity (Shannon times beams), not coverage.
+
+**Bandwidth-to-capacity link (user spectrum is not the differentiator):** the comms
+wave-5 finding that a Starlink generation's capacity leap is NOT a user-bandwidth
+story. The broadband user link is fixed and modest (~2 GHz Ku down, ~500 MHz Ku up,
+identical V1/V2/V3); a V3 reaches ~1 Tbps by reusing that SAME ~2 GHz across dozens of
+fully-digital beams at ~4-4.5 bits/Hz with high spatial reuse, fed by a wide Ka plus
+E-band (10 GHz) backhaul pipe. So capacity equals user-pool times spectral efficiency
+times spatial reuse times satellite count, and the differentiators are beams,
+backhaul, and sat-count, not the user band. The whole system incorporates >20 GHz of
+licensed RF (Ka+E+V) plus license-free optical inter-satellite links.
+
+**Fold ratio (deployed-to-stowed):** the comms wave-5 mechanical measure of how much
+a satellite's aperture collapses to fit a fairing. A Starlink V3 broadband aperture
+barely folds (fold ratio ~1x: the RF aperture is the flat satellite body and the
+~60 m span is solar-wing-dominated), so V3 is MASS-bound and fairing-agnostic. A
+direct-to-cell array folds many times (AST BlueBird Block 2 ~223 m2 is ~220-265
+modular ~0.84 m2 tiles folding phone-booth-to-studio-apartment), so it is SIZE-bound
+and the fold geometry is what fills the fairing. The general rule: a solar membrane
+stows to ~0.01% of deployed volume but a populated RF phased array packs only to
+~34-48%, so a handset-closing aperture cannot fold like a solar wing. This is the
+mechanical root of the V3-versus-direct-to-cell launch-fit asymmetry.
+
+**Spectrum-to-buy (the owned-spectrum dollar line):** the comms wave-5 term for the
+secondary-market cost of acquiring cellular spectrum OUTRIGHT, the priced alternative
+to the near-zero-capex SCS lease. Mid-band trades at ~$0.65-1.03/MHz-POP (no entrant
+discount versus primary auctions), so a US-plus-Europe footprint costs ~$32-46B for a
+~100 MHz competitive floor and ~$65-90B for a ~200 MHz incumbent-match, spectrum-only.
+Whether this line enters the model depends on the access mechanism: under the SCS
+lease it is a near-zero wash, but if the model chooses owned spectrum (the SpaceX-
+EchoStar ~$17B/~65 MHz path) it becomes a real, sourced capital line on the order of
+tens of billions.
