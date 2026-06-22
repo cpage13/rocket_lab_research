@@ -208,6 +208,12 @@ class GroundInputTree(BaseModel):
         ..., description="Ground-amortization-years input."
     )
     spectrum_cost_musd: InputCell = Field(..., description="Ground spectrum-cost wash input.")
+    incumbent_marginal_fraction_of_arpu: InputCell = Field(
+        ..., description="Dense-regime incumbent marginal defend-floor fraction-of-ARPU input."
+    )
+    starlink_disclosed_all_in_cost_usd_per_sub_year: InputCell = Field(
+        ..., description="Disclosed all-in Starlink floor reference input."
+    )
 
 
 class ScenarioInputTree(BaseModel):
@@ -820,6 +826,32 @@ def _ground_tree(dials: GroundDials, scenario_path: str) -> GroundInputTree:
                 unit="MUSD",
                 rationale="Spectrum nets out of the cost comparison; an explicit zero wash.",
                 status=SourceStatus.DERIVED_ESTIMATE,
+            ),
+            scenario_path=scenario_path,
+        ),
+        incumbent_marginal_fraction_of_arpu=_build_cell(
+            path=f"{base}.incumbent_marginal_fraction_of_arpu",
+            value=dials.incumbent_marginal_fraction_of_arpu,
+            description=_desc(GroundDials, "incumbent_marginal_fraction_of_arpu"),
+            spec=_scenario_spec(
+                label="Incumbent marginal defend-floor fraction of ARPU",
+                unit="fraction",
+                rationale="The dense-regime incumbent marginal defend floor (COMM-096 midpoint).",
+                status=SourceStatus.SOURCED_ESTIMATE,
+                claim_id="COMM-096",
+            ),
+            scenario_path=scenario_path,
+        ),
+        starlink_disclosed_all_in_cost_usd_per_sub_year=_build_cell(
+            path=f"{base}.starlink_disclosed_all_in_cost_usd_per_sub_year",
+            value=dials.starlink_disclosed_all_in_cost_usd_per_sub_year,
+            description=_desc(GroundDials, "starlink_disclosed_all_in_cost_usd_per_sub_year"),
+            spec=_scenario_spec(
+                label="Disclosed all-in Starlink floor",
+                unit="USD/yr",
+                rationale="The disclosed all-in Starlink floor (COMM-090/COMM-103); not RKLB.",
+                status=SourceStatus.SOURCED_ESTIMATE,
+                claim_id="COMM-090",
             ),
             scenario_path=scenario_path,
         ),
