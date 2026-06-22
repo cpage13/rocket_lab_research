@@ -335,6 +335,159 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         formula="0 by explicit scope treatment",
         description="Explicit zero cost for a component that does not apply in this scope.",
     ),
+    # ---- Communications model formulas (comms Phase 2). Appended at the END
+    # of the table (no existing DC entry touched) when first used by the comms
+    # engine-room modules (constellation, spectrum, price_reference). The DC
+    # never references these names; the DC parity gate confirms the append is
+    # behavior-preserving. (plan section 0.8 / comms plan P2.3.)
+    #
+    # Constellation: the four-area cost-out, the per-class fork, the cost-down,
+    # the V4 step.
+    "comms_solar_cost_from_power_and_dial": FormulaSpec(
+        formula="solar_cost_usd_per_kw x payload_power_kw / USD_PER_MUSD",
+        description="Per-satellite solar-array build cost, sized from comms payload power, $M.",
+    ),
+    "comms_cost_area_line_from_dial": FormulaSpec(
+        formula="configured build cost for this area (direct dial, no computation)",
+        description=(
+            "Per-satellite build cost for one of the directly-configured areas "
+            "(antenna, comms electronics, or radiator/bus), taken straight from its dial, $M."
+        ),
+    ),
+    "comms_minor_component_cost_from_pct": FormulaSpec(
+        formula="minor_component_pct x (antenna + comms_electronics + solar + radiator_bus)",
+        description="Per-satellite minor-component carry, a fraction of the four-area sum, $M.",
+    ),
+    "comms_satellite_build_cost_from_four_areas": FormulaSpec(
+        formula="antenna + comms_electronics + solar + radiator_bus + minor_component",
+        description=(
+            "Per-satellite build cost: the sum of the four cost areas plus the "
+            "minor-component carry, $M."
+        ),
+    ),
+    "comms_satellites_per_launch_mass_bound": FormulaSpec(
+        formula="floor(mass_envelope_t / satellite_mass_t)",
+        description="Satellites per Neutron launch when mass-bound (the broadband-class binding).",
+    ),
+    "comms_satellites_per_launch_volume_bound": FormulaSpec(
+        formula="floor(fairing_volume_m3 / stowed_volume_m3)",
+        description=(
+            "Satellites per Neutron launch when stowed-antenna-volume-bound "
+            "(the direct-to-cell binding)."
+        ),
+    ),
+    "comms_satellites_per_launch_fork": FormulaSpec(
+        formula="min(mass_bound, volume_bound)  # the binding envelope wins per class",
+        description=(
+            "Satellites per launch: the smaller of the mass-bound and the "
+            "stowed-volume-bound count."
+        ),
+    ),
+    "comms_satellite_binding_constraint": FormulaSpec(
+        formula="enum(MASS if mass_bound <= volume_bound else ANTENNA_STOW)",
+        description=(
+            "Which envelope binds satellites-per-launch (mass for broadband, "
+            "antenna-stow for direct-to-cell)."
+        ),
+    ),
+    "comms_launch_cost_per_satellite_from_cadence": FormulaSpec(
+        formula="launch_cost_musd(cadence) / satellites_per_launch",
+        description="Per-satellite share of the cadence-indexed Neutron launch cost, $M.",
+    ),
+    "comms_learning_curve_multiplier": FormulaSpec(
+        formula="(cumulative_units / reference_units) ** log2(1 - learning_rate_per_doubling)",
+        description="Wright-style learning-curve cost multiplier at a cumulative-units count.",
+    ),
+    "comms_satellite_build_cost_after_learning": FormulaSpec(
+        formula="satellite_build_cost x learning_curve_multiplier",
+        description="Per-satellite build cost after the learning-curve discount, $M.",
+    ),
+    "comms_capability_after_v4_step": FormulaSpec(
+        formula="base_capability x v4_capability_multiplier",
+        description=(
+            "Per-satellite capability after the optional V4 capability-step "
+            "multiplier (dimensionless x base)."
+        ),
+    ),
+    "comms_satellite_total_cost_from_build_and_launch": FormulaSpec(
+        formula="satellite_build_cost_after_learning + launch_cost_per_satellite",
+        description=(
+            "Total per-satellite cost: discounted build cost plus the "
+            "per-satellite launch share, $M."
+        ),
+    ),
+    "comms_satellite_cost_annual_from_total_and_life": FormulaSpec(
+        formula="satellite_total_cost / satellite_lifetime_years",
+        description="Annualized per-satellite cost over the service-life cliff, $M/yr.",
+    ),
+    # Spectrum: the requirement, the empirical anchor, the naive cross-check,
+    # the customer chain.
+    "comms_spectrum_to_acquire_from_leased": FormulaSpec(
+        formula="leased_bandwidth_mhz  # reused across all beams and satellites, not x beam count",
+        description=(
+            "Spectrum the constellation must acquire: one per-beam block, reused across every beam."
+        ),
+    ),
+    "comms_per_beam_capacity_from_empirical_anchor": FormulaSpec(
+        formula=(
+            "PER_BEAM_CAPACITY_ANCHOR_MBPS x (leased_bandwidth_mhz / PER_BEAM_CAPACITY_ANCHOR_MHZ)"
+        ),
+        description=(
+            "Per-beam capacity from the empirical AST 40-MHz-to-120-Mbps anchor, "
+            "scaled by leased MHz."
+        ),
+    ),
+    "comms_naive_capacity_cross_check": FormulaSpec(
+        formula=(
+            "leased_bandwidth_mhz x spectral_efficiency_bps_per_hz  "
+            "# CROSS-CHECK ONLY, never the capacity generator"
+        ),
+        description=(
+            "Naive bandwidth-times-spectral-efficiency capacity, reported only "
+            "as a labeled cross-check."
+        ),
+    ),
+    "comms_customers_per_beam_from_capacity_rate_oversub": FormulaSpec(
+        formula="(per_beam_capacity_mbps / target_per_user_rate_mbps) x oversubscription_factor",
+        description=(
+            "Registered customers a beam serves: sustainable concurrency "
+            "inflated by oversubscription."
+        ),
+    ),
+    "comms_customers_per_sat_from_beams_and_per_beam": FormulaSpec(
+        formula="beams_per_sat x customers_per_beam",
+        description="Registered customers per satellite (a planning-band member).",
+    ),
+    "comms_total_served_from_per_sat_and_count": FormulaSpec(
+        formula="customers_per_sat x num_satellites",
+        description=(
+            "Total registered customers served across the constellation (a planning-band member)."
+        ),
+    ),
+    # Price reference (plan section 0.0 Amendment A1: RENAMED from demand; the
+    # priced revenue line, the ARPU-collectable line, the scope split). The
+    # market-size projection formula is DELETED by A1 (it is demand modeling and
+    # changes no verdict), so it is intentionally not registered here.
+    "comms_priced_cost_from_cost_and_multiple": FormulaSpec(
+        formula="cost_annual_per_customer x revenue_multiple  # 1.5x for a 33.3% regular margin",
+        description=(
+            "Priced per-customer revenue: the per-customer cost marked up by "
+            "the regular-margin multiple."
+        ),
+    ),
+    "comms_arpu_collectable_revenue_from_arpu_and_share": FormulaSpec(
+        formula="arpu_usd_per_month x 12 x operator_revenue_share",
+        description=(
+            "Annual per-customer revenue the operator can collect: ARPU times "
+            "the operator revenue share."
+        ),
+    ),
+    "comms_scope_weighted_customers_from_total_and_weight": FormulaSpec(
+        formula="total_served x scope_weight",
+        description=(
+            "Customers in one scope region (US / Europe / Asia-ex-China) by the scope-weight split."
+        ),
+    ),
 }
 
 
