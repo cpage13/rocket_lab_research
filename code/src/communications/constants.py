@@ -329,6 +329,29 @@ zero: spectrum nets out of the cost comparison by construction (plan Section 0.7
 Section 0.9). Not a hidden omission, a visible wash."""
 
 # ============================================================
+# Fixed model constants and unit conversions (NOT tunable dials)
+# ============================================================
+
+USD_PER_MUSD: Final[float] = 1_000_000.0
+"""DERIVED (fixed unit conversion). USD per $M; the solar line is configured in
+USD per kW but the four-area sum is in $M, so the solar line is divided by this
+to convert USD to $M. Held equal to the data-center USD_PER_MUSD (drift-tested
+in test_constants_alignment.py)."""
+
+REVENUE_MULTIPLE: Final[float] = 1.5
+"""SCENARIO (fixed model constant). The 1.5x revenue multiple for a 33.3% regular
+margin (revenue minus the item's full build-plus-launch-plus-operate cost), held
+equal on both the space and the ground side so the comparison is a pure cost-
+structure ratio (DESIGN.md Section 7; the comms analog of the DC
+RLDC-REVENUE-MULTIPLE-1_5X). Carried as a module constant here, not a config dial;
+the founder may move it to config if a sensitivity sweep is wanted."""
+
+MONTHS_PER_YEAR: Final[int] = 12
+"""DERIVED (fixed calendar constant). Months per year, used to annualize the
+monthly ARPU into the per-customer collectable revenue (arpu_usd_per_month x
+MONTHS_PER_YEAR x operator_revenue_share)."""
+
+# ============================================================
 # Validator tolerances
 # ============================================================
 
@@ -377,6 +400,7 @@ __all__ = [
     "MINOR_COMPONENT_PCT_DEFAULT",
     "MIN_FY",
     "MIN_HORIZON_YEARS",
+    "MONTHS_PER_YEAR",
     "NEUTRON_FAIRING_VOLUME_M3_DEFAULT",
     "NEUTRON_MASS_ENVELOPE_T_DEFAULT",
     "OPERATOR_REVENUE_SHARE_DEFAULT",
@@ -384,6 +408,7 @@ __all__ = [
     "PER_BEAM_CAPACITY_ANCHOR_MBPS",
     "PER_BEAM_CAPACITY_ANCHOR_MHZ",
     "RETAIL_REFERENCE_USD_PER_MONTH_DEFAULT",
+    "REVENUE_MULTIPLE",
     "SATELLITE_LIFETIME_YEARS_DEFAULT",
     "SCOPE_WEIGHTS_DEFAULT",
     "SCOPE_WEIGHT_SUM_TOLERANCE",
@@ -392,5 +417,6 @@ __all__ = [
     "TARGET_PER_USER_RATE_BAND_DEFAULT",
     "UPGRADED_NEUTRON_FAIRING_VOLUME_M3_DEFAULT",
     "UPGRADED_NEUTRON_MASS_ENVELOPE_T_DEFAULT",
+    "USD_PER_MUSD",
     "V4_CAPABILITY_MULTIPLIER_DEFAULT",
 ]
