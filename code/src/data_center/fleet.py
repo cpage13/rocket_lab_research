@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict
 
+from common.cohort import cohort_is_alive_at
 from data_center.config import RBand, YearRValue
 from data_center.provenance import FieldPath, ProvenanceCell, cell
 
@@ -62,7 +63,7 @@ class Cohort(BaseModel):
         Returns:
             ``True`` if ``launch_year <= year < launch_year + service_life``.
         """
-        return self.launch_year <= year < self.launch_year + service_life
+        return cohort_is_alive_at(self.launch_year, year, service_life)
 
 
 def _r_at_year(anchors: list[YearRValue], year: int) -> float:
