@@ -488,6 +488,59 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
             "Customers in one scope region (US / Europe / Asia-ex-China) by the scope-weight split."
         ),
     ),
+    # Phase 3 (engine) rollup and steady-state formula names, appended additively
+    # after the Phase-2 entries. No existing entry is edited or reordered.
+    "comms_satellites_deployed_this_year_from_launches_and_per_launch": FormulaSpec(
+        formula="launches_this_year x satellites_per_launch",
+        description=(
+            "Satellites deployed in this calendar year: the year's launches times "
+            "satellites-per-launch."
+        ),
+    ),
+    "comms_living_fleet_satellites_from_cohort_cliff": FormulaSpec(
+        formula=(
+            "sum(cohort.satellites_deployed for cohort alive at year under the service-life cliff)"
+        ),
+        description=(
+            "Living-fleet satellite count: the sum over cohorts within the "
+            "service-life cliff at this year."
+        ),
+    ),
+    "comms_cost_annual_fleet_from_living_cohorts": FormulaSpec(
+        formula=(
+            "sum(cohort.satellites_deployed x cohort.cost_annual_per_satellite for living cohorts)"
+        ),
+        description=(
+            "Living-fleet annual cost: the cohort-vintaged sum of per-satellite "
+            "annual cost over the living set, $M/yr."
+        ),
+    ),
+    "comms_cost_annual_per_customer_from_fleet_cost_and_served": FormulaSpec(
+        formula=(
+            "cost_annual_fleet_musd x USD_PER_MUSD / total_served  "
+            "# per-customer annual cost, USD/yr"
+        ),
+        description=(
+            "Annual cost to serve one customer: the living-fleet annual cost spread "
+            "over the served customer band, USD/yr."
+        ),
+    ),
+    "comms_steady_state_satellites_from_deploy_rate_and_life": FormulaSpec(
+        formula=(
+            "living_fleet_satellites at the steady-state year "
+            "(deploy-rate x service-life at the mature cadence)"
+        ),
+        description=(
+            "Steady-state living-fleet satellite count: the standing constellation "
+            "at the configured steady-state year."
+        ),
+    ),
+    "comms_satellites_deployed_passthrough": FormulaSpec(
+        formula="satellites_deployed_this_year  # carried as a business-block cell",
+        description=(
+            "Satellites deployed this year, surfaced as a business-block cell for the cold reader."
+        ),
+    ),
 }
 
 
