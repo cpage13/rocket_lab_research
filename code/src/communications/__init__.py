@@ -1,4 +1,7 @@
-"""Reserved package for the future space-communications model.
+"""Space-communications model package (mirrors the data_center package).
 
-Empty for now. The communications model will populate this package when work begins.
+Phase 1 populated this with the configuration schema (``config``: ``CommsConfig`` and
+its dial blocks) and the named ``constants``. Later phases add the engine-room modules,
+the engine and promoted space model, the ground reference, the comparison, and the
+five-key output.
 """
