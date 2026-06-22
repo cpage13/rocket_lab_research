@@ -70,7 +70,6 @@ from communications.constants import (
     DEFAULT_ARTIFACT_ROLE,
     MODEL_PACKAGE_NAME,
     PROMOTED_DEFAULT_ARTIFACT_ROLE,
-    REVENUE_MULTIPLE,
     SCHEMA_VERSION,
     USD_PER_MUSD,
 )
@@ -101,7 +100,10 @@ from communications.output import (
     SatelliteClassPhysical,
     SatelliteCostBreakdownBlock,
 )
-from communications.price_reference import compute_arpu_collectable_revenue
+from communications.price_reference import (
+    compute_arpu_collectable_revenue,
+    compute_priced_cost_band,
+)
 from communications.spectrum import (
     compute_customers_per_beam_band,
     compute_customers_per_sat_band,
@@ -783,20 +785,19 @@ def compute_comms_fleet_trajectory(
             description_stub="Annual direct-to-cell cost to serve one customer, USD/yr",
         )
 
+        # The priced-cost band routes the 1.5x markup through the canonical
+        # price_reference.compute_priced_cost_band helper (single production
+        # source of the revenue multiple), preserving the full cost-band uses set.
         priced_uses: list[FieldPath] = [
             f"{year_path}.cost_annual_per_customer_usd.low",
             f"{year_path}.cost_annual_per_customer_usd.mid",
             f"{year_path}.cost_annual_per_customer_usd.high",
         ]
-        priced_cost = _band_block(
-            low_value=_cell_float(cost_per_customer.low) * REVENUE_MULTIPLE,
-            mid_value=_cell_float(cost_per_customer.mid) * REVENUE_MULTIPLE,
-            high_value=_cell_float(cost_per_customer.high) * REVENUE_MULTIPLE,
-            unit="USD",
-            formula_name="comms_priced_cost_from_cost_and_multiple",
-            uses=priced_uses,
-            sources=["research/comms_model_design/DESIGN.md#section-7"],
-            description_stub="Priced per-customer revenue (cost x 1.5), USD/yr",
+        priced_cost = compute_priced_cost_band(
+            cost_low=_cell_float(cost_per_customer.low),
+            cost_mid=_cell_float(cost_per_customer.mid),
+            cost_high=_cell_float(cost_per_customer.high),
+            band_uses=priced_uses,
         )
 
         arpu_collectable = compute_arpu_collectable_revenue(
@@ -809,7 +810,12 @@ def compute_comms_fleet_trajectory(
                 value=year.launches_this_year,
                 unit="count",
                 formula_name="comms_satellites_deployed_passthrough",
-                uses=["inputs.config.launch.launches_at_year_10"],
+                uses=[
+                    "inputs.config.launch.cadence_ceiling",
+                    "inputs.config.launch.launches_at_year_5",
+                    "inputs.config.launch.launches_at_year_10",
+                    "inputs.config.launch.first_launch_year",
+                ],
                 sources=["research/SOURCE_INDEX.md#NTR-010"],
                 description="Whole-number launches in this calendar year.",
             ),

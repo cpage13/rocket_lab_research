@@ -26,7 +26,14 @@ import logging
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from common.meta import SourceStatusSummary, ValidationReport
+from common.meta import (
+    DataDictEntry,
+    FormulaDefinition,
+    QueryExample,
+    SourceStatusSummary,
+    ValidationReport,
+    ValidationResult,
+)
 from common.provenance import ProvenanceCell
 from communications.constants import (
     MAX_FY,
@@ -306,27 +313,63 @@ class BusinessBlock(BaseModel):
 
 
 class MetaBlock(BaseModel):
-    """The ``meta`` block: a MINIMAL-but-valid cold-reader scaffold in this phase.
+    """The ``meta`` block: the cold-reader scaffold.
 
-    Phase 3 carries a validation report (empty or trivially-populated), a
-    source-status summary, and schema notes. Phase 5's json_output / validation
-    ENRICH this block with the introspection-driven data dictionary, the
-    query_examples cold-reader contract, the formula-definition catalog, and the
-    executable V-rule list. The leanness is intentional and stated here so a
-    later reader does not mistake the absent scaffolding for a bug.
+    The engine (Phase 3) builds this LEAN: it populates ``validation`` (an empty
+    rules list), ``source_status_summary``, and ``schema_version_notes``, and
+    leaves the four enrichment fields at their empty defaults. Phase 5's
+    :func:`communications.json_output.enrich_comms_output` fills the four
+    enrichment fields (the data dictionary, the formula catalog, the public
+    validation results, and the query-example cold-reader contract) via
+    ``model_copy``. Both the lean (engine) and the enriched (json_output)
+    constructions are valid against this one schema, because the four enrichment
+    fields default to empty.
+
+    The comms meta block deliberately has NO ``generations_dictionary`` (a
+    GPU-venture field with no comms analog) and NO ``conclusion_label`` /
+    ``verdict`` field (the baked-in-conclusion disaster gate; the comparison
+    numbers live in the ground artifact, the editorial verdict is Phase 6).
     """
 
     model_config = ConfigDict(frozen=True)
 
     validation: ValidationReport = Field(
         ...,
-        description="The engine-computed validation report (lean in Phase 3, enriched in Phase 5).",
+        description=(
+            "The engine-computed validation report (lean empty rules list from the engine; the "
+            "executable rules are filled by json_output enrichment in Phase 5)."
+        ),
     )
     source_status_summary: SourceStatusSummary = Field(
         ..., description="Count of input assumptions by source-status value."
     )
     schema_version_notes: str = Field(
         ..., description="Human-readable schema notes for this artifact version."
+    )
+    data_dictionary: list[DataDictEntry] = Field(
+        default_factory=list,
+        description=(
+            "One entry per emitted leaf field, built by the json_output introspection walk "
+            "(empty until Phase-5 enrichment)."
+        ),
+    )
+    formula_definitions: list[FormulaDefinition] = Field(
+        default_factory=list,
+        description=(
+            "Formula catalog for the formula_name references in output cells "
+            "(empty until Phase-5 enrichment)."
+        ),
+    )
+    validation_results: list[ValidationResult] = Field(
+        default_factory=list,
+        description=("Public pass/warn/fail validation entries (empty until Phase-5 enrichment)."),
+    )
+    query_examples: list[QueryExample] = Field(
+        default_factory=list,
+        description=(
+            "Worked jq queries a cold agent runs to answer common questions, the cold-reader "
+            "contract (empty until Phase-5 enrichment)."
+        ),
     )
 
 

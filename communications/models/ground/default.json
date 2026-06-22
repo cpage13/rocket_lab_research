@@ -5,7 +5,7 @@
     "base_year": 2026,
     "horizon_years": 10,
     "steady_state_year": 2036,
-    "generated_at": "2026-06-22T16:25:07.069242+00:00",
+    "generated_at": "2026-06-22T17:18:02.289998+00:00",
     "model_package": "rklb-comms",
     "model_version": null,
     "artifact_role": "promoted_ground_default",

@@ -36,6 +36,7 @@ import logging
 from common.provenance import FieldPath, ProvenanceCell, cell
 from communications.config import PriceReferenceDials, ScopeWeights
 from communications.constants import MONTHS_PER_YEAR, REVENUE_MULTIPLE
+from communications.output import CustomerBandBlock
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,52 @@ def compute_priced_cost_per_customer(
             "Priced per-customer revenue (USD/yr): the per-customer cost marked "
             "up by the 1.5x regular-margin multiple."
         ),
+    )
+
+
+def compute_priced_cost_band(
+    *,
+    cost_low: float,
+    cost_mid: float,
+    cost_high: float,
+    band_uses: list[FieldPath],
+) -> CustomerBandBlock:
+    """Priced per-customer revenue band: each cost-band member marked up by the multiple.
+
+    Every member's priced VALUE is produced by
+    :func:`compute_priced_cost_per_customer` so the 1.5x markup has a single
+    production source (the canonical helper), rather than an inline multiply.
+    The three returned cells are then re-emitted carrying the shared ``band_uses``
+    (the full cost-band path set) so the band's provenance trace, ``formula_name``
+    (``comms_priced_cost_from_cost_and_multiple``), and emitted values are
+    identical to the prior engine output.
+
+    Args:
+        cost_low: The band-low per-customer cost, USD/yr.
+        cost_mid: The band-mid per-customer cost, USD/yr.
+        cost_high: The band-high per-customer cost, USD/yr.
+        band_uses: The shared upstream cost-band paths every member derives from.
+
+    Returns:
+        A :class:`CustomerBandBlock` of three priced per-customer-revenue cells.
+    """
+
+    def _member(cost_value: float, position: str) -> ProvenanceCell:
+        """Priced cell for one band member: value via the canonical helper, shared uses."""
+        priced_value = compute_priced_cost_per_customer(cost_value, cost_path=band_uses[0]).value
+        return cell(
+            value=priced_value,
+            unit="USD",
+            formula_name="comms_priced_cost_from_cost_and_multiple",
+            uses=band_uses,
+            sources=[f"{_DESIGN}#section-7"],
+            description=f"Priced per-customer revenue (cost x 1.5), USD/yr, band-{position}.",
+        )
+
+    return CustomerBandBlock(
+        low=_member(cost_low, "low"),
+        mid=_member(cost_mid, "mid"),
+        high=_member(cost_high, "high"),
     )
 
 
@@ -169,6 +216,7 @@ def compute_scope_weighted_customers(
 
 __all__ = [
     "compute_arpu_collectable_revenue",
+    "compute_priced_cost_band",
     "compute_priced_cost_per_customer",
     "compute_scope_weighted_customers",
 ]

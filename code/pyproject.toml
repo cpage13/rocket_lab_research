@@ -11,6 +11,7 @@ dependencies = [
 
 [project.scripts]
 rklb-value = "data_center.cli:main"
+rklb-comms = "communications.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -65,4 +66,8 @@ ignore = ["ANN401"]  # Allow Any in narrow places with comment
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-ra --strict-markers"
+# importlib import mode lets the data-center and communications test packages
+# carry same-basename modules (test_validation.py, test_cli_promote.py,
+# test_text_report.py exist in both) without an __init__.py in either test
+# directory. The default "prepend" mode would collide on the shared basenames.
+addopts = "-ra --strict-markers --import-mode=importlib"

@@ -5,7 +5,7 @@
     "base_year": 2026,
     "horizon_years": 10,
     "steady_state_year": 2036,
-    "generated_at": "2026-06-22T15:40:35.727068+00:00",
+    "generated_at": "2026-06-22T17:12:21.456169+00:00",
     "model_package": "rklb-comms",
     "model_version": null,
     "artifact_role": "promoted_default",
@@ -1336,7 +1336,7 @@
         "label": "tower cost musd per site",
         "value": 0.25,
         "unit": "MUSD",
-        "description": "The amortized cellular tower/site build cost, $M per site. INTERIM.",
+        "description": "The amortized fresh cellular tower/site build cost, $M per site. INTERIM.",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -1359,9 +1359,9 @@
       "sites_per_million_subs": {
         "path": "inputs.config.ground.sites_per_million_subs",
         "label": "sites per million subs",
-        "value": 300.0,
+        "value": 18000.0,
         "unit": "count",
-        "description": "The number of cell sites needed per million subscribers in the served density (sets how many sites the ground alternative must build to serve the same customers). INTERIM.",
+        "description": "The number of cell sites needed per million subscribers in the SPARSE fresh-build (unserved/remote-fringe) density, where many sites serve few subscribers. Sets the SPARSE fresh-build denominator (COMM-100). INTERIM.",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -1434,9 +1434,9 @@
       "ground_amortization_years": {
         "path": "inputs.config.ground.ground_amortization_years",
         "label": "ground amortization years",
-        "value": 10,
+        "value": 25,
         "unit": "years",
-        "description": "The years over which the ground site capex is amortized. INTERIM.",
+        "description": "The years over which the fresh-build site capex amortizes; the ~25-year fiber asset life (COMM-102). INTERIM.",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -1479,6 +1479,56 @@
           }
         ],
         "rationale": "Spectrum nets out of the cost comparison; an explicit zero wash.",
+        "notes": null
+      },
+      "incumbent_marginal_fraction_of_arpu": {
+        "path": "inputs.config.ground.incumbent_marginal_fraction_of_arpu",
+        "label": "Incumbent marginal defend-floor fraction of ARPU",
+        "value": 0.15,
+        "unit": "fraction",
+        "description": "The DENSE-regime incumbent marginal-cost defend floor as a fraction of ARPU: the incumbent's cash cost to serve one more already-connected subscriber (the price-to-beat in served territory, NOT the list price). The midpoint of the COMM-096 10-to-20%-of-ARPU fixed-broadband defend floor. The dense per-subscriber ground cost is this fraction times annual ARPU. INTERIM.",
+        "assumption_role": "default",
+        "source_status": "sourced_estimate",
+        "source_refs": [
+          {
+            "ref_type": "source_index",
+            "ref": "research/SOURCE_INDEX.md#COMM-096",
+            "claim_id": "COMM-096",
+            "note": "Comms model dial backed by research/comms_model_design/DESIGN.md."
+          },
+          {
+            "ref_type": "research_doc",
+            "ref": "code/scenarios/comms_default.yaml",
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
+          }
+        ],
+        "rationale": "The dense-regime incumbent marginal defend floor (COMM-096 midpoint).",
+        "notes": null
+      },
+      "starlink_disclosed_all_in_cost_usd_per_sub_year": {
+        "path": "inputs.config.ground.starlink_disclosed_all_in_cost_usd_per_sub_year",
+        "label": "Disclosed all-in Starlink floor",
+        "value": 486.0,
+        "unit": "USD/yr",
+        "description": "The disclosed all-in Starlink cost to serve one subscriber for a year, USD/yr (a third-party / disclosed-financials derivation from the SpaceX S-1, COMM-090 / COMM-103, NOT a Rocket Lab figure). The disclosed all-in FLOOR shown alongside the bottom-up chain figure in the dual-space-cost honesty rule; the model never claims the chain beats it. Does NOT enter the cost-to-cost ratio. INTERIM.",
+        "assumption_role": "default",
+        "source_status": "sourced_estimate",
+        "source_refs": [
+          {
+            "ref_type": "source_index",
+            "ref": "research/SOURCE_INDEX.md#COMM-090",
+            "claim_id": "COMM-090",
+            "note": "Comms model dial backed by research/comms_model_design/DESIGN.md."
+          },
+          {
+            "ref_type": "research_doc",
+            "ref": "code/scenarios/comms_default.yaml",
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
+          }
+        ],
+        "rationale": "The disclosed all-in Starlink floor (COMM-090/COMM-103); not RKLB.",
         "notes": null
       }
     },
@@ -2821,7 +2871,7 @@
         "label": "tower cost musd per site",
         "value": 0.25,
         "unit": "MUSD",
-        "description": "The amortized cellular tower/site build cost, $M per site. INTERIM.",
+        "description": "The amortized fresh cellular tower/site build cost, $M per site. INTERIM.",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -2844,9 +2894,9 @@
       "inputs.config.ground.sites_per_million_subs": {
         "path": "inputs.config.ground.sites_per_million_subs",
         "label": "sites per million subs",
-        "value": 300.0,
+        "value": 18000.0,
         "unit": "count",
-        "description": "The number of cell sites needed per million subscribers in the served density (sets how many sites the ground alternative must build to serve the same customers). INTERIM.",
+        "description": "The number of cell sites needed per million subscribers in the SPARSE fresh-build (unserved/remote-fringe) density, where many sites serve few subscribers. Sets the SPARSE fresh-build denominator (COMM-100). INTERIM.",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -2919,9 +2969,9 @@
       "inputs.config.ground.ground_amortization_years": {
         "path": "inputs.config.ground.ground_amortization_years",
         "label": "ground amortization years",
-        "value": 10,
+        "value": 25,
         "unit": "years",
-        "description": "The years over which the ground site capex is amortized. INTERIM.",
+        "description": "The years over which the fresh-build site capex amortizes; the ~25-year fiber asset life (COMM-102). INTERIM.",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -2964,6 +3014,56 @@
           }
         ],
         "rationale": "Spectrum nets out of the cost comparison; an explicit zero wash.",
+        "notes": null
+      },
+      "inputs.config.ground.incumbent_marginal_fraction_of_arpu": {
+        "path": "inputs.config.ground.incumbent_marginal_fraction_of_arpu",
+        "label": "Incumbent marginal defend-floor fraction of ARPU",
+        "value": 0.15,
+        "unit": "fraction",
+        "description": "The DENSE-regime incumbent marginal-cost defend floor as a fraction of ARPU: the incumbent's cash cost to serve one more already-connected subscriber (the price-to-beat in served territory, NOT the list price). The midpoint of the COMM-096 10-to-20%-of-ARPU fixed-broadband defend floor. The dense per-subscriber ground cost is this fraction times annual ARPU. INTERIM.",
+        "assumption_role": "default",
+        "source_status": "sourced_estimate",
+        "source_refs": [
+          {
+            "ref_type": "source_index",
+            "ref": "research/SOURCE_INDEX.md#COMM-096",
+            "claim_id": "COMM-096",
+            "note": "Comms model dial backed by research/comms_model_design/DESIGN.md."
+          },
+          {
+            "ref_type": "research_doc",
+            "ref": "code/scenarios/comms_default.yaml",
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
+          }
+        ],
+        "rationale": "The dense-regime incumbent marginal defend floor (COMM-096 midpoint).",
+        "notes": null
+      },
+      "inputs.config.ground.starlink_disclosed_all_in_cost_usd_per_sub_year": {
+        "path": "inputs.config.ground.starlink_disclosed_all_in_cost_usd_per_sub_year",
+        "label": "Disclosed all-in Starlink floor",
+        "value": 486.0,
+        "unit": "USD/yr",
+        "description": "The disclosed all-in Starlink cost to serve one subscriber for a year, USD/yr (a third-party / disclosed-financials derivation from the SpaceX S-1, COMM-090 / COMM-103, NOT a Rocket Lab figure). The disclosed all-in FLOOR shown alongside the bottom-up chain figure in the dual-space-cost honesty rule; the model never claims the chain beats it. Does NOT enter the cost-to-cost ratio. INTERIM.",
+        "assumption_role": "default",
+        "source_status": "sourced_estimate",
+        "source_refs": [
+          {
+            "ref_type": "source_index",
+            "ref": "research/SOURCE_INDEX.md#COMM-090",
+            "claim_id": "COMM-090",
+            "note": "Comms model dial backed by research/comms_model_design/DESIGN.md."
+          },
+          {
+            "ref_type": "research_doc",
+            "ref": "code/scenarios/comms_default.yaml",
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
+          }
+        ],
+        "rationale": "The disclosed all-in Starlink floor (COMM-090/COMM-103); not RKLB.",
         "notes": null
       },
       "inputs.config.scenario_levers.scenario_name": {
@@ -9387,7 +9487,10 @@
           "formula": "satellites_deployed_this_year  # carried as a business-block cell",
           "formula_name": "comms_satellites_deployed_passthrough",
           "uses": [
-            "inputs.config.launch.launches_at_year_10"
+            "inputs.config.launch.cadence_ceiling",
+            "inputs.config.launch.launches_at_year_5",
+            "inputs.config.launch.launches_at_year_10",
+            "inputs.config.launch.first_launch_year"
           ],
           "sources": [
             "research/SOURCE_INDEX.md#NTR-010"
@@ -9680,7 +9783,10 @@
           "formula": "satellites_deployed_this_year  # carried as a business-block cell",
           "formula_name": "comms_satellites_deployed_passthrough",
           "uses": [
-            "inputs.config.launch.launches_at_year_10"
+            "inputs.config.launch.cadence_ceiling",
+            "inputs.config.launch.launches_at_year_5",
+            "inputs.config.launch.launches_at_year_10",
+            "inputs.config.launch.first_launch_year"
           ],
           "sources": [
             "research/SOURCE_INDEX.md#NTR-010"
@@ -9973,7 +10079,10 @@
           "formula": "satellites_deployed_this_year  # carried as a business-block cell",
           "formula_name": "comms_satellites_deployed_passthrough",
           "uses": [
-            "inputs.config.launch.launches_at_year_10"
+            "inputs.config.launch.cadence_ceiling",
+            "inputs.config.launch.launches_at_year_5",
+            "inputs.config.launch.launches_at_year_10",
+            "inputs.config.launch.first_launch_year"
           ],
           "sources": [
             "research/SOURCE_INDEX.md#NTR-010"
@@ -10266,7 +10375,10 @@
           "formula": "satellites_deployed_this_year  # carried as a business-block cell",
           "formula_name": "comms_satellites_deployed_passthrough",
           "uses": [
-            "inputs.config.launch.launches_at_year_10"
+            "inputs.config.launch.cadence_ceiling",
+            "inputs.config.launch.launches_at_year_5",
+            "inputs.config.launch.launches_at_year_10",
+            "inputs.config.launch.first_launch_year"
           ],
           "sources": [
             "research/SOURCE_INDEX.md#NTR-010"
@@ -10559,7 +10671,10 @@
           "formula": "satellites_deployed_this_year  # carried as a business-block cell",
           "formula_name": "comms_satellites_deployed_passthrough",
           "uses": [
-            "inputs.config.launch.launches_at_year_10"
+            "inputs.config.launch.cadence_ceiling",
+            "inputs.config.launch.launches_at_year_5",
+            "inputs.config.launch.launches_at_year_10",
+            "inputs.config.launch.first_launch_year"
           ],
           "sources": [
             "research/SOURCE_INDEX.md#NTR-010"
@@ -10852,7 +10967,10 @@
           "formula": "satellites_deployed_this_year  # carried as a business-block cell",
           "formula_name": "comms_satellites_deployed_passthrough",
           "uses": [
-            "inputs.config.launch.launches_at_year_10"
+            "inputs.config.launch.cadence_ceiling",
+            "inputs.config.launch.launches_at_year_5",
+            "inputs.config.launch.launches_at_year_10",
+            "inputs.config.launch.first_launch_year"
           ],
           "sources": [
             "research/SOURCE_INDEX.md#NTR-010"
@@ -11145,7 +11263,10 @@
           "formula": "satellites_deployed_this_year  # carried as a business-block cell",
           "formula_name": "comms_satellites_deployed_passthrough",
           "uses": [
-            "inputs.config.launch.launches_at_year_10"
+            "inputs.config.launch.cadence_ceiling",
+            "inputs.config.launch.launches_at_year_5",
+            "inputs.config.launch.launches_at_year_10",
+            "inputs.config.launch.first_launch_year"
           ],
           "sources": [
             "research/SOURCE_INDEX.md#NTR-010"
@@ -11438,7 +11559,10 @@
           "formula": "satellites_deployed_this_year  # carried as a business-block cell",
           "formula_name": "comms_satellites_deployed_passthrough",
           "uses": [
-            "inputs.config.launch.launches_at_year_10"
+            "inputs.config.launch.cadence_ceiling",
+            "inputs.config.launch.launches_at_year_5",
+            "inputs.config.launch.launches_at_year_10",
+            "inputs.config.launch.first_launch_year"
           ],
           "sources": [
             "research/SOURCE_INDEX.md#NTR-010"
@@ -11731,7 +11855,10 @@
           "formula": "satellites_deployed_this_year  # carried as a business-block cell",
           "formula_name": "comms_satellites_deployed_passthrough",
           "uses": [
-            "inputs.config.launch.launches_at_year_10"
+            "inputs.config.launch.cadence_ceiling",
+            "inputs.config.launch.launches_at_year_5",
+            "inputs.config.launch.launches_at_year_10",
+            "inputs.config.launch.first_launch_year"
           ],
           "sources": [
             "research/SOURCE_INDEX.md#NTR-010"
@@ -12024,7 +12151,10 @@
           "formula": "satellites_deployed_this_year  # carried as a business-block cell",
           "formula_name": "comms_satellites_deployed_passthrough",
           "uses": [
-            "inputs.config.launch.launches_at_year_10"
+            "inputs.config.launch.cadence_ceiling",
+            "inputs.config.launch.launches_at_year_5",
+            "inputs.config.launch.launches_at_year_10",
+            "inputs.config.launch.first_launch_year"
           ],
           "sources": [
             "research/SOURCE_INDEX.md#NTR-010"
@@ -12317,7 +12447,10 @@
           "formula": "satellites_deployed_this_year  # carried as a business-block cell",
           "formula_name": "comms_satellites_deployed_passthrough",
           "uses": [
-            "inputs.config.launch.launches_at_year_10"
+            "inputs.config.launch.cadence_ceiling",
+            "inputs.config.launch.launches_at_year_5",
+            "inputs.config.launch.launches_at_year_10",
+            "inputs.config.launch.first_launch_year"
           ],
           "sources": [
             "research/SOURCE_INDEX.md#NTR-010"
@@ -12606,11 +12739,124 @@
   },
   "meta": {
     "validation": {
-      "rules": []
+      "rules": [
+        {
+          "name": "no_baked_in_conclusion_fields",
+          "what_it_tests": "no emitted output field is a baked-in verdict / conclusion label / recommendation (the editorial verdict is the hand-written Phase-6 conclusion)",
+          "expected": "no conclusion / verdict / recommendation field names",
+          "computed": "none found",
+          "pass_check": true,
+          "severity": "critical"
+        },
+        {
+          "name": "no_market_capture_fields",
+          "what_it_tests": "no emitted output field is a market-capture dial or output (demand is assumed, not modeled; the comparison is cost-vs-ground)",
+          "expected": "no market-capture field names",
+          "computed": "none found",
+          "pass_check": true,
+          "severity": "critical"
+        },
+        {
+          "name": "no_forbidden_vehicle_fields",
+          "what_it_tests": "no emitted output field names the forbidden heavier-than-Neutron vehicle (Rocket Lab has only Neutron; the heavier vehicle is Phase-6 conclusion prose only)",
+          "expected": "no forbidden-vehicle field names",
+          "computed": "none found",
+          "pass_check": true,
+          "severity": "critical"
+        },
+        {
+          "name": "customer_outputs_are_bands",
+          "what_it_tests": "the steady-state customer / cost / priced-cost outputs are low/mid/high bands with three populated numeric member cells (no scalar customer output)",
+          "expected": "all three band-blocks have populated low/mid/high cells",
+          "computed": "all band members populated",
+          "pass_check": true,
+          "severity": "critical"
+        },
+        {
+          "name": "spectrum_is_requirement_not_cost",
+          "what_it_tests": "the spectrum-to-acquire cell is a MHz requirement and no per-satellite cost line is a spectrum dollar figure (spectrum nets out of the cost comparison)",
+          "expected": "spectrum unit == 'MHz' and no MHz cost line",
+          "computed": "spectrum unit='MHz'; no MHz cost line",
+          "pass_check": true,
+          "severity": "critical"
+        },
+        {
+          "name": "empirical_anchor_drives_capacity",
+          "what_it_tests": "per-beam capacity is driven by the empirical AST anchor and the naive bandwidth-times-efficiency figure is a labeled cross-check (never the capacity driver)",
+          "expected": "capacity formula contains 'empirical_anchor' and naive formula contains 'naive_capacity_cross_check'",
+          "computed": "capacity formula='comms_per_beam_capacity_from_empirical_anchor'; naive formula='comms_naive_capacity_cross_check'",
+          "pass_check": true,
+          "severity": "critical"
+        },
+        {
+          "name": "provenance_formula_keys",
+          "what_it_tests": "every ProvenanceCell formula_name exists in the FORMULAS registry (no silent formula-name typos)",
+          "expected": "all formula_name values present in FORMULAS",
+          "computed": "all 572 cells reference one of 25 formula names, every one present in FORMULAS",
+          "pass_check": true,
+          "severity": "critical"
+        },
+        {
+          "name": "satellites_per_launch_fork",
+          "what_it_tests": "the per-class packing fork is explicit: broadband is mass-bound, direct-to-cell is antenna-stow-bound, and broadband packs more satellites per launch",
+          "expected": "broadband=='mass', direct_to_cell=='antenna_stow', broadband per-launch > d2c",
+          "computed": "broadband='mass' (8/launch), direct_to_cell='antenna_stow' (1/launch)",
+          "pass_check": true,
+          "severity": "major"
+        },
+        {
+          "name": "steady_state_customer_band_order",
+          "what_it_tests": "the steady-state served band is ascending and the per-satellite band lands near the default 50k/150k/300k target (a default-scenario calibration check, WARNs off-default)",
+          "expected": "ascending and per-satellite ~ 50000/150000/300000 (rel_tol 0.05)",
+          "computed": "served 1.34e+07/4.02e+07/8.04e+07; per-sat 50000/150000/300000",
+          "pass_check": true,
+          "severity": "minor"
+        },
+        {
+          "name": "cost_band_inverse_of_served",
+          "what_it_tests": "the per-customer cost band is ascending and inverse-paired with the served band (cost-low pairs with served-high; cost x served reconciles to the fleet annual cost)",
+          "expected": "ascending cost band and cost.low*served.high == cost.high*served.low",
+          "computed": "cost 11.5705/23.1411/69.4233; cost.low*served.high=9.30272e+08, cost.high*served.low=9.30272e+08",
+          "pass_check": true,
+          "severity": "minor"
+        },
+        {
+          "name": "launch_cadence_monotonic",
+          "what_it_tests": "per-year launches are whole-number and non-decreasing up to the steady-state year (the cadence ramp is a logistic, never sign-flipped or fractional)",
+          "expected": "integer, non-decreasing launches to the steady-state year",
+          "computed": "launches to FY2036: [0, 2, 3, 5, 9, 14, 22, 35, 51, 70, 90]",
+          "pass_check": true,
+          "severity": "minor"
+        },
+        {
+          "name": "living_fleet_distinct_from_cohort",
+          "what_it_tests": "the steady-state direct-to-cell living fleet is larger than one year's deployment (the cohort treadmill: multiple living cohorts under the service-life cliff)",
+          "expected": "direct_to_cell_living_fleet > direct_to_cell_satellites_deployed_this_year",
+          "computed": "living 268 vs deployed-this-year 90",
+          "pass_check": true,
+          "severity": "minor"
+        },
+        {
+          "name": "release_status_no_placeholder_or_stale",
+          "what_it_tests": "the source-status summary has no placeholder or stale default inputs (a promoted artifact must not present an unsettled input as settled)",
+          "expected": "placeholder == 0 and stale == 0",
+          "computed": "placeholder=2, stale=0",
+          "pass_check": false,
+          "severity": "major"
+        },
+        {
+          "name": "data_dictionary_populated",
+          "what_it_tests": "meta.data_dictionary has >= 30 entries (the artifact is self-describing)",
+          "expected": ">= 30 entries",
+          "computed": "170 entries",
+          "pass_check": true,
+          "severity": "major"
+        }
+      ]
     },
     "source_status_summary": {
       "certified": 0,
-      "sourced_estimate": 0,
+      "sourced_estimate": 2,
       "derived_estimate": 1,
       "projection": 0,
       "extrapolation": 0,
@@ -12618,6 +12864,1929 @@
       "placeholder": 2,
       "stale": 0
     },
-    "schema_version_notes": "comms-v1 space output: per-year per-class four-area cost-out, the cohort treadmill, the direct-to-cell customer band, the source-status summary, and a lean (Phase-3) validation report enriched in Phase 5."
+    "schema_version_notes": "comms-v1 space output: per-year per-class four-area cost-out, the cohort treadmill, the direct-to-cell customer band, the source-status summary, and a lean (Phase-3) validation report enriched in Phase 5.",
+    "data_dictionary": [
+      {
+        "path": "business.years[].arpu_collectable_revenue_usd",
+        "description": "Annual per-customer revenue the operator can collect (ARPU x operator share), USD/yr.",
+        "unit": "USD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].broadband_cost_annual_fleet_musd",
+        "description": "Broadband living-fleet annual cost, $M/yr.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].broadband_living_fleet",
+        "description": "Broadband living-fleet satellite count under the service-life cliff.",
+        "unit": "count",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].broadband_satellites_deployed_this_year",
+        "description": "Broadband satellites deployed this year.",
+        "unit": "count",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].cost_annual_per_customer_usd.high",
+        "description": "Band-high member (most subscribers: the thinnest pipe, aggressive packing).",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].cost_annual_per_customer_usd.low",
+        "description": "Band-low member (fewest subscribers: the fattest pipe, conservative packing).",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].cost_annual_per_customer_usd.mid",
+        "description": "Band-mid member.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].direct_to_cell_cost_annual_fleet_musd",
+        "description": "Direct-to-cell living-fleet annual cost, $M/yr.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].direct_to_cell_living_fleet",
+        "description": "Direct-to-cell living-fleet satellite count under the service-life cliff.",
+        "unit": "count",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].direct_to_cell_satellites_deployed_this_year",
+        "description": "Direct-to-cell satellites deployed this year.",
+        "unit": "count",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].launches",
+        "description": "Whole-number launches in this calendar year.",
+        "unit": "count",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].priced_cost_per_customer_usd.high",
+        "description": "Band-high member (most subscribers: the thinnest pipe, aggressive packing).",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].priced_cost_per_customer_usd.low",
+        "description": "Band-low member (fewest subscribers: the fattest pipe, conservative packing).",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].priced_cost_per_customer_usd.mid",
+        "description": "Band-mid member.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].total_served.high",
+        "description": "Band-high member (most subscribers: the thinnest pipe, aggressive packing).",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].total_served.low",
+        "description": "Band-low member (fewest subscribers: the fattest pipe, conservative packing).",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].total_served.mid",
+        "description": "Band-mid member.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "business.years[].year",
+        "description": "Calendar year for this business record.",
+        "unit": "year",
+        "type": "integer",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "inputs.assumption_index[]",
+        "description": "Flat path-indexed lookup for every input cell.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.broadband.antenna_cost_musd",
+        "description": "Antenna build-cost input.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.broadband.comms_electronics_cost_musd",
+        "description": "Comms-electronics cost input.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.broadband.minor_component_pct",
+        "description": "Minor-component fraction input.",
+        "unit": "percent",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.broadband.payload_power_kw",
+        "description": "Payload-power input.",
+        "unit": "kW",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.broadband.radiator_bus_cost_musd",
+        "description": "Radiator/bus cost input.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.broadband.satellite_mass_t",
+        "description": "Satellite mass input.",
+        "unit": "t",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.broadband.solar_cost_usd_per_kw",
+        "description": "Solar cost-per-kW input.",
+        "unit": "kW",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.broadband.stowed_volume_m3",
+        "description": "Stowed-volume input.",
+        "unit": "m3",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.direct_to_cell.antenna_cost_musd",
+        "description": "Antenna build-cost input.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.direct_to_cell.comms_electronics_cost_musd",
+        "description": "Comms-electronics cost input.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.direct_to_cell.minor_component_pct",
+        "description": "Minor-component fraction input.",
+        "unit": "percent",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.direct_to_cell.payload_power_kw",
+        "description": "Payload-power input.",
+        "unit": "kW",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.direct_to_cell.radiator_bus_cost_musd",
+        "description": "Radiator/bus cost input.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.direct_to_cell.satellite_mass_t",
+        "description": "Satellite mass input.",
+        "unit": "t",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.direct_to_cell.solar_cost_usd_per_kw",
+        "description": "Solar cost-per-kW input.",
+        "unit": "kW",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.direct_to_cell.stowed_volume_m3",
+        "description": "Stowed-volume input.",
+        "unit": "m3",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.low_inclination_leo",
+        "description": "Low-inclination-LEO flag input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.satellite_lifetime_years",
+        "description": "Service-life cliff input.",
+        "unit": "year",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.upgraded_neutron",
+        "description": "Upgraded-Neutron flag input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.constellation.v4_capability_multiplier",
+        "description": "V4 capability-step input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.cost_down.cost_down_reference_units",
+        "description": "Cost-down reference-units input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.cost_down.learning_rate_per_doubling",
+        "description": "Learning-rate-per-doubling input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.ground.backhaul_cost_musd_per_site_year",
+        "description": "Backhaul-cost input.",
+        "unit": "year",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.ground.ground_amortization_years",
+        "description": "Ground-amortization-years input.",
+        "unit": "year",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.ground.ground_opex_musd_per_site_year",
+        "description": "Ground-opex input.",
+        "unit": "year",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.ground.incumbent_marginal_fraction_of_arpu",
+        "description": "Dense-regime incumbent marginal defend-floor fraction-of-ARPU input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.ground.sites_per_million_subs",
+        "description": "Sites-per-million-subs input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.ground.spectrum_cost_musd",
+        "description": "Ground spectrum-cost wash input.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.ground.starlink_disclosed_all_in_cost_usd_per_sub_year",
+        "description": "Disclosed all-in Starlink floor reference input.",
+        "unit": "USD",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.ground.tower_cost_musd_per_site",
+        "description": "Tower/site build-cost input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.launch.cadence_ceiling",
+        "description": "Cadence-ceiling input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.launch.first_launch_year",
+        "description": "First-launch-year input.",
+        "unit": "year",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.launch.high_cadence_cost_musd",
+        "description": "High-cadence launch-cost input.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.launch.high_cadence_launches",
+        "description": "High-cadence launch-count input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.launch.launches_at_year_10",
+        "description": "Year-10 launch anchor input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.launch.launches_at_year_5",
+        "description": "Year-5 launch anchor input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.launch.low_cadence_cost_musd",
+        "description": "Low-cadence launch-cost input.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.launch.low_cadence_launches",
+        "description": "Low-cadence launch-count input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.launch.neutron_fairing_volume_m3",
+        "description": "Baseline Neutron fairing volume.",
+        "unit": "m3",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.launch.neutron_mass_envelope_t",
+        "description": "Baseline Neutron mass envelope.",
+        "unit": "t",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.launch.upgraded_neutron_fairing_volume_m3",
+        "description": "Upgraded Neutron fairing volume.",
+        "unit": "m3",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.launch.upgraded_neutron_mass_envelope_t",
+        "description": "Upgraded Neutron mass envelope.",
+        "unit": "t",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.metadata.base_year",
+        "description": "Base-year input.",
+        "unit": "year",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.metadata.horizon_years",
+        "description": "Horizon-length input.",
+        "unit": "year",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.metadata.steady_state_year",
+        "description": "Steady-state-year input.",
+        "unit": "year",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.price_reference.arpu_usd_per_month",
+        "description": "ARPU input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.price_reference.operator_revenue_share",
+        "description": "Operator-revenue-share input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.price_reference.retail_reference_usd_per_month",
+        "description": "Retail-reference input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.price_reference.scope.asia_ex_china",
+        "description": "Asia-ex-China scope-weight input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.price_reference.scope.europe",
+        "description": "Europe scope-weight input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.price_reference.scope.us",
+        "description": "US scope-weight input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.scenario.scenario_name",
+        "description": "Scenario-name input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.scenario_meta.description",
+        "description": "What the scenario represents.",
+        "unit": "",
+        "type": "string",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.scenario_meta.is_default",
+        "description": "Whether this is the canonical default scenario.",
+        "unit": "-",
+        "type": "boolean",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.scenario_meta.name",
+        "description": "Human-readable scenario name.",
+        "unit": "",
+        "type": "string",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.scenario_meta.path",
+        "description": "Repository-relative source scenario path.",
+        "unit": "",
+        "type": "string",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.spectrum.beams_per_sat",
+        "description": "Beams-per-satellite input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.spectrum.leased_bandwidth_mhz",
+        "description": "Leased-bandwidth input.",
+        "unit": "MHz",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.spectrum.oversubscription_factor_high",
+        "description": "Oversubscription band-high input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.spectrum.oversubscription_factor_low",
+        "description": "Oversubscription band-low input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.spectrum.oversubscription_factor_mid",
+        "description": "Oversubscription band-mid input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.spectrum.spectral_efficiency_bps_per_hz",
+        "description": "Spectral-efficiency cross-check input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.spectrum.target_per_user_rate_mbps_high",
+        "description": "Per-user-rate band-high input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.spectrum.target_per_user_rate_mbps_low",
+        "description": "Per-user-rate band-low input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "inputs.spectrum.target_per_user_rate_mbps_mid",
+        "description": "Per-user-rate band-mid input.",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "INPUT"
+      },
+      {
+        "path": "meta.data_dictionary[].description",
+        "description": "One-sentence plain-English description of the field.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.data_dictionary[].path",
+        "description": "Public JSON path this dictionary entry describes.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.data_dictionary[].source_class",
+        "description": "Provenance class of the field: INPUT / CONSTANT / DERIVED.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.data_dictionary[].type",
+        "description": "The leaf value's wire type (e.g. 'number', 'integer', 'string').",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.data_dictionary[].unit",
+        "description": "Unit string, e.g. 'MUSD', 'kW', 't', 'count', 'percent', or '-' for a unitless value.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.formula_definitions[].description",
+        "description": "What this formula computes.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.formula_definitions[].formula_id",
+        "description": "Stable formula identifier.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.formula_definitions[].formula_text",
+        "description": "Human-readable formula text.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.formula_definitions[].input_path_pattern",
+        "description": "Input-path pattern this formula consumes.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.formula_definitions[].output_path_pattern",
+        "description": "Output-path pattern this formula emits.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.formula_definitions[].scenario_notes",
+        "description": "Scenario caveats.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.formula_definitions[].unit_behavior",
+        "description": "How units flow through the formula.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.query_examples[].applies_to",
+        "description": "Model family this query applies to.",
+        "unit": "-",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.query_examples[].expected_shape",
+        "description": "What the query result looks like.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.query_examples[].important_paths",
+        "description": "Important JSON paths touched.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.query_examples[].jq_expression",
+        "description": "The exact jq expression.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.query_examples[].name",
+        "description": "Stable key, e.g. 'headline_2036_revenue_central'.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.query_examples[].question_answered",
+        "description": "Plain-language question this query answers.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.schema_version_notes",
+        "description": "Human-readable schema notes for this artifact version.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.source_status_summary.certified",
+        "description": "Certified source-backed input count.",
+        "unit": "-",
+        "type": "integer",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.source_status_summary.derived_estimate",
+        "description": "Derived-estimate input count.",
+        "unit": "-",
+        "type": "integer",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.source_status_summary.extrapolation",
+        "description": "Extrapolation input count.",
+        "unit": "-",
+        "type": "integer",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.source_status_summary.placeholder",
+        "description": "Placeholder input count; must be zero in promoted artifacts.",
+        "unit": "-",
+        "type": "integer",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.source_status_summary.projection",
+        "description": "Projection input count.",
+        "unit": "-",
+        "type": "integer",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.source_status_summary.scenario",
+        "description": "Scenario-authored input count.",
+        "unit": "-",
+        "type": "integer",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.source_status_summary.sourced_estimate",
+        "description": "Sourced-estimate input count.",
+        "unit": "-",
+        "type": "integer",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.source_status_summary.stale",
+        "description": "Stale-source input count; must be zero in promoted artifacts.",
+        "unit": "-",
+        "type": "integer",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.validation.rules[].computed",
+        "description": "Human-readable computed value as a formatted string.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.validation.rules[].expected",
+        "description": "Human-readable expected value or range, e.g. 'in [0.85, 1.0]' or '> 0'.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.validation.rules[].name",
+        "description": "Short identifier for the check (e.g. 'mass_util_in_range').",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.validation.rules[].pass_check",
+        "description": "Whether the check passed (computed satisfies expected).",
+        "unit": "-",
+        "type": "boolean",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.validation.rules[].severity",
+        "description": "Severity tier if the check failed (CRITICAL / MAJOR / MINOR).",
+        "unit": "-",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.validation.rules[].what_it_tests",
+        "description": "One-sentence statement of what the check ensures.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.validation_results[].expected_condition",
+        "description": "Expected condition.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.validation_results[].observed_result",
+        "description": "Observed result.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.validation_results[].related_json_paths",
+        "description": "Related JSON paths.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.validation_results[].remediation_hint",
+        "description": "Suggested remediation.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.validation_results[].severity",
+        "description": "pass, warn, or fail.",
+        "unit": "-",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.validation_results[].validation_id",
+        "description": "Stable validation identifier.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "meta.validation_results[].what_tested",
+        "description": "Plain-language test description.",
+        "unit": "",
+        "type": "string",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "metadata.artifact_role",
+        "description": "Artifact role such as draft, promoted_default, or promoted_named.",
+        "unit": "",
+        "type": "string",
+        "source_class": "CONSTANT"
+      },
+      {
+        "path": "metadata.base_year",
+        "description": "Calendar year corresponding to model year 0.",
+        "unit": "year",
+        "type": "integer",
+        "source_class": "CONSTANT"
+      },
+      {
+        "path": "metadata.generated_at",
+        "description": "ISO-8601 UTC timestamp at which the artifact was generated.",
+        "unit": "-",
+        "type": "string",
+        "source_class": "CONSTANT"
+      },
+      {
+        "path": "metadata.horizon_years",
+        "description": "Number of fiscal-year steps after year 0; the physical / business 'years' maps have 'horizon_years + 1' entries.",
+        "unit": "year",
+        "type": "integer",
+        "source_class": "CONSTANT"
+      },
+      {
+        "path": "metadata.model_package",
+        "description": "Python package / console-script name that generated the artifact.",
+        "unit": "",
+        "type": "string",
+        "source_class": "CONSTANT"
+      },
+      {
+        "path": "metadata.model_version",
+        "description": "Installed model package version, when available.",
+        "unit": "",
+        "type": "string",
+        "source_class": "CONSTANT"
+      },
+      {
+        "path": "metadata.scenario_name",
+        "description": "Human-readable scenario label from the YAML config.",
+        "unit": "",
+        "type": "string",
+        "source_class": "CONSTANT"
+      },
+      {
+        "path": "metadata.schema_version",
+        "description": "The comms output JSON schema version (e.g. 'comms-v1').",
+        "unit": "-",
+        "type": "string",
+        "source_class": "CONSTANT"
+      },
+      {
+        "path": "metadata.source_scenario_path",
+        "description": "Repository-relative source scenario path.",
+        "unit": "",
+        "type": "string",
+        "source_class": "CONSTANT"
+      },
+      {
+        "path": "metadata.steady_state_year",
+        "description": "The calendar year the mature steady-state headline figure is read at.",
+        "unit": "year",
+        "type": "integer",
+        "source_class": "CONSTANT"
+      },
+      {
+        "path": "physical.years[].broadband.binding_constraint",
+        "description": "Which envelope binds (mass / antenna_stow / ...).",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.capability",
+        "description": "Per-satellite capability after the optional V4 step.",
+        "unit": "Mbps",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.cost_annual_per_satellite_musd",
+        "description": "Annualized per-satellite cost over the service life, $M/yr.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.cost_breakdown.antenna",
+        "description": "Per-satellite antenna build cost (the dominant line), $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.cost_breakdown.build_cost",
+        "description": "Per-satellite build cost (four areas + minor), $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.cost_breakdown.build_cost_after_learning",
+        "description": "Per-satellite build cost after the learning-curve discount, $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.cost_breakdown.comms_electronics",
+        "description": "Per-satellite comms-electronics build cost, $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.cost_breakdown.launch_cost_per_satellite",
+        "description": "Per-satellite share of the cadence-indexed launch cost, $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.cost_breakdown.minor_component",
+        "description": "Per-satellite minor-component carry, $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.cost_breakdown.radiator_bus",
+        "description": "Per-satellite radiator/bus build cost, $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.cost_breakdown.satellite_total",
+        "description": "Total per-satellite cost (discounted build + launch), $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.cost_breakdown.solar",
+        "description": "Per-satellite solar-array build cost, $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.mass_bound_count",
+        "description": "Mass-bound per-launch count (transparency).",
+        "unit": "count",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.satellites_per_launch",
+        "description": "Binding satellites-per-launch count for this class.",
+        "unit": "count",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].broadband.volume_bound_count",
+        "description": "Stowed-volume-bound per-launch count (transparency).",
+        "unit": "count",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].cumulative_satellites_built",
+        "description": "Cumulative satellites built through this year (drives the learning curve).",
+        "unit": "count",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.binding_constraint",
+        "description": "Which envelope binds (mass / antenna_stow / ...).",
+        "unit": "-",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.capability",
+        "description": "Per-satellite capability after the optional V4 step.",
+        "unit": "Mbps",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.cost_annual_per_satellite_musd",
+        "description": "Annualized per-satellite cost over the service life, $M/yr.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.cost_breakdown.antenna",
+        "description": "Per-satellite antenna build cost (the dominant line), $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.cost_breakdown.build_cost",
+        "description": "Per-satellite build cost (four areas + minor), $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.cost_breakdown.build_cost_after_learning",
+        "description": "Per-satellite build cost after the learning-curve discount, $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.cost_breakdown.comms_electronics",
+        "description": "Per-satellite comms-electronics build cost, $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.cost_breakdown.launch_cost_per_satellite",
+        "description": "Per-satellite share of the cadence-indexed launch cost, $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.cost_breakdown.minor_component",
+        "description": "Per-satellite minor-component carry, $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.cost_breakdown.radiator_bus",
+        "description": "Per-satellite radiator/bus build cost, $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.cost_breakdown.satellite_total",
+        "description": "Total per-satellite cost (discounted build + launch), $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.cost_breakdown.solar",
+        "description": "Per-satellite solar-array build cost, $M.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.mass_bound_count",
+        "description": "Mass-bound per-launch count (transparency).",
+        "unit": "count",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.satellites_per_launch",
+        "description": "Binding satellites-per-launch count for this class.",
+        "unit": "count",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].direct_to_cell.volume_bound_count",
+        "description": "Stowed-volume-bound per-launch count (transparency).",
+        "unit": "count",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].learning_curve_multiplier",
+        "description": "The learning-curve cost multiplier at this year's cumulative units.",
+        "unit": "ratio",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].naive_capacity_mbps",
+        "description": "Naive bandwidth-times-efficiency capacity, Mbps (cross-check only).",
+        "unit": "Mbps",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].per_beam_capacity_mbps",
+        "description": "Per-beam capacity from the empirical AST anchor, Mbps.",
+        "unit": "Mbps",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].spectrum_to_acquire_mhz",
+        "description": "The spectrum the constellation must acquire, MHz (a requirement, not cost).",
+        "unit": "MHz",
+        "type": "cell",
+        "source_class": "DERIVED"
+      },
+      {
+        "path": "physical.years[].year",
+        "description": "Calendar year for this physical record.",
+        "unit": "year",
+        "type": "integer",
+        "source_class": "DERIVED"
+      }
+    ],
+    "formula_definitions": [
+      {
+        "formula_id": "comms_arpu_collectable_revenue_from_arpu_and_share",
+        "formula_text": "arpu_usd_per_month x 12 x operator_revenue_share",
+        "description": "Annual per-customer revenue the operator can collect: ARPU times the operator revenue share.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_capability_after_v4_step",
+        "formula_text": "base_capability x v4_capability_multiplier",
+        "description": "Per-satellite capability after the optional V4 capability-step multiplier (dimensionless x base).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_chain_below_disclosed_floor_flag",
+        "formula_text": "bottom_up_chain_cost_per_sub < disclosed_starlink_floor",
+        "description": "Boolean: the bottom-up chain figure is below the disclosed Starlink floor (REPORTED only; being below is NOT claimed as a win).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_collectable_win_flag",
+        "formula_text": "priced_below_collectable AND priced_below_retail",
+        "description": "Boolean: the priced revenue is at or below BOTH the ARPU-collectable ceiling and the retail reference (the collectable-win gate).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_cost_annual_fleet_from_living_cohorts",
+        "formula_text": "sum(cohort.satellites_deployed x cohort.cost_annual_per_satellite for living cohorts)",
+        "description": "Living-fleet annual cost: the cohort-vintaged sum of per-satellite annual cost over the living set, $M/yr.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_cost_annual_per_customer_from_fleet_cost_and_served",
+        "formula_text": "cost_annual_fleet_musd x USD_PER_MUSD / total_served  # per-customer annual cost, USD/yr",
+        "description": "Annual cost to serve one customer: the living-fleet annual cost spread over the served customer band, USD/yr.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_cost_area_line_from_dial",
+        "formula_text": "configured build cost for this area (direct dial, no computation)",
+        "description": "Per-satellite build cost for one of the directly-configured areas (antenna, comms electronics, or radiator/bus), taken straight from its dial, $M.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_cost_to_cost_absolute_delta",
+        "formula_text": "ground_cost_per_sub - space_cost_per_sub",
+        "description": "Ground per-subscriber cost minus space per-customer cost, USD/yr.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_cost_to_cost_ratio_ground_over_space",
+        "formula_text": "ground_cost_per_sub / space_cost_per_sub",
+        "description": "Ground per-subscriber cost divided by space per-customer cost (the inverse ratio).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_cost_to_cost_ratio_space_over_ground",
+        "formula_text": "space_cost_per_sub / ground_cost_per_sub",
+        "description": "Space per-customer cost divided by ground per-subscriber cost (same 1.5x both sides; a pure cost-structure ratio).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_customers_per_beam_from_capacity_rate_oversub",
+        "formula_text": "(per_beam_capacity_mbps / target_per_user_rate_mbps) x oversubscription_factor",
+        "description": "Registered customers a beam serves: sustainable concurrency inflated by oversubscription.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_customers_per_sat_from_beams_and_per_beam",
+        "formula_text": "beams_per_sat x customers_per_beam",
+        "description": "Registered customers per satellite (a planning-band member).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_disclosed_starlink_floor_passthrough",
+        "formula_text": "starlink_disclosed_all_in_cost_usd_per_sub_year (config input)",
+        "description": "The disclosed all-in Starlink floor carried as a comparison reference cell.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_ground_anchor_total_served_mid",
+        "formula_text": "space_output total_served.mid at steady-state year",
+        "description": "The steady-state served-customer mid band member, the per-subscriber comparison basis.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_ground_backhaul_per_sub",
+        "formula_text": "sites_per_sub x backhaul_cost_musd_per_site_year x 1e6",
+        "description": "Per-subscriber annual cellular backhaul cost, USD/yr.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_ground_dense_incumbent_marginal_per_sub",
+        "formula_text": "incumbent_marginal_fraction_of_arpu x arpu_usd_per_month x 12",
+        "description": "The dense-regime incumbent marginal-cost defend floor, USD/yr (the served-market ground denominator, a fraction of annual ARPU; COMM-096).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_ground_density_crossover_reference",
+        "formula_text": "about $490/sub/yr at the dense-suburban fringe (COMM-103)",
+        "description": "The approximate sparse-vs-dense crossover ground cost, a reported reference (a zone, not a sharp point).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_ground_opex_per_sub",
+        "formula_text": "sites_per_sub x ground_opex_musd_per_site_year x 1e6",
+        "description": "Per-subscriber annual cellular operations and maintenance cost, USD/yr.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_ground_priced_per_sub_from_cost_and_multiple",
+        "formula_text": "ground_cost_per_sub x 1.5",
+        "description": "Ground per-subscriber cost marked up by the 1.5x margin (the cost-to-cost ground side).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_ground_sites_per_sub",
+        "formula_text": "sites_per_million_subs / 1e6",
+        "description": "Cell sites needed to serve one subscriber (fractional).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_ground_spectrum_wash_per_sub",
+        "formula_text": "spectrum_cost_musd x 1e6",
+        "description": "Per-subscriber annual ground-side spectrum cost; an explicit zero wash, not a cost numerator line.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_ground_total_per_sub_from_lines",
+        "formula_text": "sum(included per-subscriber ground cost lines)",
+        "description": "Total bottom-up ground per-subscriber annual cost, USD/yr.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_ground_tower_amortized_per_sub",
+        "formula_text": "sites_per_sub x tower_cost_musd_per_site x 1e6 / amortization_years",
+        "description": "Per-subscriber annual amortized cellular tower/site capex, USD/yr.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_launch_cost_per_satellite_from_cadence",
+        "formula_text": "launch_cost_musd(cadence) / satellites_per_launch",
+        "description": "Per-satellite share of the cadence-indexed Neutron launch cost, $M.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_learning_curve_multiplier",
+        "formula_text": "(cumulative_units / reference_units) ** log2(1 - learning_rate_per_doubling)",
+        "description": "Wright-style learning-curve cost multiplier at a cumulative-units count.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_living_fleet_satellites_from_cohort_cliff",
+        "formula_text": "sum(cohort.satellites_deployed for cohort alive at year under the service-life cliff)",
+        "description": "Living-fleet satellite count: the sum over cohorts within the service-life cliff at this year.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_minor_component_cost_from_pct",
+        "formula_text": "minor_component_pct x (antenna + comms_electronics + solar + radiator_bus)",
+        "description": "Per-satellite minor-component carry, a fraction of the four-area sum, $M.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_naive_capacity_cross_check",
+        "formula_text": "leased_bandwidth_mhz x spectral_efficiency_bps_per_hz  # CROSS-CHECK ONLY, never the capacity generator",
+        "description": "Naive bandwidth-times-spectral-efficiency capacity, reported only as a labeled cross-check.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_per_beam_capacity_from_empirical_anchor",
+        "formula_text": "PER_BEAM_CAPACITY_ANCHOR_MBPS x (leased_bandwidth_mhz / PER_BEAM_CAPACITY_ANCHOR_MHZ)",
+        "description": "Per-beam capacity from the empirical AST 40-MHz-to-120-Mbps anchor, scaled by leased MHz.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_price_undercut_headroom",
+        "formula_text": "price_to_beat_usd_per_year - space_priced_cost_per_sub",
+        "description": "This regime's price-to-beat minus the space priced per-subscriber cost, USD/yr (positive = undercuts; sparse price-to-beat is retail, dense is the incumbent marginal floor).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_price_undercut_passes_flag",
+        "formula_text": "space_priced_cost_per_sub <= price_to_beat_usd_per_year",
+        "description": "Boolean: the space priced cost lands under this regime's price-to-beat (the market test per regime, NOT a verdict).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_priced_below_collectable_flag",
+        "formula_text": "priced_revenue_per_sub <= arpu_collectable_revenue",
+        "description": "Boolean: the priced revenue is at or below the ARPU-collectable ceiling.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_priced_below_retail_flag",
+        "formula_text": "priced_revenue_per_sub <= retail_reference_usd_per_year",
+        "description": "Boolean: the priced revenue is at or below the retail reference.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_priced_cost_from_cost_and_multiple",
+        "formula_text": "cost_annual_per_customer x revenue_multiple  # 1.5x for a 33.3% regular margin",
+        "description": "Priced per-customer revenue: the per-customer cost marked up by the regular-margin multiple.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_retail_reference_annualized",
+        "formula_text": "retail_reference_usd_per_month x 12",
+        "description": "The founder-set retail reference annualized, USD/yr (the sparse-regime price-to-beat and the fleet-wide revenue-ceiling retail ceiling).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_satellite_binding_constraint",
+        "formula_text": "enum(MASS if mass_bound <= volume_bound else ANTENNA_STOW)",
+        "description": "Which envelope binds satellites-per-launch (mass for broadband, antenna-stow for direct-to-cell).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_satellite_build_cost_after_learning",
+        "formula_text": "satellite_build_cost x learning_curve_multiplier",
+        "description": "Per-satellite build cost after the learning-curve discount, $M.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_satellite_build_cost_from_four_areas",
+        "formula_text": "antenna + comms_electronics + solar + radiator_bus + minor_component",
+        "description": "Per-satellite build cost: the sum of the four cost areas plus the minor-component carry, $M.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_satellite_cost_annual_from_total_and_life",
+        "formula_text": "satellite_total_cost / satellite_lifetime_years",
+        "description": "Annualized per-satellite cost over the service-life cliff, $M/yr.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_satellite_total_cost_from_build_and_launch",
+        "formula_text": "satellite_build_cost_after_learning + launch_cost_per_satellite",
+        "description": "Total per-satellite cost: discounted build cost plus the per-satellite launch share, $M.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_satellites_deployed_passthrough",
+        "formula_text": "satellites_deployed_this_year  # carried as a business-block cell",
+        "description": "Satellites deployed this year, surfaced as a business-block cell for the cold reader.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_satellites_deployed_this_year_from_launches_and_per_launch",
+        "formula_text": "launches_this_year x satellites_per_launch",
+        "description": "Satellites deployed in this calendar year: the year's launches times satellites-per-launch.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_satellites_per_launch_fork",
+        "formula_text": "min(mass_bound, volume_bound)  # the binding envelope wins per class",
+        "description": "Satellites per launch: the smaller of the mass-bound and the stowed-volume-bound count.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_satellites_per_launch_mass_bound",
+        "formula_text": "floor(mass_envelope_t / satellite_mass_t)",
+        "description": "Satellites per Neutron launch when mass-bound (the broadband-class binding).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_satellites_per_launch_volume_bound",
+        "formula_text": "floor(fairing_volume_m3 / stowed_volume_m3)",
+        "description": "Satellites per Neutron launch when stowed-antenna-volume-bound (the direct-to-cell binding).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_scope_weighted_customers_from_total_and_weight",
+        "formula_text": "total_served x scope_weight",
+        "description": "Customers in one scope region (US / Europe / Asia-ex-China) by the scope-weight split.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_solar_cost_from_power_and_dial",
+        "formula_text": "solar_cost_usd_per_kw x payload_power_kw / USD_PER_MUSD",
+        "description": "Per-satellite solar-array build cost, sized from comms payload power, $M.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_space_capacity_binds_by_regime",
+        "formula_text": "False for sparse, True for dense (SPECTRUM_spec.md Section 3)",
+        "description": "Boolean: does the space capacity ceiling bind in this regime (coverage has headroom in sparse, capacity binds in dense; a physics flag, NOT a verdict).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_space_is_cheaper_flag",
+        "formula_text": "ground_to_space_ratio_mid > 1.0",
+        "description": "Boolean: does space cost less than ground at the mid band in this density regime (a comparison flag, NOT a verdict).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_spectrum_to_acquire_from_leased",
+        "formula_text": "leased_bandwidth_mhz  # reused across all beams and satellites, not x beam count",
+        "description": "Spectrum the constellation must acquire: one per-beam block, reused across every beam.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_steady_state_satellites_from_deploy_rate_and_life",
+        "formula_text": "living_fleet_satellites at the steady-state year (deploy-rate x service-life at the mature cadence)",
+        "description": "Steady-state living-fleet satellite count: the standing constellation at the configured steady-state year.",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      },
+      {
+        "formula_id": "comms_total_served_from_per_sat_and_count",
+        "formula_text": "customers_per_sat x num_satellites",
+        "description": "Total registered customers served across the constellation (a planning-band member).",
+        "input_path_pattern": "See each ProvenanceCell.uses entry.",
+        "output_path_pattern": "Search cells where formula_name equals this formula_id.",
+        "unit_behavior": "Output units are carried by each ProvenanceCell.unit.",
+        "scenario_notes": null
+      }
+    ],
+    "validation_results": [
+      {
+        "validation_id": "no_baked_in_conclusion_fields",
+        "severity": "pass",
+        "what_tested": "no emitted output field is a baked-in verdict / conclusion label / recommendation (the editorial verdict is the hand-written Phase-6 conclusion)",
+        "expected_condition": "no conclusion / verdict / recommendation field names",
+        "observed_result": "none found",
+        "related_json_paths": [],
+        "remediation_hint": null
+      },
+      {
+        "validation_id": "no_market_capture_fields",
+        "severity": "pass",
+        "what_tested": "no emitted output field is a market-capture dial or output (demand is assumed, not modeled; the comparison is cost-vs-ground)",
+        "expected_condition": "no market-capture field names",
+        "observed_result": "none found",
+        "related_json_paths": [],
+        "remediation_hint": null
+      },
+      {
+        "validation_id": "no_forbidden_vehicle_fields",
+        "severity": "pass",
+        "what_tested": "no emitted output field names the forbidden heavier-than-Neutron vehicle (Rocket Lab has only Neutron; the heavier vehicle is Phase-6 conclusion prose only)",
+        "expected_condition": "no forbidden-vehicle field names",
+        "observed_result": "none found",
+        "related_json_paths": [],
+        "remediation_hint": null
+      },
+      {
+        "validation_id": "customer_outputs_are_bands",
+        "severity": "pass",
+        "what_tested": "the steady-state customer / cost / priced-cost outputs are low/mid/high bands with three populated numeric member cells (no scalar customer output)",
+        "expected_condition": "all three band-blocks have populated low/mid/high cells",
+        "observed_result": "all band members populated",
+        "related_json_paths": [],
+        "remediation_hint": null
+      },
+      {
+        "validation_id": "spectrum_is_requirement_not_cost",
+        "severity": "pass",
+        "what_tested": "the spectrum-to-acquire cell is a MHz requirement and no per-satellite cost line is a spectrum dollar figure (spectrum nets out of the cost comparison)",
+        "expected_condition": "spectrum unit == 'MHz' and no MHz cost line",
+        "observed_result": "spectrum unit='MHz'; no MHz cost line",
+        "related_json_paths": [],
+        "remediation_hint": null
+      },
+      {
+        "validation_id": "empirical_anchor_drives_capacity",
+        "severity": "pass",
+        "what_tested": "per-beam capacity is driven by the empirical AST anchor and the naive bandwidth-times-efficiency figure is a labeled cross-check (never the capacity driver)",
+        "expected_condition": "capacity formula contains 'empirical_anchor' and naive formula contains 'naive_capacity_cross_check'",
+        "observed_result": "capacity formula='comms_per_beam_capacity_from_empirical_anchor'; naive formula='comms_naive_capacity_cross_check'",
+        "related_json_paths": [],
+        "remediation_hint": null
+      },
+      {
+        "validation_id": "provenance_formula_keys",
+        "severity": "pass",
+        "what_tested": "every ProvenanceCell formula_name exists in the FORMULAS registry (no silent formula-name typos)",
+        "expected_condition": "all formula_name values present in FORMULAS",
+        "observed_result": "all 572 cells reference one of 25 formula names, every one present in FORMULAS",
+        "related_json_paths": [],
+        "remediation_hint": null
+      },
+      {
+        "validation_id": "satellites_per_launch_fork",
+        "severity": "pass",
+        "what_tested": "the per-class packing fork is explicit: broadband is mass-bound, direct-to-cell is antenna-stow-bound, and broadband packs more satellites per launch",
+        "expected_condition": "broadband=='mass', direct_to_cell=='antenna_stow', broadband per-launch > d2c",
+        "observed_result": "broadband='mass' (8/launch), direct_to_cell='antenna_stow' (1/launch)",
+        "related_json_paths": [],
+        "remediation_hint": null
+      },
+      {
+        "validation_id": "steady_state_customer_band_order",
+        "severity": "pass",
+        "what_tested": "the steady-state served band is ascending and the per-satellite band lands near the default 50k/150k/300k target (a default-scenario calibration check, WARNs off-default)",
+        "expected_condition": "ascending and per-satellite ~ 50000/150000/300000 (rel_tol 0.05)",
+        "observed_result": "served 1.34e+07/4.02e+07/8.04e+07; per-sat 50000/150000/300000",
+        "related_json_paths": [],
+        "remediation_hint": null
+      },
+      {
+        "validation_id": "cost_band_inverse_of_served",
+        "severity": "pass",
+        "what_tested": "the per-customer cost band is ascending and inverse-paired with the served band (cost-low pairs with served-high; cost x served reconciles to the fleet annual cost)",
+        "expected_condition": "ascending cost band and cost.low*served.high == cost.high*served.low",
+        "observed_result": "cost 11.5705/23.1411/69.4233; cost.low*served.high=9.30272e+08, cost.high*served.low=9.30272e+08",
+        "related_json_paths": [],
+        "remediation_hint": null
+      },
+      {
+        "validation_id": "launch_cadence_monotonic",
+        "severity": "pass",
+        "what_tested": "per-year launches are whole-number and non-decreasing up to the steady-state year (the cadence ramp is a logistic, never sign-flipped or fractional)",
+        "expected_condition": "integer, non-decreasing launches to the steady-state year",
+        "observed_result": "launches to FY2036: [0, 2, 3, 5, 9, 14, 22, 35, 51, 70, 90]",
+        "related_json_paths": [],
+        "remediation_hint": null
+      },
+      {
+        "validation_id": "living_fleet_distinct_from_cohort",
+        "severity": "pass",
+        "what_tested": "the steady-state direct-to-cell living fleet is larger than one year's deployment (the cohort treadmill: multiple living cohorts under the service-life cliff)",
+        "expected_condition": "direct_to_cell_living_fleet > direct_to_cell_satellites_deployed_this_year",
+        "observed_result": "living 268 vs deployed-this-year 90",
+        "related_json_paths": [],
+        "remediation_hint": null
+      },
+      {
+        "validation_id": "release_status_no_placeholder_or_stale",
+        "severity": "fail",
+        "what_tested": "the source-status summary has no placeholder or stale default inputs (a promoted artifact must not present an unsettled input as settled)",
+        "expected_condition": "placeholder == 0 and stale == 0",
+        "observed_result": "placeholder=2, stale=0",
+        "related_json_paths": [],
+        "remediation_hint": "Review model inputs, formulas, and source status."
+      },
+      {
+        "validation_id": "data_dictionary_populated",
+        "severity": "pass",
+        "what_tested": "meta.data_dictionary has >= 30 entries (the artifact is self-describing)",
+        "expected_condition": ">= 30 entries",
+        "observed_result": "170 entries",
+        "related_json_paths": [],
+        "remediation_hint": null
+      }
+    ],
+    "query_examples": [
+      {
+        "name": "list_default_inputs_and_source_statuses",
+        "question_answered": "Which default inputs were used, and how are they source-classed?",
+        "jq_expression": ".inputs.assumption_index | to_entries | map({path: .key, value: .value.value, unit: .value.unit, source_status: .value.source_status})",
+        "expected_shape": "list of {path, value, unit, source_status}",
+        "important_paths": [
+          "inputs.assumption_index"
+        ],
+        "applies_to": "space"
+      },
+      {
+        "name": "steady_state_customer_band_2036",
+        "question_answered": "What is the steady-state direct-to-cell served-customer band?",
+        "jq_expression": ".business.years.\"2036\".total_served | {low: .low.value, mid: .mid.value, high: .high.value}",
+        "expected_shape": "object {low, mid, high} subscriber counts",
+        "important_paths": [
+          "business.years.\"2036\".total_served"
+        ],
+        "applies_to": "space"
+      },
+      {
+        "name": "steady_state_cost_per_customer_band_2036",
+        "question_answered": "What is the steady-state annual cost to serve one customer (a band)?",
+        "jq_expression": ".business.years.\"2036\".cost_annual_per_customer_usd | {low: .low.value, mid: .mid.value, high: .high.value}",
+        "expected_shape": "object {low, mid, high} USD/yr per-customer costs",
+        "important_paths": [
+          "business.years.\"2036\".cost_annual_per_customer_usd"
+        ],
+        "applies_to": "space"
+      },
+      {
+        "name": "steady_state_priced_cost_band_2036",
+        "question_answered": "What is the steady-state priced per-customer cost (cost x 1.5)?",
+        "jq_expression": ".business.years.\"2036\".priced_cost_per_customer_usd | {low: .low.value, mid: .mid.value, high: .high.value}",
+        "expected_shape": "object {low, mid, high} USD/yr priced costs",
+        "important_paths": [
+          "business.years.\"2036\".priced_cost_per_customer_usd"
+        ],
+        "applies_to": "space"
+      },
+      {
+        "name": "direct_to_cell_living_fleet_2036",
+        "question_answered": "How many direct-to-cell satellites are in the steady-state fleet?",
+        "jq_expression": ".business.years.\"2036\".direct_to_cell_living_fleet.value",
+        "expected_shape": "single integer satellite count",
+        "important_paths": [
+          "business.years.\"2036\".direct_to_cell_living_fleet"
+        ],
+        "applies_to": "space"
+      },
+      {
+        "name": "spectrum_requirement",
+        "question_answered": "How much spectrum must the constellation acquire (a requirement, MHz)?",
+        "jq_expression": ".physical.years.\"2036\".spectrum_to_acquire_mhz.value",
+        "expected_shape": "single number (MHz); a requirement, never a cost line",
+        "important_paths": [
+          "physical.years.\"2036\".spectrum_to_acquire_mhz"
+        ],
+        "applies_to": "space"
+      },
+      {
+        "name": "per_beam_capacity_vs_naive_cross_check",
+        "question_answered": "Empirical per-beam capacity vs the naive cross-check (Mbps)?",
+        "jq_expression": ".physical.years.\"2036\" | {empirical: .per_beam_capacity_mbps.value, naive_cross_check: .naive_capacity_mbps.value}",
+        "expected_shape": "object {empirical, naive_cross_check} Mbps",
+        "important_paths": [
+          "physical.years.\"2036\".per_beam_capacity_mbps",
+          "physical.years.\"2036\".naive_capacity_mbps"
+        ],
+        "applies_to": "space"
+      },
+      {
+        "name": "arpu_collectable_ceiling_2036",
+        "question_answered": "What is the collectable per-customer revenue ceiling (ARPU x share)?",
+        "jq_expression": ".business.years.\"2036\".arpu_collectable_revenue_usd.value",
+        "expected_shape": "single number (USD/yr)",
+        "important_paths": [
+          "business.years.\"2036\".arpu_collectable_revenue_usd"
+        ],
+        "applies_to": "space"
+      },
+      {
+        "name": "validation_warnings",
+        "question_answered": "Which validation results did not pass?",
+        "jq_expression": "[.meta.validation_results[] | select(.severity != \"pass\")]",
+        "expected_shape": "list of non-passing validation results",
+        "important_paths": [
+          "meta.validation_results"
+        ],
+        "applies_to": "space"
+      },
+      {
+        "name": "trajectory_launches",
+        "question_answered": "What is the per-year launch trajectory?",
+        "jq_expression": "[.business.years | to_entries[] | {fy: (.key|tonumber), launches: .value.launches.value}]",
+        "expected_shape": "list of {fy, launches}",
+        "important_paths": [
+          "business.years"
+        ],
+        "applies_to": "space"
+      },
+      {
+        "name": "living_fleet_per_year",
+        "question_answered": "What is the per-year living fleet by class?",
+        "jq_expression": "[.business.years | to_entries[] | {fy: (.key|tonumber), d2c: .value.direct_to_cell_living_fleet.value, broadband: .value.broadband_living_fleet.value}]",
+        "expected_shape": "list of {fy, d2c, broadband}",
+        "important_paths": [
+          "business.years"
+        ],
+        "applies_to": "space"
+      },
+      {
+        "name": "trace_a_cell",
+        "question_answered": "What is the full provenance of the steady-state mid per-customer cost?",
+        "jq_expression": ".business.years.\"2036\".cost_annual_per_customer_usd.mid",
+        "expected_shape": "one cell: value, unit, formula, formula_name, uses, sources, source_status",
+        "important_paths": [
+          "business.years.\"2036\".cost_annual_per_customer_usd.mid"
+        ],
+        "applies_to": "space"
+      },
+      {
+        "name": "trace_satellite_cost_breakdown_2036",
+        "question_answered": "What is the direct-to-cell four-area satellite cost breakdown?",
+        "jq_expression": ".physical.years.\"2036\".direct_to_cell.cost_breakdown",
+        "expected_shape": "object: the four areas plus minor, build, launch, and satellite total",
+        "important_paths": [
+          "physical.years.\"2036\".direct_to_cell.cost_breakdown"
+        ],
+        "applies_to": "space"
+      }
+    ]
   }
 }
