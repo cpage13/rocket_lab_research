@@ -121,14 +121,20 @@ price_reference:
   scope: { us: 0.5, europe: 0.3, asia_ex_china: 0.2 }   # INTERIM. Geographic CONTEXT (ex-China, premium US/EU mix), sums to 1
 
 ground:
-  # The bottom-up ground (cellular) cost build, the cost-to-cost denominator
-  # (distinct from the retail $100 price to beat above).
-  tower_cost_musd_per_site: 0.25            # INTERIM. Amortized tower/site build cost, $M per site
-  sites_per_million_subs: 300.0             # INTERIM. Cell sites needed per million subscribers
+  # The bottom-up ground (cellular) cost build, the cost-to-cost denominator,
+  # built PER DENSITY REGIME (DESIGN.md Section 7). The retail $100 price to beat
+  # is in the price_reference block above.
+  # SPARSE fresh-build denominator (the unserved/remote fringe; COMM-100):
+  tower_cost_musd_per_site: 0.25            # INTERIM. Amortized fresh tower/site build cost, $M per site
+  sites_per_million_subs: 18000.0          # INTERIM. Sites per million subs in the SPARSE fresh-build density (COMM-100)
   backhaul_cost_musd_per_site_year: 0.02    # INTERIM. Annual backhaul/transport per site, $M
   ground_opex_musd_per_site_year: 0.03      # INTERIM. Annual operations and maintenance per site, $M
-  ground_amortization_years: 10             # INTERIM. Years over which site capex is amortized
+  ground_amortization_years: 25             # INTERIM. ~25-yr fiber asset life amortization basis (COMM-102)
   spectrum_cost_musd: 0.0                   # spectrum nets out of the cost comparison by construction (a wash); explicit zero, not a cost line
+  # DENSE incumbent marginal-cost defend floor (the served market; COMM-096/COMM-101):
+  incumbent_marginal_fraction_of_arpu: 0.15 # SOURCED. Incumbent marginal defend floor as a fraction of ARPU (COMM-096 midpoint)
+  # The dual-space-cost reference (not a density denominator):
+  starlink_disclosed_all_in_cost_usd_per_sub_year: 486.0  # SOURCED. Disclosed all-in Starlink floor, USD/yr (COMM-090/COMM-103)
 
 scenario_levers:
   scenario_name: "Communications default (central case)"   # equals the schema default (a faithful round-trip)

@@ -20,6 +20,7 @@ cadence machinery. Importing from `common` is not a venture dependency.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Final
 
 # The eight cadence / launch-cost defaults are imported from the shared
@@ -35,6 +36,28 @@ from common.cadence import (
     LOW_CADENCE_COST_MUSD_DEFAULT,
     LOW_CADENCE_LAUNCHES_DEFAULT,
 )
+
+
+class DensityRegime(StrEnum):
+    """The two ground-comparison density regimes (DESIGN.md Section 7).
+
+    SPARSE is the unserved / remote fringe (no incumbent plant; the ground
+    denominator is a fresh build; space wins on cost). DENSE is the served market
+    (an entrenched incumbent on sunk plant; the ground denominator is the
+    incumbent's marginal defend cost; space loses on cost). These are descriptive
+    regime keys, NOT a verdict label; the conclusion-token grep gate does not match
+    them.
+
+    Defined in this leaf module (not in ``communications.ground``) so BOTH
+    ``ground.py`` and ``comparison.py`` can import it at module level without a
+    circular import (Pydantic needs the enum at class-build time on both sides).
+    ``communications.ground`` re-exports it, so ``from communications.ground import
+    DensityRegime`` and the ground ``__all__`` still resolve.
+    """
+
+    SPARSE = "sparse"
+    DENSE = "dense"
+
 
 # ============================================================
 # Year-bound constants
@@ -306,10 +329,13 @@ GROUND_TOWER_COST_MUSD_PER_SITE_DEFAULT: Final[float] = 0.25
 the cost-to-cost denominator capex line (DESIGN.md Section 7). Anchored pending
 the Phase-4 ground build."""
 
-GROUND_SITES_PER_MILLION_SUBS_DEFAULT: Final[float] = 300.0
+GROUND_SITES_PER_MILLION_SUBS_DEFAULT: Final[float] = 18_000.0
 """INTERIM (scenario). The number of cell sites needed per million subscribers in
-the served density; sets how many sites the ground alternative must build to
-serve the same customers (DESIGN.md Section 7). Anchored, configurable."""
+the SPARSE fresh-build (unserved/remote-fringe) density, where many sites serve
+few subscribers (the opposite of dense served plant). Sets the SPARSE fresh-build
+denominator (DESIGN.md Section 7, COMM-100): with the tower/backhaul/opex anchors
+and the ~25-year amortization, this lands the sparse per-subscriber cost at about
+$1,080/sub/yr, inside the COMM-100 $875 to $1,540/sub/yr fresh-build band."""
 
 GROUND_BACKHAUL_COST_MUSD_PER_SITE_YEAR_DEFAULT: Final[float] = 0.02
 """INTERIM (scenario). The annual backhaul/transport cost per site, $M (DESIGN.md
@@ -319,9 +345,11 @@ GROUND_OPEX_MUSD_PER_SITE_YEAR_DEFAULT: Final[float] = 0.03
 """INTERIM (scenario). The annual operations and maintenance cost per site, $M
 (DESIGN.md Section 7). Anchored pending the Phase-4 ground build."""
 
-GROUND_AMORTIZATION_YEARS_DEFAULT: Final[int] = 10
-"""INTERIM (scenario). The years over which the ground site capex is amortized
-(DESIGN.md Section 7). Anchored, configurable."""
+GROUND_AMORTIZATION_YEARS_DEFAULT: Final[int] = 25
+"""INTERIM (scenario). The years over which the fresh-build site capex amortizes;
+the ~25-year fiber asset life COMM-102 cites (IRS class life 24 yr; industry
+20-25 yr), the annualization basis for the COMM-100 sparse fresh-build
+denominator (DESIGN.md Section 7). Configurable."""
 
 GROUND_SPECTRUM_COST_MUSD_DEFAULT: Final[float] = 0.0
 """DERIVED (the wash). The ground-side spectrum cost line, carried as an EXPLICIT
@@ -377,6 +405,53 @@ PROMOTED_DEFAULT_ARTIFACT_ROLE: Final[str] = "promoted_default"
 comms analog of the DC json_output.py PROMOTED_DEFAULT_ARTIFACT_ROLE)."""
 
 # ============================================================
+# Phase-4 ground / comparison constants (the cost-vs-ground map)
+# ============================================================
+# The cost-to-cost denominator is built PER DENSITY REGIME (DESIGN.md Section 7):
+# the SPARSE fresh-build denominator (the unserved/remote fringe; COMM-100) and
+# the DENSE incumbent marginal-cost defend floor (the served market; COMM-096 /
+# COMM-101). The two ratios point in opposite directions; the model reports them
+# separately and never blends them.
+
+SUBS_PER_MILLION: Final[float] = 1_000_000.0
+"""DERIVED (fixed unit conversion). Subscribers in one million, used in the
+sites-per-million-subscribers arithmetic (sites_per_sub = sites_per_million_subs
+/ SUBS_PER_MILLION). Held equal to USD_PER_MUSD by value but kept distinct for
+readability (subscribers, not dollars)."""
+
+SPACE_MATERIALLY_CHEAPER_RATIO: Final[float] = 1.0
+"""SCENARIO (fixed comparison threshold). The ground-to-space ratio above which
+ground costs MORE than space (i.e. space is cheaper). Used ONLY to set the
+boolean space_is_cheaper flag per density regime; it is NOT mapped to any verdict
+string (the comms model emits no conclusion label, unlike the DC ground module's
+GROUND/ORBITAL_MATERIALLY_CHEAPER_RATIO band which feeds a label)."""
+
+INCUMBENT_MARGINAL_FRACTION_OF_ARPU_DEFAULT: Final[float] = 0.15
+"""SOURCED_ESTIMATE (COMM-096). The dense-regime incumbent marginal-cost defend
+floor as a fraction of ARPU: the midpoint of the COMM-096 10-to-20%-of-ARPU
+fixed-broadband defend floor (the cash cost to serve one more already-connected
+subscriber). At the default ARPU $50/mo this lands the dense denominator at
+0.15 x 50 x 12 = $90/sub/yr, inside the COMM-101 $84-180/sub/yr band. INTERIM."""
+
+STARLINK_DISCLOSED_ALL_IN_USD_PER_SUB_YEAR_DEFAULT: Final[float] = 486.0
+"""SOURCED_ESTIMATE (COMM-090 / COMM-103). The disclosed all-in Starlink cost to
+serve one subscriber for a year, USD/yr, derived from the May 2026 SpaceX S-1
+Starlink connectivity segment: ARPU ~$66/mo (Q1 2026) x 12 x (1 - 0.386
+operating margin) ~= $486/sub/yr, inside the COMM-103 ~$480-680/sub/yr disclosed
+actual band. This is a third-party / disclosed-financials derivation (NOT a
+Rocket Lab figure). It is the disclosed all-in FLOOR shown ALONGSIDE the
+bottom-up chain figure in the dual-space-cost honesty rule, NEVER a target the
+chain is claimed to beat (plan Section 0.9). Not a published per-subscriber-year
+number; an INTERIM derivation the founder should confirm."""
+
+DENSITY_CROSSOVER_USD_PER_SUB_YEAR: Final[float] = 490.0
+"""SOURCED_ESTIMATE (COMM-103). The approximate sparse-vs-dense crossover ground
+cost, USD/yr: about $490/sub/yr at the dense-suburban fringe (a zone, not a sharp
+point), where the fresh-build ground cost roughly equals the modeled space cost.
+Denser than this, ground build wins; sparser, space wins by a margin that grows
+as density drops."""
+
+# ============================================================
 # Validator tolerances
 # ============================================================
 
@@ -398,7 +473,9 @@ __all__ = [
     "CADENCE_CEILING_DEFAULT",
     "COST_DOWN_REFERENCE_UNITS_DEFAULT",
     "DEFAULT_ARTIFACT_ROLE",
+    "DENSITY_CROSSOVER_USD_PER_SUB_YEAR",
     "DIRECT_TO_CELL_ANTENNA_COST_MUSD_DEFAULT",
+    "DensityRegime",
     "DIRECT_TO_CELL_COMMS_ELECTRONICS_COST_MUSD_DEFAULT",
     "DIRECT_TO_CELL_PAYLOAD_POWER_KW_DEFAULT",
     "DIRECT_TO_CELL_RADIATOR_BUS_COST_MUSD_DEFAULT",
@@ -415,6 +492,7 @@ __all__ = [
     "HIGH_CADENCE_COST_MUSD_DEFAULT",
     "HIGH_CADENCE_LAUNCHES_DEFAULT",
     "HORIZON_YEARS_DEFAULT",
+    "INCUMBENT_MARGINAL_FRACTION_OF_ARPU_DEFAULT",
     "LAUNCHES_AT_YEAR_5_DEFAULT",
     "LAUNCHES_AT_YEAR_10_DEFAULT",
     "LEARNING_RATE_PER_DOUBLING_DEFAULT",
@@ -441,8 +519,11 @@ __all__ = [
     "SCHEMA_VERSION",
     "SCOPE_WEIGHTS_DEFAULT",
     "SCOPE_WEIGHT_SUM_TOLERANCE",
+    "SPACE_MATERIALLY_CHEAPER_RATIO",
     "SPECTRAL_EFFICIENCY_BPS_PER_HZ_DEFAULT",
+    "STARLINK_DISCLOSED_ALL_IN_USD_PER_SUB_YEAR_DEFAULT",
     "STEADY_STATE_YEAR_DEFAULT",
+    "SUBS_PER_MILLION",
     "TARGET_PER_USER_RATE_BAND_DEFAULT",
     "UPGRADED_NEUTRON_FAIRING_VOLUME_M3_DEFAULT",
     "UPGRADED_NEUTRON_MASS_ENVELOPE_T_DEFAULT",

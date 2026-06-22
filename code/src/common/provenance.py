@@ -541,6 +541,145 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
             "Satellites deployed this year, surfaced as a business-block cell for the cold reader."
         ),
     ),
+    # Phase 4 (ground reference and comparison) formula names, appended
+    # additively after the Phase-3 entries. No existing entry is edited or
+    # reordered. The ground side builds a bottom-up per-subscriber cost PER
+    # DENSITY REGIME (sparse fresh-build, dense incumbent-marginal); the
+    # comparison side builds the per-density cost-to-cost ratio and price
+    # undercut plus the fleet-wide revenue-ceiling and Starlink-floor blocks.
+    "comms_ground_sites_per_sub": FormulaSpec(
+        formula="sites_per_million_subs / 1e6",
+        description="Cell sites needed to serve one subscriber (fractional).",
+    ),
+    "comms_ground_tower_amortized_per_sub": FormulaSpec(
+        formula="sites_per_sub x tower_cost_musd_per_site x 1e6 / amortization_years",
+        description="Per-subscriber annual amortized cellular tower/site capex, USD/yr.",
+    ),
+    "comms_ground_backhaul_per_sub": FormulaSpec(
+        formula="sites_per_sub x backhaul_cost_musd_per_site_year x 1e6",
+        description="Per-subscriber annual cellular backhaul cost, USD/yr.",
+    ),
+    "comms_ground_opex_per_sub": FormulaSpec(
+        formula="sites_per_sub x ground_opex_musd_per_site_year x 1e6",
+        description="Per-subscriber annual cellular operations and maintenance cost, USD/yr.",
+    ),
+    "comms_ground_spectrum_wash_per_sub": FormulaSpec(
+        formula="spectrum_cost_musd x 1e6",
+        description=(
+            "Per-subscriber annual ground-side spectrum cost; an explicit zero wash, not a "
+            "cost numerator line."
+        ),
+    ),
+    "comms_ground_dense_incumbent_marginal_per_sub": FormulaSpec(
+        formula="incumbent_marginal_fraction_of_arpu x arpu_usd_per_month x 12",
+        description=(
+            "The dense-regime incumbent marginal-cost defend floor, USD/yr (the served-market "
+            "ground denominator, a fraction of annual ARPU; COMM-096)."
+        ),
+    ),
+    "comms_ground_density_crossover_reference": FormulaSpec(
+        formula="about $490/sub/yr at the dense-suburban fringe (COMM-103)",
+        description=(
+            "The approximate sparse-vs-dense crossover ground cost, a reported reference (a zone, "
+            "not a sharp point)."
+        ),
+    ),
+    "comms_ground_total_per_sub_from_lines": FormulaSpec(
+        formula="sum(included per-subscriber ground cost lines)",
+        description="Total bottom-up ground per-subscriber annual cost, USD/yr.",
+    ),
+    "comms_ground_priced_per_sub_from_cost_and_multiple": FormulaSpec(
+        formula="ground_cost_per_sub x 1.5",
+        description=(
+            "Ground per-subscriber cost marked up by the 1.5x margin (the cost-to-cost ground "
+            "side)."
+        ),
+    ),
+    "comms_cost_to_cost_ratio_space_over_ground": FormulaSpec(
+        formula="space_cost_per_sub / ground_cost_per_sub",
+        description=(
+            "Space per-customer cost divided by ground per-subscriber cost (same 1.5x both "
+            "sides; a pure cost-structure ratio)."
+        ),
+    ),
+    "comms_cost_to_cost_ratio_ground_over_space": FormulaSpec(
+        formula="ground_cost_per_sub / space_cost_per_sub",
+        description=(
+            "Ground per-subscriber cost divided by space per-customer cost (the inverse ratio)."
+        ),
+    ),
+    "comms_cost_to_cost_absolute_delta": FormulaSpec(
+        formula="ground_cost_per_sub - space_cost_per_sub",
+        description="Ground per-subscriber cost minus space per-customer cost, USD/yr.",
+    ),
+    "comms_space_is_cheaper_flag": FormulaSpec(
+        formula="ground_to_space_ratio_mid > 1.0",
+        description=(
+            "Boolean: does space cost less than ground at the mid band in this density regime "
+            "(a comparison flag, NOT a verdict)."
+        ),
+    ),
+    "comms_space_capacity_binds_by_regime": FormulaSpec(
+        formula="False for sparse, True for dense (SPECTRUM_spec.md Section 3)",
+        description=(
+            "Boolean: does the space capacity ceiling bind in this regime (coverage has "
+            "headroom in sparse, capacity binds in dense; a physics flag, NOT a verdict)."
+        ),
+    ),
+    "comms_retail_reference_annualized": FormulaSpec(
+        formula="retail_reference_usd_per_month x 12",
+        description=(
+            "The founder-set retail reference annualized, USD/yr (the sparse-regime "
+            "price-to-beat and the fleet-wide revenue-ceiling retail ceiling)."
+        ),
+    ),
+    "comms_price_undercut_headroom": FormulaSpec(
+        formula="price_to_beat_usd_per_year - space_priced_cost_per_sub",
+        description=(
+            "This regime's price-to-beat minus the space priced per-subscriber cost, USD/yr "
+            "(positive = undercuts; sparse price-to-beat is retail, dense is the incumbent "
+            "marginal floor)."
+        ),
+    ),
+    "comms_price_undercut_passes_flag": FormulaSpec(
+        formula="space_priced_cost_per_sub <= price_to_beat_usd_per_year",
+        description=(
+            "Boolean: the space priced cost lands under this regime's price-to-beat (the market "
+            "test per regime, NOT a verdict)."
+        ),
+    ),
+    "comms_priced_below_collectable_flag": FormulaSpec(
+        formula="priced_revenue_per_sub <= arpu_collectable_revenue",
+        description="Boolean: the priced revenue is at or below the ARPU-collectable ceiling.",
+    ),
+    "comms_priced_below_retail_flag": FormulaSpec(
+        formula="priced_revenue_per_sub <= retail_reference_usd_per_year",
+        description="Boolean: the priced revenue is at or below the retail reference.",
+    ),
+    "comms_collectable_win_flag": FormulaSpec(
+        formula="priced_below_collectable AND priced_below_retail",
+        description=(
+            "Boolean: the priced revenue is at or below BOTH the ARPU-collectable ceiling and "
+            "the retail reference (the collectable-win gate)."
+        ),
+    ),
+    "comms_chain_below_disclosed_floor_flag": FormulaSpec(
+        formula="bottom_up_chain_cost_per_sub < disclosed_starlink_floor",
+        description=(
+            "Boolean: the bottom-up chain figure is below the disclosed Starlink floor "
+            "(REPORTED only; being below is NOT claimed as a win)."
+        ),
+    ),
+    "comms_disclosed_starlink_floor_passthrough": FormulaSpec(
+        formula="starlink_disclosed_all_in_cost_usd_per_sub_year (config input)",
+        description="The disclosed all-in Starlink floor carried as a comparison reference cell.",
+    ),
+    "comms_ground_anchor_total_served_mid": FormulaSpec(
+        formula="space_output total_served.mid at steady-state year",
+        description=(
+            "The steady-state served-customer mid band member, the per-subscriber comparison basis."
+        ),
+    ),
 }
 
 

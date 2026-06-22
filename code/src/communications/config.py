@@ -85,6 +85,7 @@ from communications.constants import (
     HIGH_CADENCE_COST_MUSD_DEFAULT,
     HIGH_CADENCE_LAUNCHES_DEFAULT,
     HORIZON_YEARS_DEFAULT,
+    INCUMBENT_MARGINAL_FRACTION_OF_ARPU_DEFAULT,
     LAUNCHES_AT_YEAR_5_DEFAULT,
     LAUNCHES_AT_YEAR_10_DEFAULT,
     LEARNING_RATE_PER_DOUBLING_DEFAULT,
@@ -105,6 +106,7 @@ from communications.constants import (
     SCOPE_WEIGHT_SUM_TOLERANCE,
     SCOPE_WEIGHTS_DEFAULT,
     SPECTRAL_EFFICIENCY_BPS_PER_HZ_DEFAULT,
+    STARLINK_DISCLOSED_ALL_IN_USD_PER_SUB_YEAR_DEFAULT,
     STEADY_STATE_YEAR_DEFAULT,
     TARGET_PER_USER_RATE_BAND_DEFAULT,
     UPGRADED_NEUTRON_FAIRING_VOLUME_M3_DEFAULT,
@@ -605,10 +607,15 @@ class GroundDials(BaseModel):
     """The bottom-up ground (cellular) cost build, the cost-to-cost denominator.
 
     Carried by config in Phase 1 and consumed by the Phase-4 ground module. The
-    bottom-up cellular delivery cost is the cost-to-cost denominator (the retail
-    $100 is the price to beat, set in the price_reference block). The exact line
-    set may be refined in Phase 4; a defensible bottom-up cellular line set is
-    carried here so the config is complete and the YAML round-trips.
+    block carries BOTH density regimes (DESIGN.md Section 7): the SPARSE
+    fresh-build denominator (the unserved/remote fringe; the six fresh-build
+    lines) and the DENSE incumbent marginal-cost defend floor (the served
+    market; ``incumbent_marginal_fraction_of_arpu``), plus the disclosed
+    Starlink all-in floor used by the dual-space-cost honesty rule. The two
+    density denominators point the cost-to-cost ratio in opposite directions
+    (space wins sparse, loses dense); the model reports them separately. The
+    retail $100 is the price to beat in the SPARSE undercut check, set in the
+    price_reference block.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -616,15 +623,16 @@ class GroundDials(BaseModel):
     tower_cost_musd_per_site: float = Field(
         default=GROUND_TOWER_COST_MUSD_PER_SITE_DEFAULT,
         gt=0,
-        description="The amortized cellular tower/site build cost, $M per site. INTERIM.",
+        description="The amortized fresh cellular tower/site build cost, $M per site. INTERIM.",
     )
     sites_per_million_subs: float = Field(
         default=GROUND_SITES_PER_MILLION_SUBS_DEFAULT,
         gt=0,
         description=(
             "The number of cell sites needed per million subscribers in the "
-            "served density (sets how many sites the ground alternative must "
-            "build to serve the same customers). INTERIM."
+            "SPARSE fresh-build (unserved/remote-fringe) density, where many "
+            "sites serve few subscribers. Sets the SPARSE fresh-build "
+            "denominator (COMM-100). INTERIM."
         ),
     )
     backhaul_cost_musd_per_site_year: float = Field(
@@ -641,7 +649,10 @@ class GroundDials(BaseModel):
         default=GROUND_AMORTIZATION_YEARS_DEFAULT,
         ge=1,
         le=40,
-        description="The years over which the ground site capex is amortized. INTERIM.",
+        description=(
+            "The years over which the fresh-build site capex amortizes; the "
+            "~25-year fiber asset life (COMM-102). INTERIM."
+        ),
     )
     spectrum_cost_musd: float = Field(
         default=GROUND_SPECTRUM_COST_MUSD_DEFAULT,
@@ -650,6 +661,31 @@ class GroundDials(BaseModel):
             "The ground-side spectrum cost line. Spectrum nets out of the cost "
             "comparison by construction; carried as an explicit zero, not a "
             "cost numerator line."
+        ),
+    )
+    incumbent_marginal_fraction_of_arpu: float = Field(
+        default=INCUMBENT_MARGINAL_FRACTION_OF_ARPU_DEFAULT,
+        gt=0,
+        le=1,
+        description=(
+            "The DENSE-regime incumbent marginal-cost defend floor as a fraction "
+            "of ARPU: the incumbent's cash cost to serve one more already-"
+            "connected subscriber (the price-to-beat in served territory, NOT "
+            "the list price). The midpoint of the COMM-096 10-to-20%-of-ARPU "
+            "fixed-broadband defend floor. The dense per-subscriber ground cost "
+            "is this fraction times annual ARPU. INTERIM."
+        ),
+    )
+    starlink_disclosed_all_in_cost_usd_per_sub_year: float = Field(
+        default=STARLINK_DISCLOSED_ALL_IN_USD_PER_SUB_YEAR_DEFAULT,
+        gt=0,
+        description=(
+            "The disclosed all-in Starlink cost to serve one subscriber for a "
+            "year, USD/yr (a third-party / disclosed-financials derivation from "
+            "the SpaceX S-1, COMM-090 / COMM-103, NOT a Rocket Lab figure). The "
+            "disclosed all-in FLOOR shown alongside the bottom-up chain figure "
+            "in the dual-space-cost honesty rule; the model never claims the "
+            "chain beats it. Does NOT enter the cost-to-cost ratio. INTERIM."
         ),
     )
 
