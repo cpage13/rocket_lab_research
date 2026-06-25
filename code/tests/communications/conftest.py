@@ -1,8 +1,19 @@
-"""Shared fixtures for the communications test suite.
+"""Shared fixtures for the communications test suite (clean-rewrite, slim).
 
-Provides the default ``CommsConfig`` and the default in-memory ``CommsModelOutput``
-(the engine run) once per session so the ground / comparison tests do not each
-re-run the engine, plus a default ground config and source catalog.
+This conftest is the slim rewrite version: it provides ONLY the default
+``CommsConfig`` fixture, built purely on the rewritten ``communications.config``.
+The old conftest imported the whole old pipeline (``engine``, ``ground``,
+``json_output``, ``output``, plus the cut ``price_reference`` block), which the
+clean rewrite supersedes; importing those at conftest load broke collection of the
+new tests once ``config.py`` / ``constants.py`` were rewritten (the old modules
+import names the slim config no longer defines).
+
+Per the plan's Phase 8a remedy (write a new slim conftest for the rewrite so the
+new tests collect and run cleanly), this trims the conftest to the rewrite's
+needs. The superseded old comms test files are retired/quarantined only in the
+SEPARATE, founder-gated Phase 8b/8a step (not here, not mid-build); until then
+they may fail at their own imports, which is expected. Later phases add fixtures
+for the engine output and the ground interface as those modules land.
 """
 
 from __future__ import annotations
@@ -10,60 +21,9 @@ from __future__ import annotations
 import pytest
 
 from communications.config import CommsConfig
-from communications.engine import run_comms_model
-from communications.ground import (
-    GroundReferenceConfig,
-    GroundReferenceOutput,
-    SourceCatalog,
-    build_ground_reference_output,
-    default_ground_source_catalog,
-    ground_config_from_comms_config,
-)
-from communications.json_output import enrich_comms_output
-from communications.output import CommsModelOutput
 
 
 @pytest.fixture
 def default_comms_config() -> CommsConfig:
     """Return the default (central-case) comms config."""
     return CommsConfig()
-
-
-@pytest.fixture
-def default_comms_output(default_comms_config: CommsConfig) -> CommsModelOutput:
-    """Return the default in-memory comms space-model output (one engine run)."""
-    return run_comms_model(default_comms_config)
-
-
-@pytest.fixture
-def default_ground_config(default_comms_config: CommsConfig) -> GroundReferenceConfig:
-    """Return the default comms ground-reference config built from the comms config."""
-    return ground_config_from_comms_config(default_comms_config)
-
-
-@pytest.fixture
-def ground_source_catalog() -> SourceCatalog:
-    """Return the default comms ground source catalog."""
-    return default_ground_source_catalog()
-
-
-@pytest.fixture
-def default_enriched_output(default_comms_output: CommsModelOutput) -> CommsModelOutput:
-    """Return the default comms output with the Phase-5-enriched meta block."""
-    return enrich_comms_output(default_comms_output)
-
-
-@pytest.fixture
-def default_ground_output(
-    default_comms_output: CommsModelOutput,
-    default_ground_config: GroundReferenceConfig,
-    default_comms_config: CommsConfig,
-    ground_source_catalog: SourceCatalog,
-) -> GroundReferenceOutput:
-    """Return the default in-memory comms ground reference (one build)."""
-    return build_ground_reference_output(
-        default_comms_output,
-        default_ground_config,
-        default_comms_config.price_reference,
-        ground_source_catalog,
-    )
