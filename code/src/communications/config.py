@@ -1,197 +1,93 @@
-"""The dial schema and YAML loader for the communications model.
+"""The dial schema and YAML loader for the communications CELLULAR cost model.
 
-This module defines the INPUT contract of the communications model: a typed,
-validated Pydantic :class:`CommsConfig` whose blocks carry every founder-set
-dial from the design, plus the ``config_from_dict`` / ``load_config`` YAML
-loader pair. Nothing here computes a cost, a capacity, a customer count, or a
-comparison; it is the contract the engine-room modules (Phase 2) and the engine
-(Phase 3) consume.
+This module defines the INPUT contract of the slim, roughly 6-variable
+cost-to-serve model for a Rocket Lab Neutron-launched CELLULAR direct-to-cell
+(satellite-to-phone) constellation. It mirrors the data-center model's config
+shape: a top-level frozen :class:`CommsConfig` (``extra="forbid"``) whose nested
+blocks are each their own frozen ``extra="forbid"`` BaseModel, every field with a
+named-constant default so a no-argument construct is fully valid, plus the
+``comms_config_from_dict`` / ``load_comms_config`` YAML loader pair. Nothing here
+computes a cost, a coverage fraction, a subscriber count, or a comparison; it is
+the contract the engine (Phase 2), the coverage->subscribers logic (Phase 3), the
+ground comparison (Phase 4), and the light output (Phase 5) consume.
 
-The blocks:
+The product is CELLULAR (the subscriber unit is a PERSON, a phone subscriber, NOT
+a household). It is NOT a market-share, demand, or revenue/DCF model. The blocks:
 
-* ``metadata: MetadataDials`` - base year, horizon, steady-state year.
-* ``constellation: ConstellationDials`` - the two satellite classes (broadband,
-  direct-to-cell), each with its four cost areas (antenna, comms electronics,
-  solar, radiator/bus) and packing inputs (mass, stowed volume), plus the
-  service-life cliff, the V4 capability step, and the Neutron-envelope options.
-* ``launch: LaunchDials`` - the cadence and launch-cost dials reused verbatim
-  from the shared ``common.cadence`` machinery, plus the Neutron mass/volume
-  envelopes (baseline and upgraded).
-* ``cost_down: CostDownDials`` - the satellite learning-curve dial (a fractional
-  reduction per doubling of cumulative units built).
-* ``spectrum: SpectrumDials`` - the spectrum mechanism dials (leased MHz, the
-  cross-check spectral efficiency, beams per satellite, and the per-user-rate /
-  oversubscription bands that force the customer output to a band).
-* ``price_reference: PriceReferenceDials`` - the price/collectability references
-  (the founder-set retail reference, ARPU, operator revenue share) and the
-  geographic scope context. This block is NOT demand: demand is assumed, not
-  modeled (plan Section 0.0 Amendment A1).
-* ``ground: GroundDials`` - the bottom-up ground (cellular) cost build, the
-  cost-to-cost denominator.
-* ``scenario_levers: ScenarioLevers`` - the scenario identity.
+* ``metadata: CommsMetadataDials`` -- base year, horizon, scenario name.
+* ``cadence: CadenceDials`` -- the shared whole-fleet logistic launch ramp
+  (the DC shape, REUSED verbatim: ceiling 150, year-5 14, year-10 90, first 1).
+  This prices the launch cost at the whole-fleet cadence (variable 2's ramp).
+* ``comms_cadence: CommsCadenceDials`` -- the comms slice's SHARE of the fleet
+  cadence (variable 2's share); how many launches comms flies.
+* ``launch_cost: LaunchCostDials`` -- the cadence-indexed log-linear launch-cost
+  curve (the DC shape, REUSED verbatim: 25.0 / 13.5 / 5.0 / 100.0) (variable 6).
+* ``satellite: SatelliteDials`` -- the fixed CELLULAR-satellite spec: satellites
+  per launch (variable 1), lifetime (variable 4, the cohort cliff), and the flat
+  mass-manufactured hardware build cost (variable 5).
+* ``coverage: CoverageDials`` -- the NEW constellation-size target the build-out
+  fills toward (variable 3).
+* ``subscribers: SubscriberDials`` -- the per-PERSON denominator basis (Phase 3
+  consumes this): the served-PERSON count at full coverage plus an optional direct
+  override.
+* ``ground: GroundInterfaceDials | None`` -- the marked, TWO-REGIME ground
+  INTERFACE (Phase 4), default ``None`` so the cost side never blocks on a ground
+  number. The dense + sparse baselines are individually None-able caller inputs.
 
-The model is Neutron-only and cost-driven: no capture-share dial, the launch
-vehicle is Neutron (with an upgraded-Neutron option) and nothing heavier, no
-baked-in verdict, and (per Amendment A1) no demand lever of any kind (no
-top-down market projection, growth dial, or take-up fraction). Demand is
-assumed: if the delivered price undercuts what ground charges and that price is
-collectable, the customers follow. The whole question the model answers is
-whether the bottom-up cost compares favorably to ground.
-
-YAML loading: scenario files are YAML mappings whose top-level keys are the
-block names above, all optional (omitted = defaults). ``extra="forbid"`` means a
-typo in a scenario file fails loudly.
+This model imports only from ``common.*`` and ``communications.*`` (never
+``data_center``, per the cross-import guard) and uses none of the forbidden
+demand-side tokens. YAML loading: scenario files are YAML mappings whose top-level
+keys are the block names above, all optional (omitted = defaults). ``extra="forbid"``
+means a typo in a scenario file fails loudly.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any  # typing-acceptable: Any types the dict deserialization boundary
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
-# The eight cadence / launch-cost defaults are re-exported by
-# communications.constants from the shared common.cadence spine, so the comms
-# config reads the same anchors the data-center cadence machinery uses.
 from communications.constants import (
-    ARPU_USD_PER_MONTH_DEFAULT,
     BASE_YEAR_DEFAULT,
-    BEAMS_PER_SAT_DEFAULT,
-    BROADBAND_ANTENNA_COST_MUSD_DEFAULT,
-    BROADBAND_COMMS_ELECTRONICS_COST_MUSD_DEFAULT,
-    BROADBAND_PAYLOAD_POWER_KW_DEFAULT,
-    BROADBAND_RADIATOR_BUS_COST_MUSD_DEFAULT,
-    BROADBAND_SATELLITE_MASS_T_DEFAULT,
-    BROADBAND_SOLAR_COST_USD_PER_KW_DEFAULT,
-    BROADBAND_STOWED_VOLUME_M3_DEFAULT,
     CADENCE_CEILING_DEFAULT,
-    COST_DOWN_REFERENCE_UNITS_DEFAULT,
-    DIRECT_TO_CELL_ANTENNA_COST_MUSD_DEFAULT,
-    DIRECT_TO_CELL_COMMS_ELECTRONICS_COST_MUSD_DEFAULT,
-    DIRECT_TO_CELL_PAYLOAD_POWER_KW_DEFAULT,
-    DIRECT_TO_CELL_RADIATOR_BUS_COST_MUSD_DEFAULT,
-    DIRECT_TO_CELL_SATELLITE_MASS_T_DEFAULT,
-    DIRECT_TO_CELL_SOLAR_COST_USD_PER_KW_DEFAULT,
-    DIRECT_TO_CELL_STOWED_VOLUME_M3_DEFAULT,
+    COMMS_SHARE_DEFAULT,
     FIRST_LAUNCH_YEAR_DEFAULT,
-    GROUND_AMORTIZATION_YEARS_DEFAULT,
-    GROUND_BACKHAUL_COST_MUSD_PER_SITE_YEAR_DEFAULT,
-    GROUND_OPEX_MUSD_PER_SITE_YEAR_DEFAULT,
-    GROUND_SITES_PER_MILLION_SUBS_DEFAULT,
-    GROUND_SPECTRUM_COST_MUSD_DEFAULT,
-    GROUND_TOWER_COST_MUSD_PER_SITE_DEFAULT,
+    GROUND_BASIS_DEFAULT,
     HIGH_CADENCE_COST_MUSD_DEFAULT,
     HIGH_CADENCE_LAUNCHES_DEFAULT,
     HORIZON_YEARS_DEFAULT,
-    INCUMBENT_MARGINAL_FRACTION_OF_ARPU_DEFAULT,
     LAUNCHES_AT_YEAR_5_DEFAULT,
     LAUNCHES_AT_YEAR_10_DEFAULT,
-    LEARNING_RATE_PER_DOUBLING_DEFAULT,
-    LEASED_BANDWIDTH_MHZ_DEFAULT,
     LOW_CADENCE_COST_MUSD_DEFAULT,
     LOW_CADENCE_LAUNCHES_DEFAULT,
     MAX_FY,
     MAX_HORIZON_YEARS,
     MIN_FY,
     MIN_HORIZON_YEARS,
-    MINOR_COMPONENT_PCT_DEFAULT,
-    NEUTRON_FAIRING_VOLUME_M3_DEFAULT,
-    NEUTRON_MASS_ENVELOPE_T_DEFAULT,
-    OPERATOR_REVENUE_SHARE_DEFAULT,
-    OVERSUBSCRIPTION_BAND_DEFAULT,
-    RETAIL_REFERENCE_USD_PER_MONTH_DEFAULT,
+    SATELLITE_BUILD_COST_MUSD_DEFAULT,
     SATELLITE_LIFETIME_YEARS_DEFAULT,
-    SCOPE_WEIGHT_SUM_TOLERANCE,
-    SCOPE_WEIGHTS_DEFAULT,
-    SPECTRAL_EFFICIENCY_BPS_PER_HZ_DEFAULT,
-    STARLINK_DISCLOSED_ALL_IN_USD_PER_SUB_YEAR_DEFAULT,
-    STEADY_STATE_YEAR_DEFAULT,
-    TARGET_PER_USER_RATE_BAND_DEFAULT,
-    UPGRADED_NEUTRON_FAIRING_VOLUME_M3_DEFAULT,
-    UPGRADED_NEUTRON_MASS_ENVELOPE_T_DEFAULT,
-    V4_CAPABILITY_MULTIPLIER_DEFAULT,
+    SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
+    SATELLITES_PER_LAUNCH_DEFAULT,
+    SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT,
 )
 
 logger = logging.getLogger(__name__)
 
-
 # ===========================================================================
-# 1. Small shared value blocks
-# ===========================================================================
-
-
-class BandTriple(BaseModel):
-    """A generic ascending-magnitude (low <= mid <= high) triple of positive values.
-
-    This is a GENERIC magnitude triple: the same validator serves the
-    per-user-rate band and the oversubscription band. It is NOT a
-    customer-band-semantic ordering. Both default triples are stored with their
-    fields in raw ascending numeric order so the validator passes at
-    construction. The "low/mid/high" label only flips meaning downstream, between
-    this raw-magnitude input and the customer output (a higher per-user rate
-    provisions a fatter pipe and serves FEWER subscribers, so the Phase-2 chain
-    consumes the rate triple in reverse).
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    low: float = Field(gt=0, description="The low (smallest-magnitude) band member.")
-    mid: float = Field(gt=0, description="The mid band member.")
-    high: float = Field(gt=0, description="The high (largest-magnitude) band member.")
-
-    @model_validator(mode="after")
-    def _ordered(self) -> BandTriple:
-        """Enforce low <= mid <= high as raw magnitudes."""
-        if not self.low <= self.mid <= self.high:
-            raise ValueError("band must satisfy low <= mid <= high")
-        return self
-
-
-class ScopeWeights(BaseModel):
-    """The geographic split of the served base across US / Europe / Asia-ex-China.
-
-    The three fractions sum to 1 (validated within a small tolerance). This is
-    GEOGRAPHIC CONTEXT only (which target regions the served base sits in); it
-    does NOT weight or drive the cost-vs-ground verdict (plan Section 0.0
-    Amendment A1).
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    us: float = Field(ge=0, le=1, description="Fraction of the served base in the US.")
-    europe: float = Field(ge=0, le=1, description="Fraction of the served base in Europe.")
-    asia_ex_china: float = Field(
-        ge=0,
-        le=1,
-        description="Fraction of the served base in Asia excluding China.",
-    )
-
-    @model_validator(mode="after")
-    def _sums_to_one(self) -> ScopeWeights:
-        """Enforce that the three scope weights sum to 1 within tolerance."""
-        total = self.us + self.europe + self.asia_ex_china
-        if abs(total - 1.0) > SCOPE_WEIGHT_SUM_TOLERANCE:
-            raise ValueError(
-                f"scope weights must sum to 1 (got {total}, tolerance {SCOPE_WEIGHT_SUM_TOLERANCE})"
-            )
-        return self
-
-
-# ===========================================================================
-# 2. The dial blocks
+# 1. Dial blocks (each its own frozen, extra-forbid BaseModel)
 # ===========================================================================
 
 
-class MetadataDials(BaseModel):
-    """Run metadata: the base year, the horizon, and the steady-state year.
+class CommsMetadataDials(BaseModel):
+    """Run metadata: base year, analysis horizon, and the scenario label.
 
-    Mirrors the data-center metadata block but carries NO workload / operator /
-    radiator enums (those are GPU-venture locks with no comms analog). The
-    steady-state year is the year the headline mature figure is read at; the
-    headline-vs-timeseries choice itself is a Phase-3 decision (concern C1), but
-    the year is a config input here.
+    Mirrors the DC ``MetadataConfig`` base-year / horizon pattern (both REQUIRED,
+    no field default; the all-defaults construct supplies them via the
+    :func:`_default_comms_metadata` factory). The DC-specific enums (workload,
+    operator, radiator architecture) are DROPPED: the satellite is a fixed spec
+    with no workload/operator/radiator taxonomy.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -199,178 +95,28 @@ class MetadataDials(BaseModel):
     base_year: int = Field(
         ge=MIN_FY,
         le=MAX_FY,
-        description="Calendar year corresponding to model year 0.",
+        description="Calendar year corresponding to model year 0 (Neutron first-flight year).",
     )
     horizon_years: int = Field(
         ge=MIN_HORIZON_YEARS,
         le=MAX_HORIZON_YEARS,
-        description="Number of fiscal-year steps after year 0.",
+        description="Number of fiscal-year steps after year 0 (base_year + horizon = final year).",
     )
-    steady_state_year: int = Field(
-        ge=MIN_FY,
-        le=MAX_FY,
-        description="The year the headline mature steady-state figure is read at.",
-    )
-
-    @model_validator(mode="after")
-    def _steady_state_within_window(self) -> MetadataDials:
-        """Enforce base_year <= steady_state_year <= base_year + horizon_years."""
-        if not self.base_year <= self.steady_state_year <= self.base_year + self.horizon_years:
-            raise ValueError(
-                "steady_state_year must satisfy "
-                "base_year <= steady_state_year <= base_year + horizon_years"
-            )
-        return self
-
-
-class SatelliteClassDials(BaseModel):
-    """The four cost areas and packing inputs for ONE satellite class.
-
-    The comms model has TWO classes (the per-class fork): BROADBAND (V3-class,
-    mass-bound, about 5 per launch) and DIRECT_TO_CELL (antenna-stow /
-    volume-bound, about 1 per launch). The top-level config carries one
-    instance per class. This block carries NO ``satellites_per_launch`` field:
-    that is COMPUTED in Phase 2 from the mass and stowed-volume inputs against
-    the Neutron envelope (the fork binds on mass for broadband, volume for
-    direct-to-cell). A hand-set satellites-per-launch would be the
-    blanket-mass-binds disaster the gate forbids.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    antenna_cost_musd: float = Field(
-        gt=0,
-        description=(
-            "The phased-array aperture cost, $M; the dominant high-value line "
-            "(the comms analog of the DC compute line). Bill-of-materials-"
-            "derived, INTERIM until the antenna BOM lands."
-        ),
-    )
-    comms_electronics_cost_musd: float = Field(
-        gt=0,
-        description=(
-            "The comms electronics cost (modems, beam-forming, on-board "
-            "processing, the RF chain), $M; broken out separately. Bill-of-"
-            "materials-derived, INTERIM."
-        ),
-    )
-    solar_cost_usd_per_kw: float = Field(
-        gt=0,
-        description=(
-            "The power-array cost per kW of comms-payload power, USD per kW "
-            "(NOT MUSD per kW; the engine converts). About $20k/kW, explicitly "
-            "NOT the DC $40k/kW. INTERIM, configurable."
-        ),
-    )
-    payload_power_kw: float = Field(
-        gt=0,
-        description=(
-            "The comms-payload power draw, kW (tens of kW, far below the DC "
-            "node's roughly 400 kW). Sizes the solar line in Phase 2. "
-            "NEEDS-RESEARCH / INTERIM, per-class."
-        ),
-    )
-    radiator_bus_cost_musd: float = Field(
-        gt=0,
-        description=(
-            "The spacecraft bus (structure, avionics, propulsion) plus thermal "
-            "cost, $M; grouped because the radiator is minor at this power. "
-            "Anchored light and AI-1-class. INTERIM, configurable."
-        ),
-    )
-    satellite_mass_t: float = Field(
-        gt=0,
-        description=(
-            "The per-satellite wet mass, tonnes; the mass bound divides the "
-            "Neutron mass envelope by this. Broadband about 1.5 t; direct-to-"
-            "cell heavier (antenna-heavy)."
-        ),
-    )
-    stowed_volume_m3: float = Field(
-        gt=0,
-        description=(
-            "The per-satellite stowed (folded) volume in the fairing, cubic "
-            "meters; the volume bound divides the fairing volume by this. "
-            "Direct-to-cell is large (the folded antenna fills the fairing "
-            "before the mass limit), broadband smaller."
-        ),
-    )
-    minor_component_pct: float = Field(
-        ge=0,
-        lt=1,
-        default=MINOR_COMPONENT_PCT_DEFAULT,
-        description=(
-            "A configurable fraction of the satellite carried for a minor "
-            "component the model does not break out (about 1%). Applied in "
-            "Phase 2."
-        ),
+    scenario_name: str = Field(
+        default="Comms cellular direct-to-cell (central case)",
+        description="Human-readable scenario label, surfaced in the output metadata.",
     )
 
 
-class ConstellationDials(BaseModel):
-    """The constellation-level block: the two satellite classes plus lifetime, V4, vehicle.
+class CadenceDials(BaseModel):
+    """Whole-fleet launch-cadence dials feeding the shared logistic ramp.
 
-    Holds the two :class:`SatelliteClassDials` (broadband, direct-to-cell), the
-    service-life cliff, the V4 capability step, and the launch-envelope flags.
-    The two classes use named builders because their defaults differ by class
-    (broadband cheaper / lighter, direct-to-cell antenna-heavy).
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    broadband: SatelliteClassDials = Field(
-        default_factory=lambda: _default_broadband_class(),
-        description="The V3-class broadband satellite (mass-bound, about 5 per launch).",
-    )
-    direct_to_cell: SatelliteClassDials = Field(
-        default_factory=lambda: _default_direct_to_cell_class(),
-        description=(
-            "The direct-to-cell satellite (antenna-stow / volume-bound, about 1 per launch)."
-        ),
-    )
-    satellite_lifetime_years: int = Field(
-        default=SATELLITE_LIFETIME_YEARS_DEFAULT,
-        ge=1,
-        le=20,
-        description="The satellite service-life cliff, years (5 default, test 7, NOT 3).",
-    )
-    v4_capability_multiplier: float = Field(
-        default=V4_CAPABILITY_MULTIPLIER_DEFAULT,
-        gt=0,
-        description=(
-            "The V4 capability step from the V1/V2/V3 trend; a dimensionless "
-            "multiplier, 1.0 = no step (the base case is the V3-class anchor). "
-            "Phase 2 applies it."
-        ),
-    )
-    upgraded_neutron: bool = Field(
-        default=False,
-        description=(
-            "The upgraded-Neutron option (bigger fairing, more mass). False = "
-            "baseline Neutron; when True, Phase 2 uses the upgraded envelope."
-        ),
-    )
-    low_inclination_leo: bool = Field(
-        default=True,
-        description=(
-            "Comms does not need sun-synchronous orbit, so low-inclination LEO "
-            "carries more mass than the SSO case. True = low-inclination LEO "
-            "(the comms default)."
-        ),
-    )
-
-
-class LaunchDials(BaseModel):
-    """The cadence and launch-cost reuse dials plus the Neutron envelopes.
-
-    The cadence and launch-cost fields carry the SAME names, bounds, and
-    defaults the shared ``common.cadence`` machinery consumes, so
-    ``common.cadence.compute_launches_per_year`` and
-    ``common.cadence.compute_launch_cost_musd`` consume them unchanged. The
-    Neutron mass / fairing-volume envelopes (baseline and upgraded) are
-    comms-specific and feed the Phase-2 satellites-per-launch fork. There is no
-    heavier-vehicle envelope: the vehicle is Neutron with an upgraded-Neutron
-    option only.
+    REUSED VERBATIM from the DC ``CadenceDials`` shape (same field names, same
+    bounds, same named-constant defaults sourced from the shared
+    ``common.cadence`` spine). This is the WHOLE-FLEET Neutron cadence (the 90/year
+    FY2036 ramp) that prices the launch cost; the comms slice flies a SHARE of it
+    (see :class:`CommsCadenceDials`). Consumed by
+    ``common.cadence.compute_launches_per_year``.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -388,16 +134,52 @@ class LaunchDials(BaseModel):
     launches_at_year_10: int = Field(
         default=LAUNCHES_AT_YEAR_10_DEFAULT,
         ge=0,
-        description=(
-            "Integer logistic anchor: launches per year at model year 10 "
-            "(the 90-launches-by-2036 cadence)."
-        ),
+        description="Integer logistic anchor: launches per year at model year 10.",
     )
     first_launch_year: int = Field(
         default=FIRST_LAUNCH_YEAR_DEFAULT,
         ge=0,
         description="Model-year index before which launch count is clamped to zero.",
     )
+
+
+class CommsCadenceDials(BaseModel):
+    """The comms slice's SHARE of the whole-fleet cadence (variable 2's share).
+
+    The whole-fleet cadence (:class:`CadenceDials`) ramps to 90 launches/year by
+    FY2036; the comms constellation flies a SHARE of those launches. Phase 2
+    multiplies the shared per-year integer launch count by ``share_of_fleet`` and
+    re-rounds to an integer (with the shared half-up offset) to get the comms
+    launches flown per year. The launch COST is still priced at the whole-fleet
+    cadence (the cost-down is a Neutron-production-scale effect, shared), not at
+    the comms slice's own cadence.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    share_of_fleet: float = Field(
+        default=COMMS_SHARE_DEFAULT,
+        gt=0,
+        le=1.0,
+        description=(
+            "Comms fraction of the whole-fleet per-year launch count. FOUNDER_SET "
+            "to 0.18 (~16 of the 90 FY2036 launches/year); the founder's ~15 to 20 "
+            "band maps to ~0.167 to ~0.222. Configurable."
+        ),
+    )
+
+
+class LaunchCostDials(BaseModel):
+    """Cadence-indexed launch-cost dials feeding the log-linear cost curve.
+
+    REUSED VERBATIM from the DC ``LaunchCostDials`` shape (same field names, same
+    bounds, same named-constant defaults from the shared ``common.cadence`` spine).
+    The cost is priced at the WHOLE-FLEET cadence. Consumed by
+    ``common.cadence.compute_launch_cost_musd``.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     low_cadence_cost_musd: float = Field(
         default=LOW_CADENCE_COST_MUSD_DEFAULT,
         gt=0,
@@ -406,486 +188,320 @@ class LaunchDials(BaseModel):
     high_cadence_cost_musd: float = Field(
         default=HIGH_CADENCE_COST_MUSD_DEFAULT,
         gt=0,
-        description=(
-            "Launch cost at the high-cadence anchor, $M (about $13M to $13.5M "
-            "per Neutron flight at target cadence)."
-        ),
+        description="Launch cost at the high-cadence anchor, $M.",
     )
     low_cadence_launches: float = Field(
         default=LOW_CADENCE_LAUNCHES_DEFAULT,
         gt=0,
-        description="Cadence at the low-cost anchor (launches per year).",
+        description="Cadence (launches/yr) at the low-cost anchor.",
     )
     high_cadence_launches: float = Field(
         default=HIGH_CADENCE_LAUNCHES_DEFAULT,
         gt=0,
-        description="Cadence at the high-cost anchor (launches per year).",
-    )
-    neutron_mass_envelope_t: float = Field(
-        default=NEUTRON_MASS_ENVELOPE_T_DEFAULT,
-        gt=0,
-        description=(
-            "The baseline Neutron mass envelope to low-inclination LEO, tonnes "
-            "(the satellites-per-launch mass bound divides this by "
-            "satellite_mass_t). Low-inclination LEO carries more than the DC "
-            "SSO 12.5 t case. INTERIM."
-        ),
-    )
-    neutron_fairing_volume_m3: float = Field(
-        default=NEUTRON_FAIRING_VOLUME_M3_DEFAULT,
-        gt=0,
-        description=(
-            "The baseline Neutron fairing usable volume, cubic meters (the "
-            "volume bound divides this by stowed_volume_m3)."
-        ),
-    )
-    upgraded_neutron_mass_envelope_t: float = Field(
-        default=UPGRADED_NEUTRON_MASS_ENVELOPE_T_DEFAULT,
-        gt=0,
-        description=(
-            "The upgraded-Neutron mass envelope (bigger fairing, more mass), "
-            "tonnes, used when ConstellationDials.upgraded_neutron is True. "
-            "INTERIM."
-        ),
-    )
-    upgraded_neutron_fairing_volume_m3: float = Field(
-        default=UPGRADED_NEUTRON_FAIRING_VOLUME_M3_DEFAULT,
-        gt=0,
-        description="The upgraded-Neutron fairing usable volume, cubic meters. INTERIM.",
+        description="Cadence (launches/yr) at the high-cost anchor.",
     )
 
 
-class CostDownDials(BaseModel):
-    """The satellite cost-down (learning-curve) dial, with the form pinned.
+class SatelliteDials(BaseModel):
+    """The fixed CELLULAR direct-to-cell satellite spec (variables 1, 4, 5).
 
-    The form is a Wright-style learning curve expressed as a fractional cost
-    reduction per DOUBLING of cumulative units built. The form is fixed here so
-    it cannot be silently reintroduced as something else later; the FORMULA that
-    applies it is registered and computed in Phase 2.
+    The satellite is a flat mass-manufactured satellite-to-phone bird (a fixed
+    spec, NOT a re-spec'd frontier generation, so the DC ``generations`` /
+    ``slopes`` engine is dropped). Three dials: satellites per launch (a direct
+    input), the operating life (the cohort cliff), and the one flat hardware
+    build-cost scalar.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    learning_rate_per_doubling: float = Field(
-        default=LEARNING_RATE_PER_DOUBLING_DEFAULT,
-        ge=0,
-        lt=1,
+    satellites_per_launch: int = Field(
+        default=SATELLITES_PER_LAUNCH_DEFAULT,
+        ge=1,
+        le=16,
         description=(
-            "Fractional cost reduction per doubling of cumulative units; "
-            "0.0 = no learning, 0.2 = a 20-percent reduction per doubling (an "
-            "80-percent learning curve). The cost multiplier at cumulative N is "
-            "(N / N0) ** log2(1 - learning_rate_per_doubling) against a "
-            "reference cumulative N0. Phase 2 registers and computes this."
+            "Satellites per Neutron launch, a DIRECT input scalar (12 default, up "
+            "to 16). Mass-bound count for a Flatellite-class bird: ~12 (SSO), ~16 "
+            "(LEO). Source COMM-258 / COMM-260."
         ),
     )
-    cost_down_reference_units: int = Field(
-        default=COST_DOWN_REFERENCE_UNITS_DEFAULT,
+    satellite_lifetime_years: int = Field(
+        default=SATELLITE_LIFETIME_YEARS_DEFAULT,
+        ge=1,
+        le=20,
+        description=(
+            "Satellite operating life in years, the cohort cliff: after this a "
+            "cohort retires and contributes zero coverage. ~5-year Starlink "
+            "replacement anchor (COMM-091), a design assumption not a certified "
+            "field life."
+        ),
+    )
+    satellite_build_cost_musd: float = Field(
+        default=SATELLITE_BUILD_COST_MUSD_DEFAULT,
+        gt=0,
+        description=(
+            "The flat MASS-MANUFACTURED CELLULAR-SATELLITE HARDWARE cost, ONE "
+            "scalar, ~$1.0 to 1.1M (FOUNDER_SET 1.05). A V3-class hardware analogy "
+            "(Starlink V3 ~$1.2M, the upper anchor, COMM-080) for a direct-to-cell "
+            "payload (bigger antenna and more power than a broadband panel, far "
+            "smaller than AST's giant array, so AST ~$19 to 21M is the WRONG "
+            "anchor). A hardware build-cost analogy, NOT a broadband-product claim. "
+            "Configurable."
+        ),
+    )
+
+
+class CoverageDials(BaseModel):
+    """The NEW constellation-size coverage target (variable 3).
+
+    The build-out fills toward ``satellites_for_full_coverage`` satellites on
+    orbit; the coverage fraction reached each year (Phase 2) drives the
+    coverage-driven subscriber count (Phase 3). This dial exists in NO current
+    model. The ELEVATION MASK is the underlying physical dial (this default is the
+    25-degree quality-link, populated-band, 95%-coverage figure).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    satellites_for_full_coverage: int = Field(
+        default=SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
         ge=1,
         description=(
-            "The reference cumulative-units count N0 at which the four-area "
-            "cost equals the un-discounted per-satellite cost (the curve's "
-            "anchor point); 1 = the first unit is the un-discounted anchor."
+            "Constellation-size target the build-out fills toward. FOUNDER_SET to "
+            "340: the quality-link case (25 degree elevation mask, populated "
+            "mid-latitude band +/-55 deg at 95%, ~450 km, ~53 deg). Coverage sim "
+            "(.agent/other/coverage_sim/FINDINGS.md: 341, rounded to 340) plus "
+            "COMM-209 / COMM-216 / COMM-217 and COMM-386..COMM-405. Configurable."
         ),
     )
 
 
-class SpectrumDials(BaseModel):
-    """The spectrum mechanism dials (SPECTRUM_spec.md Section 4).
+class SubscriberDials(BaseModel):
+    """The per-PERSON denominator basis for the cellular cost per subscriber.
 
-    These feed the Phase-2 spectrum module (the requirement formula, the
-    empirical capacity anchor, the customer chain). The per-user-rate and
-    oversubscription BANDS are :class:`BandTriple`s (low/mid/high), not scalars,
-    because they are the two inputs that force the customer output to a band (the
-    point-estimate disaster gate). The spectral efficiency is carried ONLY as a
-    cross-check on the empirical anchor, never to generate capacity.
+    The unit is a PERSON (a phone subscriber), NOT a household (cellular is
+    per-person). Subscribers are COVERAGE-DRIVEN (Phase 3 scales the full-coverage
+    base by the coverage fraction reached), NOT capacity-derived: the spectrum ->
+    capacity -> demand chain the old model used is CUT. None of the field names use
+    a forbidden demand-side token.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    leased_bandwidth_mhz: float = Field(
-        default=LEASED_BANDWIDTH_MHZ_DEFAULT,
-        gt=0,
-        description=(
-            "The per-beam channel width leased under the FCC SCS framework, MHz "
-            "(the capacity layer vs the 2x5 MHz messaging floor); the AST "
-            "40-MHz-to-120-Mbps anchor."
-        ),
-    )
-    spectral_efficiency_bps_per_hz: float = Field(
-        default=SPECTRAL_EFFICIENCY_BPS_PER_HZ_DEFAULT,
-        gt=0,
-        description=(
-            "The D2C median spectral efficiency, bits per second per Hz. USED "
-            "ONLY as a cross-check on the empirical capacity anchor, NEVER to "
-            "generate capacity (the Phase-2 spectrum module emits the naive "
-            "figure as a labeled cross-check only)."
-        ),
-    )
-    beams_per_sat: int = Field(
-        default=BEAMS_PER_SAT_DEFAULT,
-        gt=0,
-        description="The beams per satellite (AST Block 2 is about 2,500 adjustable beams).",
-    )
-    target_per_user_rate_mbps: BandTriple = Field(
-        default_factory=lambda: _default_per_user_rate_band(),
-        description=(
-            "The per-user service level the beam is provisioned against (the "
-            "sustained shared rate, the biggest open question), as a low/mid/"
-            "high triple stored ascending in Mbps. Consumed INVERTED by the "
-            "Phase-2 chain (rate.high feeds the customer-LOW member). "
-            "INTERIM / NEEDS-FOUNDER."
-        ),
-    )
-    oversubscription_factor: BandTriple = Field(
-        default_factory=lambda: _default_oversubscription_band(),
-        description=(
-            "Registered subscribers run many times the simultaneously active "
-            "users (many-to-one packing; direct-to-cell demand is trip-shaped), "
-            "as a low/mid/high triple stored ascending, every member >= 1. "
-            "Consumed forward by the Phase-2 chain. INTERIM / NEEDS-FOUNDER."
-        ),
-    )
-
-
-class PriceReferenceDials(BaseModel):
-    """The price / collectability references and the geographic scope context.
-
-    RENAMED from the design's ``DemandDials`` by plan Section 0.0 Amendment A1
-    (the config key ``demand`` becomes ``price_reference``). Demand is ASSUMED,
-    not modeled: if the delivered price undercuts what ground charges and that
-    price is collectable, the customers follow. This block therefore carries
-    ONLY price/collectability references and scope-as-context, NOT a demand,
-    top-down-market, growth, or capture-share lever. The top-down market
-    projection fields and the forward-projection machinery the pre-A1 design
-    described are DELETED by A1 and are not built.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    retail_reference_usd_per_month: float = Field(
-        default=RETAIL_REFERENCE_USD_PER_MONTH_DEFAULT,
-        gt=0,
-        description=(
-            "FOUNDER-SET CONFIG, not sourced: about $100/month of full cell "
-            "service (the founder's own bill, a chosen reference). The retail-"
-            "undercut denominator (the price to beat), kept distinct from the "
-            "bottom-up ground cost. The corpus carries individual phone ARPU "
-            "around $50 and per-account ARPA around $147, so $100 sits between."
-        ),
-    )
-    arpu_usd_per_month: float = Field(
-        default=ARPU_USD_PER_MONTH_DEFAULT,
-        gt=0,
-        description=(
-            "The average revenue per user reference used in the revenue-ceiling "
-            "reconciliation (the priced cost is checked against the retail "
-            "reference AND against ARPU times operator-share). The individual-"
-            "phone ARPU the corpus carries."
-        ),
-    )
-    operator_revenue_share: float = Field(
-        default=OPERATOR_REVENUE_SHARE_DEFAULT,
-        gt=0,
-        le=1,
-        description=(
-            "The fraction of ARPU the space operator collects under an SCS "
-            "revenue-share lease (the rest stays with the carrier). Used in the "
-            "Phase-4/5 revenue-ceiling reconciliation. INTERIM."
-        ),
-    )
-    scope: ScopeWeights = Field(
-        default_factory=lambda: _default_scope_weights(),
-        description=(
-            "The geographic CONTEXT split of the served base across US / Europe "
-            "/ Asia-ex-China (a premium US/EU mix, ex-China). Context only: it "
-            "does NOT weight or drive the cost-vs-ground verdict."
-        ),
-    )
-
-
-class GroundDials(BaseModel):
-    """The bottom-up ground (cellular) cost build, the cost-to-cost denominator.
-
-    Carried by config in Phase 1 and consumed by the Phase-4 ground module. The
-    block carries BOTH density regimes (DESIGN.md Section 7): the SPARSE
-    fresh-build denominator (the unserved/remote fringe; the six fresh-build
-    lines) and the DENSE incumbent marginal-cost defend floor (the served
-    market; ``incumbent_marginal_fraction_of_arpu``), plus the disclosed
-    Starlink all-in floor used by the dual-space-cost honesty rule. The two
-    density denominators point the cost-to-cost ratio in opposite directions
-    (space wins sparse, loses dense); the model reports them separately. The
-    retail $100 is the price to beat in the SPARSE undercut check, set in the
-    price_reference block.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    tower_cost_musd_per_site: float = Field(
-        default=GROUND_TOWER_COST_MUSD_PER_SITE_DEFAULT,
-        gt=0,
-        description="The amortized fresh cellular tower/site build cost, $M per site. INTERIM.",
-    )
-    sites_per_million_subs: float = Field(
-        default=GROUND_SITES_PER_MILLION_SUBS_DEFAULT,
-        gt=0,
-        description=(
-            "The number of cell sites needed per million subscribers in the "
-            "SPARSE fresh-build (unserved/remote-fringe) density, where many "
-            "sites serve few subscribers. Sets the SPARSE fresh-build "
-            "denominator (COMM-100). INTERIM."
-        ),
-    )
-    backhaul_cost_musd_per_site_year: float = Field(
-        default=GROUND_BACKHAUL_COST_MUSD_PER_SITE_YEAR_DEFAULT,
-        gt=0,
-        description="The annual backhaul/transport cost per site, $M. INTERIM.",
-    )
-    ground_opex_musd_per_site_year: float = Field(
-        default=GROUND_OPEX_MUSD_PER_SITE_YEAR_DEFAULT,
-        gt=0,
-        description="The annual operations and maintenance cost per site, $M. INTERIM.",
-    )
-    ground_amortization_years: int = Field(
-        default=GROUND_AMORTIZATION_YEARS_DEFAULT,
+    subscribers_at_full_coverage: int = Field(
+        default=SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT,
         ge=1,
-        le=40,
         description=(
-            "The years over which the fresh-build site capex amortizes; the "
-            "~25-year fiber asset life (COMM-102). INTERIM."
+            "The served-PERSON count (phone subscribers) when coverage reaches 1.0, "
+            "a coverage-driven capacity-of-coverage figure, NOT a demand estimate, "
+            "NOT a household count. FOUNDER_SET to a starting 50,000,000 people and "
+            "flagged as the SWING DIAL that most moves cost-per-subscriber. Niche "
+            "basis: the ~300M global coverage-gap people (COMM-021 / COMM-390) plus "
+            "the developed-world remote/unserved layer (household tiers, e.g. "
+            "COMM-065, converted at ~2.5 people/household). The base grows over "
+            "time. Configurable."
         ),
     )
-    spectrum_cost_musd: float = Field(
-        default=GROUND_SPECTRUM_COST_MUSD_DEFAULT,
-        ge=0,
+    subscribers_served_override: int | None = Field(
+        default=None,
+        ge=1,
         description=(
-            "The ground-side spectrum cost line. Spectrum nets out of the cost "
-            "comparison by construction; carried as an explicit zero, not a "
-            "cost numerator line."
-        ),
-    )
-    incumbent_marginal_fraction_of_arpu: float = Field(
-        default=INCUMBENT_MARGINAL_FRACTION_OF_ARPU_DEFAULT,
-        gt=0,
-        le=1,
-        description=(
-            "The DENSE-regime incumbent marginal-cost defend floor as a fraction "
-            "of ARPU: the incumbent's cash cost to serve one more already-"
-            "connected subscriber (the price-to-beat in served territory, NOT "
-            "the list price). The midpoint of the COMM-096 10-to-20%-of-ARPU "
-            "fixed-broadband defend floor. The dense per-subscriber ground cost "
-            "is this fraction times annual ARPU. INTERIM."
-        ),
-    )
-    starlink_disclosed_all_in_cost_usd_per_sub_year: float = Field(
-        default=STARLINK_DISCLOSED_ALL_IN_USD_PER_SUB_YEAR_DEFAULT,
-        gt=0,
-        description=(
-            "The disclosed all-in Starlink cost to serve one subscriber for a "
-            "year, USD/yr (a third-party / disclosed-financials derivation from "
-            "the SpaceX S-1, COMM-090 / COMM-103, NOT a Rocket Lab figure). The "
-            "disclosed all-in FLOOR shown alongside the bottom-up chain figure "
-            "in the dual-space-cost honesty rule; the model never claims the "
-            "chain beats it. Does NOT enter the cost-to-cost ratio. INTERIM."
+            "OPTIONAL direct assumed-subscribers scalar. If set, it overrides the "
+            "coverage-driven full-coverage base (the model uses this absolute count "
+            "at coverage 1.0; below full coverage it still scales by coverage "
+            "fraction). Default None means use the coverage-driven mapping."
         ),
     )
 
 
-class ScenarioLevers(BaseModel):
-    """The scenario-identity block (the comms analog of the DC scenario_name)."""
+class GroundInterfaceDials(BaseModel):
+    """The marked, TWO-REGIME CELLULAR-ground cost INTERFACE (Phase 4).
+
+    INTERFACE INPUTS. These two ground baselines (dense-served incumbent-marginal
+    and sparse fresh-build) come from the ground research wave; the founder owns the
+    final ground call and is still unsure about the comparison. Do not hardcode
+    settled values in the comms src; supply them per-scenario. Either or both may be
+    None, in which case that regime's ratio is skipped and the model still reports
+    the space cost per subscriber.
+
+    The space side of the comparison is the model's OWN COMPUTED cellular annual
+    cost-per-subscriber (Phase 3), NEVER Starlink's disclosed broadband per-sub
+    number. This block is declared in Phase 1 (the ``ground`` field defaults to
+    None on :class:`CommsConfig`); Phase 4 consumes it in ``ground.py``.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    dense_ground_cost_per_subscriber_usd: float | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Dense-served incumbent-marginal CELLULAR ground cost per subscriber "
+            "(the mobile-network all-in cost per human subscriber), grounded ~$140 "
+            "to 310/sub/yr. MARKED INTERFACE INPUT; optional (None-able) so the cost "
+            "side never blocks. Sources COMM-096 / COMM-098 and "
+            "research/economics/ground_cellular_cost_per_subscriber.md Section 2.4."
+        ),
+    )
+    sparse_ground_cost_per_subscriber_usd: float | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Sparse fresh-build ground cost per subscriber, grounded ~$875 to "
+            "1,540/sub/yr rural (up to the ~$44,500 extreme tail). MARKED INTERFACE "
+            "INPUT; optional. This is the regime the HEADLINE verdict reads: space "
+            "below this number is the niche. Source COMM-100."
+        ),
+    )
+    basis: str = Field(
+        default=GROUND_BASIS_DEFAULT,
+        description=(
+            "Label stating which basis the ground numbers are on (default "
+            "'annual_cost_per_subscriber'), so the Phase 4 comparison matches "
+            "like-for-like with the space side (it asserts the bases match)."
+        ),
+    )
     scenario_name: str = Field(
-        default="Communications default (central case)",
-        description="Human-readable scenario label, surfaced in the report and the JSON manifest.",
+        default="ground interface (research-grounded, founder owns the call)",
+        description="Human-readable label for the supplied ground-interface scenario.",
+    )
+    source_note: str = Field(
+        default="",
+        description="Free-text record of the research provenance once firm (empty by default).",
     )
 
 
 # ===========================================================================
-# 3. The top-level CommsConfig
+# 2. The top-level CommsConfig
 # ===========================================================================
 
 
 class CommsConfig(BaseModel):
-    """The complete configuration for one communications-model run.
+    """The complete configuration for one communications cellular cost run.
 
-    Construct one (the defaults reproduce the central design-Section-8 case),
-    or load one from YAML with :func:`load_config`. Hand it to
-    :func:`communications.engine.run_comms_model` (built in a later phase).
+    Construct one (the defaults reproduce the central case), or load one from YAML
+    with :func:`load_comms_config`. Hand it to ``run_comms_model`` (Phase 2) /
+    ``build_comms_output`` (Phase 5).
 
-    Each block defaults via Pydantic's ``default_factory`` so a config
-    constructed with no arguments, or a YAML omitting a block, gets a fully
-    valid all-default block. The model is Neutron-only and cost-driven: no
-    capture-share dial, no heavier-than-Neutron vehicle envelope, no baked-in
-    verdict, and no demand lever of any kind (demand is assumed, not modeled).
+    Every block defaults via ``default_factory`` (or, for ``ground``, a plain None)
+    so a config constructed with no arguments, or a YAML omitting a block, gets a
+    fully valid all-default block. The ``ground`` field is ``None`` by default,
+    which is what makes the cost side run with no ground number.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, validate_assignment=True)
 
-    metadata: MetadataDials = Field(
+    metadata: CommsMetadataDials = Field(
         default_factory=lambda: _default_comms_metadata(),
-        description="Run metadata: base year, horizon, steady-state year.",
+        description="Run metadata: base year, horizon, scenario name.",
     )
-    constellation: ConstellationDials = Field(
-        default_factory=ConstellationDials,
+    cadence: CadenceDials = Field(
+        default_factory=CadenceDials,
+        description="Whole-fleet launch-cadence dials (shared logistic ramp; prices launch cost).",
+    )
+    comms_cadence: CommsCadenceDials = Field(
+        default_factory=CommsCadenceDials,
+        description="The comms slice's share of the fleet cadence (how many launches comms flies).",
+    )
+    launch_cost: LaunchCostDials = Field(
+        default_factory=LaunchCostDials,
+        description="Cadence-indexed launch-cost dials (log-linear, priced at fleet cadence).",
+    )
+    satellite: SatelliteDials = Field(
+        default_factory=SatelliteDials,
+        description="The fixed cellular-satellite spec: per-launch count, lifetime, build cost.",
+    )
+    coverage: CoverageDials = Field(
+        default_factory=CoverageDials,
+        description="The NEW constellation-size coverage target the build-out fills toward.",
+    )
+    subscribers: SubscriberDials = Field(
+        default_factory=SubscriberDials,
+        description="The per-PERSON denominator basis (full-coverage count + optional override).",
+    )
+    ground: GroundInterfaceDials | None = Field(
+        default=None,
         description=(
-            "The two satellite classes (broadband, direct-to-cell), each with "
-            "its four cost areas and packing inputs, plus lifetime, the V4 step, "
-            "and the Neutron-envelope options."
+            "The marked, TWO-REGIME ground interface (Phase 4). None by default so "
+            "the cost side runs with no ground number; supply it per-scenario."
         ),
-    )
-    launch: LaunchDials = Field(
-        default_factory=LaunchDials,
-        description="Cadence and launch-cost reuse dials plus the Neutron envelopes.",
-    )
-    cost_down: CostDownDials = Field(
-        default_factory=CostDownDials,
-        description="The satellite learning-curve dial (reduction per doubling).",
-    )
-    spectrum: SpectrumDials = Field(
-        default_factory=SpectrumDials,
-        description="The spectrum mechanism dials (leased MHz, capacity bands, beams).",
-    )
-    price_reference: PriceReferenceDials = Field(
-        default_factory=PriceReferenceDials,
-        description=(
-            "Price/collectability references (the founder-set retail reference, "
-            "ARPU, operator share) and geographic scope context. NOT demand: "
-            "demand is assumed, not modeled (Amendment A1)."
-        ),
-    )
-    ground: GroundDials = Field(
-        default_factory=GroundDials,
-        description="The bottom-up ground (cellular) cost build for the cost-to-cost ratio.",
-    )
-    scenario_levers: ScenarioLevers = Field(
-        default_factory=ScenarioLevers,
-        description="Scenario identity and any named levers.",
     )
 
 
 # ===========================================================================
-# 4. Default-builder helpers
+# 3. Default-builder helpers
 # ===========================================================================
 
 
-def _default_comms_metadata() -> MetadataDials:
-    """Build the default :class:`MetadataDials` for the central case.
+def _default_comms_metadata() -> CommsMetadataDials:
+    """Build the default :class:`CommsMetadataDials` for the central case.
 
-    A named builder is required because :class:`MetadataDials` has three
-    required fields with no Pydantic defaults, so ``default_factory=MetadataDials``
-    would fail.
+    A named builder is required because :class:`CommsMetadataDials` has two
+    required fields (``base_year``, ``horizon_years``) with no field defaults, so
+    ``default_factory=CommsMetadataDials`` would fail. Mirrors the DC
+    ``_default_metadata`` pattern; supplies base year 2026 and horizon 10.
     """
-    return MetadataDials(
-        base_year=BASE_YEAR_DEFAULT,
-        horizon_years=HORIZON_YEARS_DEFAULT,
-        steady_state_year=STEADY_STATE_YEAR_DEFAULT,
-    )
-
-
-def _default_broadband_class() -> SatelliteClassDials:
-    """Build the default broadband (V3-class, mass-bound) satellite class block."""
-    return SatelliteClassDials(
-        antenna_cost_musd=BROADBAND_ANTENNA_COST_MUSD_DEFAULT,
-        comms_electronics_cost_musd=BROADBAND_COMMS_ELECTRONICS_COST_MUSD_DEFAULT,
-        solar_cost_usd_per_kw=BROADBAND_SOLAR_COST_USD_PER_KW_DEFAULT,
-        payload_power_kw=BROADBAND_PAYLOAD_POWER_KW_DEFAULT,
-        radiator_bus_cost_musd=BROADBAND_RADIATOR_BUS_COST_MUSD_DEFAULT,
-        satellite_mass_t=BROADBAND_SATELLITE_MASS_T_DEFAULT,
-        stowed_volume_m3=BROADBAND_STOWED_VOLUME_M3_DEFAULT,
-        minor_component_pct=MINOR_COMPONENT_PCT_DEFAULT,
-    )
-
-
-def _default_direct_to_cell_class() -> SatelliteClassDials:
-    """Build the default direct-to-cell (antenna-stow, volume-bound) class block."""
-    return SatelliteClassDials(
-        antenna_cost_musd=DIRECT_TO_CELL_ANTENNA_COST_MUSD_DEFAULT,
-        comms_electronics_cost_musd=DIRECT_TO_CELL_COMMS_ELECTRONICS_COST_MUSD_DEFAULT,
-        solar_cost_usd_per_kw=DIRECT_TO_CELL_SOLAR_COST_USD_PER_KW_DEFAULT,
-        payload_power_kw=DIRECT_TO_CELL_PAYLOAD_POWER_KW_DEFAULT,
-        radiator_bus_cost_musd=DIRECT_TO_CELL_RADIATOR_BUS_COST_MUSD_DEFAULT,
-        satellite_mass_t=DIRECT_TO_CELL_SATELLITE_MASS_T_DEFAULT,
-        stowed_volume_m3=DIRECT_TO_CELL_STOWED_VOLUME_M3_DEFAULT,
-        minor_component_pct=MINOR_COMPONENT_PCT_DEFAULT,
-    )
-
-
-def _default_per_user_rate_band() -> BandTriple:
-    """Build the default per-user-rate band (2.0 / 3.0 / 6.0 Mbps, ascending)."""
-    low, mid, high = TARGET_PER_USER_RATE_BAND_DEFAULT
-    return BandTriple(low=low, mid=mid, high=high)
-
-
-def _default_oversubscription_band() -> BandTriple:
-    """Build the default oversubscription band (1.0 / 1.5 / 2.0, ascending)."""
-    low, mid, high = OVERSUBSCRIPTION_BAND_DEFAULT
-    return BandTriple(low=low, mid=mid, high=high)
-
-
-def _default_scope_weights() -> ScopeWeights:
-    """Build the default scope weights (0.5 / 0.3 / 0.2, summing to 1)."""
-    us, europe, asia_ex_china = SCOPE_WEIGHTS_DEFAULT
-    return ScopeWeights(us=us, europe=europe, asia_ex_china=asia_ex_china)
+    return CommsMetadataDials(base_year=BASE_YEAR_DEFAULT, horizon_years=HORIZON_YEARS_DEFAULT)
 
 
 # ===========================================================================
-# 5. YAML loader
+# 4. YAML loaders
 # ===========================================================================
 
 
-def config_from_dict(data: dict[str, Any]) -> CommsConfig:
+def comms_config_from_dict(data: dict[str, object]) -> CommsConfig:
     """Build a :class:`CommsConfig` from an already-parsed YAML mapping.
 
-    Top-level keys are the block names (``metadata``, ``constellation``,
-    ``launch``, ``cost_down``, ``spectrum``, ``price_reference``, ``ground``,
-    ``scenario_levers``), all optional. Validation is Pydantic's: an unknown
-    key, a wrong type, an out-of-bounds value, or a missing required field
-    raises :class:`pydantic.ValidationError` with a precise location.
+    Top-level keys are the block names (``metadata``, ``cadence``,
+    ``comms_cadence``, ``launch_cost``, ``satellite``, ``coverage``,
+    ``subscribers``, ``ground``), all optional (omitted = defaults). An empty dict
+    yields an all-defaults config.
+
+    Validation is Pydantic's: an unknown key, a wrong type, an out-of-bounds value,
+    or a missing required field raises :class:`pydantic.ValidationError` with a
+    precise location.
     """
     if not isinstance(data, dict):
         raise ValueError("config root must be a mapping (a YAML object)")
     return CommsConfig.model_validate(data)
 
 
-def load_config(path: str | Path) -> CommsConfig:
+def load_comms_config(path: str | Path) -> CommsConfig:
     """Load and validate a :class:`CommsConfig` from a YAML file.
 
     Raises :class:`FileNotFoundError` if the path does not exist and
-    :class:`ValueError` (a :class:`pydantic.ValidationError` or a YAML parse
-    error wrapped with context) on any malformed or invalid content. An empty
-    file is treated as all-defaults.
+    :class:`ValueError` (a :class:`pydantic.ValidationError` for schema problems)
+    on any malformed or invalid content. An empty file yields an all-defaults
+    :class:`CommsConfig`.
     """
     p = Path(path)
     if not p.is_file():
-        raise FileNotFoundError(f"config file not found: {p}")
+        raise FileNotFoundError(f"comms config file not found: {p}")
     try:
         data = yaml.safe_load(p.read_text())
     except yaml.YAMLError as exc:
-        raise ValueError(f"could not parse YAML config {p}: {exc}") from exc
+        raise ValueError(f"could not parse YAML comms config {p}: {exc}") from exc
     if data is None:
         # An empty scenario file = all defaults.
         return CommsConfig()
     if not isinstance(data, dict):
-        raise ValueError(f"config file {p} must contain a YAML mapping (got {type(data).__name__})")
-    return config_from_dict(data)
+        raise ValueError(
+            f"comms config file {p} must contain a YAML mapping (got {type(data).__name__})"
+        )
+    return comms_config_from_dict(data)
 
 
-# Re-export the public config surface so external callers (CLI, tests,
-# downstream modules) import from one place.
+# Re-export the public config surface so external callers (engine, ground, output,
+# tests) import from one place.
 __all__ = [
-    "BandTriple",
+    "CadenceDials",
+    "CommsCadenceDials",
     "CommsConfig",
-    "ConstellationDials",
-    "CostDownDials",
-    "GroundDials",
-    "LaunchDials",
-    "MetadataDials",
-    "PriceReferenceDials",
-    "SatelliteClassDials",
-    "ScenarioLevers",
-    "ScopeWeights",
-    "SpectrumDials",
-    "config_from_dict",
-    "load_config",
+    "CommsMetadataDials",
+    "CoverageDials",
+    "GroundInterfaceDials",
+    "LaunchCostDials",
+    "SatelliteDials",
+    "SubscriberDials",
+    "comms_config_from_dict",
+    "load_comms_config",
 ]
