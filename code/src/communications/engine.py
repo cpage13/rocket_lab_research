@@ -67,8 +67,28 @@ cohort overshoot the target by strictly less than one launch's worth and never
 deploys beyond what is needed to hold. During HOLD the deficit equals exactly
 that year's cliff losses, so the same formula replaces only the ageing cohorts.
 
-Units: money in $M; counts are integers; time in fiscal years (FY2026..FY2036,
-year 0 = ``base_year``).
+THE REVENUE + GROSS-MARGIN OVERLAY (mirrors the data-center revenue/margin pattern,
+adapted to the comms model's lighter single-value style; no R-band, no provenance
+envelope). On top of the cost treadmill the engine layers, per cohort and per year,
+TWO REVENUE CASES against one ANNUALIZED cost basis. The cost basis is the
+per-satellite LIFETIME cost (the flat build cost plus the satellite's share of its
+deployment-year launch cost) spread over the satellite life, summed over the living
+cohorts (matching the DC ``cost_annual = node_total / service_life`` convention). It
+is a different convention from the cash replacement line (which the cost-per-
+subscriber headline reads); the two converge only in clean rotational steady state.
+Case 1 (COST-PLUS): revenue = annual cost x ``revenue_multiple`` (cost-coupled, the
+DC central R = 1.5 mirror). Case 2 (PRICES-TODAY / ARPU): revenue = served
+subscribers x
+``arpu_usd_per_month`` x 12. Gross margin in both is ``(revenue - cost) / revenue``,
+a percent. The overlay rides a parallel ``_CohortBuild`` list (the per-satellite
+annual cost the bare ``LivedCohort`` does not carry), reusing the shared cohort
+cliff; each living cohort's per-year line is a :class:`CommsCohortYear`, and the
+fleet roll-up plus the steady-state (final-year) headlines sit on
+:class:`CommsYear` / :class:`CommsTrajectory`. The revenue is a cost-coupled multiple
+or a price-times-served-base figure, NEVER a demand or market-size estimate.
+
+Units: money in $M; counts are integers; margins in percent; time in fiscal years
+(FY2026..FY2036, year 0 = ``base_year``).
 """
 
 from __future__ import annotations
@@ -82,10 +102,10 @@ from common.cadence import (
     compute_launch_cost_musd,
     compute_launches_per_year,
 )
-from common.cohort import LivedCohort, living_cohorts
+from common.cohort import LivedCohort, cohort_is_alive_at, living_cohorts
 from common.provenance import ProvenanceCell
 from communications.config import CommsConfig
-from communications.constants import BindingRegime
+from communications.constants import MONTHS_PER_YEAR, BindingRegime
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +152,25 @@ ZERO_SUBSCRIBER_TARGET_COST_USD: float = 0.0
 the dial is ``ge=1``, but the division is guarded for total safety) or the build-out
 never reached steady state within the horizon (steady-state annual cost is 0.0, so
 the per-subscriber figure is 0.0, a truthful below-steady-state output)."""
+
+MARGIN_PERCENT_SCALE: float = 100.0
+"""The percent scale for a gross margin: ``(revenue - cost) / revenue`` times this
+yields a percentage (e.g. 0.333 -> 33.3), mirroring the data-center fleet-margin
+convention so the two models report margin in the same unit."""
+
+ZERO_MARGIN_PCT: float = 0.0
+"""The gross-margin percent when revenue is zero (an empty fleet, or a build-out
+year before any satellite is on orbit): the margin is undefined, so it reports 0.0
+rather than dividing by zero, mirroring the data-center fleet-margin guard."""
+
+NO_REVENUE_MUSD: float = 0.0
+"""The revenue line ($M) for a year with no living fleet (no satellites on orbit yet,
+so no cost basis and no served subscribers): both revenue cases report 0.0."""
+
+NO_ANNUAL_COST_MUSD: float = 0.0
+"""The annualized fleet-cost basis ($M) for a year with no living fleet: the margin
+cost basis (the per-satellite lifetime cost spread over the life, summed over the
+living fleet) is 0.0 when nothing is on orbit."""
 
 
 # ---------------------------------------------------------------------------
@@ -360,8 +399,155 @@ def _cost_per_subscriber_annual_usd(
 
 
 # ---------------------------------------------------------------------------
+# The revenue + gross-margin overlay (the two revenue cases; mirrors the DC
+# revenue/margin pattern, adapted to the comms model's lighter single-value style).
+#
+# The COST BASIS for margin is the ANNUALIZED per-satellite cost (the satellite's
+# lifetime cost: its flat build cost plus its share of its deployment-year launch
+# cost, spread over the satellite life), matching the DC annualized convention
+# (cost_annual = node_total / service_life). Each living satellite carries this
+# annual cost every year of its life, so the per-year annualized fleet cost is the
+# sum over living cohorts. NOTE this is a different convention from the cash
+# replacement line (``replacement_cost_this_year_musd``, which the cost-per-subscriber
+# headline reads): the two CONVERGE only in clean rotational steady state (equal-sized
+# cohorts, a full lifecycle elapsed), where replacing ~1/life of the fleet per year
+# costs ~lifetime_cost/life per satellite. In the build-just-completed final horizon
+# year they differ (the build ramped, so the cohorts are unequal and one year's cliff
+# replacement is not 1/life of the fleet). The annualized basis is the stable
+# economic cost the margins read. Two revenue cases ride this basis:
+#
+#   COST-PLUS: revenue = annual cost x revenue_multiple (cost-coupled).
+#   ARPU:      revenue = served subscribers x monthly ARPU x 12 (price x served base).
+#
+# Gross margin in BOTH cases is (revenue - cost) / revenue, reported as a percent.
+# ---------------------------------------------------------------------------
+
+
+def _per_satellite_annual_cost_musd(
+    *,
+    satellite_build_cost_musd: float,
+    launch_cost_per_launch_musd: float,
+    satellites_per_launch: int,
+    satellite_lifetime_years: int,
+) -> float:
+    """Annualize one satellite's lifetime cost (build + its launch share) over its life.
+
+    A satellite's lifetime cost is its flat hardware build cost plus its share of the
+    launch that carried it (the per-launch cost divided by the satellites per launch).
+    Spreading that over the satellite life gives the per-satellite ANNUAL cost, the
+    margin cost basis, matching the DC annualized convention
+    (``cost_annual = node_total / service_life``). The launch cost is the
+    deployment-year per-launch cost (priced at the whole-fleet cadence), so a cohort
+    launched in a cheaper-cadence year carries a lower annual cost for its whole life
+    (the cost-down is locked in at launch, mirroring the DC per-cohort cost).
+
+    Args:
+        satellite_build_cost_musd: The flat per-satellite hardware build cost, $M.
+        launch_cost_per_launch_musd: The deployment-year per-launch cost, $M.
+        satellites_per_launch: Satellites carried per launch (a positive count).
+        satellite_lifetime_years: The satellite life over which to annualize (the
+            cohort cliff, a positive count).
+
+    Returns:
+        The per-satellite annual cost, $M/yr (``0.0`` if the life is not positive,
+        guarded though the dial is ``ge=1``).
+    """
+    if satellite_lifetime_years <= 0:
+        return NO_ANNUAL_COST_MUSD
+    launch_cost_per_satellite_musd = launch_cost_per_launch_musd / satellites_per_launch
+    lifetime_cost_per_satellite_musd = satellite_build_cost_musd + launch_cost_per_satellite_musd
+    return lifetime_cost_per_satellite_musd / satellite_lifetime_years
+
+
+def _gross_margin_pct(revenue_musd: float, cost_musd: float) -> float:
+    """Gross margin as a percent: ``(revenue - cost) / revenue x 100``.
+
+    Mirrors the DC fleet-margin formula, including its zero-revenue guard (a year
+    with no living fleet, hence no revenue, reports :data:`ZERO_MARGIN_PCT` rather
+    than dividing by zero).
+
+    Args:
+        revenue_musd: The annual revenue, $M.
+        cost_musd: The annual cost (the annualized cost basis), $M.
+
+    Returns:
+        The gross margin in percent, or :data:`ZERO_MARGIN_PCT` when revenue is not
+        positive.
+    """
+    if revenue_musd <= 0.0:
+        return ZERO_MARGIN_PCT
+    return (revenue_musd - cost_musd) / revenue_musd * MARGIN_PERCENT_SCALE
+
+
+# ---------------------------------------------------------------------------
 # Per-year and whole-trajectory data structures (frozen, plain numerics).
 # ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _CohortBuild:
+    """One deployed cohort's facts for the economics overlay (engine-internal).
+
+    Tracks, per cohort (one per launch year), the satellites deployed and the
+    per-satellite ANNUAL cost locked in at launch (built from the deployment-year
+    launch cost, so the cadence cost-down is fixed for the cohort's life, mirroring
+    the DC per-cohort cost). The cohort-cliff survival reuses the shared
+    ``common.cohort.cohort_is_alive_at`` (no separate cliff machinery). This rides
+    alongside the shared ``LivedCohort`` list (which drives the build/cost treadmill,
+    unchanged); the parallel record adds only the per-satellite annual cost the
+    treadmill does not carry.
+
+    Attributes:
+        launch_year: The fiscal year this cohort deployed (a unique key: at most one
+            cohort per model year, and only deploying years are recorded).
+        satellites: The satellites in this cohort (always strictly positive: empty
+            years are not recorded).
+        per_satellite_annual_cost_musd: The per-satellite annual cost ($M/yr) locked
+            in at launch (:func:`_per_satellite_annual_cost_musd`).
+    """
+
+    launch_year: int
+    satellites: int
+    per_satellite_annual_cost_musd: float
+
+
+@dataclass(frozen=True)
+class CommsCohortYear:
+    """One living cohort's per-year economics line (both revenue cases).
+
+    The cohort-level mirror of the DC per-cohort economics: each living cohort, in
+    each year of its life, carries its annualized cost, its two-case revenue, and its
+    two-case gross margin. The cost-plus case is cost-coupled (revenue = cohort annual
+    cost x the multiple), so the cost-plus margin is the same flat figure for every
+    cohort. The ARPU case allocates the year's served subscribers to the cohort by its
+    share of the living fleet (a cohort with more living satellites serves
+    proportionally more of the base), so the ARPU revenue and margin vary with the
+    cohort's living-satellite share and the year's served base.
+
+    Attributes:
+        launch_year: The cohort's deployment year (its identity across the years).
+        living_satellites: This cohort's satellites alive this year (under the cliff).
+        annual_cost_musd: This cohort's annualized cost this year
+            (``living_satellites x per_satellite_annual_cost_musd``), $M/yr.
+        cost_plus_revenue_musd: The cost-plus revenue (``annual_cost x multiple``),
+            $M/yr.
+        cost_plus_gross_margin_pct: The cost-plus gross margin, percent (flat across
+            cohorts: ``(multiple - 1) / multiple x 100``).
+        arpu_subscribers_served: The served subscribers allocated to this cohort this
+            year (the year's served base x this cohort's share of the living fleet).
+        arpu_revenue_musd: The ARPU revenue (``arpu_subscribers_served x monthly ARPU
+            x 12``), $M/yr.
+        arpu_gross_margin_pct: The ARPU gross margin, percent.
+    """
+
+    launch_year: int
+    living_satellites: int
+    annual_cost_musd: float
+    cost_plus_revenue_musd: float
+    cost_plus_gross_margin_pct: float
+    arpu_subscribers_served: int
+    arpu_revenue_musd: float
+    arpu_gross_margin_pct: float
 
 
 @dataclass(frozen=True)
@@ -397,6 +583,33 @@ class CommsYear:
             year and every year thereafter).
         replacement_cost_this_year_musd: The HOLD-phase ongoing replacement line,
             $M; ``0.0`` during build-out, the year's total cost once in HOLD.
+        subscribers_served_this_year: The served-PERSON count at THIS year's buildout
+            fraction (the subscriber target scaled by ``buildout_fraction``, or the
+            override). Drives the ARPU revenue case per year (the final year's value
+            is the trajectory headline ``subscribers_served``).
+        annual_cost_this_year_musd: The ANNUALIZED fleet cost this year (the margin
+            cost basis), $M/yr: the sum over living cohorts of each cohort's
+            per-satellite annual cost (lifetime cost spread over the life). This is
+            NOT the deployment cash cost (``total_cost_this_year_musd``) and NOT the
+            cash replacement line; it is the steady annual cost each living satellite
+            carries, matching the DC annualized convention. It converges with the
+            replacement line only in clean rotational steady state (equal cohorts, a
+            full lifecycle elapsed); in the build-just-completed final year it runs
+            higher (the ramped cohorts are unequal, so one year's cliff replacement is
+            below 1/life of the fleet).
+        cost_plus_revenue_this_year_musd: The COST-PLUS revenue this year, $M
+            (``annual_cost_this_year_musd x revenue_multiple``).
+        cost_plus_gross_margin_pct: The COST-PLUS gross margin this year, percent
+            (``(revenue - cost) / revenue x 100``; flat at the multiple's implied
+            margin once any fleet is on orbit).
+        arpu_revenue_this_year_musd: The PRICES-TODAY ARPU revenue this year, $M
+            (``subscribers_served_this_year x arpu_usd_per_month x 12 / 1e6``).
+        arpu_gross_margin_pct: The ARPU gross margin this year, percent
+            (``(revenue - cost) / revenue x 100`` against the annualized cost basis).
+        cohort_lines: The per-living-cohort economics breakdown this year (one
+            :class:`CommsCohortYear` per cohort alive under the cliff), the
+            cohort-level mirror of the DC per-cohort revenue/margin. Empty in a year
+            with no living fleet.
     """
 
     year: int
@@ -412,6 +625,13 @@ class CommsYear:
     total_cost_this_year_musd: float
     is_hold_phase: bool
     replacement_cost_this_year_musd: float
+    subscribers_served_this_year: int
+    annual_cost_this_year_musd: float
+    cost_plus_revenue_this_year_musd: float
+    cost_plus_gross_margin_pct: float
+    arpu_revenue_this_year_musd: float
+    arpu_gross_margin_pct: float
+    cohort_lines: tuple[CommsCohortYear, ...]
 
 
 @dataclass(frozen=True)
@@ -451,6 +671,24 @@ class CommsTrajectory:
             steady state within the horizon (the steady-state cost is ``0.0``). This
             is the space side of the ground comparison (Phase 4) and the headline
             cost-to-serve figure.
+        steady_state_annual_cost_musd: The representative HOLD-phase ANNUALIZED fleet
+            cost, $M/yr (the final model year's ``annual_cost_this_year_musd``), the
+            cost basis the steady-state margins read. ``0.0`` if the build never
+            completes within the horizon. This is the annualized basis (the DC
+            convention); it is the like-for-like cost behind the two steady-state
+            revenue headlines. It is generally HIGHER than
+            ``steady_state_annual_replacement_cost_musd`` in the final horizon year
+            (the cash replacement line is a single lumpy year of the ramped build);
+            the two converge only in clean rotational steady state.
+        steady_state_revenue_cost_plus_musd: The steady-state COST-PLUS annual
+            revenue, $M/yr (the final year's ``cost_plus_revenue_this_year_musd``).
+        steady_state_gross_margin_cost_plus_pct: The steady-state COST-PLUS gross
+            margin, percent (the multiple's implied flat margin once built out).
+        steady_state_revenue_arpu_musd: The steady-state PRICES-TODAY ARPU annual
+            revenue, $M/yr (the final year's ``arpu_revenue_this_year_musd``).
+        steady_state_gross_margin_arpu_pct: The steady-state ARPU gross margin,
+            percent. Unlike the cost-plus margin, this depends on whether the ARPU
+            revenue clears the annualized cost basis at the served base.
     """
 
     years: tuple[CommsYear, ...]
@@ -462,6 +700,11 @@ class CommsTrajectory:
     steady_state_annual_replacement_cost_musd: float
     subscribers_served: int
     cost_per_subscriber_annual_usd: float
+    steady_state_annual_cost_musd: float
+    steady_state_revenue_cost_plus_musd: float
+    steady_state_gross_margin_cost_plus_pct: float
+    steady_state_revenue_arpu_musd: float
+    steady_state_gross_margin_arpu_pct: float
 
 
 # ---------------------------------------------------------------------------
@@ -517,15 +760,84 @@ def _comms_launches_for_year(year_idx: int, config: CommsConfig) -> tuple[int, i
 # ---------------------------------------------------------------------------
 
 
+def _cohort_economics_for_year(
+    *,
+    fy: int,
+    life: int,
+    cohort_builds: list[_CohortBuild],
+    living_fleet: int,
+    subscribers_served_this_year: int,
+    revenue_multiple: float,
+    arpu_usd_per_month: float,
+) -> tuple[CommsCohortYear, ...]:
+    """Build the per-living-cohort economics breakdown for one year (both cases).
+
+    For each cohort alive at ``fy`` under the cliff, computes its annualized cost
+    (its living satellites x its locked-in per-satellite annual cost), its cost-plus
+    revenue + margin, and its ARPU revenue + margin. The year's served subscribers are
+    allocated across cohorts by each cohort's share of the living fleet (a cohort with
+    more living satellites serves proportionally more of the base). The last living
+    cohort absorbs any rounding remainder so the per-cohort served counts sum exactly
+    to the year's served total (no drift versus the fleet-level ARPU figure).
+
+    Args:
+        fy: The fiscal year of this rollup.
+        life: The satellite life (the cohort cliff).
+        cohort_builds: The deployed cohorts so far (the economics overlay).
+        living_fleet: The total living satellites this year (the allocation base).
+        subscribers_served_this_year: The year's served-PERSON count (the ARPU base).
+        revenue_multiple: The cost-plus multiple.
+        arpu_usd_per_month: The monthly ARPU.
+
+    Returns:
+        The per-living-cohort economics lines, oldest cohort first (empty when no
+        cohort is alive).
+    """
+    living_builds = [b for b in cohort_builds if cohort_is_alive_at(b.launch_year, fy, life)]
+    lines: list[CommsCohortYear] = []
+    subscribers_allocated = 0
+    for idx, build in enumerate(living_builds):
+        annual_cost_musd = build.satellites * build.per_satellite_annual_cost_musd
+        cost_plus_revenue_musd = annual_cost_musd * revenue_multiple
+        # Allocate the year's served subscribers by the cohort's living-satellite
+        # share; the last living cohort takes the remainder so the parts sum exactly.
+        if idx == len(living_builds) - 1:
+            cohort_subscribers = subscribers_served_this_year - subscribers_allocated
+        elif living_fleet > 0:
+            cohort_subscribers = round(
+                subscribers_served_this_year * build.satellites / living_fleet
+            )
+        else:
+            cohort_subscribers = 0
+        subscribers_allocated += cohort_subscribers
+        arpu_revenue_musd = cohort_subscribers * arpu_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
+        cost_plus_margin_pct = _gross_margin_pct(cost_plus_revenue_musd, annual_cost_musd)
+        arpu_margin_pct = _gross_margin_pct(arpu_revenue_musd, annual_cost_musd)
+        lines.append(
+            CommsCohortYear(
+                launch_year=build.launch_year,
+                living_satellites=build.satellites,
+                annual_cost_musd=annual_cost_musd,
+                cost_plus_revenue_musd=cost_plus_revenue_musd,
+                cost_plus_gross_margin_pct=cost_plus_margin_pct,
+                arpu_subscribers_served=cohort_subscribers,
+                arpu_revenue_musd=arpu_revenue_musd,
+                arpu_gross_margin_pct=arpu_margin_pct,
+            )
+        )
+    return tuple(lines)
+
+
 def _compute_comms_year(
     year_idx: int,
     fy: int,
     config: CommsConfig,
     cohorts: list[LivedCohort],
+    cohort_builds: list[_CohortBuild],
     fleet_target: int,
     target_already_reached: bool,
 ) -> tuple[CommsYear, bool]:
-    """Roll up one model year: deploy toward the fleet target, hold, and cost it.
+    """Roll up one model year: deploy toward the fleet target, hold, cost it, and price revenue.
 
     Applies the build-and-hold cap in launch-year order:
 
@@ -542,6 +854,14 @@ def _compute_comms_year(
     5. Append ``LivedCohort(fy, satellites_added)`` and re-derive ``living_after``
        under the cliff (so the living count tracks the cohort window).
 
+    Then it layers the REVENUE + GROSS MARGIN overlay (the two cases). It records this
+    year's cohort on the parallel ``cohort_builds`` list with its locked-in
+    per-satellite annual cost, sums the annualized fleet cost over the living cohorts
+    (the margin cost basis, matching the DC annualized convention), scales the served
+    subscribers to this year's buildout, and computes both the cost-plus revenue
+    (annual cost x the multiple) and the ARPU revenue (served base x monthly ARPU x
+    12), each with its gross margin, plus the per-cohort breakdown.
+
     The fleet target is the CAPACITY-sized fleet (:func:`compute_fleet_target`); the
     treadmill builds and holds to it. The coverage metric is reported separately
     against the coverage floor (it can saturate at 1.0 well before full deployment
@@ -552,6 +872,8 @@ def _compute_comms_year(
         fy: The fiscal year (``base_year + year_idx``), the cohort launch year.
         config: The comms config.
         cohorts: The cohort list so far (this year's cohort is appended in place).
+        cohort_builds: The parallel economics-overlay cohort list (this year's cohort,
+            with its locked-in per-satellite annual cost, is appended in place).
         fleet_target: The capacity-sized fleet the build-out fills toward.
         target_already_reached: Whether the fleet target was reached in a PRIOR year
             (carries the HOLD-phase flag forward across years).
@@ -595,6 +917,68 @@ def _compute_comms_year(
         total_cost_this_year_musd if target_reached_now else NO_REPLACEMENT_COST_MUSD
     )
 
+    # --- The revenue + gross-margin overlay (the two cases). ---
+    # Record this year's cohort with its locked-in per-satellite annual cost (built
+    # from this year's launch cost, so the cadence cost-down is fixed for its life).
+    # Only NON-EMPTY cohorts are recorded: a year that deploys zero satellites (e.g.
+    # the early build-out years at a small cadence share) launches no cohort and so
+    # adds no economics line (it would carry zero satellites, zero cost, zero
+    # revenue, an undefined margin); skipping it keeps the cohort lines to the real
+    # living satellites.
+    if satellites_added > 0:
+        per_satellite_annual_cost_musd = _per_satellite_annual_cost_musd(
+            satellite_build_cost_musd=config.satellite.satellite_build_cost_musd,
+            launch_cost_per_launch_musd=launch_cost_per_launch_musd,
+            satellites_per_launch=satellites_per_launch,
+            satellite_lifetime_years=life,
+        )
+        cohort_builds.append(
+            _CohortBuild(
+                launch_year=fy,
+                satellites=satellites_added,
+                per_satellite_annual_cost_musd=per_satellite_annual_cost_musd,
+            )
+        )
+    # The annualized fleet cost (the margin cost basis): sum over living cohorts of
+    # each cohort's living satellites x its per-satellite annual cost. This is the
+    # steady annual cost each satellite carries, NOT the deployment cash cost; it is
+    # a different convention from the cash replacement line (they converge only in
+    # clean rotational steady state).
+    annual_cost_this_year_musd = sum(
+        b.satellites * b.per_satellite_annual_cost_musd
+        for b in cohort_builds
+        if cohort_is_alive_at(b.launch_year, fy, life)
+    )
+    # The served subscribers at THIS year's buildout (the ARPU base for the year).
+    subscribers_served_this_year = subscribers_served_at(
+        buildout_fraction,
+        subscriber_target=config.subscribers.subscribers_at_full_coverage,
+        override=config.subscribers.subscribers_served_override,
+    )
+    revenue_multiple = config.revenue.revenue_multiple
+    arpu_usd_per_month = config.revenue.arpu_usd_per_month
+    # Case 1, COST-PLUS: revenue = annual cost x the multiple (cost-coupled).
+    cost_plus_revenue_this_year_musd = annual_cost_this_year_musd * revenue_multiple
+    cost_plus_gross_margin_pct = _gross_margin_pct(
+        cost_plus_revenue_this_year_musd, annual_cost_this_year_musd
+    )
+    # Case 2, ARPU: revenue = served base x monthly ARPU x 12 (price x served base).
+    arpu_revenue_this_year_musd = (
+        subscribers_served_this_year * arpu_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
+    )
+    arpu_gross_margin_pct = _gross_margin_pct(
+        arpu_revenue_this_year_musd, annual_cost_this_year_musd
+    )
+    cohort_lines = _cohort_economics_for_year(
+        fy=fy,
+        life=life,
+        cohort_builds=cohort_builds,
+        living_fleet=living_after,
+        subscribers_served_this_year=subscribers_served_this_year,
+        revenue_multiple=revenue_multiple,
+        arpu_usd_per_month=arpu_usd_per_month,
+    )
+
     comms_year = CommsYear(
         year=fy,
         fleet_launches_this_year=fleet_launches,
@@ -609,6 +993,13 @@ def _compute_comms_year(
         total_cost_this_year_musd=total_cost_this_year_musd,
         is_hold_phase=target_reached_now,
         replacement_cost_this_year_musd=replacement_cost_this_year_musd,
+        subscribers_served_this_year=subscribers_served_this_year,
+        annual_cost_this_year_musd=annual_cost_this_year_musd,
+        cost_plus_revenue_this_year_musd=cost_plus_revenue_this_year_musd,
+        cost_plus_gross_margin_pct=cost_plus_gross_margin_pct,
+        arpu_revenue_this_year_musd=arpu_revenue_this_year_musd,
+        arpu_gross_margin_pct=arpu_gross_margin_pct,
+        cohort_lines=cohort_lines,
     )
     return comms_year, target_reached_now
 
@@ -644,7 +1035,8 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
         A :class:`CommsTrajectory`: the per-year rollups plus the cumulative
         build-and-hold cost, the fleet target and its binding regime, the first
         full-deployment year (or ``None``), the steady-state annual replacement cost,
-        the served-subscriber count, and the annual cost per subscriber.
+        the served-subscriber count, the annual cost per subscriber, and the
+        steady-state two-case revenue + gross margin (cost-plus and ARPU).
     """
     base_year = config.metadata.base_year
     horizon_years = config.metadata.horizon_years
@@ -661,6 +1053,9 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
     )
 
     cohorts: list[LivedCohort] = []
+    # The parallel economics-overlay cohort list (carries the per-satellite annual
+    # cost the build/cost treadmill does not). Threaded alongside ``cohorts``.
+    cohort_builds: list[_CohortBuild] = []
     years: list[CommsYear] = []
     target_reached = False
     full_coverage_reached_year: int | None = None
@@ -668,7 +1063,7 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
     for year_idx in range(horizon_years + 1):
         fy = base_year + year_idx
         comms_year, target_reached = _compute_comms_year(
-            year_idx, fy, config, cohorts, fleet_target, target_reached
+            year_idx, fy, config, cohorts, cohort_builds, fleet_target, target_reached
         )
         years.append(comms_year)
         if full_coverage_reached_year is None and target_reached:
@@ -699,6 +1094,29 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
         steady_state_annual_replacement_cost_musd, subscriber_target
     )
 
+    # The steady-state revenue + gross-margin headlines (both cases) read the FINAL
+    # model year's lines (the representative HOLD-phase steady state, matching the
+    # ``steady_state_annual_replacement_cost`` convention). The margin cost basis is
+    # the ANNUALIZED fleet cost (``annual_cost_this_year_musd``), the DC convention;
+    # it converges with the cash replacement line only in clean rotational steady
+    # state (in the build-just-completed final year it runs higher).
+    final_year = years[-1] if years else None
+    steady_state_annual_cost_musd = (
+        final_year.annual_cost_this_year_musd if final_year else NO_ANNUAL_COST_MUSD
+    )
+    steady_state_revenue_cost_plus_musd = (
+        final_year.cost_plus_revenue_this_year_musd if final_year else NO_REVENUE_MUSD
+    )
+    steady_state_gross_margin_cost_plus_pct = (
+        final_year.cost_plus_gross_margin_pct if final_year else ZERO_MARGIN_PCT
+    )
+    steady_state_revenue_arpu_musd = (
+        final_year.arpu_revenue_this_year_musd if final_year else NO_REVENUE_MUSD
+    )
+    steady_state_gross_margin_arpu_pct = (
+        final_year.arpu_gross_margin_pct if final_year else ZERO_MARGIN_PCT
+    )
+
     if full_coverage_reached_year is None:
         logger.warning(
             "Comms build-out did not reach the fleet target (%d satellites, %s regime) within "
@@ -722,10 +1140,16 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
         steady_state_annual_replacement_cost_musd=steady_state_annual_replacement_cost_musd,
         subscribers_served=subscribers_served,
         cost_per_subscriber_annual_usd=cost_per_subscriber_annual_usd,
+        steady_state_annual_cost_musd=steady_state_annual_cost_musd,
+        steady_state_revenue_cost_plus_musd=steady_state_revenue_cost_plus_musd,
+        steady_state_gross_margin_cost_plus_pct=steady_state_gross_margin_cost_plus_pct,
+        steady_state_revenue_arpu_musd=steady_state_revenue_arpu_musd,
+        steady_state_gross_margin_arpu_pct=steady_state_gross_margin_arpu_pct,
     )
 
 
 __all__ = [
+    "CommsCohortYear",
     "CommsTrajectory",
     "CommsYear",
     "compute_fleet_target",

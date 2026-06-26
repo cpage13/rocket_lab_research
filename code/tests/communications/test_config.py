@@ -49,12 +49,14 @@ from communications.config import (
     CoverageDials,
     GroundInterfaceDials,
     LaunchCostDials,
+    RevenueDials,
     SatelliteDials,
     SubscriberDials,
     comms_config_from_dict,
     load_comms_config,
 )
 from communications.constants import (
+    ARPU_USD_PER_MONTH_DEFAULT,
     BASE_YEAR_DEFAULT,
     CADENCE_CEILING_DEFAULT,
     COMMS_SHARE_DEFAULT,
@@ -66,6 +68,7 @@ from communications.constants import (
     LAUNCHES_AT_YEAR_10_DEFAULT,
     LOW_CADENCE_COST_MUSD_DEFAULT,
     MAX_FLEET_SATELLITES_DEFAULT,
+    REVENUE_MULTIPLE_DEFAULT,
     SATELLITE_BUILD_COST_MUSD_DEFAULT,
     SATELLITE_LIFETIME_YEARS_DEFAULT,
     SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
@@ -87,6 +90,7 @@ def test_comms_config_default_construction_has_all_blocks() -> None:
     assert isinstance(c.satellite, SatelliteDials)
     assert isinstance(c.coverage, CoverageDials)
     assert isinstance(c.subscribers, SubscriberDials)
+    assert isinstance(c.revenue, RevenueDials)
     # The ground interface is None by default so the cost side never blocks.
     assert c.ground is None
 
@@ -122,6 +126,13 @@ def test_satellite_dials_frozen() -> None:
         sat.satellite_build_cost_musd = 2.0
 
 
+def test_revenue_dials_frozen() -> None:
+    """Mutating the revenue block raises ``ValidationError`` (frozen)."""
+    rev = RevenueDials()
+    with pytest.raises(ValidationError):
+        rev.revenue_multiple = 2.0
+
+
 # -- extra=forbid -----------------------------------------------------
 
 
@@ -138,6 +149,11 @@ def test_cadence_dials_rejects_unknown_field() -> None:
 def test_satellite_dials_rejects_unknown_field() -> None:
     with pytest.raises(ValidationError):
         SatelliteDials.model_validate({"bogus_dial": 1})
+
+
+def test_revenue_dials_rejects_unknown_field() -> None:
+    with pytest.raises(ValidationError):
+        RevenueDials.model_validate({"bogus_dial": 1.0})
 
 
 def test_ground_interface_dials_rejects_unknown_field() -> None:
@@ -243,6 +259,15 @@ def test_subscriber_dials_defaults() -> None:
     assert subs.subscribers_served_override is None
 
 
+def test_revenue_dials_defaults() -> None:
+    """The revenue multiple default is 1.5 (the DC R mirror); the ARPU is $50/mo."""
+    rev = RevenueDials()
+    assert rev.revenue_multiple == REVENUE_MULTIPLE_DEFAULT
+    assert rev.revenue_multiple == pytest.approx(1.5)
+    assert rev.arpu_usd_per_month == ARPU_USD_PER_MONTH_DEFAULT
+    assert rev.arpu_usd_per_month == pytest.approx(50.0)
+
+
 # -- ground interface block (declared in Phase 1, None-able baselines) -
 
 
@@ -297,6 +322,16 @@ def test_subscribers_per_satellite_rejects_zero() -> None:
         SubscriberDials(subscribers_per_satellite=0)
 
 
+def test_revenue_multiple_rejects_zero() -> None:
+    with pytest.raises(ValidationError):
+        RevenueDials(revenue_multiple=0.0)
+
+
+def test_arpu_rejects_zero() -> None:
+    with pytest.raises(ValidationError):
+        RevenueDials(arpu_usd_per_month=0.0)
+
+
 def test_metadata_rejects_out_of_range_horizon() -> None:
     with pytest.raises(ValidationError):
         CommsMetadataDials(base_year=BASE_YEAR_DEFAULT, horizon_years=0)
@@ -316,6 +351,14 @@ def test_comms_config_from_dict_partial_fills_defaults() -> None:
     assert c.satellite.satellites_per_launch == 16
     # An unspecified field in the same block keeps its default.
     assert c.satellite.satellite_build_cost_musd == SATELLITE_BUILD_COST_MUSD_DEFAULT
+
+
+def test_comms_config_from_dict_revenue_block_overrides() -> None:
+    """A revenue-block mapping overrides the named revenue field and fills the rest."""
+    c = comms_config_from_dict({"revenue": {"arpu_usd_per_month": 80.0}})
+    assert c.revenue.arpu_usd_per_month == pytest.approx(80.0)
+    # The unspecified multiple keeps its default.
+    assert c.revenue.revenue_multiple == REVENUE_MULTIPLE_DEFAULT
 
 
 def test_load_comms_config_empty_file_is_all_defaults(tmp_path: Path) -> None:

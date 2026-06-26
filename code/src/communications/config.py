@@ -31,6 +31,10 @@ a household). It is NOT a market-share, demand, or revenue/DCF model. The blocks
   this): the subscriber TARGET (the base to serve, the INPUT), the attached
   subscribers-per-satellite density that divides the target into the capacity fleet
   need, plus an optional direct served-base override.
+* ``revenue: RevenueDials`` -- the two REVENUE cases the engine computes on every
+  run: the COST-PLUS multiple (revenue = cost x multiple, mirroring the DC R) and the
+  PRICES-TODAY ARPU (revenue = served base x monthly ARPU x 12). Both yield revenue +
+  gross margin per cohort and per year.
 * ``ground: GroundInterfaceDials | None`` -- the marked, TWO-REGIME ground
   INTERFACE (Phase 4), default ``None`` so the cost side never blocks on a ground
   number. The dense + sparse baselines are individually None-able caller inputs.
@@ -51,6 +55,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from communications.constants import (
+    ARPU_USD_PER_MONTH_DEFAULT,
     BASE_YEAR_DEFAULT,
     CADENCE_CEILING_DEFAULT,
     COMMS_SHARE_DEFAULT,
@@ -68,6 +73,7 @@ from communications.constants import (
     MAX_HORIZON_YEARS,
     MIN_FY,
     MIN_HORIZON_YEARS,
+    REVENUE_MULTIPLE_DEFAULT,
     SATELLITE_BUILD_COST_MUSD_DEFAULT,
     SATELLITE_LIFETIME_YEARS_DEFAULT,
     SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
@@ -352,6 +358,56 @@ class SubscriberDials(BaseModel):
     )
 
 
+class RevenueDials(BaseModel):
+    """The two REVENUE cases that ride the cohort treadmill (revenue + gross margin).
+
+    The engine computes BOTH cases on every run (they are not mutually exclusive
+    dials; each is a separate lens on the same fleet), mirroring the data-center
+    model's revenue/margin pattern but adapted to the comms model's lighter
+    single-value (no R-band) style:
+
+    * COST-PLUS / MARGIN-TARGET (``revenue_multiple``): annual revenue = annual cost
+      x the multiple, the same owner-operator basis as the DC central R (1.5 -> 33.3%
+      gross margin). A cost-coupled case (revenue tracks the cost basis).
+    * PRICES-TODAY / ARPU (``arpu_usd_per_month``): annual revenue = served
+      subscribers x the monthly ARPU x 12, a retail price applied to the served base.
+
+    Gross margin in BOTH cases is ``(revenue - cost) / revenue`` against the same
+    annualized cost basis the engine carries per cohort (the per-satellite lifetime
+    cost spread over the satellite life, matching the DC annualized convention). The
+    revenue is a cost-coupled multiple or a price-times-served-base figure, NEVER a
+    demand, market-size, or willingness-to-pay estimate (no forbidden demand-side
+    token appears on this block).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    revenue_multiple: float = Field(
+        default=REVENUE_MULTIPLE_DEFAULT,
+        gt=0,
+        description=(
+            "The COST-PLUS / MARGIN-TARGET revenue multiple: annual revenue = annual "
+            "cost x this. FOUNDER_SET to 1.5 (cost+50%, an implied (1.5 - 1) / 1.5 = "
+            "33.3% gross margin), mirroring the data-center central R = 1.5 "
+            "(research/SOURCE_INDEX.md#REV-008). Each 5-year cohort earns this margin "
+            "across its life. Configurable."
+        ),
+    )
+    arpu_usd_per_month: float = Field(
+        default=ARPU_USD_PER_MONTH_DEFAULT,
+        gt=0,
+        description=(
+            "The PRICES-TODAY / ARPU monthly revenue per subscriber: annual revenue = "
+            "served subscribers x this x 12 months. Default $50/month, a supportable "
+            "median that sits BELOW the ~$80 to 100/month terrestrial mobile plan "
+            "(documented in the assumptions), the headroom assuming direct-to-cell "
+            "prices drop toward and below today's terrestrial floor as the service "
+            "scales. A retail price on the SERVED base, NOT a demand estimate. "
+            "Configurable."
+        ),
+    )
+
+
 class GroundInterfaceDials(BaseModel):
     """The marked, TWO-REGIME CELLULAR-ground cost INTERFACE (Phase 4).
 
@@ -457,6 +513,10 @@ class CommsConfig(BaseModel):
         default_factory=SubscriberDials,
         description="The capacity dimension: subscriber target, per-satellite density, override.",
     )
+    revenue: RevenueDials = Field(
+        default_factory=RevenueDials,
+        description="The two revenue cases: the cost-plus multiple and the prices-today ARPU.",
+    )
     ground: GroundInterfaceDials | None = Field(
         default=None,
         description=(
@@ -492,8 +552,8 @@ def comms_config_from_dict(data: dict[str, object]) -> CommsConfig:
 
     Top-level keys are the block names (``metadata``, ``cadence``,
     ``comms_cadence``, ``launch_cost``, ``satellite``, ``coverage``,
-    ``subscribers``, ``ground``), all optional (omitted = defaults). An empty dict
-    yields an all-defaults config.
+    ``subscribers``, ``revenue``, ``ground``), all optional (omitted = defaults). An
+    empty dict yields an all-defaults config.
 
     Validation is Pydantic's: an unknown key, a wrong type, an out-of-bounds value,
     or a missing required field raises :class:`pydantic.ValidationError` with a
@@ -539,6 +599,7 @@ __all__ = [
     "CoverageDials",
     "GroundInterfaceDials",
     "LaunchCostDials",
+    "RevenueDials",
     "SatelliteDials",
     "SubscriberDials",
     "comms_config_from_dict",
