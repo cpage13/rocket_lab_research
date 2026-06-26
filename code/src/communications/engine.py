@@ -1,143 +1,105 @@
-"""The communications-model engine: the orchestrator and the promoted space JSON.
+"""The communications CELLULAR cost engine: the per-year cohort treadmill.
 
-``run_comms_model(config, ...)`` drives the Phase-2 engine-room modules across
-the horizon and assembles the five-key :class:`CommsModelOutput`. It:
-(1) computes the per-satellite four-area cost-out (with the learning-curve
-discount and the per-class satellites-per-launch fork) for BOTH satellite
-classes at each model year, (2) rolls the per-year cohorts up into the living
-fleet via the service-life treadmill (the cohort cliff reused from
-``common.cohort``), (3) computes the spectrum requirement, the empirical
-per-beam capacity, and the customer-chain planning band, mapping the
-direct-to-cell living-fleet satellite count to a served-customer band, and
-(4) assembles the typed five-key output, which the lean
-:func:`promote_default_space_model` helper serialises to
-``communications/models/space/default.json``.
+``run_comms_model(config)`` drives the slim cost-to-serve model across the
+horizon and returns a :class:`CommsTrajectory` of plain-numeric per-year rollups.
+It mirrors the data-center model's fleet engine (the per-year loop in
+``data_center/engine.py`` plus the living-cohort rollup in ``data_center/fleet.py``)
+with three deliberate differences, all driven by the comms design:
 
-THE C1 RESOLUTION (the headline is the STEADY-STATE figure). The headline mature
-per-customer cost, priced revenue, and served-customer band are read at
-``config.metadata.steady_state_year`` (default 2036). The engine ALSO emits the
-full per-year ``physical`` and ``business`` trajectories across the horizon as a
-coarse fill-out ramp for context, exactly as the DC emits per-year blocks; the
-steady-state figure is simply the ``business.years."<steady_state_year>"``
-record. ``RunMetadata`` carries ``steady_state_year`` so a cold reader (and
-Phase 4) knows which year to read.
+1. Satellites per launch. The DC deploys one node per launch; comms deploys
+   ``satellites_per_launch`` satellites per launch, so
+   ``satellites_deployed_this_year = comms_launches_flown_this_year * satellites_per_launch``.
+2. The build-and-hold cap (the treadmill). The DC fleet grows with cadence
+   without bound. Comms builds toward a fixed coverage target
+   (``satellites_for_full_coverage``) and then HOLDS: once the target is reached
+   it deploys only enough whole launches to replace the cohorts ageing off the
+   5-year cliff, so the living count stays at (or as close as launch granularity
+   allows to) the target.
+3. Two cadence roles. The shared whole-fleet logistic ramp
+   (``common.cadence.compute_launches_per_year``, the 90/year FY2036 ramp) sets
+   the WHOLE-fleet launch count. The comms slice flies a SHARE of it
+   (``share_of_fleet``). The launch COST is priced at the WHOLE-fleet cadence
+   (the cadence-indexed cost-down is a Neutron-production-scale effect shared
+   across the whole program, not the comms slice's own rate); the comms share
+   sets only how many launches comms flies. This is the load-bearing
+   distinction: cost is priced at fleet cadence, the count flown is the comms
+   share. (If the founder later wants the comms slice priced at its own lower
+   cadence, that is a documented alternative; the default is fleet-cadence
+   pricing.)
 
-THE TWO-PARALLEL-CONSTELLATIONS MODELLING CHOICE (load-bearing, founder-
-confirmable). The model has TWO satellite classes (broadband, direct-to-cell).
-The engine treats them as TWO PARALLEL constellations (each gets the full
-cadence of launches), reports each class's cohort, fleet, and cost SEPARATELY,
-and reports the DIRECT-TO-CELL customer band as the headline customer number
-(the SPECTRUM_spec 2,500-beam chain is the direct-to-cell relationship; mapping
-it onto broadband would misapply the anchor). The broadband class is costed and
-its fleet tracked, but the D2C customer chain is not forced onto it.
+The cohort cliff is the shared ``common.cohort.LivedCohort`` /
+``living_cohorts`` machinery, reused unchanged: a cohort is alive in the
+half-open interval ``[launch_year, launch_year + satellite_lifetime_years)``.
+The shared ``LivedCohort`` carries only ``launch_year`` + ``units_deployed``,
+which is exactly what comms needs (no per-satellite economics ride on the
+cohort, unlike the DC ``Cohort``), so comms uses it directly with no subclass.
 
-THE V4 STEP IS CAPABILITY-SURFACING, NOT COST- OR CUSTOMER-MOVING in this phase.
-The required ``capability`` cell is always populated (its base is the
-per-satellite aggregate throughput ``per_beam_capacity_mbps x beams_per_sat``,
-scaled by ``v4_capability_multiplier``, an identity at the default 1.0); it does
-not feed the cost or the customer band here.
+The two shared ``common.cadence`` functions return a ``ProvenanceCell``; this
+engine unwraps each ``.value`` to a plain ``float``/``int`` ONCE (via the
+private ``_cell_float`` / ``_cell_int`` helpers, mirroring the DC engine) at the
+single seam where the model touches a cell. Everything downstream is plain
+numerics; the comms output stays light (no provenance envelope).
 
-THE ``meta`` BLOCK IS INTENTIONALLY LEAN in this phase (an empty validation
-report, the source-status summary, the schema notes); Phase 5 enriches it.
+This module imports only from ``common.*`` and ``communications.*`` (never
+``data_center``, per the cross-import guard) and uses none of the forbidden
+demand-side tokens: subscribers are added by the Phase 3 / Phase 5 output
+assembly, not here. The engine is a clean cost-and-counts module; the output
+layer (Phase 5) wraps this trajectory and adds the coverage-to-subscriber
+mapping (Phase 3) and the ground ratio (Phase 4).
 
-The model is Neutron-only and cost-driven (Amendment A1: demand is assumed, not
-modelled): this phase emits NO cost-to-cost ratio, NO retail-undercut check, NO
-verdict, NO conclusion label, NO capture-share, NO market-share, and no
-heavier-than-Neutron vehicle. The space-side cost, the priced revenue
-(cost x 1.5), and the ARPU-collectable revenue are emitted as space-side cells;
-the COMPARISON against ground is Phase 4.
+THE OVERSHOOT RULE (frozen here and in the parity test). Launches are granular
+(a whole launch deploys ``satellites_per_launch`` satellites at once), so the
+last build-out launch may push the living count slightly OVER the target. The
+rule, applied uniformly in BOTH the build-out and HOLD phases: the satellites to
+add this year are the deficit to the target (``target - living_before``) rounded
+UP to a whole number of launches (``_ceil_to_launch``), capped by the comms
+cadence share for the year (``would_be_deployed``). This lets the final build
+cohort overshoot the target by strictly less than one launch's worth and never
+deploys beyond what is needed to hold. During HOLD the deficit equals exactly
+that year's cliff losses, so the same formula replaces only the ageing cohorts.
+
+Units: money in $M; counts are integers; time in fiscal years (FY2026..FY2036,
+year 0 = ``base_year``).
 """
 
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from importlib.metadata import PackageNotFoundError, version
-from pathlib import Path
-from typing import Final
 
-from common.cadence import compute_launches_per_year
-from common.input_manifest import SourceStatus
-from common.meta import SourceStatusSummary, ValidationReport
-from common.provenance import FieldPath, ProvenanceCell, cell
-from communications.config import (
-    CommsConfig,
-    SatelliteClassDials,
-    load_config,
+from common.cadence import (
+    ROUND_TO_NEAREST_OFFSET,
+    compute_launch_cost_musd,
+    compute_launches_per_year,
 )
-from communications.constants import (
-    DEFAULT_ARTIFACT_ROLE,
-    MODEL_PACKAGE_NAME,
-    PROMOTED_DEFAULT_ARTIFACT_ROLE,
-    SCHEMA_VERSION,
-    USD_PER_MUSD,
-)
-from communications.constellation import (
-    SatelliteCohort,
-    SatelliteCostBreakdown,
-    SatellitePacking,
-    compute_capability_after_v4_step,
-    compute_launch_cost_per_satellite,
-    compute_learning_curve_multiplier,
-    compute_satellite_build_cost,
-    compute_satellite_build_cost_after_learning,
-    compute_satellite_cost_annual,
-    compute_satellite_cost_breakdown,
-    compute_satellite_total_cost,
-    compute_satellites_per_launch,
-)
-from communications.input_manifest import InputManifest, build_comms_input_manifest
-from communications.output import (
-    BusinessBlock,
-    BusinessYear,
-    CommsModelOutput,
-    CustomerBandBlock,
-    MetaBlock,
-    PhysicalBlock,
-    PhysicalYear,
-    RunMetadata,
-    SatelliteClassPhysical,
-    SatelliteCostBreakdownBlock,
-)
-from communications.price_reference import (
-    compute_arpu_collectable_revenue,
-    compute_priced_cost_band,
-)
-from communications.spectrum import (
-    compute_customers_per_beam_band,
-    compute_customers_per_sat_band,
-    compute_naive_capacity_cross_check,
-    compute_per_beam_capacity,
-    compute_spectrum_to_acquire,
-    compute_total_served_band,
-)
+from common.cohort import LivedCohort, living_cohorts
+from common.provenance import ProvenanceCell
+from communications.config import CommsConfig
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION_NOTES: Final[str] = (
-    "comms-v1 space output: per-year per-class four-area cost-out, the cohort treadmill, "
-    "the direct-to-cell customer band, the source-status summary, and a lean (Phase-3) "
-    "validation report enriched in Phase 5."
-)
-"""The schema-version notes literal stamped into the meta block (a named constant
-so it is not a bare inline string)."""
+# ---------------------------------------------------------------------------
+# Fixed model constants (named, never bare literals; see CLAUDE.md).
+# ---------------------------------------------------------------------------
 
-# Path constants, resolved relative to this module file (the DC cli.py pattern)
-# so the paths are found from a checkout or an installed wheel.
-_CALCULATOR_DIR: Final[Path] = Path(__file__).resolve().parents[2]
-_PROJECT_DIR: Final[Path] = _CALCULATOR_DIR.parent
-_DEFAULT_YAML: Final[Path] = _CALCULATOR_DIR / "scenarios" / "comms_default.yaml"
-_PROMOTED_MODEL_DIR: Final[Path] = _PROJECT_DIR / "communications" / "models" / "space"
+FULL_COVERAGE_FRACTION: float = 1.0
+"""The coverage fraction at the full-coverage target: the living fleet is clamped
+to this so coverage never reports above 1.0 when the build overshoots the target
+by less than one launch's worth."""
 
-# The two satellite class names (used to key the per-class records).
-_BROADBAND: Final[str] = "broadband"
-_DIRECT_TO_CELL: Final[str] = "direct_to_cell"
+NO_REPLACEMENT_COST_MUSD: float = 0.0
+"""The HOLD-phase replacement-cost line value during the BUILD-OUT phase: there is
+no steady-state replacement line until the target is first reached, so build-out
+years carry 0.0 on the replacement line (their cost is the build-out cost, not a
+replacement cost)."""
 
 
-# ===========================================================================
-# 1. Unwrap helpers
-# ===========================================================================
+# ---------------------------------------------------------------------------
+# ProvenanceCell unwrap seam (mirrors the DC engine's _cell_float / _cell_int).
+# This is the ONLY place the comms model touches a ProvenanceCell; everything
+# downstream is plain floats/ints.
+# ---------------------------------------------------------------------------
 
 
 def _cell_float(c: ProvenanceCell) -> float:
@@ -150,7 +112,7 @@ def _cell_float(c: ProvenanceCell) -> float:
         The cell's value as a ``float``.
 
     Raises:
-        TypeError: If the cell's value is not a real number.
+        TypeError: If the cell's value is a bool or not a real number.
     """
     if isinstance(c.value, bool) or not isinstance(c.value, (int, float)):
         raise TypeError(f"ProvenanceCell {c.formula_name!r} is not numeric: {c.value!r}")
@@ -167,939 +129,349 @@ def _cell_int(c: ProvenanceCell) -> int:
         The cell's value as an ``int``.
 
     Raises:
-        TypeError: If the cell's value is not an integer.
+        TypeError: If the cell's value is a bool or not an int.
     """
     if isinstance(c.value, bool) or not isinstance(c.value, int):
         raise TypeError(f"ProvenanceCell {c.formula_name!r} is not an int: {c.value!r}")
     return c.value
 
 
-# ===========================================================================
-# 2. The per-class per-year computation
-# ===========================================================================
+# ---------------------------------------------------------------------------
+# Integer launch-count helpers (reuse the shared half-up offset; do not redefine).
+# ---------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class SatelliteClassYear:
-    """One satellite class's per-year computed state (the in-engine intermediate).
+def _round_half_up(x: float) -> int:
+    """Round a non-negative rate to an integer launch count, half up.
 
-    Holds the per-satellite cost breakdown, the packing fork, the discounted
-    per-satellite cost and its annualized form, and the per-launch count, all as
-    ProvenanceCells (or the Phase-2 dataclasses of cells). The engine builds one
-    per class per year and turns it into a cohort.
-
-    Attributes:
-        class_name: ``"broadband"`` or ``"direct_to_cell"``.
-        satellites_per_launch: The binding per-launch count (an int, unwrapped).
-        packing: The Phase-2 :class:`SatellitePacking` (the fork cells).
-        cost_breakdown: The Phase-2 :class:`SatelliteCostBreakdown`.
-        build_cost_after_learning_musd: The discounted build cost (a float).
-        satellite_total_musd: The total per-satellite cost (a float).
-        cost_annual_per_satellite_musd: The annualized per-satellite cost (a float).
-        physical: The :class:`SatelliteClassPhysical` output sub-block for this class.
-    """
-
-    class_name: str
-    satellites_per_launch: int
-    packing: SatellitePacking
-    cost_breakdown: SatelliteCostBreakdown
-    build_cost_after_learning_musd: float
-    satellite_total_musd: float
-    cost_annual_per_satellite_musd: float
-    physical: SatelliteClassPhysical
-
-
-def compute_satellite_class_year(
-    dials: SatelliteClassDials,
-    *,
-    class_name: str,
-    year_idx: int,
-    launches_this_year: int,
-    cumulative_units_before: int,
-    config: CommsConfig,
-    mass_envelope_t: float,
-    fairing_volume_m3: float,
-    per_beam_capacity_mbps: float,
-) -> SatelliteClassYear:
-    """Compute one satellite class's per-year per-satellite cost and packing.
-
-    Builds the four-area cost breakdown, the per-class satellites-per-launch
-    fork (using the active Neutron envelope the caller passes), the
-    learning-curve multiplier at the running cumulative-units count, the
-    discounted build cost, the per-satellite launch share at this year's
-    cadence, the total per-satellite cost, and the annualized cost over the
-    service life. ALSO builds the REQUIRED ``capability`` cell via
-    :func:`communications.constellation.compute_capability_after_v4_step` (the
-    base is the per-satellite aggregate throughput ``per_beam_capacity_mbps x
-    beams_per_sat``, unit ``"Mbps"``, scaled by ``v4_capability_multiplier``),
-    so the assembled :class:`SatelliteClassPhysical` has every required field
-    populated. Returns the in-engine intermediate plus the assembled output
-    sub-block.
+    Mirrors ``common.cadence._integer_launch_count`` using the shared
+    ``ROUND_TO_NEAREST_OFFSET`` authority (imported from ``common.cadence``, not
+    redefined): ``floor(x + 0.5)``. Used to turn the comms slice's fractional
+    ``fleet_launches * share_of_fleet`` into a whole launch count.
 
     Args:
-        dials: The per-class cost and packing dials.
-        class_name: ``"broadband"`` or ``"direct_to_cell"``.
-        year_idx: Model-year index (0 = base year).
-        launches_this_year: Whole-number launches in this calendar year.
-        cumulative_units_before: Cumulative satellites of this class built before
-            this year (the learning-curve count is taken at start-of-year).
-        config: The whole comms config (for lifetime, cost-down, launch dials, V4).
-        mass_envelope_t: The active Neutron mass envelope (baseline or upgraded).
-        fairing_volume_m3: The active Neutron fairing volume (baseline or upgraded).
-        per_beam_capacity_mbps: The year's empirical per-beam capacity (Mbps),
-            passed so this function can form the aggregate-throughput base for
-            the required ``capability`` cell.
+        x: A non-negative rate (the comms slice of the fleet launch count).
 
     Returns:
-        A :class:`SatelliteClassYear`.
+        The nearest whole-number launch count, rounded half up.
     """
-    dials_path: FieldPath = f"inputs.config.constellation.{class_name}"
-    launch_dials_path: FieldPath = "inputs.config.launch"
-    cost_down_path: FieldPath = "inputs.config.cost_down"
-    breakdown_path: FieldPath = (
-        f'physical.years."{config.metadata.base_year + year_idx}".{class_name}.cost_breakdown'
-    )
+    return math.floor(x + ROUND_TO_NEAREST_OFFSET)
 
-    breakdown = compute_satellite_cost_breakdown(
-        dials, class_name=class_name, dials_path=dials_path
-    )
-    build_cost = compute_satellite_build_cost(breakdown, breakdown_path=breakdown_path)
 
-    packing = compute_satellites_per_launch(
-        dials,
-        mass_envelope_t=mass_envelope_t,
-        fairing_volume_m3=fairing_volume_m3,
-        class_name=class_name,
-        dials_path=dials_path,
-        launch_dials_path=launch_dials_path,
-    )
-    satellites_per_launch = _cell_int(packing.satellites_per_launch)
+def _ceil_to_launch(satellites_needed: int, satellites_per_launch: int) -> int:
+    """Round a satellite deficit UP to a whole number of launches' worth.
 
-    learning_multiplier = compute_learning_curve_multiplier(
-        cumulative_units_before,
-        learning_rate_per_doubling=config.cost_down.learning_rate_per_doubling,
-        reference_units=config.cost_down.cost_down_reference_units,
-        cost_down_path=cost_down_path,
-    )
-    build_cost_after_learning = compute_satellite_build_cost_after_learning(
-        _cell_float(build_cost),
-        _cell_float(learning_multiplier),
-        build_cost_path=f"{breakdown_path}.build_cost",
-        learning_multiplier_path=(
-            f'physical.years."{config.metadata.base_year + year_idx}".learning_curve_multiplier'
-        ),
-    )
+    The build is granular: satellites are added a whole launch at a time. This
+    rounds the satellite deficit to the target up to the next multiple of
+    ``satellites_per_launch`` (the overshoot rule), so the final build launch may
+    push the living count over the target by strictly less than one launch's
+    worth.
 
-    launch_cost_per_satellite = compute_launch_cost_per_satellite(
-        satellites_per_launch,
-        launches_per_year=launches_this_year,
-        launch_dials=config.launch,
-        dials_path=launch_dials_path,
-        satellites_per_launch_path=f"{breakdown_path}.satellites_per_launch",
-    )
-    satellite_total = compute_satellite_total_cost(
-        _cell_float(build_cost_after_learning),
-        _cell_float(launch_cost_per_satellite),
-        build_cost_path=f"{breakdown_path}.build_cost_after_learning",
-        launch_cost_path=f"{breakdown_path}.launch_cost_per_satellite",
-    )
-    cost_annual = compute_satellite_cost_annual(
-        _cell_float(satellite_total),
-        config.constellation.satellite_lifetime_years,
-        satellite_total_path=f"{breakdown_path}.satellite_total",
-        lifetime_path="inputs.config.constellation.satellite_lifetime_years",
-    )
+    Args:
+        satellites_needed: Satellites still needed to reach the target this year
+            (already floored at 0 by the caller).
+        satellites_per_launch: Satellites deployed per launch (a positive count).
 
-    base_capability = per_beam_capacity_mbps * config.spectrum.beams_per_sat
-    capability = compute_capability_after_v4_step(
-        base_capability,
-        config.constellation.v4_capability_multiplier,
-        base_capability_path=(
-            f'physical.years."{config.metadata.base_year + year_idx}".per_beam_capacity_mbps'
-        ),
-        multiplier_path="inputs.config.constellation.v4_capability_multiplier",
-        capability_unit="Mbps",
-    )
+    Returns:
+        ``satellites_needed`` rounded up to the next multiple of
+        ``satellites_per_launch`` (``0`` when nothing is needed).
+    """
+    if satellites_needed <= 0:
+        return 0
+    launches = math.ceil(satellites_needed / satellites_per_launch)
+    return launches * satellites_per_launch
 
-    cost_breakdown_block = SatelliteCostBreakdownBlock(
-        antenna=breakdown.antenna,
-        comms_electronics=breakdown.comms_electronics,
-        solar=breakdown.solar,
-        radiator_bus=breakdown.radiator_bus,
-        minor_component=breakdown.minor_component,
-        build_cost=build_cost,
-        build_cost_after_learning=build_cost_after_learning,
-        launch_cost_per_satellite=launch_cost_per_satellite,
-        satellite_total=satellite_total,
-    )
-    physical = SatelliteClassPhysical(
-        satellites_per_launch=packing.satellites_per_launch,
-        binding_constraint=packing.binding_constraint,
-        mass_bound_count=packing.mass_bound_count,
-        volume_bound_count=packing.volume_bound_count,
-        cost_breakdown=cost_breakdown_block,
-        cost_annual_per_satellite_musd=cost_annual,
-        capability=capability,
-    )
-    return SatelliteClassYear(
-        class_name=class_name,
-        satellites_per_launch=satellites_per_launch,
-        packing=packing,
-        cost_breakdown=breakdown,
-        build_cost_after_learning_musd=_cell_float(build_cost_after_learning),
-        satellite_total_musd=_cell_float(satellite_total),
-        cost_annual_per_satellite_musd=_cell_float(cost_annual),
-        physical=physical,
-    )
+
+# ---------------------------------------------------------------------------
+# Per-year and whole-trajectory data structures (frozen, plain numerics).
+# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
 class CommsYear:
-    """One model year's full computed state across both classes plus the spectrum cells.
+    """One fiscal year's cost-and-counts rollup (plain numerics, no cells).
 
     Attributes:
-        year_idx: Model-year index (0 = base year).
-        fy: Calendar year (base_year + year_idx).
-        launches_this_year: Whole-number launches this year (an int).
-        launch_cost_musd: Per-launch cost at this year's cadence (a float).
-        broadband: The broadband :class:`SatelliteClassYear`.
-        direct_to_cell: The direct-to-cell :class:`SatelliteClassYear`.
-        physical: The assembled :class:`PhysicalYear` output block for this year.
-    """
-
-    year_idx: int
-    fy: int
-    launches_this_year: int
-    broadband: SatelliteClassYear
-    direct_to_cell: SatelliteClassYear
-    physical: PhysicalYear
-
-
-def compute_comms_year(
-    year_idx: int,
-    config: CommsConfig,
-    *,
-    cumulative_broadband_before: int,
-    cumulative_direct_to_cell_before: int,
-) -> CommsYear:
-    """Compute one model year across both satellite classes and the spectrum cells.
-
-    Prices the cadence (launches via ``common.cadence``), picks the active
-    Neutron envelope (upgraded vs baseline, the one place this choice lives),
-    computes the year's spectrum cells FIRST (the requirement, the empirical
-    per-beam capacity, the naive cross-check) so the empirical per-beam capacity
-    value is available to thread into both classes' capability bases, then
-    computes each class's :class:`SatelliteClassYear`, and assembles those cells
-    plus the learning-curve multiplier and the cumulative-built count into the
-    :class:`PhysicalYear` output block.
-
-    Args:
-        year_idx: Model-year index (0 = base year).
-        config: The validated comms config.
-        cumulative_broadband_before: Cumulative broadband satellites built before
-            this year (threaded by the trajectory loop).
-        cumulative_direct_to_cell_before: Cumulative direct-to-cell satellites
-            built before this year (threaded by the trajectory loop).
-
-    Returns:
-        A :class:`CommsYear`.
-    """
-    fy = config.metadata.base_year + year_idx
-    launches_cell = compute_launches_per_year(
-        year_idx,
-        dials_path="inputs.config.launch",
-        cadence_ceiling=config.launch.cadence_ceiling,
-        launches_at_year_5=config.launch.launches_at_year_5,
-        launches_at_year_10=config.launch.launches_at_year_10,
-        first_launch_year=config.launch.first_launch_year,
-    )
-    launches_this_year = _cell_int(launches_cell)
-
-    if config.constellation.upgraded_neutron:
-        mass_envelope_t = config.launch.upgraded_neutron_mass_envelope_t
-        fairing_volume_m3 = config.launch.upgraded_neutron_fairing_volume_m3
-    else:
-        mass_envelope_t = config.launch.neutron_mass_envelope_t
-        fairing_volume_m3 = config.launch.neutron_fairing_volume_m3
-
-    spectrum_path: FieldPath = "inputs.config.spectrum"
-    spectrum_to_acquire = compute_spectrum_to_acquire(config.spectrum, dials_path=spectrum_path)
-    per_beam_capacity = compute_per_beam_capacity(config.spectrum, dials_path=spectrum_path)
-    naive_capacity = compute_naive_capacity_cross_check(config.spectrum, dials_path=spectrum_path)
-    per_beam_capacity_mbps = _cell_float(per_beam_capacity)
-
-    broadband = compute_satellite_class_year(
-        config.constellation.broadband,
-        class_name=_BROADBAND,
-        year_idx=year_idx,
-        launches_this_year=launches_this_year,
-        cumulative_units_before=cumulative_broadband_before,
-        config=config,
-        mass_envelope_t=mass_envelope_t,
-        fairing_volume_m3=fairing_volume_m3,
-        per_beam_capacity_mbps=per_beam_capacity_mbps,
-    )
-    direct_to_cell = compute_satellite_class_year(
-        config.constellation.direct_to_cell,
-        class_name=_DIRECT_TO_CELL,
-        year_idx=year_idx,
-        launches_this_year=launches_this_year,
-        cumulative_units_before=cumulative_direct_to_cell_before,
-        config=config,
-        mass_envelope_t=mass_envelope_t,
-        fairing_volume_m3=fairing_volume_m3,
-        per_beam_capacity_mbps=per_beam_capacity_mbps,
-    )
-
-    # The learning-curve multiplier and cumulative-built cells are the same
-    # across the two classes only in form; the engine surfaces the broadband
-    # cumulative count + multiplier in the physical block (the per-class
-    # discounted cost already used each class's own cumulative count, threaded
-    # via compute_satellite_class_year). The block-level cells report the
-    # direct-to-cell-relevant cumulative built (the headline class), which keeps
-    # one cell per year while the per-class discount used the per-class count.
-    learning_multiplier_cell = compute_learning_curve_multiplier(
-        cumulative_direct_to_cell_before,
-        learning_rate_per_doubling=config.cost_down.learning_rate_per_doubling,
-        reference_units=config.cost_down.cost_down_reference_units,
-        cost_down_path="inputs.config.cost_down",
-    )
-    cumulative_built_cell = cell(
-        value=cumulative_direct_to_cell_before,
-        unit="count",
-        formula_name="comms_satellites_deployed_passthrough",
-        uses=["inputs.config.cost_down.cost_down_reference_units"],
-        sources=["research/comms_model_design/DESIGN.md#section-3"],
-        description=(
-            "Cumulative direct-to-cell satellites built before this year "
-            "(the start-of-year learning-curve count)."
-        ),
-    )
-
-    physical = PhysicalYear(
-        year=fy,
-        broadband=broadband.physical,
-        direct_to_cell=direct_to_cell.physical,
-        learning_curve_multiplier=learning_multiplier_cell,
-        cumulative_satellites_built=cumulative_built_cell,
-        spectrum_to_acquire_mhz=spectrum_to_acquire,
-        per_beam_capacity_mbps=per_beam_capacity,
-        naive_capacity_mbps=naive_capacity,
-    )
-    return CommsYear(
-        year_idx=year_idx,
-        fy=fy,
-        launches_this_year=launches_this_year,
-        broadband=broadband,
-        direct_to_cell=direct_to_cell,
-        physical=physical,
-    )
-
-
-# ===========================================================================
-# 3. The cohort rollup and the per-year fleet business block
-# ===========================================================================
-
-
-def _comms_year_to_cohorts(
-    year: CommsYear,
-    config: CommsConfig,
-) -> tuple[SatelliteCohort, SatelliteCohort]:
-    """Build the (broadband, direct_to_cell) deployment-year cohorts for one year.
-
-    Each cohort carries its launch year, its satellites-deployed count
-    (``launches_this_year x satellites_per_launch`` for the class), its
-    annualized per-satellite cost (fixed at launch), and its per-satellite
-    customer band (three ``customers_per_sat_low/mid/high`` floats).
-
-    THE PER-SATELLITE CUSTOMER-BAND FIELDS ARE CARRIED FOR COHORT-LEVEL
-    TRANSPARENCY / FUTURE USE AND ARE INTENTIONALLY NOT THE SOURCE OF THE
-    SERVED-CUSTOMER BAND. The authoritative served-customer band is computed at
-    the FLEET level in :func:`compute_comms_fleet_trajectory` from the
-    direct-to-cell LIVING-FLEET satellite count; the rollup does NOT sum these
-    cohort per-sat fields. They exist so a future cohort-vintaged customer view
-    (or a cross-check) has the data, and because the Phase-2
-    :class:`SatelliteCohort` declares them required, so the engine MUST populate
-    them. The direct-to-cell cohort populates them with the spectrum-chain
-    per-sat band; the broadband cohort populates them with ``0.0`` (the customer
-    chain is not applied to broadband), a truthful "no D2C chain on this class"
-    marker, never summed into any reported customer number.
-
-    Args:
-        year: The model year's :class:`CommsYear`.
-        config: The comms config (for the spectrum dials and beams-per-sat).
-
-    Returns:
-        A ``(broadband_cohort, direct_to_cell_cohort)`` tuple.
-    """
-    spectrum_path: FieldPath = "inputs.config.spectrum"
-    per_beam_capacity = compute_per_beam_capacity(config.spectrum, dials_path=spectrum_path)
-    per_beam_band = compute_customers_per_beam_band(
-        _cell_float(per_beam_capacity),
-        config.spectrum.target_per_user_rate_mbps,
-        config.spectrum.oversubscription_factor,
-        capacity_path=f"{spectrum_path}.per_beam_capacity",
-        rate_band_path=f"{spectrum_path}.target_per_user_rate_mbps",
-        oversubscription_band_path=f"{spectrum_path}.oversubscription_factor",
-    )
-    per_sat_band = compute_customers_per_sat_band(
-        per_beam_band,
-        config.spectrum.beams_per_sat,
-        customers_per_beam_path=f"{spectrum_path}.customers_per_beam",
-        beams_per_sat_path=f"{spectrum_path}.beams_per_sat",
-    )
-
-    broadband_deployed = year.launches_this_year * year.broadband.satellites_per_launch
-    direct_to_cell_deployed = year.launches_this_year * year.direct_to_cell.satellites_per_launch
-
-    broadband_cohort = SatelliteCohort(
-        launch_year=year.fy,
-        satellites_deployed=broadband_deployed,
-        cost_annual_per_satellite_musd=year.broadband.cost_annual_per_satellite_musd,
-        customers_per_sat_low=0.0,
-        customers_per_sat_mid=0.0,
-        customers_per_sat_high=0.0,
-    )
-    direct_to_cell_cohort = SatelliteCohort(
-        launch_year=year.fy,
-        satellites_deployed=direct_to_cell_deployed,
-        cost_annual_per_satellite_musd=year.direct_to_cell.cost_annual_per_satellite_musd,
-        customers_per_sat_low=_cell_float(per_sat_band.low),
-        customers_per_sat_mid=_cell_float(per_sat_band.mid),
-        customers_per_sat_high=_cell_float(per_sat_band.high),
-    )
-    return broadband_cohort, direct_to_cell_cohort
-
-
-@dataclass(frozen=True)
-class CommsFleetYear:
-    """One calendar year's living-fleet rollup for both classes plus the customer band.
-
-    Attributes:
-        year: Calendar year for this rollup.
-        broadband_living_satellites: Living broadband satellite count (an int).
-        direct_to_cell_living_satellites: Living direct-to-cell satellite count (an int).
-        business: The assembled :class:`BusinessYear` output block for this year.
+        year: The fiscal year (e.g. 2036).
+        fleet_launches_this_year: The whole-fleet integer cadence this year (the
+            shared logistic ramp output). The launch cost is priced at this.
+        comms_launches_flown_this_year: The comms launches actually flown this
+            year, after the cadence share and the build-and-hold cap.
+        satellites_deployed_this_year: Satellites added this year
+            (= ``comms_launches_flown_this_year * satellites_per_launch``).
+        living_fleet: Living satellites at this year under the 5-year cliff,
+            counted AFTER this year's cohort is added.
+        coverage_fraction: ``living_fleet / satellites_for_full_coverage``,
+            clamped to 1.0. Drives the coverage-driven subscriber count (Phase 3).
+        launch_cost_per_launch_musd: Per-launch cost at the whole-fleet cadence
+            this year, $M.
+        build_cost_this_year_musd: Satellite hardware build cost this year, $M
+            (= ``satellites_deployed_this_year * satellite_build_cost_musd``).
+        launch_cost_this_year_musd: Launch cost this year, $M
+            (= ``comms_launches_flown_this_year * launch_cost_per_launch_musd``).
+        total_cost_this_year_musd: ``build_cost_this_year_musd +
+            launch_cost_this_year_musd``.
+        is_hold_phase: ``True`` once the build-out target was first reached (this
+            year and every year thereafter).
+        replacement_cost_this_year_musd: The HOLD-phase ongoing replacement line,
+            $M; ``0.0`` during build-out, the year's total cost once in HOLD.
     """
 
     year: int
-    broadband_living_satellites: int
-    direct_to_cell_living_satellites: int
-    business: BusinessYear
+    fleet_launches_this_year: int
+    comms_launches_flown_this_year: int
+    satellites_deployed_this_year: int
+    living_fleet: int
+    coverage_fraction: float
+    launch_cost_per_launch_musd: float
+    build_cost_this_year_musd: float
+    launch_cost_this_year_musd: float
+    total_cost_this_year_musd: float
+    is_hold_phase: bool
+    replacement_cost_this_year_musd: float
 
 
-def _living_count_and_cost(
-    cohorts: list[SatelliteCohort],
-    year: int,
-    service_life: int,
-) -> tuple[int, float]:
-    """Return the living satellite count and the cohort-vintaged annual cost for a class.
+@dataclass(frozen=True)
+class CommsTrajectory:
+    """The whole build-and-hold run: the per-year rollups plus the headlines.
+
+    Attributes:
+        years: The per-year rollups, one per model year (FY2026..FY2036).
+        total_build_and_hold_cost_musd: The cumulative cost over the trajectory
+            (the sum of every year's ``total_cost_this_year_musd``), $M.
+        full_coverage_reached_year: The first fiscal year the living fleet hit
+            the coverage target, or ``None`` if the target is never reached
+            within the horizon (a truthful below-target output, not an error).
+        steady_state_annual_replacement_cost_musd: The representative HOLD-phase
+            annual replacement cost, $M. Defined as the final model year's
+            ``replacement_cost_this_year_musd`` (the steady state once the build
+            completes); ``0.0`` if the build never completes within the horizon.
+    """
+
+    years: tuple[CommsYear, ...]
+    total_build_and_hold_cost_musd: float
+    full_coverage_reached_year: int | None
+    steady_state_annual_replacement_cost_musd: float
+
+
+# ---------------------------------------------------------------------------
+# The cadence-share seam: how many launches the comms slice flies this year.
+# ---------------------------------------------------------------------------
+
+
+def _comms_launches_for_year(year_idx: int, config: CommsConfig) -> tuple[int, int, float]:
+    """Price one model year's cadence: fleet launches, comms launches, launch cost.
+
+    Calls the two shared ``common.cadence`` functions and unwraps their cells.
+    The whole-fleet cadence drives BOTH the comms launch count (via the share)
+    and the launch-cost pricing; the comms model never prices launches at its own
+    lower slice cadence.
 
     Args:
-        cohorts: All cohorts of one class deployed so far.
-        year: Calendar year to evaluate.
-        service_life: The service-life cliff in years.
+        year_idx: Zero-based model year index.
+        config: The comms config (provides the cadence, comms-cadence, and
+            launch-cost dial blocks).
 
     Returns:
-        A ``(living_satellites, cost_annual_fleet_musd)`` tuple over the cohorts
-        within the half-open service-life cliff at ``year``.
+        A 3-tuple ``(fleet_launches, comms_launches, launch_cost_per_launch_musd)``:
+        the whole-fleet integer launch count, the comms slice's integer launch
+        count (``round_half_up(fleet_launches * share_of_fleet)``), and the
+        per-launch cost in $M priced at the whole-fleet cadence.
     """
-    living = [c for c in cohorts if c.is_alive_at(year, service_life)]
-    count = sum(c.satellites_deployed for c in living)
-    cost = sum(c.satellites_deployed * c.cost_annual_per_satellite_musd for c in living)
-    return count, cost
-
-
-def _per_customer_cost_value(cost_annual_fleet_musd: float, served: float) -> float:
-    """Annual per-customer cost, USD/yr: fleet annual cost spread over served customers.
-
-    A NEGATIVE served count is a programming error (a count cannot be negative)
-    and raises. A served count of EXACTLY zero is the legitimate early-ramp case
-    (no living fleet yet, so no customers and zero fleet cost): the guarded zero
-    (``0.0``) is returned rather than a divide-by-zero, matching the DC
-    zero-guard philosophy. Under valid dials the steady-state served band is
-    strictly positive.
-
-    Args:
-        cost_annual_fleet_musd: The living-fleet annual cost, $M/yr.
-        served: A served-customer band member (a non-negative count).
-
-    Returns:
-        ``cost_annual_fleet_musd x USD_PER_MUSD / served`` USD/yr when ``served``
-        is positive, else ``0.0`` when ``served`` is exactly zero.
-
-    Raises:
-        ValueError: If ``served`` is negative.
-    """
-    if served < 0:
-        raise ValueError(f"served customers cannot be negative (got {served})")
-    if served == 0:
-        return 0.0
-    return cost_annual_fleet_musd * USD_PER_MUSD / served
-
-
-def _band_block(
-    *,
-    low_value: float,
-    mid_value: float,
-    high_value: float,
-    unit: str,
-    formula_name: str,
-    uses: list[FieldPath],
-    sources: list[str],
-    description_stub: str,
-) -> CustomerBandBlock:
-    """Build a :class:`CustomerBandBlock` from three float values plus shared cell metadata.
-
-    Args:
-        low_value: The band-low member value.
-        mid_value: The band-mid member value.
-        high_value: The band-high member value.
-        unit: The unit string for all three cells.
-        formula_name: The FORMULAS key for all three cells.
-        uses: The upstream JSON paths the band derives from.
-        sources: Provenance citations for all three cells.
-        description_stub: The leading phrase for each member's description.
-
-    Returns:
-        A :class:`CustomerBandBlock` of three sibling cells.
-    """
-    return CustomerBandBlock(
-        low=cell(
-            value=low_value,
-            unit=unit,
-            formula_name=formula_name,
-            uses=uses,
-            sources=sources,
-            description=f"{description_stub}, band-low.",
-        ),
-        mid=cell(
-            value=mid_value,
-            unit=unit,
-            formula_name=formula_name,
-            uses=uses,
-            sources=sources,
-            description=f"{description_stub}, band-mid.",
-        ),
-        high=cell(
-            value=high_value,
-            unit=unit,
-            formula_name=formula_name,
-            uses=uses,
-            sources=sources,
-            description=f"{description_stub}, band-high.",
-        ),
-    )
-
-
-def compute_comms_fleet_trajectory(
-    config: CommsConfig,
-    years: list[CommsYear],
-) -> list[CommsFleetYear]:
-    """Build the per-year living-fleet rollup parallel to the per-satellite trajectory.
-
-    For each model year: turns the year's per-class economics into deployment
-    cohorts (via :func:`_comms_year_to_cohorts`), rolls the living cohort set up
-    under the service-life cliff (the cohort treadmill, reusing the
-    ``common.cohort`` cliff), sums each class's living-fleet satellite count and
-    annual cost, computes the direct-to-cell served-customer band from the
-    direct-to-cell living-fleet satellite count and the spectrum chain, derives
-    the per-customer cost band and the priced-cost band, computes the
-    ARPU-collectable revenue cell, and assembles the :class:`BusinessYear`
-    output block. Threads the two cohort lists across the loop.
-
-    Args:
-        config: The comms config.
-        years: The per-year :class:`CommsYear` trajectory.
-
-    Returns:
-        A list of :class:`CommsFleetYear`, one per element of ``years``.
-    """
-    service_life = config.constellation.satellite_lifetime_years
-    spectrum_path: FieldPath = "inputs.config.spectrum"
-    price_reference_path: FieldPath = "inputs.config.price_reference"
-
-    # The per-beam / per-sat customer band is configuration-driven and constant
-    # across years, so compute it once outside the loop.
-    per_beam_capacity = compute_per_beam_capacity(config.spectrum, dials_path=spectrum_path)
-    per_beam_band = compute_customers_per_beam_band(
-        _cell_float(per_beam_capacity),
-        config.spectrum.target_per_user_rate_mbps,
-        config.spectrum.oversubscription_factor,
-        capacity_path=f"{spectrum_path}.per_beam_capacity",
-        rate_band_path=f"{spectrum_path}.target_per_user_rate_mbps",
-        oversubscription_band_path=f"{spectrum_path}.oversubscription_factor",
-    )
-    per_sat_band = compute_customers_per_sat_band(
-        per_beam_band,
-        config.spectrum.beams_per_sat,
-        customers_per_beam_path=f"{spectrum_path}.customers_per_beam",
-        beams_per_sat_path=f"{spectrum_path}.beams_per_sat",
-    )
-
-    broadband_cohorts: list[SatelliteCohort] = []
-    direct_to_cell_cohorts: list[SatelliteCohort] = []
-    fleet_years: list[CommsFleetYear] = []
-
-    for year in years:
-        broadband_cohort, direct_to_cell_cohort = _comms_year_to_cohorts(year, config)
-        broadband_cohorts.append(broadband_cohort)
-        direct_to_cell_cohorts.append(direct_to_cell_cohort)
-
-        broadband_living, broadband_cost = _living_count_and_cost(
-            broadband_cohorts, year.fy, service_life
-        )
-        direct_to_cell_living, direct_to_cell_cost = _living_count_and_cost(
-            direct_to_cell_cohorts, year.fy, service_life
-        )
-
-        year_path: FieldPath = f'business.years."{year.fy}"'
-
-        total_served = compute_total_served_band(
-            per_sat_band,
-            direct_to_cell_living,
-            customers_per_sat_path=f"{spectrum_path}.customers_per_sat",
-            num_satellites_path=f"{year_path}.direct_to_cell_living_fleet",
-        )
-        served_low = _cell_float(total_served.low)
-        served_mid = _cell_float(total_served.mid)
-        served_high = _cell_float(total_served.high)
-
-        # The per-customer cost band is the INVERSE pairing on the served band:
-        # cost-low uses the served-HIGH count (more customers spreads the fleet
-        # cost thinner, so cost-per-customer is lowest at the highest served).
-        cost_uses: list[FieldPath] = [
-            f"{year_path}.direct_to_cell_cost_annual_fleet_musd",
-            f"{year_path}.total_served.low",
-            f"{year_path}.total_served.mid",
-            f"{year_path}.total_served.high",
-        ]
-        cost_per_customer = _band_block(
-            low_value=_per_customer_cost_value(direct_to_cell_cost, served_high),
-            mid_value=_per_customer_cost_value(direct_to_cell_cost, served_mid),
-            high_value=_per_customer_cost_value(direct_to_cell_cost, served_low),
-            unit="USD",
-            formula_name="comms_cost_annual_per_customer_from_fleet_cost_and_served",
-            uses=cost_uses,
-            sources=["research/comms_model_design/DESIGN.md#section-7"],
-            description_stub="Annual direct-to-cell cost to serve one customer, USD/yr",
-        )
-
-        # The priced-cost band routes the 1.5x markup through the canonical
-        # price_reference.compute_priced_cost_band helper (single production
-        # source of the revenue multiple), preserving the full cost-band uses set.
-        priced_uses: list[FieldPath] = [
-            f"{year_path}.cost_annual_per_customer_usd.low",
-            f"{year_path}.cost_annual_per_customer_usd.mid",
-            f"{year_path}.cost_annual_per_customer_usd.high",
-        ]
-        priced_cost = compute_priced_cost_band(
-            cost_low=_cell_float(cost_per_customer.low),
-            cost_mid=_cell_float(cost_per_customer.mid),
-            cost_high=_cell_float(cost_per_customer.high),
-            band_uses=priced_uses,
-        )
-
-        arpu_collectable = compute_arpu_collectable_revenue(
-            config.price_reference, dials_path=price_reference_path
-        )
-
-        business = BusinessYear(
-            year=year.fy,
-            launches=cell(
-                value=year.launches_this_year,
-                unit="count",
-                formula_name="comms_satellites_deployed_passthrough",
-                uses=[
-                    "inputs.config.launch.cadence_ceiling",
-                    "inputs.config.launch.launches_at_year_5",
-                    "inputs.config.launch.launches_at_year_10",
-                    "inputs.config.launch.first_launch_year",
-                ],
-                sources=["research/SOURCE_INDEX.md#NTR-010"],
-                description="Whole-number launches in this calendar year.",
-            ),
-            broadband_satellites_deployed_this_year=cell(
-                value=year.launches_this_year * year.broadband.satellites_per_launch,
-                unit="count",
-                formula_name="comms_satellites_deployed_this_year_from_launches_and_per_launch",
-                uses=[
-                    f"{year_path}.launches",
-                    f'physical.years."{year.fy}".broadband.satellites_per_launch',
-                ],
-                sources=["research/comms_model_design/DESIGN.md#section-4"],
-                description="Broadband satellites deployed this year.",
-            ),
-            direct_to_cell_satellites_deployed_this_year=cell(
-                value=year.launches_this_year * year.direct_to_cell.satellites_per_launch,
-                unit="count",
-                formula_name="comms_satellites_deployed_this_year_from_launches_and_per_launch",
-                uses=[
-                    f"{year_path}.launches",
-                    f'physical.years."{year.fy}".direct_to_cell.satellites_per_launch',
-                ],
-                sources=["research/comms_model_design/DESIGN.md#section-4"],
-                description="Direct-to-cell satellites deployed this year.",
-            ),
-            broadband_living_fleet=cell(
-                value=broadband_living,
-                unit="count",
-                formula_name="comms_living_fleet_satellites_from_cohort_cliff",
-                uses=[f"{year_path}.broadband_satellites_deployed_this_year"],
-                sources=["research/comms_model_design/DESIGN.md#section-4"],
-                description="Broadband living-fleet satellite count under the service-life cliff.",
-            ),
-            direct_to_cell_living_fleet=cell(
-                value=direct_to_cell_living,
-                unit="count",
-                formula_name="comms_living_fleet_satellites_from_cohort_cliff",
-                uses=[f"{year_path}.direct_to_cell_satellites_deployed_this_year"],
-                sources=["research/comms_model_design/DESIGN.md#section-4"],
-                description=(
-                    "Direct-to-cell living-fleet satellite count under the service-life cliff."
-                ),
-            ),
-            broadband_cost_annual_fleet_musd=cell(
-                value=broadband_cost,
-                unit="MUSD",
-                formula_name="comms_cost_annual_fleet_from_living_cohorts",
-                uses=[
-                    f"{year_path}.broadband_living_fleet",
-                    f'physical.years."{year.fy}".broadband.cost_annual_per_satellite_musd',
-                ],
-                sources=["research/comms_model_design/DESIGN.md#section-3"],
-                description="Broadband living-fleet annual cost, $M/yr.",
-            ),
-            direct_to_cell_cost_annual_fleet_musd=cell(
-                value=direct_to_cell_cost,
-                unit="MUSD",
-                formula_name="comms_cost_annual_fleet_from_living_cohorts",
-                uses=[
-                    f"{year_path}.direct_to_cell_living_fleet",
-                    f'physical.years."{year.fy}".direct_to_cell.cost_annual_per_satellite_musd',
-                ],
-                sources=["research/comms_model_design/DESIGN.md#section-3"],
-                description="Direct-to-cell living-fleet annual cost, $M/yr.",
-            ),
-            total_served=CustomerBandBlock(
-                low=total_served.low, mid=total_served.mid, high=total_served.high
-            ),
-            cost_annual_per_customer_usd=cost_per_customer,
-            priced_cost_per_customer_usd=priced_cost,
-            arpu_collectable_revenue_usd=arpu_collectable,
-        )
-        fleet_years.append(
-            CommsFleetYear(
-                year=year.fy,
-                broadband_living_satellites=broadband_living,
-                direct_to_cell_living_satellites=direct_to_cell_living,
-                business=business,
-            )
-        )
-    return fleet_years
-
-
-# ===========================================================================
-# 4. The top-level run and the output assembly
-# ===========================================================================
-
-
-def _model_version() -> str | None:
-    """Return the installed package version when import metadata is available.
-
-    The comms analog of the DC ``_model_version``: ``version(MODEL_PACKAGE_NAME)``
-    guarded by ``except PackageNotFoundError: return None`` (so an editable
-    checkout that was never pip-installed returns ``None``, which is expected).
-    """
-    try:
-        return version(MODEL_PACKAGE_NAME)
-    except PackageNotFoundError:
-        return None
-
-
-def _source_status_summary(manifest: InputManifest) -> SourceStatusSummary:
-    """Count input assumptions by source-status value.
-
-    Tallies every :class:`InputCell` in the manifest's flat ``assumption_index``
-    by its ``source_status`` and returns the eight-count
-    :class:`SourceStatusSummary`. The comms analog of the DC
-    ``_source_status_summary``: it counts INPUT cells (not the computed
-    provenance cells in physical / business).
-
-    Args:
-        manifest: The comms input manifest.
-
-    Returns:
-        The eight-count source-status summary.
-    """
-    summary = dict.fromkeys(SourceStatus, 0)
-    for input_cell in manifest.assumption_index.values():
-        summary[input_cell.source_status] += 1
-    return SourceStatusSummary(
-        certified=summary[SourceStatus.CERTIFIED],
-        sourced_estimate=summary[SourceStatus.SOURCED_ESTIMATE],
-        derived_estimate=summary[SourceStatus.DERIVED_ESTIMATE],
-        projection=summary[SourceStatus.PROJECTION],
-        extrapolation=summary[SourceStatus.EXTRAPOLATION],
-        scenario=summary[SourceStatus.SCENARIO],
-        placeholder=summary[SourceStatus.PLACEHOLDER],
-        stale=summary[SourceStatus.STALE],
-    )
-
-
-def run_comms_model(
-    config: CommsConfig,
-    *,
-    source_scenario_path: str = "unrecorded",
-    artifact_role: str = DEFAULT_ARTIFACT_ROLE,
-) -> CommsModelOutput:
-    """Run the communications model end-to-end and return the comms artifact.
-
-    Computes one :class:`CommsYear` per model year from year 0 to
-    ``metadata.horizon_years`` (threading the cumulative-built counts per class
-    for the learning curve), rolls the living fleet up by cohort, builds the
-    source-linked input manifest, and assembles the five-key
-    :class:`CommsModelOutput`. The headline mature figure is the steady-state
-    year's record (the C1 resolution); the per-year ramp is carried as context.
-    Computes NO cost-to-cost ratio and NO retail-undercut check (Phase 4) and NO
-    verdict (the model never bakes in a conclusion).
-
-    Args:
-        config: The validated :class:`CommsConfig`.
-        source_scenario_path: Repository-relative source scenario path.
-        artifact_role: Artifact role to stamp in the output metadata.
-
-    Returns:
-        A frozen :class:`CommsModelOutput`.
-    """
-    reference_units = config.cost_down.cost_down_reference_units
-    cumulative_broadband = reference_units
-    cumulative_direct_to_cell = reference_units
-
-    years: list[CommsYear] = []
-    for year_idx in range(config.metadata.horizon_years + 1):
-        comms_year = compute_comms_year(
+    cad = config.cadence
+    fleet_launches = _cell_int(
+        compute_launches_per_year(
             year_idx,
-            config,
-            cumulative_broadband_before=cumulative_broadband,
-            cumulative_direct_to_cell_before=cumulative_direct_to_cell,
+            cadence_ceiling=cad.cadence_ceiling,
+            launches_at_year_5=cad.launches_at_year_5,
+            launches_at_year_10=cad.launches_at_year_10,
+            first_launch_year=cad.first_launch_year,
+        )
+    )
+    comms_launches = _round_half_up(fleet_launches * config.comms_cadence.share_of_fleet)
+    lc = config.launch_cost
+    launch_cost_per_launch_musd = _cell_float(
+        compute_launch_cost_musd(
+            float(fleet_launches),
+            low_cadence_cost_musd=lc.low_cadence_cost_musd,
+            high_cadence_cost_musd=lc.high_cadence_cost_musd,
+            low_cadence_launches=lc.low_cadence_launches,
+            high_cadence_launches=lc.high_cadence_launches,
+        )
+    )
+    return fleet_launches, comms_launches, launch_cost_per_launch_musd
+
+
+# ---------------------------------------------------------------------------
+# The build-and-hold treadmill: one model year.
+# ---------------------------------------------------------------------------
+
+
+def _compute_comms_year(
+    year_idx: int,
+    fy: int,
+    config: CommsConfig,
+    cohorts: list[LivedCohort],
+    target_already_reached: bool,
+) -> tuple[CommsYear, bool]:
+    """Roll up one model year: deploy toward the target, hold, and cost it.
+
+    Applies the build-and-hold cap in launch-year order:
+
+    1. Price the cadence (fleet launches, comms launches, launch cost).
+    2. ``would_be_deployed = comms_launches * satellites_per_launch`` (the
+       cadence-share cap on the build rate this year).
+    3. ``living_before`` = the living fleet from PRIOR cohorts under the cliff at
+       ``fy`` (cohorts that aged off are already excluded).
+    4. ``satellites_added = min(would_be_deployed, ceil_to_launch(max(0,
+       target - living_before), satellites_per_launch))`` (the overshoot rule:
+       the deficit rounded up to whole launches, capped by the cadence share).
+       During HOLD the deficit equals that year's cliff losses, so this replaces
+       only the ageing cohorts.
+    5. Append ``LivedCohort(fy, satellites_added)`` and re-derive ``living_after``
+       under the cliff (so the living count tracks the cohort window).
+
+    Args:
+        year_idx: Zero-based model year index (for the cadence ramp).
+        fy: The fiscal year (``base_year + year_idx``), the cohort launch year.
+        config: The comms config.
+        cohorts: The cohort list so far (this year's cohort is appended in place).
+        target_already_reached: Whether the build-out target was reached in a
+            PRIOR year (carries the HOLD-phase flag forward across years).
+
+    Returns:
+        A 2-tuple ``(comms_year, target_reached_now_or_before)``: the year's
+        rollup and the updated "target reached" flag to thread to the next year.
+    """
+    satellites_per_launch = config.satellite.satellites_per_launch
+    life = config.satellite.satellite_lifetime_years
+    target = config.coverage.satellites_for_full_coverage
+
+    fleet_launches, comms_launches, launch_cost_per_launch_musd = _comms_launches_for_year(
+        year_idx, config
+    )
+    would_be_deployed = comms_launches * satellites_per_launch
+
+    living_before = sum(c.units_deployed for c in living_cohorts(cohorts, fy, life))
+    deficit = max(0, target - living_before)
+    satellites_added = min(would_be_deployed, _ceil_to_launch(deficit, satellites_per_launch))
+    # The launches actually flown for cost is the whole-launch count we deployed
+    # (an integer, since satellites_added is a whole-launch multiple). The cadence
+    # share may have allowed more launches than the cap used near the end of the
+    # build-out; only the flown launches are costed.
+    comms_launches_flown = satellites_added // satellites_per_launch
+
+    cohorts.append(LivedCohort(launch_year=fy, units_deployed=satellites_added))
+    living_after = sum(c.units_deployed for c in living_cohorts(cohorts, fy, life))
+
+    coverage_fraction = min(FULL_COVERAGE_FRACTION, living_after / target)
+    target_reached_now = target_already_reached or living_after >= target
+
+    build_cost_this_year_musd = satellites_added * config.satellite.satellite_build_cost_musd
+    launch_cost_this_year_musd = comms_launches_flown * launch_cost_per_launch_musd
+    total_cost_this_year_musd = build_cost_this_year_musd + launch_cost_this_year_musd
+    # The replacement line is the ongoing HOLD-phase cost: 0.0 during build-out,
+    # the year's total cost once the target has been reached (this year's cost in
+    # HOLD is exactly the replacement of the cohorts that aged off).
+    replacement_cost_this_year_musd = (
+        total_cost_this_year_musd if target_reached_now else NO_REPLACEMENT_COST_MUSD
+    )
+
+    comms_year = CommsYear(
+        year=fy,
+        fleet_launches_this_year=fleet_launches,
+        comms_launches_flown_this_year=comms_launches_flown,
+        satellites_deployed_this_year=satellites_added,
+        living_fleet=living_after,
+        coverage_fraction=coverage_fraction,
+        launch_cost_per_launch_musd=launch_cost_per_launch_musd,
+        build_cost_this_year_musd=build_cost_this_year_musd,
+        launch_cost_this_year_musd=launch_cost_this_year_musd,
+        total_cost_this_year_musd=total_cost_this_year_musd,
+        is_hold_phase=target_reached_now,
+        replacement_cost_this_year_musd=replacement_cost_this_year_musd,
+    )
+    return comms_year, target_reached_now
+
+
+# ---------------------------------------------------------------------------
+# The engine entry point.
+# ---------------------------------------------------------------------------
+
+
+def run_comms_model(config: CommsConfig) -> CommsTrajectory:
+    """Run the build-and-hold cost trajectory for one comms cellular scenario.
+
+    Iterates the model years 0..``horizon_years`` inclusive (FY2026..FY2036 at
+    the defaults), deploying satellites toward the coverage target, holding the
+    constellation once reached (replacing the 5-year-cliff losses), and summing
+    the satellite build cost plus the cadence-indexed launch cost over the
+    trajectory.
+
+    The launch cost is priced at the WHOLE-fleet Neutron cadence (the shared
+    90/year FY2036 ramp drives the cost-down); the comms cadence share sets only
+    how many launches comms flies. If the coverage target is too high for the
+    chosen cadence share to reach within the horizon, the model still runs and
+    reports a living fleet below the target at the final year (a truthful output,
+    surfaced via ``full_coverage_reached_year is None`` and a WARNING log), not an
+    error.
+
+    Args:
+        config: The comms config (the slim, roughly 6-dial frozen Pydantic tree).
+            The all-defaults config reproduces the central case.
+
+    Returns:
+        A :class:`CommsTrajectory`: the per-year rollups plus the cumulative
+        build-and-hold cost, the first full-coverage year (or ``None``), and the
+        steady-state annual replacement cost.
+    """
+    base_year = config.metadata.base_year
+    horizon_years = config.metadata.horizon_years
+
+    cohorts: list[LivedCohort] = []
+    years: list[CommsYear] = []
+    target_reached = False
+    full_coverage_reached_year: int | None = None
+
+    for year_idx in range(horizon_years + 1):
+        fy = base_year + year_idx
+        comms_year, target_reached = _compute_comms_year(
+            year_idx, fy, config, cohorts, target_reached
         )
         years.append(comms_year)
-        cumulative_broadband += (
-            comms_year.launches_this_year * comms_year.broadband.satellites_per_launch
+        if full_coverage_reached_year is None and target_reached:
+            full_coverage_reached_year = fy
+
+    total_build_and_hold_cost_musd = sum(y.total_cost_this_year_musd for y in years)
+    # The steady-state annual replacement cost is the final model year's
+    # replacement line (the representative HOLD-phase annual cost once the build
+    # completes); 0.0 if the build never completed within the horizon.
+    steady_state_annual_replacement_cost_musd = (
+        years[-1].replacement_cost_this_year_musd if years else NO_REPLACEMENT_COST_MUSD
+    )
+
+    if full_coverage_reached_year is None:
+        logger.warning(
+            "Comms build-out did not reach the coverage target (%d satellites) within the "
+            "%d-year horizon at share_of_fleet=%.3f; living fleet at FY%d is %d. This is a "
+            "truthful below-target output, not an error.",
+            config.coverage.satellites_for_full_coverage,
+            horizon_years,
+            config.comms_cadence.share_of_fleet,
+            years[-1].year if years else base_year,
+            years[-1].living_fleet if years else 0,
         )
-        cumulative_direct_to_cell += (
-            comms_year.launches_this_year * comms_year.direct_to_cell.satellites_per_launch
-        )
 
-    fleet_years = compute_comms_fleet_trajectory(config, years)
-
-    physical_by_year: dict[str, PhysicalYear] = {str(y.fy): y.physical for y in years}
-    business_by_year: dict[str, BusinessYear] = {str(fy.year): fy.business for fy in fleet_years}
-
-    manifest = build_comms_input_manifest(config=config, source_scenario_path=source_scenario_path)
-    source_status_summary = _source_status_summary(manifest)
-    meta = MetaBlock(
-        validation=ValidationReport(rules=[]),
-        source_status_summary=source_status_summary,
-        schema_version_notes=SCHEMA_VERSION_NOTES,
+    return CommsTrajectory(
+        years=tuple(years),
+        total_build_and_hold_cost_musd=total_build_and_hold_cost_musd,
+        full_coverage_reached_year=full_coverage_reached_year,
+        steady_state_annual_replacement_cost_musd=steady_state_annual_replacement_cost_musd,
     )
-    metadata = RunMetadata(
-        schema_version=SCHEMA_VERSION,
-        scenario_name=config.scenario_levers.scenario_name,
-        base_year=config.metadata.base_year,
-        horizon_years=config.metadata.horizon_years,
-        steady_state_year=config.metadata.steady_state_year,
-        generated_at=datetime.now(UTC).isoformat(),
-        model_package=MODEL_PACKAGE_NAME,
-        model_version=_model_version(),
-        artifact_role=artifact_role,
-        source_scenario_path=source_scenario_path,
-    )
-    return CommsModelOutput(
-        metadata=metadata,
-        inputs=manifest,
-        physical=PhysicalBlock(years=physical_by_year),
-        business=BusinessBlock(years=business_by_year),
-        meta=meta,
-    )
-
-
-# ===========================================================================
-# 5. The lean serialize-and-promote helper
-# ===========================================================================
-
-
-def render_comms_json(output: CommsModelOutput) -> str:
-    """Serialise a :class:`CommsModelOutput` as indented JSON.
-
-    Wraps ``output.model_dump_json(indent=2)``. The returned string is what the
-    promote helper writes and what Phase 5's ``--json`` path will emit.
-
-    Args:
-        output: The comms model output to serialise.
-
-    Returns:
-        The indented JSON string.
-    """
-    return output.model_dump_json(indent=2)
-
-
-def _repo_relative(path: Path) -> str:
-    """Return a repository-relative path string for the source-scenario stamp."""
-    try:
-        return path.relative_to(_PROJECT_DIR).as_posix()
-    except ValueError:
-        return path.as_posix()
-
-
-def promote_default_space_model(
-    *,
-    config_path: Path | None = None,
-) -> Path:
-    """Run the default comms scenario and write the promoted space JSON to disk.
-
-    Loads the default scenario (``code/scenarios/comms_default.yaml`` when
-    ``config_path`` is None), runs :func:`run_comms_model` with the
-    promoted-default artifact role, and writes the JSON to
-    ``<repo_root>/communications/models/space/default.json`` (creating the
-    ``space/`` directory if absent). This is the lean Phase-3 promote so the
-    space model genuinely promotes; Phase 5's CLI supersedes it with the
-    ``rklb-comms`` console script and the dual-promote (space + ground).
-
-    Args:
-        config_path: Scenario YAML to run; defaults to the packaged
-            ``comms_default.yaml``.
-
-    Returns:
-        The path the promoted JSON was written to.
-
-    Raises:
-        FileNotFoundError: If the scenario file does not exist.
-        ValueError: If the scenario fails to load or validate.
-    """
-    yaml_path = config_path if config_path is not None else _DEFAULT_YAML
-    config = load_config(yaml_path)
-    output = run_comms_model(
-        config,
-        source_scenario_path=_repo_relative(yaml_path),
-        artifact_role=PROMOTED_DEFAULT_ARTIFACT_ROLE,
-    )
-    path = _PROMOTED_MODEL_DIR / "default.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render_comms_json(output) + "\n", encoding="utf-8")
-    logger.info("promoted comms space model -> %s", path)
-    return path
 
 
 __all__ = [
-    "CommsFleetYear",
+    "CommsTrajectory",
     "CommsYear",
-    "SatelliteClassYear",
-    "compute_comms_fleet_trajectory",
-    "compute_comms_year",
-    "compute_satellite_class_year",
-    "promote_default_space_model",
-    "render_comms_json",
     "run_comms_model",
 ]
