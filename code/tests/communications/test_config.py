@@ -65,11 +65,13 @@ from communications.constants import (
     LAUNCHES_AT_YEAR_5_DEFAULT,
     LAUNCHES_AT_YEAR_10_DEFAULT,
     LOW_CADENCE_COST_MUSD_DEFAULT,
+    MAX_FLEET_SATELLITES_DEFAULT,
     SATELLITE_BUILD_COST_MUSD_DEFAULT,
     SATELLITE_LIFETIME_YEARS_DEFAULT,
     SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
     SATELLITES_PER_LAUNCH_DEFAULT,
     SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT,
+    SUBSCRIBERS_PER_SATELLITE_DEFAULT,
 )
 
 # -- all-defaults construction ----------------------------------------
@@ -208,10 +210,18 @@ def test_satellite_dials_defaults() -> None:
     assert sat.satellite_build_cost_musd == SATELLITE_BUILD_COST_MUSD_DEFAULT
 
 
-def test_coverage_dials_default_is_founder_set_340() -> None:
+def test_coverage_dials_default_floor_is_founder_set_340() -> None:
+    """The coverage FLOOR default is the founder-set 340 (the lower fleet bound)."""
     cov = CoverageDials()
     assert cov.satellites_for_full_coverage == SATELLITES_FOR_FULL_COVERAGE_DEFAULT
     assert cov.satellites_for_full_coverage == 340
+
+
+def test_coverage_dials_default_cap_is_founder_set_2000() -> None:
+    """The saturation CAP default is the founder-set 2,000 (the upper fleet bound)."""
+    cov = CoverageDials()
+    assert cov.max_fleet_satellites == MAX_FLEET_SATELLITES_DEFAULT
+    assert cov.max_fleet_satellites == 2_000
 
 
 def test_comms_cadence_default_share_is_founder_set() -> None:
@@ -221,10 +231,15 @@ def test_comms_cadence_default_share_is_founder_set() -> None:
 
 
 def test_subscriber_dials_defaults() -> None:
+    """The subscriber target default is the founder baseline 10M; density 75,000."""
     subs = SubscriberDials()
+    # The target (the base to serve) is the 10M baseline.
     assert subs.subscribers_at_full_coverage == SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT
-    assert subs.subscribers_at_full_coverage == 50_000_000
-    # The optional direct override defaults to None (coverage-driven mapping).
+    assert subs.subscribers_at_full_coverage == 10_000_000
+    # The per-satellite attached density (the capacity dial) is the 75,000 central.
+    assert subs.subscribers_per_satellite == SUBSCRIBERS_PER_SATELLITE_DEFAULT
+    assert subs.subscribers_per_satellite == 75_000
+    # The optional direct override defaults to None (the target is the served base).
     assert subs.subscribers_served_override is None
 
 
@@ -270,6 +285,16 @@ def test_share_of_fleet_rejects_zero() -> None:
 def test_coverage_rejects_zero() -> None:
     with pytest.raises(ValidationError):
         CoverageDials(satellites_for_full_coverage=0)
+
+
+def test_max_fleet_satellites_rejects_zero() -> None:
+    with pytest.raises(ValidationError):
+        CoverageDials(max_fleet_satellites=0)
+
+
+def test_subscribers_per_satellite_rejects_zero() -> None:
+    with pytest.raises(ValidationError):
+        SubscriberDials(subscribers_per_satellite=0)
 
 
 def test_metadata_rejects_out_of_range_horizon() -> None:

@@ -27,6 +27,7 @@ from communications.config import (
     CommsCadenceDials,
     CommsConfig,
     CoverageDials,
+    SubscriberDials,
 )
 from communications.engine import CommsTrajectory, run_comms_model
 
@@ -37,6 +38,15 @@ EXPECTED_DEFAULT_YEAR_COUNT = 11
 # A tight relative tolerance for the one cost-sum identity check (floats sum in a
 # different association order than the engine's running accumulation).
 COST_SUM_REL_TOL = 1e-9
+
+# A tiny subscriber target whose capacity need (ceil(target / 75,000) == 1) is below
+# any coverage floor these tests set, so the fleet target equals the coverage floor.
+# This lets a test drive the build target directly via ``satellites_for_full_coverage``
+# (the floor), isolating the treadmill / cliff mechanics from the capacity sizing.
+FLOOR_BINDING_SUBSCRIBER_TARGET = 1
+_FLOOR_BINDING_SUBSCRIBERS = SubscriberDials(
+    subscribers_at_full_coverage=FLOOR_BINDING_SUBSCRIBER_TARGET
+)
 
 
 def test_run_returns_trajectory_with_full_horizon() -> None:
@@ -72,17 +82,18 @@ def test_living_fleet_non_decreasing_during_build_out() -> None:
 
 
 def test_living_fleet_never_exceeds_target_by_more_than_one_launch() -> None:
-    """The living fleet overshoots the target by strictly less than one launch's worth.
+    """The living fleet overshoots the FLEET TARGET by strictly less than one launch's worth.
 
     The overshoot rule rounds the final build cohort up to a whole launch, so the
-    living count can sit above the target but by less than ``satellites_per_launch``.
+    living count can sit above the fleet target but by less than
+    ``satellites_per_launch``. The fleet target is the capacity-sized fleet the
+    treadmill builds toward (the default 10M base floors it at the coverage floor).
     """
     config = CommsConfig()
-    target = config.coverage.satellites_for_full_coverage
     per_launch = config.satellite.satellites_per_launch
     traj = run_comms_model(config)
     for year in traj.years:
-        assert year.living_fleet < target + per_launch
+        assert year.living_fleet < traj.fleet_target + per_launch
 
 
 def test_comms_launch_sequence_non_decreasing_during_build_out() -> None:
@@ -159,16 +170,27 @@ def test_replacement_line_zero_during_build_out_nonzero_in_hold() -> None:
             assert year.replacement_cost_this_year_musd == 0.0
 
 
-def test_coverage_fraction_is_living_over_target_clamped() -> None:
-    """coverage_fraction == min(1.0, living_fleet / target) every year."""
+def test_coverage_fraction_is_living_over_floor_clamped() -> None:
+    """coverage_fraction == min(1.0, living_fleet / coverage_floor) every year."""
     config = CommsConfig()
-    target = config.coverage.satellites_for_full_coverage
+    coverage_floor = config.coverage.satellites_for_full_coverage
     traj = run_comms_model(config)
     for year in traj.years:
         assert year.coverage_fraction == pytest.approx(
-            min(1.0, year.living_fleet / target), rel=COST_SUM_REL_TOL
+            min(1.0, year.living_fleet / coverage_floor), rel=COST_SUM_REL_TOL
         )
         assert 0.0 <= year.coverage_fraction <= 1.0
+
+
+def test_buildout_fraction_is_living_over_fleet_target_clamped() -> None:
+    """buildout_fraction == min(1.0, living_fleet / fleet_target) every year."""
+    config = CommsConfig()
+    traj = run_comms_model(config)
+    for year in traj.years:
+        assert year.buildout_fraction == pytest.approx(
+            min(1.0, year.living_fleet / traj.fleet_target), rel=COST_SUM_REL_TOL
+        )
+        assert 0.0 <= year.buildout_fraction <= 1.0
 
 
 def test_full_coverage_reached_year_is_first_hold_year() -> None:
@@ -196,10 +218,16 @@ def test_low_target_enters_hold_immediately() -> None:
     """
     config = CommsConfig()
     per_launch = config.satellite.satellites_per_launch
+    # Drive the fleet target to one launch's worth via the coverage floor; the tiny
+    # subscriber target keeps the capacity need below the floor so the floor binds.
     low_target_config = config.model_copy(
-        update={"coverage": CoverageDials(satellites_for_full_coverage=per_launch)}
+        update={
+            "coverage": CoverageDials(satellites_for_full_coverage=per_launch),
+            "subscribers": _FLOOR_BINDING_SUBSCRIBERS,
+        }
     )
     traj = run_comms_model(low_target_config)
+    assert traj.fleet_target == per_launch
 
     first_deploy_year = next(y for y in traj.years if y.satellites_deployed_this_year > 0)
     # The target is reached the moment the first comms launch flies.
@@ -233,7 +261,11 @@ def test_five_year_cliff_retires_an_early_cohort() -> None:
             cadence_ceiling=150,
         ),
         comms_cadence=CommsCadenceDials(share_of_fleet=1.0),
-        coverage=CoverageDials(satellites_for_full_coverage=never_capped_target),
+        coverage=CoverageDials(
+            satellites_for_full_coverage=never_capped_target,
+            max_fleet_satellites=never_capped_target,
+        ),
+        subscribers=_FLOOR_BINDING_SUBSCRIBERS,
     )
     traj = run_comms_model(config)
     by_year = {y.year: y for y in traj.years}
@@ -256,14 +288,59 @@ def test_unreached_target_reports_none_and_runs() -> None:
     """A target too high to reach within the horizon still runs, reporting None."""
     unreachable_target = 100_000
     config = CommsConfig(
-        coverage=CoverageDials(satellites_for_full_coverage=unreachable_target),
+        # Floor the fleet at 100,000 and lift the saturation cap above it so the floor
+        # (not the cap) is the fleet target; the tiny base keeps capacity below it.
+        coverage=CoverageDials(
+            satellites_for_full_coverage=unreachable_target,
+            max_fleet_satellites=unreachable_target,
+        ),
+        subscribers=_FLOOR_BINDING_SUBSCRIBERS,
     )
     traj = run_comms_model(config)
+    assert traj.fleet_target == unreachable_target
     assert traj.full_coverage_reached_year is None
     assert len(traj.years) == EXPECTED_DEFAULT_YEAR_COUNT
     # No year reaches HOLD, so the steady-state replacement line is zero.
     assert all(not y.is_hold_phase for y in traj.years)
     assert traj.steady_state_annual_replacement_cost_musd == 0.0
+
+
+def test_trajectory_surfaces_fleet_target_and_regime() -> None:
+    """The trajectory carries the capacity-sized fleet target and its binding regime."""
+    traj = run_comms_model(CommsConfig())
+    # The default 10M base floors the fleet at the coverage floor (340), coverage regime.
+    assert traj.fleet_target == CommsConfig().coverage.satellites_for_full_coverage
+    assert traj.binding_regime.value == "coverage"
+    assert traj.subscribers_per_satellite == CommsConfig().subscribers.subscribers_per_satellite
+
+
+def test_capacity_base_builds_beyond_the_coverage_floor() -> None:
+    """A large subscriber base sizes the fleet above the coverage floor (capacity binds).
+
+    With the 50M target the fleet target is 667 satellites (capacity-bound, above the
+    340 coverage floor), so the treadmill builds toward 667 and the living fleet runs
+    past the coverage floor. Coverage saturates at 1.0 well before full deployment.
+    """
+    config = CommsConfig(subscribers=SubscriberDials(subscribers_at_full_coverage=50_000_000))
+    traj = run_comms_model(config)
+    coverage_floor = config.coverage.satellites_for_full_coverage
+    assert traj.fleet_target == 667
+    assert traj.binding_regime.value == "capacity"
+    # The build pushes the living fleet past the coverage floor (it is sizing capacity).
+    assert max(y.living_fleet for y in traj.years) > coverage_floor
+    # Coverage saturates at 1.0 once the floor is met, before full deployment.
+    final = traj.years[-1]
+    assert final.coverage_fraction == pytest.approx(1.0)
+    assert final.buildout_fraction <= 1.0
+
+
+def test_cost_per_subscriber_is_steady_state_over_target() -> None:
+    """cost_per_subscriber_annual_usd == steady-state annual cost (USD) / subscriber target."""
+    config = CommsConfig()
+    traj = run_comms_model(config)
+    target = config.subscribers.subscribers_at_full_coverage
+    expected = traj.steady_state_annual_replacement_cost_musd * 1_000_000.0 / target
+    assert traj.cost_per_subscriber_annual_usd == pytest.approx(expected, rel=COST_SUM_REL_TOL)
 
 
 def test_comms_share_matches_shared_half_up_rounding() -> None:
@@ -283,7 +360,11 @@ def test_comms_share_matches_shared_half_up_rounding() -> None:
             cadence_ceiling=150,
         ),
         comms_cadence=CommsCadenceDials(share_of_fleet=1.0),
-        coverage=CoverageDials(satellites_for_full_coverage=never_capped_target),
+        coverage=CoverageDials(
+            satellites_for_full_coverage=never_capped_target,
+            max_fleet_satellites=never_capped_target,
+        ),
+        subscribers=_FLOOR_BINDING_SUBSCRIBERS,
     )
     traj = run_comms_model(config)
     for year in traj.years:
