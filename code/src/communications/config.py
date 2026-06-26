@@ -25,11 +25,12 @@ a household). It is NOT a market-share, demand, or revenue/DCF model. The blocks
 * ``satellite: SatelliteDials`` -- the fixed CELLULAR-satellite spec: satellites
   per launch (variable 1), lifetime (variable 4, the cohort cliff), and the flat
   mass-manufactured hardware build cost (variable 5).
-* ``coverage: CoverageDials`` -- the NEW constellation-size target the build-out
-  fills toward (variable 3).
-* ``subscribers: SubscriberDials`` -- the per-PERSON denominator basis (Phase 3
-  consumes this): the served-PERSON count at full coverage plus an optional direct
-  override.
+* ``coverage: CoverageDials`` -- the fleet-sizing bounds (variable 3): the coverage
+  FLOOR the fleet must at least reach, and the saturation CAP it may not exceed.
+* ``subscribers: SubscriberDials`` -- the CAPACITY dimension (the engine consumes
+  this): the subscriber TARGET (the base to serve, the INPUT), the attached
+  subscribers-per-satellite density that divides the target into the capacity fleet
+  need, plus an optional direct served-base override.
 * ``ground: GroundInterfaceDials | None`` -- the marked, TWO-REGIME ground
   INTERFACE (Phase 4), default ``None`` so the cost side never blocks on a ground
   number. The dense + sparse baselines are individually None-able caller inputs.
@@ -62,6 +63,7 @@ from communications.constants import (
     LAUNCHES_AT_YEAR_10_DEFAULT,
     LOW_CADENCE_COST_MUSD_DEFAULT,
     LOW_CADENCE_LAUNCHES_DEFAULT,
+    MAX_FLEET_SATELLITES_DEFAULT,
     MAX_FY,
     MAX_HORIZON_YEARS,
     MIN_FY,
@@ -71,6 +73,7 @@ from communications.constants import (
     SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
     SATELLITES_PER_LAUNCH_DEFAULT,
     SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT,
+    SUBSCRIBERS_PER_SATELLITE_DEFAULT,
 )
 
 logger = logging.getLogger(__name__)
@@ -251,13 +254,16 @@ class SatelliteDials(BaseModel):
 
 
 class CoverageDials(BaseModel):
-    """The NEW constellation-size coverage target (variable 3).
+    """The fleet-sizing bounds: the coverage FLOOR and the saturation CAP (variable 3).
 
-    The build-out fills toward ``satellites_for_full_coverage`` satellites on
-    orbit; the coverage fraction reached each year (Phase 2) drives the
-    coverage-driven subscriber count (Phase 3). This dial exists in NO current
-    model. The ELEVATION MASK is the underlying physical dial (this default is the
-    25-degree quality-link, populated-band, 95%-coverage figure).
+    The fleet target the build-out fills toward is the CAPACITY need (the subscriber
+    target divided by the per-satellite density, see :class:`SubscriberDials`),
+    FLOORED by ``satellites_for_full_coverage`` (everyone must be able to see a
+    satellite) and CAPPED by ``max_fleet_satellites`` (past which the spread servable
+    base is exhausted). At a small base the floor binds (the engine reports the
+    coverage regime); at a large base the capacity need binds; at an enormous base
+    the cap binds. The ELEVATION MASK is the underlying physical dial behind the floor
+    (this default is the 25-degree quality-link, populated-band, 95%-coverage figure).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -266,23 +272,42 @@ class CoverageDials(BaseModel):
         default=SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
         ge=1,
         description=(
-            "Constellation-size target the build-out fills toward. FOUNDER_SET to "
-            "340: the quality-link case (25 degree elevation mask, populated "
-            "mid-latitude band +/-55 deg at 95%, ~450 km, ~53 deg). Coverage sim "
-            "(.agent/other/coverage_sim/FINDINGS.md: 341, rounded to 340) plus "
-            "COMM-209 / COMM-216 / COMM-217 and COMM-386..COMM-405. Configurable."
+            "The coverage FLOOR: the minimum fleet for everyone in the served band "
+            "to SEE a satellite (the lower bound on the fleet target, NOT the whole "
+            "fleet when the base is large). FOUNDER_SET to 340: the quality-link case "
+            "(25 degree elevation mask, populated mid-latitude band +/-55 deg at 95%, "
+            "~450 km, ~53 deg). Coverage sim (.agent/other/coverage_sim/FINDINGS.md: "
+            "341, rounded to 340) plus COMM-209 / COMM-216 / COMM-217 and "
+            "COMM-386..COMM-405. Configurable."
+        ),
+    )
+    max_fleet_satellites: int = Field(
+        default=MAX_FLEET_SATELLITES_DEFAULT,
+        ge=1,
+        description=(
+            "The saturation CAP: the largest fleet the model sizes to (the upper "
+            "bound on the fleet target). Past this the spread, low-density servable "
+            "base is exhausted and more satellites stop buying servable subscribers "
+            "(a dense cell saturates). FOUNDER_SET to 2,000: the ~100M ambitious "
+            "target (1,334 satellites at 75,000/sat) sits just under it. Source "
+            "COMM-535..560. Configurable."
         ),
     )
 
 
 class SubscriberDials(BaseModel):
-    """The per-PERSON denominator basis for the cellular cost per subscriber.
+    """The CAPACITY dimension: the subscriber TARGET and the per-satellite density.
 
     The unit is a PERSON (a phone subscriber), NOT a household (cellular is
-    per-person). Subscribers are COVERAGE-DRIVEN (Phase 3 scales the full-coverage
-    base by the coverage fraction reached), NOT capacity-derived: the spectrum ->
-    capacity -> demand chain the old model used is CUT. None of the field names use
-    a forbidden demand-side token.
+    per-person). The subscriber TARGET (``subscribers_at_full_coverage``) is the
+    INPUT, the base to SERVE; the engine sizes the fleet to serve it at
+    ``subscribers_per_satellite`` attached subscribers per satellite (the capacity
+    need), then floors by the coverage floor and caps by the saturation cap. The
+    served count then RAMPS with the buildout (target x living-fleet / fleet-target),
+    reaching the target at full deployment. This is capacity-SIZED (the fleet tracks
+    the base), NOT capacity-DERIVED in the old sense (no spectrum -> capacity ->
+    demand chain; the served base is a sized input, not a demand estimate). None of
+    the field names use a forbidden demand-side token.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -291,24 +316,38 @@ class SubscriberDials(BaseModel):
         default=SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT,
         ge=1,
         description=(
-            "The served-PERSON count (phone subscribers) when coverage reaches 1.0, "
-            "a coverage-driven capacity-of-coverage figure, NOT a demand estimate, "
-            "NOT a household count. FOUNDER_SET to a starting 50,000,000 people and "
-            "flagged as the SWING DIAL that most moves cost-per-subscriber. Niche "
-            "basis: the ~300M global coverage-gap people (COMM-021 / COMM-390) plus "
-            "the developed-world remote/unserved layer (household tiers, e.g. "
-            "COMM-065, converted at ~2.5 people/household). The base grows over "
-            "time. Configurable."
+            "The SUBSCRIBER TARGET: the served-PERSON base (phone subscribers) the "
+            "fleet is sized to serve, the model's INPUT, NOT a demand estimate, NOT a "
+            "household count. FOUNDER_SET to a 10,000,000-person BASELINE (50,000,000 "
+            "and 100,000,000 are the scenarios) and flagged as the SWING DIAL that "
+            "most moves cost-per-subscriber. Niche basis: the ~300M global "
+            "coverage-gap people (COMM-021 / COMM-390) plus the developed-world "
+            "remote/unserved layer (household tiers, e.g. COMM-065, converted at ~2.5 "
+            "people/household). The base grows over time. Configurable. (The field "
+            "name is retained for config-schema stability; it now means the target.)"
+        ),
+    )
+    subscribers_per_satellite: int = Field(
+        default=SUBSCRIBERS_PER_SATELLITE_DEFAULT,
+        ge=1,
+        description=(
+            "ATTACHED subscribers per cellular satellite: the central of the grounded "
+            "~50,000 to 100,000 range (75,000 default). Divides the subscriber target "
+            "into the CAPACITY fleet need (ceil(target / this)). ~50x a Starlink "
+            "BROADBAND satellite because a cellular subscriber sips data. On 25 MHz "
+            "the spectrum binds first, the antenna power past ~50 to 100 MHz, the "
+            "onboard chip last. Source COMM-535..560. Configurable."
         ),
     )
     subscribers_served_override: int | None = Field(
         default=None,
         ge=1,
         description=(
-            "OPTIONAL direct assumed-subscribers scalar. If set, it overrides the "
-            "coverage-driven full-coverage base (the model uses this absolute count "
-            "at coverage 1.0; below full coverage it still scales by coverage "
-            "fraction). Default None means use the coverage-driven mapping."
+            "OPTIONAL direct served-base scalar. If set, it overrides the subscriber "
+            "TARGET as the base the served count ramps toward (the model serves this "
+            "absolute count at full deployment; below full deployment it still scales "
+            "by the buildout fraction). The fleet target is still sized from the "
+            "TARGET dial, not this override. Default None means use the target."
         ),
     )
 
@@ -412,11 +451,11 @@ class CommsConfig(BaseModel):
     )
     coverage: CoverageDials = Field(
         default_factory=CoverageDials,
-        description="The NEW constellation-size coverage target the build-out fills toward.",
+        description="The fleet-sizing bounds: the coverage floor and the saturation cap.",
     )
     subscribers: SubscriberDials = Field(
         default_factory=SubscriberDials,
-        description="The per-PERSON denominator basis (full-coverage count + optional override).",
+        description="The capacity dimension: subscriber target, per-satellite density, override.",
     )
     ground: GroundInterfaceDials | None = Field(
         default=None,

@@ -17,15 +17,25 @@ machinery and cannot drift from it (re-export, not a hand-copy, makes the
 venture dependency. This module never imports ``data_center`` (the cross-import
 guard forbids it).
 
-The four FOUNDER-SET dials (round 4, 2026-06-25) are recorded as real default
-VALUES (``satellites_for_full_coverage = 340``, ``share_of_fleet = 0.18``,
-``subscribers_at_full_coverage = 50,000,000`` people, ``satellite_build_cost
-= 1.05`` $M); they stay configurable. Because they are real values, the Phase 5
-placeholder check CANNOT use value-equals-default as the placeholder signal (that
-would false-positive on the real defaults). Instead a static per-dial flag map
-(:data:`PLACEHOLDER_DIAL_FLAGS`) records, per guarded dial, whether its default
-is a real founder-set value (``False``) or an arbitrary sentinel (``True``); all
-four are ``False`` now. The Phase 5 ``check_no_placeholder_inputs`` reads that map.
+The FOUNDER-SET dials are recorded as real default VALUES
+(``satellites_for_full_coverage = 340`` the coverage FLOOR, ``share_of_fleet =
+0.18``, ``subscribers_at_full_coverage = 10,000,000`` the subscriber TARGET,
+``subscribers_per_satellite = 75,000``, ``max_fleet_satellites = 2,000``,
+``satellite_build_cost = 1.05`` $M); they stay configurable. Because they are real
+values, the Phase 5 placeholder check CANNOT use value-equals-default as the
+placeholder signal (that would false-positive on the real defaults). Instead a
+static per-dial flag map (:data:`PLACEHOLDER_DIAL_FLAGS`) records, per guarded dial,
+whether its default is a real founder-set value (``False``) or an arbitrary sentinel
+(``True``); all are ``False`` now. The Phase 5 ``check_no_placeholder_inputs`` reads
+that map.
+
+CAPACITY DIMENSION (founder-directed 2026-06-26, research COMM-535..560). The model
+is sized to SERVE the subscriber base, not merely to cover it. The subscriber TARGET
+(``subscribers_at_full_coverage``) is the INPUT; the fleet is sized to serve it at
+``subscribers_per_satellite`` attached subscribers per satellite, floored by the
+coverage floor and capped by the saturation cap ``max_fleet_satellites``. The fleet
+target is ``min(max_fleet_satellites, max(satellites_for_full_coverage,
+ceil(subscriber_target / subscribers_per_satellite)))``.
 """
 
 from __future__ import annotations
@@ -66,6 +76,31 @@ class DensityRegime(StrEnum):
 
     SPARSE = "sparse"
     DENSE = "dense"
+
+
+class BindingRegime(StrEnum):
+    """Which constraint sets the fleet target: the coverage floor or the capacity need.
+
+    The fleet target is ``min(max_fleet_satellites, max(coverage_floor,
+    capacity_need))`` where ``capacity_need = ceil(subscriber_target /
+    subscribers_per_satellite)``. This enum records which term binds, the founder's
+    coverage-vs-capacity question:
+
+    * ``COVERAGE`` -- the coverage floor binds (``capacity_need <= coverage_floor``);
+      the subscriber base is small enough that covering the globe needs more
+      satellites than serving the base does (the ~10M baseline, where 134 capacity
+      satellites are below the 340 coverage floor).
+    * ``CAPACITY`` -- the capacity need binds (``coverage_floor < capacity_need <
+      max_fleet_satellites``); serving the base needs more satellites than coverage
+      does (the ~50M and ~100M scenarios).
+    * ``SATURATED`` -- the saturation cap binds (``capacity_need >=
+      max_fleet_satellites``); the base would need more satellites than the cap
+      allows, so the fleet pins at the cap and the served base is capacity-limited.
+    """
+
+    COVERAGE = "coverage"
+    CAPACITY = "capacity"
+    SATURATED = "saturated"
 
 
 # ===========================================================================
@@ -132,16 +167,31 @@ build-cost analogy ONLY, NOT a broadband-product cost claim. CONFIGURABLE."""
 # ===========================================================================
 
 SATELLITES_FOR_FULL_COVERAGE_DEFAULT: Final[int] = 340
-"""FOUNDER_SET (round 4, 2026-06-25). The constellation-size target the build-out
-fills toward: the quality-link case (a 25 degree elevation mask over the populated
-mid-latitude band, +/-55 deg, at 95% coverage, ~450 km, ~53 deg inclined). Backed
-by the coverage sim (.agent/other/coverage_sim/FINDINGS.md: populated band, 450 km,
-25 deg mask, 95% = 341 sats, founder-rounded to 340) and the corpus (COMM-209 /
-COMM-216 / COMM-217 from leo_constellation_coverage_minimums; the DTC
-coverage-geography band COMM-386..COMM-405). 340 sits inside the analytic ~290 to
+"""FOUNDER_SET (round 4, 2026-06-25). The COVERAGE FLOOR: the minimum constellation
+size for everyone in the served band to SEE a satellite (a quality link), the lower
+bound on the fleet target. This is NOT the fleet the build fills toward when the
+subscriber base is large: the capacity dimension (see
+:data:`SUBSCRIBERS_PER_SATELLITE_DEFAULT`) can require more satellites than this to
+SERVE the base, in which case the capacity need binds and the fleet target rises
+above the floor. The floor is the quality-link case (a 25 degree elevation mask over
+the populated mid-latitude band, +/-55 deg, at 95% coverage, ~450 km, ~53 deg
+inclined). Backed by the coverage sim (.agent/other/coverage_sim/FINDINGS.md:
+populated band, 450 km, 25 deg mask, 95% = 341 sats, founder-rounded to 340) and the
+corpus (COMM-209 / COMM-216 / COMM-217 from leo_constellation_coverage_minimums; the
+DTC coverage-geography band COMM-386..COMM-405). 340 sits inside the analytic ~290 to
 960 global-band floor (COMM-216) and the sim's populated-band 95% figure. The
 ELEVATION MASK is the physical dial: raising the mask or lowering altitude roughly
 doubles to triples the floor (COMM-217). CONFIGURABLE."""
+
+MAX_FLEET_SATELLITES_DEFAULT: Final[int] = 2_000
+"""FOUNDER_SET (2026-06-26). The SATURATION CAP on the fleet target: the largest
+constellation the model will size to, the upper bound on the fleet target. Past this
+the spread, low-density servable base is exhausted and adding satellites stops buying
+servable subscribers (a dense cell saturates and cannot be served by adding more
+satellites, the density caveat in research/direct_communication/
+dtc_subscribers_per_satellite.md, COMM-535..560). The implied capacity fleets are
+~1,000 to 2,000 satellites at 50M to 100M attached, so 2,000 is the cap the ~100M
+ambitious target sits just under (1,334 at the 75,000 density). CONFIGURABLE."""
 
 # ===========================================================================
 # Comms cadence share (variable 2's share of the whole-fleet ramp)
@@ -156,21 +206,35 @@ Phase 2 applies this as a multiplier on the shared per-year integer launch count
 re-rounded to an integer with the shared half-up offset."""
 
 # ===========================================================================
-# Subscriber denominator (variable for the per-PERSON cost unit)
+# Subscriber target + per-satellite capacity (the capacity dimension)
 # ===========================================================================
 
-SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT: Final[int] = 50_000_000
-"""FOUNDER_SET (round 4, 2026-06-25). The SWING DIAL. The served-PERSON count
-(phone subscribers, NOT households: cellular is per-person) when coverage reaches
-1.0. A coverage-driven capacity-of-coverage figure, NOT a demand estimate. The
-people-sized cellular niche basis: the ~300M global mobile coverage-gap PEOPLE
-(COMM-021 / COMM-390, already a people count) plus the US and developed-world
-remote/unserved layer, with any household-stated tier (e.g. developed-ex-US
-~30 to 45M households, COMM-065) converted at ~2.5 people per household before
-summing. 50M is a conservative phone-shaped slice of that pool (well below the
-~300M coverage gap), a starting point the founder can move. Note the served base
-GROWS over time. CONFIGURABLE. This dial most moves cost-per-subscriber, so surface
-it as the swing dial."""
+SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT: Final[int] = 10_000_000
+"""FOUNDER_SET (2026-06-26). The SUBSCRIBER TARGET: the base to SERVE (phone
+subscribers, NOT households: cellular is per-person), the model's INPUT. The fleet
+is sized to serve this base at :data:`SUBSCRIBERS_PER_SATELLITE_DEFAULT` per
+satellite (the capacity dimension), so the fleet target and the cost track the base.
+10,000,000 is the founder's BASELINE; 50,000,000 and 100,000,000 (the ambitious
+target) are the scenarios, set per-config. A served-base figure, NOT a demand
+estimate. The people-sized cellular niche basis: the ~300M global mobile
+coverage-gap PEOPLE (COMM-021 / COMM-390, already a people count) plus the US and
+developed-world remote/unserved layer, with any household-stated tier (e.g.
+developed-ex-US ~30 to 45M households, COMM-065) converted at ~2.5 people per
+household before summing. 10M is a conservative phone-shaped slice of that pool, the
+founder's starting baseline. Note the served base GROWS over time. CONFIGURABLE.
+This dial most moves cost-per-subscriber, so surface it as the swing dial."""
+
+SUBSCRIBERS_PER_SATELLITE_DEFAULT: Final[int] = 75_000
+"""SOURCED_ESTIMATE (COMM-535..560, research/direct_communication/
+dtc_subscribers_per_satellite.md). ATTACHED subscribers per flat ~25 m^2 cellular
+satellite: the central of the grounded ~50,000 to 100,000 range (with ~250 to 2,000
+simultaneously ACTIVE at ~2-3% busy-hour concurrency). ~50x a Starlink BROADBAND
+satellite (~1,260/sat) because a cellular subscriber sips data versus a broadband
+household (Starlink's own V3 D2C plan implies ~70,000 attached/sat). On 25 MHz the
+SPECTRUM binds first; the antenna POWER binds past ~50 to 100 MHz; the onboard
+COMPUTATION binds last (>100 to 200 MHz), so the chip is the LEAST binding. This
+density divides the subscriber target into the CAPACITY fleet need. Only the SPREAD,
+low-density subscriber is servable (a dense cell saturates). CONFIGURABLE."""
 
 # ===========================================================================
 # Ground interface basis label (the two-regime ground interface, Phase 4)
@@ -207,21 +271,24 @@ type DialPath = str
 
 PLACEHOLDER_DIAL_FLAGS: Final[dict[DialPath, bool]] = {
     "satellite.satellite_build_cost_musd": False,  # FOUNDER_SET 1.05 (not a sentinel)
-    "coverage.satellites_for_full_coverage": False,  # FOUNDER_SET 340 (not a sentinel)
+    "coverage.satellites_for_full_coverage": False,  # FOUNDER_SET 340 floor (not a sentinel)
+    "coverage.max_fleet_satellites": False,  # FOUNDER_SET 2,000 cap (not a sentinel)
     "comms_cadence.share_of_fleet": False,  # FOUNDER_SET 0.18 (not a sentinel)
-    "subscribers.subscribers_at_full_coverage": False,  # FOUNDER_SET 50M (not a sentinel)
+    "subscribers.subscribers_at_full_coverage": False,  # FOUNDER_SET 10M target (not a sentinel)
+    "subscribers.subscribers_per_satellite": False,  # SOURCED_ESTIMATE 75,000 (not a sentinel)
 }
 """FOUNDER_SET status per guarded dial. ``True`` = still an arbitrary placeholder
-sentinel; ``False`` = a real founder-set value. All four are ``False`` (round 4,
-2026-06-25). ``satellites_per_launch`` and ``satellite_lifetime_years`` were never
-placeholders, so they are not inspected. Add a future placeholder dial here as
-``True`` and the Phase 5 check will catch it."""
+sentinel; ``False`` = a real founder-set (or sourced) value. All are ``False``.
+``satellites_per_launch`` and ``satellite_lifetime_years`` were never placeholders,
+so they are not inspected. Add a future placeholder dial here as ``True`` and the
+Phase 5 check will catch it."""
 
 
 __all__ = [
     "BASE_YEAR_DEFAULT",
     "CADENCE_CEILING_DEFAULT",
     "COMMS_SHARE_DEFAULT",
+    "BindingRegime",
     "DensityRegime",
     "DialPath",
     "FIRST_LAUNCH_YEAR_DEFAULT",
@@ -233,6 +300,7 @@ __all__ = [
     "LAUNCHES_AT_YEAR_10_DEFAULT",
     "LOW_CADENCE_COST_MUSD_DEFAULT",
     "LOW_CADENCE_LAUNCHES_DEFAULT",
+    "MAX_FLEET_SATELLITES_DEFAULT",
     "MAX_FY",
     "MAX_HORIZON_YEARS",
     "MIN_FY",
@@ -245,4 +313,5 @@ __all__ = [
     "SATELLITE_LIFETIME_YEARS_DEFAULT",
     "SCHEMA_VERSION",
     "SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT",
+    "SUBSCRIBERS_PER_SATELLITE_DEFAULT",
 ]
