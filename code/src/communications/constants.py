@@ -21,7 +21,9 @@ The FOUNDER-SET dials are recorded as real default VALUES
 (``satellites_for_full_coverage = 340`` the coverage FLOOR, ``share_of_fleet =
 0.18``, ``subscribers_at_full_coverage = 10,000,000`` the subscriber TARGET,
 ``subscribers_per_satellite = 75,000``, ``max_fleet_satellites = 2,000``,
-``satellite_build_cost = 1.05`` $M); they stay configurable. Because they are real
+``satellite_build_cost = 1.05`` $M, ``revenue_multiple = 1.5`` mirroring the DC R,
+``arpu_usd_per_month = 50.0`` the supportable median); they stay configurable.
+Because they are real
 values, the Phase 5 placeholder check CANNOT use value-equals-default as the
 placeholder signal (that would false-positive on the real defaults). Instead a
 static per-dial flag map (:data:`PLACEHOLDER_DIAL_FLAGS`) records, per guarded dial,
@@ -237,6 +239,33 @@ density divides the subscriber target into the CAPACITY fleet need. Only the SPR
 low-density subscriber is servable (a dense cell saturates). CONFIGURABLE."""
 
 # ===========================================================================
+# Revenue + gross-margin dials (the two revenue cases; mirrors the DC R multiple)
+# ===========================================================================
+
+REVENUE_MULTIPLE_DEFAULT: Final[float] = 1.5
+"""FOUNDER_SET (mirrors the DC central R = 1.5, research/SOURCE_INDEX.md#REV-008).
+The COST-PLUS / MARGIN-TARGET revenue case: annual revenue = annual cost x this
+multiple. 1.5 is cost+50%, an implied gross margin of (1.5 - 1) / 1.5 = 33.3%, the
+same owner-operator margin the data-center model carries as its central R. Each
+5-year cohort earns this margin across its life (the multiple is flat, no taper).
+A cost-coupled revenue case (revenue tracks the cost basis), NOT a market estimate.
+CONFIGURABLE."""
+
+ARPU_USD_PER_MONTH_DEFAULT: Final[float] = 50.0
+"""SCENARIO (the supportable median; documented in the assumptions). The
+PRICES-TODAY / ARPU revenue case: annual revenue = served subscribers x this ARPU x
+12 months. $50/month is a supportable median that sits BELOW the ~$80 to 100/month
+terrestrial mobile plan (the all-in retail price a developed-market subscriber pays
+today), the headroom assuming direct-to-cell prices drop toward and below today's
+terrestrial floor as the service scales. A per-subscriber retail price applied to
+the SERVED base, NOT a demand or willingness-to-pay estimate (the served base is the
+sized model input, not a market-sizing output). CONFIGURABLE."""
+
+MONTHS_PER_YEAR: Final[int] = 12
+"""Calendar months per year, the ARPU annualization factor (monthly ARPU x this =
+annual revenue per subscriber). A fixed unit-conversion constant, not a tunable."""
+
+# ===========================================================================
 # Ground interface basis label (the two-regime ground interface, Phase 4)
 # ===========================================================================
 
@@ -276,6 +305,8 @@ PLACEHOLDER_DIAL_FLAGS: Final[dict[DialPath, bool]] = {
     "comms_cadence.share_of_fleet": False,  # FOUNDER_SET 0.18 (not a sentinel)
     "subscribers.subscribers_at_full_coverage": False,  # FOUNDER_SET 10M target (not a sentinel)
     "subscribers.subscribers_per_satellite": False,  # SOURCED_ESTIMATE 75,000 (not a sentinel)
+    "revenue.revenue_multiple": False,  # FOUNDER_SET 1.5 (mirrors the DC R; not a sentinel)
+    "revenue.arpu_usd_per_month": False,  # SCENARIO 50.0 supportable median (not a sentinel)
 }
 """FOUNDER_SET status per guarded dial. ``True`` = still an arbitrary placeholder
 sentinel; ``False`` = a real founder-set (or sourced) value. All are ``False``.
@@ -285,6 +316,7 @@ Phase 5 check will catch it."""
 
 
 __all__ = [
+    "ARPU_USD_PER_MONTH_DEFAULT",
     "BASE_YEAR_DEFAULT",
     "CADENCE_CEILING_DEFAULT",
     "COMMS_SHARE_DEFAULT",
@@ -305,7 +337,9 @@ __all__ = [
     "MAX_HORIZON_YEARS",
     "MIN_FY",
     "MIN_HORIZON_YEARS",
+    "MONTHS_PER_YEAR",
     "PLACEHOLDER_DIAL_FLAGS",
+    "REVENUE_MULTIPLE_DEFAULT",
     "ROUND_TO_NEAREST_OFFSET",
     "SATELLITES_FOR_FULL_COVERAGE_DEFAULT",
     "SATELLITES_PER_LAUNCH_DEFAULT",
