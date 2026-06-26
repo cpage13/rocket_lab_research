@@ -42,10 +42,14 @@ numerics; the comms output stays light (no provenance envelope).
 
 This module imports only from ``common.*`` and ``communications.*`` (never
 ``data_center``, per the cross-import guard) and uses none of the forbidden
-demand-side tokens: subscribers are added by the Phase 3 / Phase 5 output
-assembly, not here. The engine is a clean cost-and-counts module; the output
-layer (Phase 5) wraps this trajectory and adds the coverage-to-subscriber
-mapping (Phase 3) and the ground ratio (Phase 4).
+demand-side tokens. It also carries the Phase 3 coverage-to-subscribers mapping
+(:func:`subscribers_served_at`): subscribers are PEOPLE (phone subscribers, the
+CELLULAR direct-to-cell unit, NOT households), COVERAGE-DRIVEN (they scale with
+the coverage fraction reached toward the configured full-coverage base, or a
+direct override), NOT capacity-derived (the old spectrum -> capacity -> demand
+chain is cut). The engine reports the served-people count at the FINAL year's
+coverage (``CommsTrajectory.subscribers_served``); the output layer (Phase 5)
+divides cost by it for cost per subscriber and the ground ratio (Phase 4).
 
 THE OVERSHOOT RULE (frozen here and in the parity test). Launches are granular
 (a whole launch deploys ``satellites_per_launch`` satellites at once), so the
@@ -86,7 +90,14 @@ logger = logging.getLogger(__name__)
 FULL_COVERAGE_FRACTION: float = 1.0
 """The coverage fraction at the full-coverage target: the living fleet is clamped
 to this so coverage never reports above 1.0 when the build overshoots the target
-by less than one launch's worth."""
+by less than one launch's worth. Also the upper clamp on the coverage fraction fed
+to the coverage-to-subscribers mapping (subscribers never scale beyond the
+full-coverage base)."""
+
+NO_COVERAGE_FRACTION: float = 0.0
+"""The lower clamp on the coverage fraction fed to the coverage-to-subscribers
+mapping: a negative coverage fraction is meaningless (the engine never produces
+one), so it floors at zero before scaling the served-people base."""
 
 NO_REPLACEMENT_COST_MUSD: float = 0.0
 """The HOLD-phase replacement-cost line value during the BUILD-OUT phase: there is
@@ -183,6 +194,61 @@ def _ceil_to_launch(satellites_needed: int, satellites_per_launch: int) -> int:
 
 
 # ---------------------------------------------------------------------------
+# The coverage-to-subscribers mapping (the NEW Phase 3 logic).
+#
+# Subscribers are PEOPLE (phone subscribers, the CELLULAR direct-to-cell unit),
+# NOT households (a household is the broadband unit). They are COVERAGE-DRIVEN,
+# NOT capacity-derived: the old model's spectrum -> capacity -> demand chain
+# (satellites x beams x subscribers-per-beam) is CUT and not reintroduced here.
+# There is no beam, spectral-efficiency, oversubscription, or any capacity term.
+# This is a pure, monotone map from the coverage fraction reached to the served-
+# people count, and it is the unit denominator for cost per subscriber (Phase 5).
+# ---------------------------------------------------------------------------
+
+
+def subscribers_served_at(
+    coverage_fraction: float,
+    *,
+    subscribers_at_full_coverage: int,
+    override: int | None,
+) -> int:
+    """Map a coverage fraction to the served-PERSON count (the cellular subscribers).
+
+    The mapping is linear in the coverage fraction: at full coverage
+    (``coverage_fraction == 1.0``) the fully-built constellation serves the
+    full-coverage base; at partial coverage it serves proportionally fewer people.
+    The base is the optional direct override when supplied, otherwise the
+    coverage-driven ``subscribers_at_full_coverage`` dial.
+
+    Subscribers are PEOPLE (phone subscribers), not households, because the product
+    is CELLULAR direct-to-cell. The figure is a capacity-of-coverage count (how many
+    people the constellation can serve at the coverage reached), NOT a demand or
+    market estimate, and it carries no capacity/spectrum/beam term.
+
+    Args:
+        coverage_fraction: The fraction of the full-coverage constellation currently
+            on orbit (``living_fleet / satellites_for_full_coverage``, the engine's
+            per-year ``CommsYear.coverage_fraction``). Clamped to ``[0.0, 1.0]``
+            before scaling, so an out-of-range value (the engine never produces one)
+            cannot push the served count below zero or above the base.
+        subscribers_at_full_coverage: The served-PERSON count when coverage reaches
+            ``1.0`` (the configured coverage-driven base). Used when ``override`` is
+            ``None``.
+        override: The OPTIONAL direct assumed-subscribers scalar. When not ``None``
+            it replaces ``subscribers_at_full_coverage`` as the full-coverage base
+            (the model serves this absolute count at coverage ``1.0``; below full
+            coverage it still scales by the coverage fraction).
+
+    Returns:
+        The served-PERSON count at the given coverage fraction, rounded half up to a
+        whole person (``round_half_up(clamped_coverage_fraction * base)``).
+    """
+    base = override if override is not None else subscribers_at_full_coverage
+    clamped = min(FULL_COVERAGE_FRACTION, max(NO_COVERAGE_FRACTION, coverage_fraction))
+    return _round_half_up(clamped * base)
+
+
+# ---------------------------------------------------------------------------
 # Per-year and whole-trajectory data structures (frozen, plain numerics).
 # ---------------------------------------------------------------------------
 
@@ -246,12 +312,20 @@ class CommsTrajectory:
             annual replacement cost, $M. Defined as the final model year's
             ``replacement_cost_this_year_musd`` (the steady state once the build
             completes); ``0.0`` if the build never completes within the horizon.
+        subscribers_served: The served-PERSON count (cellular phone subscribers)
+            at the FINAL year's coverage fraction (FY2036), the coverage-driven
+            mapping (:func:`subscribers_served_at`) applied to the configured base
+            (or the direct override). This is the unit denominator for cost per
+            subscriber (Phase 5). When the build-out completed, the final coverage
+            fraction is ``1.0`` and this equals the full-coverage base; when it did
+            not, it is the proportional partial-coverage count.
     """
 
     years: tuple[CommsYear, ...]
     total_build_and_hold_cost_musd: float
     full_coverage_reached_year: int | None
     steady_state_annual_replacement_cost_musd: float
+    subscribers_served: int
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +523,16 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
     steady_state_annual_replacement_cost_musd = (
         years[-1].replacement_cost_this_year_musd if years else NO_REPLACEMENT_COST_MUSD
     )
+    # The reported subscribers served is the coverage-driven mapping applied to the
+    # FINAL year's coverage fraction (FY2036). At a completed build-out the final
+    # coverage fraction is 1.0 and this equals the full-coverage base (or the
+    # override); below full coverage it is the proportional partial-coverage count.
+    final_coverage_fraction = years[-1].coverage_fraction if years else NO_COVERAGE_FRACTION
+    subscribers_served = subscribers_served_at(
+        final_coverage_fraction,
+        subscribers_at_full_coverage=config.subscribers.subscribers_at_full_coverage,
+        override=config.subscribers.subscribers_served_override,
+    )
 
     if full_coverage_reached_year is None:
         logger.warning(
@@ -467,6 +551,7 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
         total_build_and_hold_cost_musd=total_build_and_hold_cost_musd,
         full_coverage_reached_year=full_coverage_reached_year,
         steady_state_annual_replacement_cost_musd=steady_state_annual_replacement_cost_musd,
+        subscribers_served=subscribers_served,
     )
 
 
@@ -474,4 +559,5 @@ __all__ = [
     "CommsTrajectory",
     "CommsYear",
     "run_comms_model",
+    "subscribers_served_at",
 ]
