@@ -106,15 +106,23 @@ from common.cohort import LivedCohort, cohort_is_alive_at, living_cohorts
 from common.provenance import ProvenanceCell
 from communications.config import CommsConfig, IridiumDials
 from communications.constants import (
+    APERTURE_FOLD_CAVEAT_NOTE,
+    APERTURE_NO_FOLD_LIMIT_M2,
     APERTURE_REFERENCE_M2,
     ECOSYSTEM_ASSUMPTION_NOTE,
     GBPS_TO_MBPS,
     IRIDIUM_OPERATIONS_COST_MUSD,
     MONTHS_PER_YEAR,
     PHONE_CLASS_SE_CENTRAL,
+    PHONE_CLASS_SE_HIGH,
+    PHONE_CLASS_SE_LOW,
     REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE,
     SMALL_TERMINAL_CLASS_SE_CENTRAL,
+    SMALL_TERMINAL_CLASS_SE_HIGH,
+    SMALL_TERMINAL_CLASS_SE_LOW,
     TERMINAL_CLASS_SE_CENTRAL,
+    TERMINAL_CLASS_SE_HIGH,
+    TERMINAL_CLASS_SE_LOW,
     BindingRegime,
     DeviceClass,
 )
@@ -1039,6 +1047,78 @@ def build_iridium_result(
     )
 
 
+def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
+    """Return the Model B stated-assumptions lines (the assumptions output).
+
+    Takes the dials because one line is conditional on them (the aperture fold
+    caveat, 0.8a). Always states: the ecosystem assumption
+    (:data:`ECOSYSTEM_ASSUMPTION_NOTE`, 0.8); that operations cost is assumed zero
+    (:data:`IRIDIUM_OPERATIONS_COST_MUSD`, an explicit founder-instructed assumption,
+    a fixed line to research and add later); the estimate tiers (the
+    spectral-efficiency bands, the reuse calibration, the aperture reference and its
+    linear conservative scaling, the concurrency pair, the active rate) as
+    estimate-tier, founder-owned values; that the prices-today ARPU case is DEFERRED
+    for Model B (cost-plus is the load-bearing revenue, the per-tier MSS ARPUs plug
+    in later); and that Model B is the MSS lane (owned L-band, purpose-built or
+    in-chipset devices), never the cellular unmodified-phone lane. Conditionally
+    appends :data:`APERTURE_FOLD_CAVEAT_NOTE` when ``dials.aperture_m2`` exceeds
+    :data:`APERTURE_NO_FOLD_LIMIT_M2` (0.8a: a documented note, never a validation
+    error, so the above-limit what-if stays computable).
+
+    Args:
+        dials: The Model B :class:`~communications.config.IridiumDials` block (its
+            aperture drives the conditional fold caveat, its concurrency and active
+            rate populate the estimate-tier lines).
+
+    Returns:
+        The stated-assumptions lines, in stable order, as a tuple of strings.
+    """
+    lines: list[str] = [
+        ECOSYSTEM_ASSUMPTION_NOTE,
+        (
+            f"Operations cost is assumed zero ({IRIDIUM_OPERATIONS_COST_MUSD} USD "
+            "millions per year): an explicit founder-instructed assumption, a fixed "
+            "operations line to research and add later, stated here rather than "
+            "silently omitted."
+        ),
+        (
+            "Spectral efficiency is estimate-tier and founder-owned: the phone-class "
+            f"band is {PHONE_CLASS_SE_LOW} to {PHONE_CLASS_SE_HIGH}, the "
+            f"small-terminal-class band {SMALL_TERMINAL_CLASS_SE_LOW} to "
+            f"{SMALL_TERMINAL_CLASS_SE_HIGH}, the large-terminal-class band "
+            f"{TERMINAL_CLASS_SE_LOW} to {TERMINAL_CLASS_SE_HIGH} bps/Hz (class "
+            f"centrals {PHONE_CLASS_SE_CENTRAL} / {SMALL_TERMINAL_CLASS_SE_CENTRAL} / "
+            f"{TERMINAL_CLASS_SE_CENTRAL})."
+        ),
+        (
+            f"The reuse calibration ({REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE} Gbps per "
+            "MHz per unit spectral efficiency) is calibrated at the "
+            f"{APERTURE_REFERENCE_M2} m^2 reference aperture; per-satellite capacity "
+            "scales linearly with aperture area, which is conservative (it ignores "
+            "the additional per-link SNR lift a larger aperture also gives)."
+        ),
+        (
+            f"The busy-hour concurrency pair (peak {dials.concurrency_peak}, off-peak "
+            f"{dials.concurrency_offpeak}) and the per-subscriber active rate "
+            f"({dials.active_user_rate_mbps} Mbps) are estimate-tier, founder-owned "
+            "values."
+        ),
+        (
+            "The prices-today ARPU revenue case is DEFERRED for Model B: cost-plus "
+            "(revenue equals annualized cost times the revenue multiple) is the "
+            "load-bearing Model B revenue, and the per-tier MSS ARPUs plug in later."
+        ),
+        (
+            "Model B is the MSS lane (owned L-band, purpose-built or in-chipset "
+            "devices), never the cellular direct-to-cell unmodified-phone lane "
+            "(Model A)."
+        ),
+    ]
+    if dials.aperture_m2 > APERTURE_NO_FOLD_LIMIT_M2:
+        lines.append(APERTURE_FOLD_CAVEAT_NOTE)
+    return tuple(lines)
+
+
 # ---------------------------------------------------------------------------
 # The cadence-share seam: how many launches the comms slice flies this year.
 # ---------------------------------------------------------------------------
@@ -1540,6 +1620,7 @@ __all__ = [
     "derive_iridium_satellites_per_launch",
     "derive_iridium_subscribers_per_satellite",
     "derive_per_satellite_capacity_gbps",
+    "iridium_assumptions",
     "resolve_device_spectral_efficiency",
     "run_comms_model",
     "subscribers_served_at",

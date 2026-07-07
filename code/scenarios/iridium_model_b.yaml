@@ -1,0 +1,59 @@
+# =============================================================================
+# rklb-comms - MODEL B scenario (Iridium L-band max-outcome, phone-class baseline)
+# =============================================================================
+#
+# The Model B (MSS lane) scenario. A single top-level `iridium:` block selects the
+# Model B derivation: the engine DERIVES the per-satellite subscriber density from
+# L-band physics (held spectrum, device spectral efficiency, active rate, busy-hour
+# concurrency) instead of reading the fixed Model A `subscribers_per_satellite`
+# dial, then feeds the SAME `compute_fleet_target`. Every value below is set
+# EXPLICITLY and equals the schema default, so this file is a faithful,
+# self-documenting statement of the phone-class baseline.
+#
+# There is NO `metadata:` block on purpose: `CommsMetadataDials` requires `base_year`
+# and `horizon_years` (no field defaults), and omitting the block lets the config's
+# default factory supply base year 2026 and horizon 10. The scenario label lives in
+# exactly one home, `iridium.scenario_name` (mirroring the `GroundInterfaceDials`
+# precedent: an optional block carries its own label).
+#
+# Model B is the MSS lane: purpose-built or in-chipset devices on Iridium's OWNED
+# L-band. It is NOT cellular direct-to-cell to an unmodified phone (that is Model A,
+# the default no-`iridium` config) and NOT broadband. `spectrum_mhz` is a WIDTH held
+# (8 MHz exclusive), not a frequency. This file computes no conclusion: it is the
+# input contract, and the engine writes the trajectory.
+
+iridium:
+  # The held L-band WIDTH in MHz (a width, not a frequency): 8.0, the Iridium
+  # exclusive holding. The coordinated-span variant is 10.5.
+  spectrum_mhz: 8.0
+
+  # The satellite flat phased-array AREA in m^2. 25.0 is the Flatellite flat-body
+  # reference, which by design also IS the calibration reference and the no-fold
+  # stow limit. Set explicitly even though it equals the default (self-documenting):
+  # capacity scales linearly with it, satellites-per-launch couples inversely.
+  aperture_m2: 25.0
+
+  # The device class that sets the spectral-efficiency tier. phone_class is the
+  # 0-dBi in-chipset phone-form-factor baseline (the ecosystem assumption): SE ~0.65.
+  # The other tiers are small_terminal_class (SE ~2.0) and terminal_class (SE ~2.5).
+  device_class: phone_class
+
+  # The per-subscriber active data rate in Mbps (the service tier, also the peak
+  # per-user rate by construction). 1.0 is standard smartphone activity; 2.5 is the
+  # rich variant.
+  active_user_rate_mbps: 1.0
+
+  # The busy-hour PEAK concurrency fraction (share of subscribers active at peak):
+  # 0.025 (2.5%).
+  concurrency_peak: 0.025
+
+  # The OFF-PEAK concurrency fraction: 0.005 (0.5%).
+  concurrency_offpeak: 0.005
+
+  # A separate DEVICE passthrough counter (not people, not folded into the
+  # subscriber count, zero fleet-sizing effect): 10,000,000 (low end of tens of
+  # millions).
+  iot_devices: 10000000
+
+  # The Model B scenario label's single home.
+  scenario_name: "Iridium L-band max-outcome (Model B, phone-class baseline)"
