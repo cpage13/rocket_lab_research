@@ -38,6 +38,10 @@ a household). It is NOT a market-share, demand, or revenue/DCF model. The blocks
 * ``ground: GroundInterfaceDials | None`` -- the marked, TWO-REGIME ground
   INTERFACE (Phase 4), default ``None`` so the cost side never blocks on a ground
   number. The dense + sparse baselines are individually None-able caller inputs.
+* ``iridium: IridiumDials | None`` -- the optional Model B (Iridium L-band
+  max-outcome) MSS dials, default ``None`` so the config stays Model A. Present, it
+  selects the Model B derivation (the per-satellite density is derived from L-band
+  physics instead of read from the fixed Model A dial).
 
 This model imports only from ``common.*`` and ``communications.*`` (never
 ``data_center``, per the cross-import guard) and uses none of the forbidden
@@ -55,15 +59,21 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from communications.constants import (
+    ACTIVE_USER_RATE_MBPS_DEFAULT,
+    APERTURE_REFERENCE_M2,
     ARPU_USD_PER_MONTH_DEFAULT,
     BASE_YEAR_DEFAULT,
     CADENCE_CEILING_DEFAULT,
     COMMS_SHARE_DEFAULT,
+    CONCURRENCY_OFFPEAK_DEFAULT,
+    CONCURRENCY_PEAK_DEFAULT,
     FIRST_LAUNCH_YEAR_DEFAULT,
     GROUND_BASIS_DEFAULT,
     HIGH_CADENCE_COST_MUSD_DEFAULT,
     HIGH_CADENCE_LAUNCHES_DEFAULT,
     HORIZON_YEARS_DEFAULT,
+    IOT_DEVICES_DEFAULT,
+    IRIDIUM_SCENARIO_NAME_DEFAULT,
     LAUNCHES_AT_YEAR_5_DEFAULT,
     LAUNCHES_AT_YEAR_10_DEFAULT,
     LOW_CADENCE_COST_MUSD_DEFAULT,
@@ -78,8 +88,10 @@ from communications.constants import (
     SATELLITE_LIFETIME_YEARS_DEFAULT,
     SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
     SATELLITES_PER_LAUNCH_DEFAULT,
+    SPECTRUM_MHZ_DEFAULT,
     SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT,
     SUBSCRIBERS_PER_SATELLITE_DEFAULT,
+    DeviceClass,
 )
 
 logger = logging.getLogger(__name__)
@@ -465,6 +477,117 @@ class GroundInterfaceDials(BaseModel):
     )
 
 
+class IridiumDials(BaseModel):
+    """Model B (Iridium L-band max-outcome) input dials: the MSS lane.
+
+    Present (non-None on :class:`CommsConfig`) selects the Model B derivation: the
+    engine DERIVES the per-satellite subscriber density from L-band physics (held
+    spectrum, device spectral efficiency, active rate, busy-hour concurrency) instead
+    of reading the fixed Model A ``subscribers_per_satellite`` dial, then feeds the SAME
+    ``compute_fleet_target``. The subscriber TARGET is the existing
+    ``subscribers.subscribers_at_full_coverage`` dial (not duplicated here). Subscribers
+    are PEOPLE; ``iot_devices`` is a separate DEVICE passthrough. ``spectrum_mhz`` is a
+    WIDTH held (not a frequency). See the ecosystem assumption: this is the MSS lane
+    (purpose-built or in-chipset devices on owned L-band), never an unmodified phone
+    (that is the cellular lane, Model A).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    spectrum_mhz: float = Field(
+        default=SPECTRUM_MHZ_DEFAULT,
+        gt=0,
+        description=(
+            "The L-band WIDTH held in MHz (a width, NOT a frequency; the frequency is "
+            "the ~1.6 GHz dial position). FOUNDER_SET to 8.0, the Iridium exclusive "
+            "holding (~7.775 rounded); 10.5 is the coordinated-span variant. Flagged. "
+            "Configurable."
+        ),
+    )
+    aperture_m2: float = Field(
+        default=APERTURE_REFERENCE_M2,
+        gt=0,
+        description=(
+            "The satellite flat phased-array AREA in m^2. Default 25.0, which by design "
+            "IS the calibration reference (APERTURE_REFERENCE_M2) AND the no-fold stow "
+            "limit (APERTURE_NO_FOLD_LIMIT_M2). Capacity scales linearly with it "
+            "(conservative: it ignores the per-link SNR lift a larger aperture also "
+            "gives); satellites-per-launch couples inversely (fewer, bigger satellites "
+            "per launch). Above APERTURE_NO_FOLD_LIMIT_M2 the assumptions output carries "
+            "the fold caveat, deliberately NOT a bound so the what-if stays computable. "
+            "FOUNDER-DIRECTED. Configurable."
+        ),
+    )
+    device_class: DeviceClass = Field(
+        default=DeviceClass.PHONE_CLASS,
+        description=(
+            "The device class that sets the spectral-efficiency tier: PHONE_CLASS "
+            "(0 dBi in-chipset, the ecosystem-assumption baseline, SE ~0.65), "
+            "SMALL_TERMINAL_CLASS (paperback/puck ~10 dBi purpose-built, SE ~2.0), or "
+            "TERMINAL_CLASS (large boosted / custom antenna, 15+ dBi, SE ~2.5). Default "
+            "PHONE_CLASS; one class per run in v1 (no mixed fleet). Flagged. "
+            "Configurable."
+        ),
+    )
+    spectral_efficiency_bps_per_hz: float | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "OPTIONAL spectral-efficiency override in bps/Hz. None (default) resolves to "
+            "the device_class central tier; set it to sweep within the class band "
+            "(phone 0.5 to 0.8, small terminal 1.5 to 2.5, large terminal 2.0 to 3.0). "
+            "Configurable."
+        ),
+    )
+    active_user_rate_mbps: float = Field(
+        default=ACTIVE_USER_RATE_MBPS_DEFAULT,
+        gt=0,
+        description=(
+            "The per-subscriber active data rate in Mbps (the service tier; also the "
+            "peak per-user rate by construction). FOUNDER_SET to 1.0 (standard "
+            "smartphone activity); 2.5 is the rich variant. Flagged. Configurable."
+        ),
+    )
+    concurrency_peak: float = Field(
+        default=CONCURRENCY_PEAK_DEFAULT,
+        gt=0,
+        le=1.0,
+        description=(
+            "The busy-hour PEAK concurrency fraction (share of subscribers "
+            "simultaneously active at peak). FOUNDER_SET to 0.025 (2.5%). Flagged as "
+            "the pair with concurrency_offpeak. Configurable."
+        ),
+    )
+    concurrency_offpeak: float = Field(
+        default=CONCURRENCY_OFFPEAK_DEFAULT,
+        gt=0,
+        le=1.0,
+        description=(
+            "The OFF-PEAK concurrency fraction. FOUNDER_SET to 0.005 (0.5%). Flagged as "
+            "the pair with concurrency_peak. Configurable."
+        ),
+    )
+    iot_devices: int = Field(
+        default=IOT_DEVICES_DEFAULT,
+        ge=0,
+        description=(
+            "A separate DEVICE passthrough counter (NOT people, NOT folded into the "
+            "subscriber count): IoT is negligible-load and does NOT affect fleet "
+            "sizing. ESTIMATE 10,000,000 (low end of tens of millions); founder-owned. "
+            "Configurable."
+        ),
+    )
+    scenario_name: str = Field(
+        default=IRIDIUM_SCENARIO_NAME_DEFAULT,
+        description=(
+            "The Model B scenario label's SINGLE home (mirroring the "
+            "GroundInterfaceDials.scenario_name precedent: an optional block carries "
+            "its own label). The Model B scenario YAML sets no metadata block, so the "
+            "Model B label lives here. Configurable."
+        ),
+    )
+
+
 # ===========================================================================
 # 2. The top-level CommsConfig
 # ===========================================================================
@@ -477,10 +600,12 @@ class CommsConfig(BaseModel):
     with :func:`load_comms_config`. Hand it to ``run_comms_model`` (Phase 2) /
     ``build_comms_output`` (Phase 5).
 
-    Every block defaults via ``default_factory`` (or, for ``ground``, a plain None)
-    so a config constructed with no arguments, or a YAML omitting a block, gets a
-    fully valid all-default block. The ``ground`` field is ``None`` by default,
-    which is what makes the cost side run with no ground number.
+    Every block defaults via ``default_factory`` (or, for ``ground`` and ``iridium``,
+    a plain None) so a config constructed with no arguments, or a YAML omitting a
+    block, gets a fully valid all-default block. The ``ground`` field is ``None`` by
+    default, which is what makes the cost side run with no ground number; the
+    ``iridium`` field is ``None`` by default, which selects the Model A path (a
+    non-None ``iridium`` selects the Model B MSS derivation).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, validate_assignment=True)
@@ -522,6 +647,14 @@ class CommsConfig(BaseModel):
         description=(
             "The marked, TWO-REGIME ground interface (Phase 4). None by default so "
             "the cost side runs with no ground number; supply it per-scenario."
+        ),
+    )
+    iridium: IridiumDials | None = Field(
+        default=None,
+        description=(
+            "Model B (Iridium L-band max-outcome) dials. None by default so the config "
+            "is Model A (cellular direct-to-cell); set it to select the Model B MSS "
+            "derivation."
         ),
     )
 
@@ -598,6 +731,7 @@ __all__ = [
     "CommsMetadataDials",
     "CoverageDials",
     "GroundInterfaceDials",
+    "IridiumDials",
     "LaunchCostDials",
     "RevenueDials",
     "SatelliteDials",
