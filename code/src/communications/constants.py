@@ -105,6 +105,28 @@ class BindingRegime(StrEnum):
     SATURATED = "saturated"
 
 
+class DeviceClass(StrEnum):
+    """The Model B device class, which sets the spectral-efficiency tier.
+
+    The founder's three device categories (2026-07-07; the 9c device ladder).
+    ``PHONE_CLASS`` is the cell phone: the 0-dBi in-chipset phone-form-factor baseline
+    (SE band 0.5 to 0.8 bps/Hz, central :data:`PHONE_CLASS_SE_CENTRAL`).
+    ``SMALL_TERMINAL_CLASS`` is the small boosted antenna: paperback/puck size, ~20 cm
+    integrated patch, ~10 dBi, unpointed, purpose-built with NO chipset assumption
+    (SE band 1.5 to 2.5, central :data:`SMALL_TERMINAL_CLASS_SE_CENTRAL`).
+    ``TERMINAL_CLASS`` is the LARGE boosted / custom-antenna tier: mounted or pointed,
+    15+ dBi (drones, fixed sites, vehicles; SE band 2.0 to 3.0, central
+    :data:`TERMINAL_CLASS_SE_CENTRAL`). See the ecosystem assumption
+    (:data:`ECOSYSTEM_ASSUMPTION_NOTE`): Model B reaches purpose-built or in-chipset
+    devices on Iridium's owned L-band (the MSS lane), NEVER an unmodified phone (that
+    is the cellular lane, Model A). One class per run in v1 (no mixed fleet).
+    """
+
+    PHONE_CLASS = "phone_class"
+    SMALL_TERMINAL_CLASS = "small_terminal_class"
+    TERMINAL_CLASS = "terminal_class"
+
+
 # ===========================================================================
 # Year-bound constants (config Field bounds)
 # ===========================================================================
@@ -285,6 +307,178 @@ SCHEMA_VERSION: Final[str] = "comms-v1"
 (Phase 5). ``v1`` is the clean-rewrite schema (no provenance envelope)."""
 
 # ===========================================================================
+# Model B: Iridium L-band max-outcome scenario (the MSS lane) dials + physics
+# ===========================================================================
+#
+# Model B DERIVES the per-satellite subscriber density from L-band physics (held
+# spectrum, device spectral efficiency, active rate, busy-hour concurrency) instead
+# of reading the fixed Model A ``subscribers_per_satellite`` dial, then feeds the SAME
+# ``compute_fleet_target``. These are its named-constant defaults and physics
+# calibrations. THE THREE LANES stay separate: Model B is the MSS lane (purpose-built
+# or in-chipset devices on owned L-band), NOT cellular direct-to-cell to an unmodified
+# phone (Model A) and NOT broadband.
+
+SPECTRUM_MHZ_DEFAULT: Final[float] = 8.0
+"""FOUNDER_SET (flagged; session state, Iridium spectrum reconciled). The Iridium
+EXCLUSIVE L-band holding (~7.775 MHz rounded to 8.0), a WIDTH held, NOT a frequency
+(the frequency is the ~1.6 GHz dial position). The coordinated 10.5 MHz span is the
+documented variant (:data:`SPECTRUM_MHZ_COORDINATED`), not the default."""
+
+SPECTRUM_MHZ_COORDINATED: Final[float] = 10.5
+"""SCENARIO. The coordinated L-band span (1616 to 1626.5 MHz), a documented Model B
+variant WIDTH, not the default (the exclusive ~8 MHz is the default)."""
+
+PHONE_CLASS_SE_CENTRAL: Final[float] = 0.65
+"""SOURCED_ESTIMATE (COMM-428 / COMM-429). Central of the 0.5 to 0.8 bps/Hz
+phone-class spectral-efficiency band (the Starlink-D2C measured 0-dBi anchor). The
+phone-class tier is the 0-dBi in-chipset baseline (the ecosystem assumption)."""
+
+PHONE_CLASS_SE_LOW: Final[float] = 0.5
+"""SOURCED_ESTIMATE (COMM-428 / COMM-429). Low edge of the documented phone-class
+spectral-efficiency sweep band."""
+
+PHONE_CLASS_SE_HIGH: Final[float] = 0.8
+"""SOURCED_ESTIMATE (COMM-428 / COMM-429). High edge of the documented phone-class
+spectral-efficiency sweep band."""
+
+SMALL_TERMINAL_CLASS_SE_CENTRAL: Final[float] = 2.0
+"""ESTIMATE (derived; brainstorming 9c device ladder). Central of the 1.5 to 2.5
+bps/Hz band for the SMALL boosted-antenna device: paperback/puck size, ~20 cm
+integrated patch, ~10 dBi, unpointed, purpose-built so NO chipset assumption (OUR
+hardware; the founder's 10 to 20 Mbps tier in 9c). Derivation anchor: phone-class SE
+0.65 implies SNR ~0.57 (2 ** 0.65 - 1); +10 dB of antenna gain is SNR ~5.7; Shannon
+log2(1 + 5.7) ~2.7; real systems reach ~60 to 80 percent of Shannon (~1.65 to 2.19),
+so ~2.0 central."""
+
+SMALL_TERMINAL_CLASS_SE_LOW: Final[float] = 1.5
+"""ESTIMATE (brainstorming 9c). Low edge of the documented small-terminal
+spectral-efficiency sweep band."""
+
+SMALL_TERMINAL_CLASS_SE_HIGH: Final[float] = 2.5
+"""ESTIMATE (brainstorming 9c). High edge of the documented small-terminal
+spectral-efficiency sweep band (it meets the large tier's central; the bands overlap,
+the centrals are ordered 0.65 < 2.0 < 2.5)."""
+
+TERMINAL_CLASS_SE_CENTRAL: Final[float] = 2.5
+"""SOURCED_ESTIMATE (COMM-647). Central of the 2.0 to 3.0 bps/Hz band for the LARGE
+boosted / custom-antenna tier: mounted or pointed, 15+ dBi (drones, fixed sites,
+vehicles; the AST-class anchor). Value untouched from the corpus; wording updated for
+the three-tier device ladder."""
+
+TERMINAL_CLASS_SE_LOW: Final[float] = 2.0
+"""SOURCED_ESTIMATE (COMM-647). Low edge of the documented large-tier
+spectral-efficiency sweep band."""
+
+TERMINAL_CLASS_SE_HIGH: Final[float] = 3.0
+"""SOURCED_ESTIMATE (COMM-647). High edge of the documented large-tier
+spectral-efficiency sweep band."""
+
+REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE: Final[float] = 0.15
+"""DERIVED (COMM-410). The per-satellite capacity calibration, in Gbps per (MHz x
+bps/Hz), at the :data:`APERTURE_REFERENCE_M2` reference aperture. It is NOT a clean
+unit conversion: it folds the effective ~150x beam-count-times-frequency-reuse
+multiplier of a modern digital-beamforming satellite together with the Mbps-to-Gbps
+scaling (0.15 Gbps per (MHz x bps/Hz) = 150 effective reuse x (1 Gbps / 1000 Mbps)).
+CHOSEN so the corpus anchor reproduces: 25 MHz x 2.5 SE x 0.15 = 9.375 Gbps, the
+central of the grounded ~5 to 15 Gbps-per-satellite range (COMM-410). It also
+reproduces phone-class 8 MHz x 0.65 x 0.15 = 0.78 Gbps and terminal-class 8 MHz x 2.5
+x 0.15 = 3.0 Gbps. Per-satellite capacity is this x spectrum_mhz x SE x (aperture_m2 /
+:data:`APERTURE_REFERENCE_M2`)."""
+
+ACTIVE_USER_RATE_MBPS_DEFAULT: Final[float] = 1.0
+"""FOUNDER_SET (flagged; 6a input schema). The per-subscriber active data rate in
+Mbps (standard smartphone activity when active); also the peak per-user rate by
+construction (the service tier). :data:`ACTIVE_USER_RATE_MBPS_RICH` is the rich
+variant."""
+
+ACTIVE_USER_RATE_MBPS_RICH: Final[float] = 2.5
+"""SCENARIO (6a input schema). The rich per-subscriber active-rate variant in Mbps, a
+documented alternative to :data:`ACTIVE_USER_RATE_MBPS_DEFAULT`."""
+
+CONCURRENCY_PEAK_DEFAULT: Final[float] = 0.025
+"""FOUNDER_SET (flagged as the pair with :data:`CONCURRENCY_OFFPEAK_DEFAULT`; 6a input
+schema, the DTC concurrency corpus). Busy-hour PEAK concurrency fraction (2.5% of
+subscribers simultaneously active at peak)."""
+
+CONCURRENCY_OFFPEAK_DEFAULT: Final[float] = 0.005
+"""FOUNDER_SET (flagged as the pair with :data:`CONCURRENCY_PEAK_DEFAULT`; 6a input
+schema, the DTC concurrency corpus). OFF-PEAK concurrency fraction (0.5% of
+subscribers simultaneously active off-peak)."""
+
+IOT_DEVICES_DEFAULT: Final[int] = 10_000_000
+"""ESTIMATE (COMM-654 / COMM-659). A passthrough DEVICE counter (low end of "tens of
+millions"), founder-owned (flagged). Counted as DEVICES, never folded into the people
+subscriber count; it is negligible-load and contention-limited, so it has ZERO effect
+on fleet sizing (its value is cosmetic on the result)."""
+
+APERTURE_REFERENCE_M2: Final[float] = 25.0
+"""SOURCED_ESTIMATE (COMM-253 / COMM-256, a render-read ~25 m^2 Flatellite working
+number; the official dimensions are unpublished). The CALIBRATION ANCHOR: the corpus
+per-satellite capacity chain (COMM-410, :data:`REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE`)
+is calibrated AT this aperture, so the capacity aperture factor is aperture_m2 / this
+and equals 1.0 at the default. It is ALSO the ``aperture_m2`` Field default (the dial
+defaults TO the reference), and by design coincides with
+:data:`APERTURE_NO_FOLD_LIMIT_M2` (all three meanings are 25.0). Capacity is linear in
+aperture area (the reuse term), which is CONSERVATIVE: it ignores the additional
+per-link SNR lift a larger aperture also gives (brainstorming 9c)."""
+
+APERTURE_NO_FOLD_LIMIT_M2: Final[float] = 25.0
+"""SOURCED_ESTIMATE (brainstorming 9c). The largest flat aperture that stows in
+Neutron's 5.5 m fairing WITHOUT folding. Grounding: Neutron's fairing is 5.5 m payload
+diameter; a 60 m^2 flat panel is ~7.7 m in its smallest square dimension, so it cannot
+stow flat; folding a coherent array across hinges contradicts the Flatellite
+no-deployable design (COMM-251); the AST precedent shows the fold path's cost (223 m^2
+flies 1 per launch even on a 7 m fairing). Used ONLY by the assumptions caveat
+(:data:`APERTURE_FOLD_CAVEAT_NOTE`), NEVER as a config bound: the above-limit what-if
+stays computable."""
+
+APERTURE_FOLD_CAVEAT_NOTE: Final[str] = (
+    "The configured aperture exceeds the no-fold stow limit: a flat panel this large "
+    "cannot stow in Neutron's 5.5 m fairing without folding, which contradicts the "
+    "Flatellite no-deployable design (COMM-251), and the deployment-complexity penalty "
+    "of folding is not otherwise modeled. This is a documented what-if caveat, not a "
+    "validation error."
+)
+"""SCENARIO (0.8a caveat text). Emitted by the Model B assumptions output when
+``aperture_m2`` exceeds :data:`APERTURE_NO_FOLD_LIMIT_M2`. A documented note, not an
+error, so the above-limit what-if stays computable."""
+
+GBPS_TO_MBPS: Final[float] = 1000.0
+"""Fixed unit conversion (Gbps to Mbps), the offered-load and per-user-rate
+denominator scaling. A unit constant, not a tunable."""
+
+ECOSYSTEM_ASSUMPTION_NOTE: Final[str] = (
+    "Model B's phone-class tier assumes phone-form-factor devices with in-chipset "
+    "support for Iridium's 1616 to 1626.5 MHz L-band (0 dBi, no external antenna). A "
+    "literally-unmodified 2026 phone receives nothing on this band: no phone has an "
+    "L-band MSS radio and the band is not a deployed 3GPP NTN band (COMM-668 / COMM-669 "
+    "/ COMM-670). Today's real in-chipset path on this band is Project Stardust "
+    "(NB-IoT NTN): messaging and IoT, kbps-class, no voice (COMM-661 to COMM-676). The "
+    "phone-class data-grade tier (active rate ~1 Mbps) is therefore a forward "
+    "assumption: a future where standard chipsets include the band grown up from the "
+    "Stardust path, 0 dBi, no external antenna, at the cost of the low phone-class SE "
+    "tier (a knowingly-taken ~4x capacity haircut versus a gain terminal). "
+    "Boosted-antenna devices are purpose-built (our hardware, no chipset assumption). "
+    "Model B is the MSS lane and never claims to reach an unmodified handset; the "
+    "unmodified-phone lane stays on cellular spectrum (Model A)."
+)
+"""SOURCED_ESTIMATE (0.8 ecosystem assumption; COMM-661 to COMM-676). The stated
+ecosystem assumption behind Model B's phone-class tier, carried on the Model B result
+and surfaced in the assumptions output. Keeps the three lanes separate: Model B is the
+MSS lane, never the unmodified-phone cellular lane (Model A)."""
+
+IRIDIUM_OPERATIONS_COST_MUSD: Final[float] = 0.0
+"""FOUNDER_SET (assumption). Model B operations cost assumed zero (Model A carries no
+operations line, so Model B inherits zero): a fixed line to research and add later,
+stated explicitly in the assumptions output rather than silently omitted."""
+
+IRIDIUM_SCENARIO_NAME_DEFAULT: Final[str] = (
+    "Iridium L-band max-outcome (Model B, phone-class baseline)"
+)
+"""SCENARIO. The default Model B scenario label, carried on the ``IridiumDials`` block
+(the optional block's single label home, mirroring ``GroundInterfaceDials``)."""
+
+# ===========================================================================
 # Placeholder-dial flag map (read by Phase 5 ``check_no_placeholder_inputs``)
 # ===========================================================================
 #
@@ -307,6 +501,14 @@ PLACEHOLDER_DIAL_FLAGS: Final[dict[DialPath, bool]] = {
     "subscribers.subscribers_per_satellite": False,  # SOURCED_ESTIMATE 75,000 (not a sentinel)
     "revenue.revenue_multiple": False,  # FOUNDER_SET 1.5 (mirrors the DC R; not a sentinel)
     "revenue.arpu_usd_per_month": False,  # SCENARIO 50.0 supportable median (not a sentinel)
+    # Model B (Iridium L-band) input dials, all real in-band values (not sentinels).
+    "iridium.spectrum_mhz": False,  # FOUNDER_SET 8.0 exclusive holding (not a sentinel)
+    "iridium.aperture_m2": False,  # FOUNDER_SET 25.0 Flatellite reference (not a sentinel)
+    "iridium.device_class": False,  # FOUNDER_SET PHONE_CLASS baseline (not a sentinel)
+    "iridium.active_user_rate_mbps": False,  # FOUNDER_SET 1.0 Mbps (not a sentinel)
+    "iridium.concurrency_peak": False,  # FOUNDER_SET 0.025 peak (not a sentinel)
+    "iridium.concurrency_offpeak": False,  # FOUNDER_SET 0.005 off-peak (not a sentinel)
+    "iridium.iot_devices": False,  # ESTIMATE 10M passthrough (not a sentinel)
 }
 """FOUNDER_SET status per guarded dial. ``True`` = still an arbitrary placeholder
 sentinel; ``False`` = a real founder-set (or sourced) value. All are ``False``.
@@ -348,4 +550,30 @@ __all__ = [
     "SCHEMA_VERSION",
     "SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT",
     "SUBSCRIBERS_PER_SATELLITE_DEFAULT",
+    # Model B (Iridium L-band max-outcome) additions.
+    "ACTIVE_USER_RATE_MBPS_DEFAULT",
+    "ACTIVE_USER_RATE_MBPS_RICH",
+    "APERTURE_FOLD_CAVEAT_NOTE",
+    "APERTURE_NO_FOLD_LIMIT_M2",
+    "APERTURE_REFERENCE_M2",
+    "CONCURRENCY_OFFPEAK_DEFAULT",
+    "CONCURRENCY_PEAK_DEFAULT",
+    "DeviceClass",
+    "ECOSYSTEM_ASSUMPTION_NOTE",
+    "GBPS_TO_MBPS",
+    "IOT_DEVICES_DEFAULT",
+    "IRIDIUM_OPERATIONS_COST_MUSD",
+    "IRIDIUM_SCENARIO_NAME_DEFAULT",
+    "PHONE_CLASS_SE_CENTRAL",
+    "PHONE_CLASS_SE_HIGH",
+    "PHONE_CLASS_SE_LOW",
+    "REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE",
+    "SMALL_TERMINAL_CLASS_SE_CENTRAL",
+    "SMALL_TERMINAL_CLASS_SE_HIGH",
+    "SMALL_TERMINAL_CLASS_SE_LOW",
+    "SPECTRUM_MHZ_COORDINATED",
+    "SPECTRUM_MHZ_DEFAULT",
+    "TERMINAL_CLASS_SE_CENTRAL",
+    "TERMINAL_CLASS_SE_HIGH",
+    "TERMINAL_CLASS_SE_LOW",
 ]
