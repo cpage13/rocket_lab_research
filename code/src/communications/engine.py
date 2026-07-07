@@ -104,8 +104,20 @@ from common.cadence import (
 )
 from common.cohort import LivedCohort, cohort_is_alive_at, living_cohorts
 from common.provenance import ProvenanceCell
-from communications.config import CommsConfig
-from communications.constants import MONTHS_PER_YEAR, BindingRegime
+from communications.config import CommsConfig, IridiumDials
+from communications.constants import (
+    APERTURE_REFERENCE_M2,
+    ECOSYSTEM_ASSUMPTION_NOTE,
+    GBPS_TO_MBPS,
+    IRIDIUM_OPERATIONS_COST_MUSD,
+    MONTHS_PER_YEAR,
+    PHONE_CLASS_SE_CENTRAL,
+    REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE,
+    SMALL_TERMINAL_CLASS_SE_CENTRAL,
+    TERMINAL_CLASS_SE_CENTRAL,
+    BindingRegime,
+    DeviceClass,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -317,6 +329,196 @@ def compute_fleet_target(
     else:
         binding_regime = BindingRegime.CAPACITY
     return fleet_target, binding_regime
+
+
+# ---------------------------------------------------------------------------
+# Model B (Iridium L-band max-outcome): the pure L-band derivation spine.
+#
+# Model B DERIVES the per-satellite subscriber density from L-band physics (held
+# spectrum, device spectral efficiency, satellite aperture area, per-user active
+# rate, busy-hour concurrency) instead of reading the fixed Model A
+# subscribers_per_satellite dial, then feeds the SAME compute_fleet_target above.
+# These are pure derivations (primitives or the dials in, primitives out, no side
+# effects); run_comms_model wires them in behind the config.iridium branch. THE
+# THREE LANES stay separate: Model B is the MSS lane (purpose-built or in-chipset
+# devices on owned L-band), NOT cellular direct-to-cell to an unmodified phone
+# (Model A) and NOT broadband.
+# ---------------------------------------------------------------------------
+
+
+def resolve_device_spectral_efficiency(dials: IridiumDials) -> float:
+    """Resolve the Model B spectral efficiency (bps/Hz) from the dials (0.7 step 1).
+
+    Returns the explicit ``spectral_efficiency_bps_per_hz`` override when set,
+    otherwise the central spectral-efficiency tier for the ``device_class`` (the
+    founder's three device categories, a three-row mapping): ``PHONE_CLASS`` to
+    :data:`PHONE_CLASS_SE_CENTRAL` (0.65), ``SMALL_TERMINAL_CLASS`` to
+    :data:`SMALL_TERMINAL_CLASS_SE_CENTRAL` (2.0), ``TERMINAL_CLASS`` to
+    :data:`TERMINAL_CLASS_SE_CENTRAL` (2.5).
+
+    Args:
+        dials: The Model B :class:`~communications.config.IridiumDials` block (the
+            device class plus the optional override).
+
+    Returns:
+        The spectral efficiency in bps/Hz to use in the capacity derivation.
+    """
+    if dials.spectral_efficiency_bps_per_hz is not None:
+        return dials.spectral_efficiency_bps_per_hz
+    class_central: dict[DeviceClass, float] = {
+        DeviceClass.PHONE_CLASS: PHONE_CLASS_SE_CENTRAL,
+        DeviceClass.SMALL_TERMINAL_CLASS: SMALL_TERMINAL_CLASS_SE_CENTRAL,
+        DeviceClass.TERMINAL_CLASS: TERMINAL_CLASS_SE_CENTRAL,
+    }
+    return class_central[dials.device_class]
+
+
+def derive_per_satellite_capacity_gbps(
+    spectrum_mhz: float, spectral_efficiency_bps_per_hz: float, aperture_m2: float
+) -> float:
+    """Derive the per-satellite capacity in Gbps (0.7 step 2).
+
+    ::
+
+        per_sat_capacity_gbps = spectrum_mhz x spectral_efficiency_bps_per_hz
+                                x REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE
+                                x (aperture_m2 / APERTURE_REFERENCE_M2)
+
+    The reuse calibration (:data:`REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE`) folds the
+    effective ~150x beam-count-times-frequency-reuse multiplier of a modern
+    digital-beamforming satellite together with the Mbps-to-Gbps scaling, calibrated
+    AT the :data:`APERTURE_REFERENCE_M2` (25 m^2) reference aperture, so the aperture
+    factor is 1.0 at the default and every baseline number is unchanged. The aperture
+    factor is linear in area (a bigger array forms proportionally more simultaneous
+    beams, the reuse term) and is CONSERVATIVE: it ignores the additional per-link
+    SNR lift a larger aperture also gives. Worked at the phone-class default aperture:
+    8 x 0.65 x 0.15 x (25 / 25) = 0.78 Gbps.
+
+    Args:
+        spectrum_mhz: The held L-band width, MHz.
+        spectral_efficiency_bps_per_hz: The device spectral efficiency, bps/Hz.
+        aperture_m2: The satellite flat-array area, m^2 (the aperture factor divides
+            by :data:`APERTURE_REFERENCE_M2`).
+
+    Returns:
+        The per-satellite capacity, Gbps.
+    """
+    aperture_factor = aperture_m2 / APERTURE_REFERENCE_M2
+    return (
+        spectrum_mhz
+        * spectral_efficiency_bps_per_hz
+        * REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE
+        * aperture_factor
+    )
+
+
+def derive_iridium_satellites_per_launch(
+    *, configured_satellites_per_launch: int, aperture_m2: float
+) -> int:
+    """Derive the aperture-coupled effective satellites-per-launch (0.7 step 10).
+
+    ::
+
+        effective = max(1, floor(configured x APERTURE_REFERENCE_M2 / aperture_m2))
+
+    Multiply BEFORE dividing (keeps the ratio exact at clean apertures: 12 x 25 / 60
+    = 5.0 exactly in floats). The ``floor`` is deliberate, the opposite convention
+    from the density's round-half-up: a partial satellite cannot fly, so per-launch
+    capacity is never overstated. The ``max(1, ...)`` floor means an arbitrarily
+    large aperture still flies one satellite per launch (the AST pattern: a 223 m^2
+    array flies 1 per launch). Equals the configured value EXACTLY at the 25 m^2
+    default aperture (the launch-coupling identity, so Model A behavior is unchanged).
+    Mass rationale for the inverse-linear coupling: ~800 kg at the 25 m^2 reference
+    (COMM-256) scales roughly linearly with area, ~1,900 kg at 60 m^2, so ~5 per
+    launch by mass, agreeing with the stow-derived count.
+
+    Args:
+        configured_satellites_per_launch: The Model A satellites-per-launch dial (the
+            count at the reference aperture).
+        aperture_m2: The satellite flat-array area, m^2.
+
+    Returns:
+        The effective whole satellites per launch (at least 1).
+    """
+    return max(
+        1,
+        math.floor(configured_satellites_per_launch * APERTURE_REFERENCE_M2 / aperture_m2),
+    )
+
+
+def derive_iridium_subscribers_per_satellite(
+    *,
+    per_satellite_capacity_gbps: float,
+    active_user_rate_mbps: float,
+    concurrency_peak: float,
+) -> int:
+    """Derive the per-satellite subscriber density (people) fed to the fleet sizing (0.7 step 3).
+
+    ::
+
+        offered_load_per_subscriber_mbps = active_user_rate_mbps x concurrency_peak
+        subscribers_per_satellite = round_half_up(
+            per_satellite_capacity_gbps x GBPS_TO_MBPS / offered_load_per_subscriber_mbps)
+
+    Uses the engine's :func:`_round_half_up` (NOT ``floor`` or ``int()``): it matches
+    the engine's rounding idiom AND is robust to floating-point representation error
+    at the exact-integer boundary (e.g. 31200.0000001 rounds to 31200). This is the
+    OPPOSITE rounding convention from the launch coupling's ``floor``, and both are
+    deliberate. Worked at the phone-class baseline: 0.78 x 1000 / (1.0 x 0.025) =
+    780 / 0.025 = 31,200.
+
+    Args:
+        per_satellite_capacity_gbps: The derived per-satellite capacity, Gbps.
+        active_user_rate_mbps: The per-subscriber active data rate, Mbps.
+        concurrency_peak: The busy-hour peak concurrency fraction.
+
+    Returns:
+        The derived subscribers-per-satellite density (people, a whole count).
+    """
+    offered_load_per_subscriber_mbps = active_user_rate_mbps * concurrency_peak
+    return _round_half_up(
+        per_satellite_capacity_gbps * GBPS_TO_MBPS / offered_load_per_subscriber_mbps
+    )
+
+
+def derive_iridium_per_user_rates(
+    *,
+    spectrum_mhz: float,
+    spectral_efficiency_bps_per_hz: float,
+    active_user_rate_mbps: float,
+    concurrency_peak: float,
+    concurrency_offpeak: float,
+) -> tuple[float, float]:
+    """Derive the Model B (peak, off-peak) per-user rates in Mbps (0.7 step 5).
+
+    The peak per-user rate is the active rate by construction (the service tier). The
+    off-peak rate is the smaller of the single-beam Shannon pool and the rate a
+    subscriber gets when the concurrency drops from peak to off-peak::
+
+        beam_pool_mbps = spectrum_mhz x spectral_efficiency_bps_per_hz   (MHz x bps/Hz = Mbps)
+        per_user_rate_offpeak_mbps = min(
+            beam_pool_mbps,
+            active_user_rate_mbps x concurrency_peak / concurrency_offpeak)
+
+    Worked at the phone-class baseline: peak = 1.0 Mbps; beam_pool = 8 x 0.65 = 5.2
+    Mbps; off-peak = min(5.2, 1.0 x 0.025 / 0.005) = min(5.2, 5.0) = 5.0 Mbps.
+
+    Args:
+        spectrum_mhz: The held L-band width, MHz.
+        spectral_efficiency_bps_per_hz: The device spectral efficiency, bps/Hz.
+        active_user_rate_mbps: The per-subscriber active rate, Mbps (the peak rate).
+        concurrency_peak: The busy-hour peak concurrency fraction.
+        concurrency_offpeak: The off-peak concurrency fraction.
+
+    Returns:
+        A 2-tuple ``(per_user_rate_peak_mbps, per_user_rate_offpeak_mbps)``, Mbps.
+    """
+    beam_pool_mbps = spectrum_mhz * spectral_efficiency_bps_per_hz
+    per_user_rate_peak_mbps = active_user_rate_mbps
+    per_user_rate_offpeak_mbps = min(
+        beam_pool_mbps, active_user_rate_mbps * concurrency_peak / concurrency_offpeak
+    )
+    return per_user_rate_peak_mbps, per_user_rate_offpeak_mbps
 
 
 # ---------------------------------------------------------------------------
@@ -689,6 +891,11 @@ class CommsTrajectory:
         steady_state_gross_margin_arpu_pct: The steady-state ARPU gross margin,
             percent. Unlike the cost-plus margin, this depends on whether the ARPU
             revenue clears the annualized cost basis at the served base.
+        iridium: The Model B (Iridium L-band max-outcome) physics result block when
+            Model B ran (``config.iridium`` was non-None), else ``None`` (the Model A
+            path). It carries the derived per-satellite capacity, the fleet aggregate,
+            the per-user peak/off-peak rates, the IoT passthrough, and the stated
+            ecosystem assumption; it never perturbs the shared Model A fields above.
     """
 
     years: tuple[CommsYear, ...]
@@ -705,6 +912,131 @@ class CommsTrajectory:
     steady_state_gross_margin_cost_plus_pct: float
     steady_state_revenue_arpu_musd: float
     steady_state_gross_margin_arpu_pct: float
+    iridium: IridiumResult | None = None
+
+
+@dataclass(frozen=True)
+class IridiumResult:
+    """The Model B (Iridium L-band max-outcome) physics result block.
+
+    Attached to :attr:`CommsTrajectory.iridium` when Model B ran (``config.iridium``
+    was non-None); ``None`` on the Model A path. All fields are estimate-tier derived
+    quantities. Subscribers are PEOPLE; ``iot_devices`` is a separate DEVICE
+    passthrough, never folded into the people count. This is the MSS lane (owned
+    L-band, purpose-built or in-chipset devices), NEVER the cellular unmodified-phone
+    lane (Model A). See :attr:`ecosystem_assumption`.
+
+    Attributes:
+        spectrum_mhz: The held L-band width used, MHz (echo of the dial).
+        aperture_m2: The satellite flat-array area used, m^2 (echo of the dial).
+        device_class: The device class that set the spectral-efficiency tier.
+        spectral_efficiency_bps_per_hz: The resolved spectral efficiency used, bps/Hz
+            (the override when set, else the ``device_class`` central).
+        per_satellite_capacity_gbps: The derived per-satellite capacity, Gbps
+            (0.7 step 2).
+        fleet_aggregate_capacity_gbps: ``per_satellite_capacity_gbps x fleet_target``,
+            the built-out fleet's aggregate capacity, Gbps (0.7 step 6).
+        subscribers_per_satellite: The derived per-satellite density (people) that
+            sized the fleet (echo of what fed :func:`compute_fleet_target`).
+        effective_satellites_per_launch: The aperture-coupled per-launch count the
+            deployment used (0.7 step 10; equals the configured value at the default
+            aperture).
+        active_user_rate_mbps: The per-subscriber active data rate, Mbps.
+        concurrency_peak: The busy-hour peak concurrency fraction.
+        concurrency_offpeak: The off-peak concurrency fraction.
+        beam_pool_mbps: The single-beam Shannon pool, ``spectrum_mhz x SE``, Mbps.
+        per_user_rate_peak_mbps: The peak per-user rate, Mbps (the active rate).
+        per_user_rate_offpeak_mbps: The off-peak per-user rate, Mbps (0.7 step 5).
+        iot_devices: The passthrough IoT DEVICE count (not people; zero sizing effect).
+        operations_cost_musd: The Model B operations cost, $M
+            (:data:`IRIDIUM_OPERATIONS_COST_MUSD`, 0.0, an explicit stated assumption,
+            a fixed line to research and add later).
+        ecosystem_assumption: The stated ecosystem assumption behind the phone-class
+            tier (:data:`ECOSYSTEM_ASSUMPTION_NOTE`): in-chipset L-band support, 0 dBi,
+            a forward assumption; Model B never claims to reach an unmodified handset.
+    """
+
+    spectrum_mhz: float
+    aperture_m2: float
+    device_class: DeviceClass
+    spectral_efficiency_bps_per_hz: float
+    per_satellite_capacity_gbps: float
+    fleet_aggregate_capacity_gbps: float
+    subscribers_per_satellite: int
+    effective_satellites_per_launch: int
+    active_user_rate_mbps: float
+    concurrency_peak: float
+    concurrency_offpeak: float
+    beam_pool_mbps: float
+    per_user_rate_peak_mbps: float
+    per_user_rate_offpeak_mbps: float
+    iot_devices: int
+    operations_cost_musd: float
+    ecosystem_assumption: str
+
+
+def build_iridium_result(
+    dials: IridiumDials,
+    *,
+    fleet_target: int,
+    subscribers_per_satellite: int,
+    effective_satellites_per_launch: int,
+) -> IridiumResult:
+    """Assemble the :class:`IridiumResult` from the dials and the sized fleet.
+
+    Resolves the spectral efficiency, re-derives the per-satellite capacity and the
+    per-user rates from the dials (the pure derivations above), computes the fleet
+    aggregate as ``per_satellite_capacity_gbps x fleet_target`` (0.7 step 6), and
+    echoes the derived density and the aperture-coupled effective
+    satellites-per-launch (both passed in, already computed once in
+    :func:`run_comms_model`, so the density that sized the fleet and the density
+    reported here cannot drift). The operations cost and the ecosystem assumption are
+    the stated Model B constants (:data:`IRIDIUM_OPERATIONS_COST_MUSD`,
+    :data:`ECOSYSTEM_ASSUMPTION_NOTE`).
+
+    Args:
+        dials: The Model B :class:`~communications.config.IridiumDials` block.
+        fleet_target: The capacity-sized fleet target (from
+            :func:`compute_fleet_target`).
+        subscribers_per_satellite: The derived per-satellite density that sized the
+            fleet (echoed onto the result).
+        effective_satellites_per_launch: The aperture-coupled per-launch count the
+            deployment used (echoed onto the result).
+
+    Returns:
+        The populated :class:`IridiumResult` physics block.
+    """
+    spectral_efficiency = resolve_device_spectral_efficiency(dials)
+    per_satellite_capacity_gbps = derive_per_satellite_capacity_gbps(
+        dials.spectrum_mhz, spectral_efficiency, dials.aperture_m2
+    )
+    beam_pool_mbps = dials.spectrum_mhz * spectral_efficiency
+    per_user_rate_peak_mbps, per_user_rate_offpeak_mbps = derive_iridium_per_user_rates(
+        spectrum_mhz=dials.spectrum_mhz,
+        spectral_efficiency_bps_per_hz=spectral_efficiency,
+        active_user_rate_mbps=dials.active_user_rate_mbps,
+        concurrency_peak=dials.concurrency_peak,
+        concurrency_offpeak=dials.concurrency_offpeak,
+    )
+    return IridiumResult(
+        spectrum_mhz=dials.spectrum_mhz,
+        aperture_m2=dials.aperture_m2,
+        device_class=dials.device_class,
+        spectral_efficiency_bps_per_hz=spectral_efficiency,
+        per_satellite_capacity_gbps=per_satellite_capacity_gbps,
+        fleet_aggregate_capacity_gbps=per_satellite_capacity_gbps * fleet_target,
+        subscribers_per_satellite=subscribers_per_satellite,
+        effective_satellites_per_launch=effective_satellites_per_launch,
+        active_user_rate_mbps=dials.active_user_rate_mbps,
+        concurrency_peak=dials.concurrency_peak,
+        concurrency_offpeak=dials.concurrency_offpeak,
+        beam_pool_mbps=beam_pool_mbps,
+        per_user_rate_peak_mbps=per_user_rate_peak_mbps,
+        per_user_rate_offpeak_mbps=per_user_rate_offpeak_mbps,
+        iot_devices=dials.iot_devices,
+        operations_cost_musd=IRIDIUM_OPERATIONS_COST_MUSD,
+        ecosystem_assumption=ECOSYSTEM_ASSUMPTION_NOTE,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -835,6 +1167,7 @@ def _compute_comms_year(
     cohorts: list[LivedCohort],
     cohort_builds: list[_CohortBuild],
     fleet_target: int,
+    satellites_per_launch: int,
     target_already_reached: bool,
 ) -> tuple[CommsYear, bool]:
     """Roll up one model year: deploy toward the fleet target, hold, cost it, and price revenue.
@@ -875,6 +1208,12 @@ def _compute_comms_year(
         cohort_builds: The parallel economics-overlay cohort list (this year's cohort,
             with its locked-in per-satellite annual cost, is appended in place).
         fleet_target: The capacity-sized fleet the build-out fills toward.
+        satellites_per_launch: The satellites deployed per launch this run (0.6 seam
+            2). Model A passes the configured ``satellite.satellites_per_launch``
+            dial; Model B passes the aperture-coupled EFFECTIVE value (0.7 step 10).
+            Consumed by the would-be-deployed count, the overshoot ceil, the
+            flown-launches re-derivation, and the per-satellite launch-cost
+            annualization.
         target_already_reached: Whether the fleet target was reached in a PRIOR year
             (carries the HOLD-phase flag forward across years).
 
@@ -882,7 +1221,6 @@ def _compute_comms_year(
         A 2-tuple ``(comms_year, target_reached_now_or_before)``: the year's
         rollup and the updated "target reached" flag to thread to the next year.
     """
-    satellites_per_launch = config.satellite.satellites_per_launch
     life = config.satellite.satellite_lifetime_years
     coverage_floor = config.coverage.satellites_for_full_coverage
 
@@ -1041,7 +1379,30 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
     base_year = config.metadata.base_year
     horizon_years = config.metadata.horizon_years
     subscriber_target = config.subscribers.subscribers_at_full_coverage
-    subscribers_per_satellite = config.subscribers.subscribers_per_satellite
+
+    # The per-satellite density and the effective satellites-per-launch: Model A
+    # reads them from the dials; Model B (a non-None iridium block) DERIVES the
+    # density from L-band physics and the effective per-launch count from the aperture
+    # coupling (0.6 seams 1 and 2; 0.7 steps 2/3/10). Everything downstream
+    # (compute_fleet_target, the year loop) consumes the two values unchanged, so the
+    # Model A path (config.iridium is None) is behavior-identical.
+    if config.iridium is not None:
+        spectral_efficiency = resolve_device_spectral_efficiency(config.iridium)
+        per_sat_capacity_gbps = derive_per_satellite_capacity_gbps(
+            config.iridium.spectrum_mhz, spectral_efficiency, config.iridium.aperture_m2
+        )
+        subscribers_per_satellite = derive_iridium_subscribers_per_satellite(
+            per_satellite_capacity_gbps=per_sat_capacity_gbps,
+            active_user_rate_mbps=config.iridium.active_user_rate_mbps,
+            concurrency_peak=config.iridium.concurrency_peak,
+        )
+        satellites_per_launch_effective = derive_iridium_satellites_per_launch(
+            configured_satellites_per_launch=config.satellite.satellites_per_launch,
+            aperture_m2=config.iridium.aperture_m2,
+        )
+    else:
+        subscribers_per_satellite = config.subscribers.subscribers_per_satellite
+        satellites_per_launch_effective = config.satellite.satellites_per_launch
 
     # Size the fleet to SERVE the subscriber base (the capacity dimension): the
     # treadmill below builds and holds to this fleet target, not the coverage floor.
@@ -1051,6 +1412,18 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
         coverage_floor=config.coverage.satellites_for_full_coverage,
         max_fleet_satellites=config.coverage.max_fleet_satellites,
     )
+
+    # Build the Model B physics result block once the fleet is sized (None on the
+    # Model A path). It re-derives the physics from the dials and echoes the density
+    # and the effective per-launch count that actually sized and deployed the fleet.
+    iridium_result: IridiumResult | None = None
+    if config.iridium is not None:
+        iridium_result = build_iridium_result(
+            config.iridium,
+            fleet_target=fleet_target,
+            subscribers_per_satellite=subscribers_per_satellite,
+            effective_satellites_per_launch=satellites_per_launch_effective,
+        )
 
     cohorts: list[LivedCohort] = []
     # The parallel economics-overlay cohort list (carries the per-satellite annual
@@ -1063,7 +1436,14 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
     for year_idx in range(horizon_years + 1):
         fy = base_year + year_idx
         comms_year, target_reached = _compute_comms_year(
-            year_idx, fy, config, cohorts, cohort_builds, fleet_target, target_reached
+            year_idx,
+            fy,
+            config,
+            cohorts,
+            cohort_builds,
+            fleet_target,
+            satellites_per_launch_effective,
+            target_reached,
         )
         years.append(comms_year)
         if full_coverage_reached_year is None and target_reached:
@@ -1145,6 +1525,7 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
         steady_state_gross_margin_cost_plus_pct=steady_state_gross_margin_cost_plus_pct,
         steady_state_revenue_arpu_musd=steady_state_revenue_arpu_musd,
         steady_state_gross_margin_arpu_pct=steady_state_gross_margin_arpu_pct,
+        iridium=iridium_result,
     )
 
 
@@ -1152,7 +1533,14 @@ __all__ = [
     "CommsCohortYear",
     "CommsTrajectory",
     "CommsYear",
+    "IridiumResult",
+    "build_iridium_result",
     "compute_fleet_target",
+    "derive_iridium_per_user_rates",
+    "derive_iridium_satellites_per_launch",
+    "derive_iridium_subscribers_per_satellite",
+    "derive_per_satellite_capacity_gbps",
+    "resolve_device_spectral_efficiency",
     "run_comms_model",
     "subscribers_served_at",
 ]
