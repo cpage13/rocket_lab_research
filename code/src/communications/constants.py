@@ -172,9 +172,10 @@ single-source ~800 kg Flatellite mass read (COMM-253 / COMM-256)."""
 
 SATELLITE_LIFETIME_YEARS_DEFAULT: Final[int] = 5
 """ESTIMATE (COMM-097, the ~$200 to 260/sub/yr replacement split implies a
-~5-year hardware lineage; corrected from COMM-091 per the traceability audit). Satellite operating life, the cohort cliff: after this
-many years a cohort retires and contributes zero coverage. A design/depreciation
-assumption (the Starlink replacement-capex anchor), not a certified field life."""
+~5-year hardware lineage; corrected from COMM-091 per the traceability audit).
+Satellite operating life, the cohort cliff: after this many years a cohort retires
+and contributes zero coverage. A design/depreciation assumption (the Starlink
+replacement-capex anchor), not a certified field life."""
 
 SATELLITE_BUILD_COST_MUSD_DEFAULT: Final[float] = 1.05
 """FOUNDER_SET (in-band; round 4, 2026-06-25). The flat MASS-MANUFACTURED
