@@ -95,6 +95,26 @@ six rows are modeling posture the audit surfaced and stated explicitly.
 | 15 | IoT device passthrough (devices, not people) | 10,000,000 |
 | 16 | ARPU 50 dollars per month: a High-Bandwidth Cellular Pure Play case value; for the Iridium model the ARPU case is deferred until per-tier prices are set | deferred |
 
+### Why The Cadence Share Is 0.18
+
+The communications share of Neutron cadence (row 12) is a founder-set scenario
+dial, not a derived number, and the reasoning behind the value is worth
+recording. Communications shares Neutron with the data-center application and
+with external launch customers, so it takes a minority of the manifest. At the
+modeled cadence ramp (90 launches a year by 2036), an 18 percent share is about
+16 launches a year at maturity. That is enough to do the job the baseline asks
+of it: the 340-satellite coverage floor deploys by 2035 (about 29 cumulative
+launches of 12 satellites, spread over the ramp years), and the five-year
+replacement treadmill at steady state needs about 68 satellites a year, roughly
+6 launches, well inside the share. It also deliberately leaves the large
+majority of Neutron capacity for the rest of the business. The dial is the
+deployment-speed lever: at a higher share the same 29-launch build lands in 3
+to 7 years instead of about 10 (the conclusion states both), and the rich-tier
+and saturation scenarios need a higher share to complete inside the model
+horizon. The model reports below-target deployment truthfully rather than
+hiding it, so an under-provisioned share is visible in the output, not papered
+over.
+
 ### Conventions And Modeling Posture
 
 | # | Assumption | Value |
