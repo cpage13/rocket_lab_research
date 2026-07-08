@@ -171,8 +171,8 @@ gives ~16. Default 12 (SSO), with ~16 the LEO upside. Estimate-bound on the
 single-source ~800 kg Flatellite mass read (COMM-253 / COMM-256)."""
 
 SATELLITE_LIFETIME_YEARS_DEFAULT: Final[int] = 5
-"""ESTIMATE (COMM-091, the ~$200 to 260/sub/yr replacement split implies a
-~5-year hardware lineage). Satellite operating life, the cohort cliff: after this
+"""ESTIMATE (COMM-097, the ~$200 to 260/sub/yr replacement split implies a
+~5-year hardware lineage; corrected from COMM-091 per the traceability audit). Satellite operating life, the cohort cliff: after this
 many years a cohort retires and contributes zero coverage. A design/depreciation
 assumption (the Starlink replacement-capex anchor), not a certified field life."""
 
@@ -180,7 +180,7 @@ SATELLITE_BUILD_COST_MUSD_DEFAULT: Final[float] = 1.05
 """FOUNDER_SET (in-band; round 4, 2026-06-25). The flat MASS-MANUFACTURED
 CELLULAR-SATELLITE HARDWARE cost, ONE scalar, ~$1.0 to 1.1M (1.05 is the in-band
 default). This is a V3-CLASS HARDWARE analogy: the Starlink V3 per-satellite
-hardware cost is ~$1.2M (~1,500 kg), the upper hardware anchor (COMM-080). A
+hardware cost is ~$1.2M (~1,500 kg), the upper hardware anchor (COMM-082). A
 CELLULAR direct-to-cell payload is a bigger antenna and more power than a
 broadband panel, but FAR smaller than AST's giant phased array (so AST's
 ~$19 to 21M giant-array figure is the WRONG anchor). It is a HARDWARE
@@ -360,17 +360,17 @@ spectral-efficiency sweep band (it meets the large tier's central; the bands ove
 the centrals are ordered 0.65 < 2.0 < 2.5)."""
 
 TERMINAL_CLASS_SE_CENTRAL: Final[float] = 2.5
-"""SOURCED_ESTIMATE (COMM-647). Central of the 2.0 to 3.0 bps/Hz band for the LARGE
+"""SOURCED_ESTIMATE (COMM-650). Central of the 2.0 to 3.0 bps/Hz band for the LARGE
 boosted / custom-antenna tier: mounted or pointed, 15+ dBi (drones, fixed sites,
 vehicles; the AST-class anchor). Value untouched from the corpus; wording updated for
 the three-tier device ladder."""
 
 TERMINAL_CLASS_SE_LOW: Final[float] = 2.0
-"""SOURCED_ESTIMATE (COMM-647). Low edge of the documented large-tier
+"""SOURCED_ESTIMATE (COMM-650). Low edge of the documented large-tier
 spectral-efficiency sweep band."""
 
 TERMINAL_CLASS_SE_HIGH: Final[float] = 3.0
-"""SOURCED_ESTIMATE (COMM-647). High edge of the documented large-tier
+"""SOURCED_ESTIMATE (COMM-650). High edge of the documented large-tier
 spectral-efficiency sweep band."""
 
 REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE: Final[float] = 0.15
@@ -412,8 +412,9 @@ subscriber count; it is negligible-load and contention-limited, so it has ZERO e
 on fleet sizing (its value is cosmetic on the result)."""
 
 APERTURE_REFERENCE_M2: Final[float] = 25.0
-"""SOURCED_ESTIMATE (COMM-253 / COMM-256, a render-read ~25 m^2 Flatellite working
-number; the official dimensions are unpublished). The CALIBRATION ANCHOR: the corpus
+"""SOURCED_ESTIMATE (COMM-408 / COMM-410, the corpus flat ~25 m^2-class array;
+official Flatellite dimensions are unpublished, and the ~800 kg MASS read is
+COMM-253 / COMM-256, which do not state an area). The CALIBRATION ANCHOR: the corpus
 per-satellite capacity chain (COMM-410, :data:`REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE`)
 is calibrated AT this aperture, so the capacity aperture factor is aperture_m2 / this
 and equals 1.0 at the default. It is ALSO the ``aperture_m2`` Field default (the dial
