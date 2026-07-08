@@ -340,22 +340,24 @@ def compute_fleet_target(
 
 
 # ---------------------------------------------------------------------------
-# Model B (Iridium L-band max-outcome): the pure L-band derivation spine.
+# The Iridium model (formerly Model B; L-band max-outcome): the pure L-band
+# derivation spine.
 #
-# Model B DERIVES the per-satellite subscriber density from L-band physics (held
-# spectrum, device spectral efficiency, satellite aperture area, per-user active
-# rate, busy-hour concurrency) instead of reading the fixed Model A
-# subscribers_per_satellite dial, then feeds the SAME compute_fleet_target above.
-# These are pure derivations (primitives or the dials in, primitives out, no side
-# effects); run_comms_model wires them in behind the config.iridium branch. THE
-# THREE LANES stay separate: Model B is the MSS lane (purpose-built or in-chipset
+# The Iridium model DERIVES the per-satellite subscriber density from L-band
+# physics (held spectrum, device spectral efficiency, satellite aperture area,
+# per-user active rate, busy-hour concurrency) instead of reading the fixed
+# subscribers_per_satellite dial of the High-Bandwidth Cellular Pure Play model
+# (formerly Model A), then feeds the SAME compute_fleet_target above. These are
+# pure derivations (primitives or the dials in, primitives out, no side effects);
+# run_comms_model wires them in behind the config.iridium branch. THE THREE LANES
+# stay separate: the Iridium model is the MSS lane (purpose-built or in-chipset
 # devices on owned L-band), NOT cellular direct-to-cell to an unmodified phone
-# (Model A) and NOT broadband.
+# (the High-Bandwidth Cellular Pure Play model) and NOT broadband.
 # ---------------------------------------------------------------------------
 
 
 def resolve_device_spectral_efficiency(dials: IridiumDials) -> float:
-    """Resolve the Model B spectral efficiency (bps/Hz) from the dials (0.7 step 1).
+    """Resolve the Iridium-model spectral efficiency (bps/Hz) from the dials (0.7 step 1).
 
     Returns the explicit ``spectral_efficiency_bps_per_hz`` override when set,
     otherwise the central spectral-efficiency tier for the ``device_class`` (the
@@ -365,8 +367,8 @@ def resolve_device_spectral_efficiency(dials: IridiumDials) -> float:
     :data:`TERMINAL_CLASS_SE_CENTRAL` (2.5).
 
     Args:
-        dials: The Model B :class:`~communications.config.IridiumDials` block (the
-            device class plus the optional override).
+        dials: The Iridium-model :class:`~communications.config.IridiumDials` block
+            (the device class plus the optional override).
 
     Returns:
         The spectral efficiency in bps/Hz to use in the capacity derivation.
@@ -435,14 +437,15 @@ def derive_iridium_satellites_per_launch(
     capacity is never overstated. The ``max(1, ...)`` floor means an arbitrarily
     large aperture still flies one satellite per launch (the AST pattern: a 223 m^2
     array flies 1 per launch). Equals the configured value EXACTLY at the 25 m^2
-    default aperture (the launch-coupling identity, so Model A behavior is unchanged).
+    default aperture (the launch-coupling identity, so the High-Bandwidth Cellular
+    Pure Play model's behavior is unchanged).
     Mass rationale for the inverse-linear coupling: ~800 kg at the 25 m^2 reference
     (COMM-256) scales roughly linearly with area, ~1,900 kg at 60 m^2, so ~5 per
     launch by mass, agreeing with the stow-derived count.
 
     Args:
-        configured_satellites_per_launch: The Model A satellites-per-launch dial (the
-            count at the reference aperture).
+        configured_satellites_per_launch: The High-Bandwidth Cellular Pure Play
+            model's satellites-per-launch dial (the count at the reference aperture).
         aperture_m2: The satellite flat-array area, m^2.
 
     Returns:
@@ -497,7 +500,7 @@ def derive_iridium_per_user_rates(
     concurrency_peak: float,
     concurrency_offpeak: float,
 ) -> tuple[float, float]:
-    """Derive the Model B (peak, off-peak) per-user rates in Mbps (0.7 step 5).
+    """Derive the Iridium-model (peak, off-peak) per-user rates in Mbps (0.7 step 5).
 
     The peak per-user rate is the active rate by construction (the service tier). The
     off-peak rate is the smaller of the single-beam Shannon pool and the rate a
@@ -899,11 +902,12 @@ class CommsTrajectory:
         steady_state_gross_margin_arpu_pct: The steady-state ARPU gross margin,
             percent. Unlike the cost-plus margin, this depends on whether the ARPU
             revenue clears the annualized cost basis at the served base.
-        iridium: The Model B (Iridium L-band max-outcome) physics result block when
-            Model B ran (``config.iridium`` was non-None), else ``None`` (the Model A
-            path). It carries the derived per-satellite capacity, the fleet aggregate,
-            the per-user peak/off-peak rates, the IoT passthrough, and the stated
-            ecosystem assumption; it never perturbs the shared Model A fields above.
+        iridium: The Iridium model's (L-band max-outcome) physics result block when
+            the Iridium model ran (``config.iridium`` was non-None), else ``None``
+            (the High-Bandwidth Cellular Pure Play path). It carries the derived
+            per-satellite capacity, the fleet aggregate, the per-user peak/off-peak
+            rates, the IoT passthrough, and the stated ecosystem assumption; it never
+            perturbs the shared fields above.
     """
 
     years: tuple[CommsYear, ...]
@@ -925,14 +929,15 @@ class CommsTrajectory:
 
 @dataclass(frozen=True)
 class IridiumResult:
-    """The Model B (Iridium L-band max-outcome) physics result block.
+    """The Iridium model's (L-band max-outcome) physics result block.
 
-    Attached to :attr:`CommsTrajectory.iridium` when Model B ran (``config.iridium``
-    was non-None); ``None`` on the Model A path. All fields are estimate-tier derived
-    quantities. Subscribers are PEOPLE; ``iot_devices`` is a separate DEVICE
-    passthrough, never folded into the people count. This is the MSS lane (owned
-    L-band, purpose-built or in-chipset devices), NEVER the cellular unmodified-phone
-    lane (Model A). See :attr:`ecosystem_assumption`.
+    Attached to :attr:`CommsTrajectory.iridium` when the Iridium model ran
+    (``config.iridium`` was non-None); ``None`` on the High-Bandwidth Cellular Pure
+    Play path. All fields are estimate-tier derived quantities. Subscribers are
+    PEOPLE; ``iot_devices`` is a separate DEVICE passthrough, never folded into the
+    people count. This is the MSS lane (owned L-band, purpose-built or in-chipset
+    devices), NEVER the cellular unmodified-phone lane (the High-Bandwidth Cellular
+    Pure Play model). See :attr:`ecosystem_assumption`.
 
     Attributes:
         spectrum_mhz: The held L-band width used, MHz (echo of the dial).
@@ -956,12 +961,13 @@ class IridiumResult:
         per_user_rate_peak_mbps: The peak per-user rate, Mbps (the active rate).
         per_user_rate_offpeak_mbps: The off-peak per-user rate, Mbps (0.7 step 5).
         iot_devices: The passthrough IoT DEVICE count (not people; zero sizing effect).
-        operations_cost_musd: The Model B operations cost, $M
+        operations_cost_musd: The Iridium model's operations cost, $M
             (:data:`IRIDIUM_OPERATIONS_COST_MUSD`, 0.0, an explicit stated assumption,
             a fixed line to research and add later).
         ecosystem_assumption: The stated ecosystem assumption behind the phone-class
             tier (:data:`ECOSYSTEM_ASSUMPTION_NOTE`): in-chipset L-band support, 0 dBi,
-            a forward assumption; Model B never claims to reach an unmodified handset.
+            a forward assumption; the Iridium model never claims to reach an
+            unmodified handset.
     """
 
     spectrum_mhz: float
@@ -999,11 +1005,11 @@ def build_iridium_result(
     satellites-per-launch (both passed in, already computed once in
     :func:`run_comms_model`, so the density that sized the fleet and the density
     reported here cannot drift). The operations cost and the ecosystem assumption are
-    the stated Model B constants (:data:`IRIDIUM_OPERATIONS_COST_MUSD`,
+    the stated Iridium-model constants (:data:`IRIDIUM_OPERATIONS_COST_MUSD`,
     :data:`ECOSYSTEM_ASSUMPTION_NOTE`).
 
     Args:
-        dials: The Model B :class:`~communications.config.IridiumDials` block.
+        dials: The Iridium-model :class:`~communications.config.IridiumDials` block.
         fleet_target: The capacity-sized fleet target (from
             :func:`compute_fleet_target`).
         subscribers_per_satellite: The derived per-satellite density that sized the
@@ -1048,7 +1054,7 @@ def build_iridium_result(
 
 
 def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
-    """Return the Model B stated-assumptions lines (the assumptions output).
+    """Return the Iridium model's stated-assumptions lines (the assumptions output).
 
     Takes the dials because one line is conditional on them (the aperture fold
     caveat, 0.8a). Always states: the ecosystem assumption
@@ -1058,17 +1064,18 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
     spectral-efficiency bands, the reuse calibration, the aperture reference and its
     linear conservative scaling, the concurrency pair, the active rate) as
     estimate-tier, founder-owned values; that the prices-today ARPU case is DEFERRED
-    for Model B (cost-plus is the load-bearing revenue, the per-tier MSS ARPUs plug
-    in later); and that Model B is the MSS lane (owned L-band, purpose-built or
-    in-chipset devices), never the cellular unmodified-phone lane. Conditionally
+    for the Iridium model (cost-plus is the load-bearing revenue, the per-tier MSS
+    ARPUs plug in later); and that the Iridium model is the MSS lane (owned L-band,
+    purpose-built or in-chipset devices), never the cellular unmodified-phone lane.
+    Conditionally
     appends :data:`APERTURE_FOLD_CAVEAT_NOTE` when ``dials.aperture_m2`` exceeds
     :data:`APERTURE_NO_FOLD_LIMIT_M2` (0.8a: a documented note, never a validation
     error, so the above-limit what-if stays computable).
 
     Args:
-        dials: The Model B :class:`~communications.config.IridiumDials` block (its
-            aperture drives the conditional fold caveat, its concurrency and active
-            rate populate the estimate-tier lines).
+        dials: The Iridium-model :class:`~communications.config.IridiumDials` block
+            (its aperture drives the conditional fold caveat, its concurrency and
+            active rate populate the estimate-tier lines).
 
     Returns:
         The stated-assumptions lines, in stable order, as a tuple of strings.
@@ -1104,14 +1111,15 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
             "values."
         ),
         (
-            "The prices-today ARPU revenue case is DEFERRED for Model B: cost-plus "
-            "(revenue equals annualized cost times the revenue multiple) is the "
-            "load-bearing Model B revenue, and the per-tier MSS ARPUs plug in later."
+            "The prices-today ARPU revenue case is DEFERRED for the Iridium model: "
+            "cost-plus (revenue equals annualized cost times the revenue multiple) is "
+            "the load-bearing Iridium-model revenue, and the per-tier MSS ARPUs plug "
+            "in later."
         ),
         (
-            "Model B is the MSS lane (owned L-band, purpose-built or in-chipset "
-            "devices), never the cellular direct-to-cell unmodified-phone lane "
-            "(Model A)."
+            "The Iridium model is the MSS lane (owned L-band, purpose-built or "
+            "in-chipset devices), never the cellular direct-to-cell unmodified-phone "
+            "lane (the High-Bandwidth Cellular Pure Play model)."
         ),
     ]
     if dials.aperture_m2 > APERTURE_NO_FOLD_LIMIT_M2:
@@ -1289,8 +1297,9 @@ def _compute_comms_year(
             with its locked-in per-satellite annual cost, is appended in place).
         fleet_target: The capacity-sized fleet the build-out fills toward.
         satellites_per_launch: The satellites deployed per launch this run (0.6 seam
-            2). Model A passes the configured ``satellite.satellites_per_launch``
-            dial; Model B passes the aperture-coupled EFFECTIVE value (0.7 step 10).
+            2). The High-Bandwidth Cellular Pure Play model passes the configured
+            ``satellite.satellites_per_launch`` dial; the Iridium model passes the
+            aperture-coupled EFFECTIVE value (0.7 step 10).
             Consumed by the would-be-deployed count, the overshoot ceil, the
             flown-launches re-derivation, and the per-satellite launch-cost
             annualization.
@@ -1460,12 +1469,13 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
     horizon_years = config.metadata.horizon_years
     subscriber_target = config.subscribers.subscribers_at_full_coverage
 
-    # The per-satellite density and the effective satellites-per-launch: Model A
-    # reads them from the dials; Model B (a non-None iridium block) DERIVES the
-    # density from L-band physics and the effective per-launch count from the aperture
-    # coupling (0.6 seams 1 and 2; 0.7 steps 2/3/10). Everything downstream
-    # (compute_fleet_target, the year loop) consumes the two values unchanged, so the
-    # Model A path (config.iridium is None) is behavior-identical.
+    # The per-satellite density and the effective satellites-per-launch: the
+    # High-Bandwidth Cellular Pure Play model reads them from the dials; the Iridium
+    # model (a non-None iridium block) DERIVES the density from L-band physics and
+    # the effective per-launch count from the aperture coupling (0.6 seams 1 and 2;
+    # 0.7 steps 2/3/10). Everything downstream (compute_fleet_target, the year loop)
+    # consumes the two values unchanged, so the High-Bandwidth Cellular Pure Play
+    # path (config.iridium is None) is behavior-identical.
     if config.iridium is not None:
         spectral_efficiency = resolve_device_spectral_efficiency(config.iridium)
         per_sat_capacity_gbps = derive_per_satellite_capacity_gbps(
@@ -1493,8 +1503,9 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
         max_fleet_satellites=config.coverage.max_fleet_satellites,
     )
 
-    # Build the Model B physics result block once the fleet is sized (None on the
-    # Model A path). It re-derives the physics from the dials and echoes the density
+    # Build the Iridium-model physics result block once the fleet is sized (None on
+    # the High-Bandwidth Cellular Pure Play path). It re-derives the physics from
+    # the dials and echoes the density
     # and the effective per-launch count that actually sized and deployed the fleet.
     iridium_result: IridiumResult | None = None
     if config.iridium is not None:

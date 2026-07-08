@@ -11,7 +11,6 @@ dependencies = [
 
 [project.scripts]
 rklb-value = "data_center.cli:main"
-rklb-comms = "communications.cli:main"
 
 [build-system]
 requires = ["hatchling"]

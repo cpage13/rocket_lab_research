@@ -19,10 +19,11 @@ from pathlib import Path
 
 import pytest
 
-# The comms src directory and the default scenario, repo-anchored from this file.
+# The comms src directory and the default comms scenario (the Iridium scenario,
+# scenarios/iridium.yaml), repo-anchored from this file.
 _REPO_CODE = Path(__file__).resolve().parents[2]
 _COMMS_SRC = _REPO_CODE / "src" / "communications"
-_DEFAULT_YAML = _REPO_CODE / "scenarios" / "comms_default.yaml"
+_DEFAULT_YAML = _REPO_CODE / "scenarios" / "iridium.yaml"
 
 _COMMS_SRC_FILES = sorted(_COMMS_SRC.glob("*.py"))
 
@@ -79,9 +80,9 @@ def test_no_forbidden_token_in_comms_src(token: str) -> None:
 
 @pytest.mark.parametrize("token", _FORBIDDEN_TOKENS)
 def test_no_forbidden_token_in_default_yaml(token: str) -> None:
-    """No forbidden token appears in the default scenario YAML."""
+    """No forbidden token appears in the default comms scenario YAML (iridium.yaml)."""
     pattern = re.compile(token, re.IGNORECASE)
-    assert not pattern.search(_DEFAULT_YAML.read_text()), f"{token} found in comms_default.yaml"
+    assert not pattern.search(_DEFAULT_YAML.read_text()), f"{token} found in iridium.yaml"
 
 
 def test_comms_src_files_discovered() -> None:

@@ -1,30 +1,33 @@
-"""Tests for Model B (the Iridium L-band max-outcome scenario, the MSS lane).
+"""Tests for the Iridium model (formerly Model B): L-band max-outcome, the MSS lane.
 
-These cover the additive Model B path: the pure L-band derivations (spectral
+These cover the additive Iridium path: the pure L-band derivations (spectral
 efficiency from the device class, per-satellite capacity with the aperture factor,
 the derived per-satellite subscriber density, the per-user peak/off-peak rates, the
 aperture-coupled effective satellites-per-launch), the end-to-end engine run behind
-the ``config.iridium`` branch, the minimal scenario YAML the existing loader parses
-unchanged, and the stated-assumptions accessor.
+the ``config.iridium`` branch, the scenario YAML the existing loader parses
+unchanged, the stated-assumptions accessor, and the promoted-JSON export.
 
-Two structural facts anchor the suite. First, Model A is untouched: the default
-config (no ``iridium`` block) still yields ``trajectory.iridium is None`` and every
-Model A number is unchanged. Second, THE STRONG EQUALITY CHECK: because the Model B
-phone-class baseline and the Model A default 10M run BOTH bind at the 340 coverage
-floor, and at the default 25 m^2 aperture the effective satellites-per-launch equals
-the configured 12 (the launch-coupling identity), their entire cost / cohort /
-revenue trajectories are IDENTICAL; only the per-satellite density and the new
-Iridium physics block differ. The 60 m^2 what-if breaks that identity by design (the
-launch granularity changes), so it freezes the derived physics and the fleet target
-only, not the deployment-year or cost outcomes.
+Two structural facts anchor the suite. First, the High-Bandwidth Cellular Pure Play
+model (formerly Model A) is untouched: the default config (no ``iridium`` block)
+still yields ``trajectory.iridium is None`` and every High-Bandwidth Cellular Pure
+Play number is unchanged. Second, THE STRONG EQUALITY CHECK: because the Iridium
+phone-class baseline and the High-Bandwidth Cellular Pure Play default 10M run BOTH
+bind at the 340 coverage floor, and at the default 25 m^2 aperture the effective
+satellites-per-launch equals the configured 12 (the launch-coupling identity), their
+entire cost / cohort / revenue trajectories are IDENTICAL; only the per-satellite
+density and the new Iridium physics block differ. The 60 m^2 what-if breaks that
+identity by design (the launch granularity changes), so it freezes the derived
+physics and the fleet target only, not the deployment-year or cost outcomes.
 
 Subscribers are PEOPLE; ``iot_devices`` is a separate DEVICE passthrough, never
-folded into the people count. Model B is the MSS lane (purpose-built or in-chipset
-devices on owned L-band), never the cellular unmodified-phone lane (Model A).
+folded into the people count. The Iridium model is the MSS lane (purpose-built or
+in-chipset devices on owned L-band), never the cellular unmodified-phone lane (the
+High-Bandwidth Cellular Pure Play model).
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -49,12 +52,14 @@ from communications.engine import (
     resolve_device_spectral_efficiency,
     run_comms_model,
 )
+from communications.json_output import MODEL_NAME, export_iridium_json
 
 # ---------------------------------------------------------------------------
-# The frozen Model B phone-class baseline (spectrum 8.0, aperture 25.0, phone_class,
-# SE 0.65, active 1.0 Mbps, concurrency 0.025 / 0.005, target 10M, floor 340, cap
-# 2,000). At aperture 25.0 the aperture factor is 1.0 and the launch coupling is the
-# identity, so every number here is the pre-aperture-dial value exactly.
+# The frozen Iridium-model phone-class baseline (spectrum 8.0, aperture 25.0,
+# phone_class, SE 0.65, active 1.0 Mbps, concurrency 0.025 / 0.005, target 10M,
+# floor 340, cap 2,000). At aperture 25.0 the aperture factor is 1.0 and the launch
+# coupling is the identity, so every number here is the pre-aperture-dial value
+# exactly.
 # ---------------------------------------------------------------------------
 BASELINE_SPECTRUM_MHZ = 8.0
 BASELINE_SE_BPS_PER_HZ = 0.65
@@ -62,7 +67,7 @@ BASELINE_ACTIVE_RATE_MBPS = 1.0
 BASELINE_CONCURRENCY_PEAK = 0.025
 BASELINE_CONCURRENCY_OFFPEAK = 0.005
 DEFAULT_APERTURE_M2 = 25.0
-CONFIGURED_SATELLITES_PER_LAUNCH = 12  # the Model A satellites-per-launch dial.
+CONFIGURED_SATELLITES_PER_LAUNCH = 12  # the shared satellites-per-launch config dial.
 
 EXPECTED_PER_SAT_CAPACITY_GBPS = 0.78  # 8 x 0.65 x 0.15 x (25 / 25).
 EXPECTED_SUBS_PER_SAT_PHONE_BASELINE = 31_200  # 0.78 x 1000 / (1.0 x 0.025).
@@ -75,8 +80,9 @@ EXPECTED_EFFECTIVE_SPL_BASELINE = 12  # max(1, floor(12 x 25 / 25)), the identit
 EXPECTED_IOT_DEVICES = 10_000_000  # the passthrough counter (zero sizing effect).
 EXPECTED_OPERATIONS_COST_MUSD = 0.0  # the explicit stated ops-zero assumption.
 
-# The one intended difference from Model A: the derived density vs the fixed dial.
-MODEL_A_SUBS_PER_SAT = SUBSCRIBERS_PER_SATELLITE_DEFAULT  # 75,000.
+# The one intended difference from the High-Bandwidth Cellular Pure Play model: the
+# derived density vs the fixed dial.
+HB_CELLULAR_SUBS_PER_SAT = SUBSCRIBERS_PER_SATELLITE_DEFAULT  # 75,000.
 
 # The rich variant: a 2.5 Mbps active rate raises offered load, shrinks the density,
 # and pushes the fleet target above the floor (the capacity regime binds).
@@ -106,8 +112,8 @@ VERY_LARGE_APERTURE_M2 = 400.0
 EXPECTED_EFFECTIVE_SPL_LARGE = 1  # max(1, floor(12 x 25 / 400)) = max(1, 0).
 
 # The scenario YAML (anchored from this test file: tests/communications -> code ->
-# scenarios/iridium_model_b.yaml).
-_SCENARIO_YAML = Path(__file__).resolve().parents[2] / "scenarios" / "iridium_model_b.yaml"
+# scenarios/iridium.yaml).
+_SCENARIO_YAML = Path(__file__).resolve().parents[2] / "scenarios" / "iridium.yaml"
 
 
 # ---------------------------------------------------------------------------
@@ -226,22 +232,23 @@ def test_effective_satellites_per_launch_coupling_points() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Model A stays untouched (the None-iridium path).
+# The High-Bandwidth Cellular Pure Play model stays untouched (the None-iridium
+# path).
 # ---------------------------------------------------------------------------
 
 
-def test_model_a_default_has_no_iridium_block() -> None:
-    """The default Model A config produces no Iridium result block (the path is untouched)."""
+def test_hb_cellular_default_has_no_iridium_block() -> None:
+    """The default High-Bandwidth Cellular Pure Play config produces no Iridium block."""
     traj = run_comms_model(CommsConfig())
     assert traj.iridium is None
 
 
 # ---------------------------------------------------------------------------
-# Model B end-to-end (behind the config.iridium branch).
+# The Iridium model end-to-end (behind the config.iridium branch).
 # ---------------------------------------------------------------------------
 
 
-def test_model_b_baseline_physics_frozen() -> None:
+def test_iridium_baseline_physics_frozen() -> None:
     """The phone-class baseline freezes every derived physics number (aperture invariant)."""
     traj = run_comms_model(CommsConfig(iridium=IridiumDials()))
     assert traj.iridium is not None
@@ -265,34 +272,38 @@ def test_model_b_baseline_physics_frozen() -> None:
     assert iridium.operations_cost_musd == pytest.approx(EXPECTED_OPERATIONS_COST_MUSD)
 
 
-def test_model_b_baseline_shares_model_a_trajectory() -> None:
-    """Model B baseline shares Model A's trajectory, differing only in the density."""
-    model_a = run_comms_model(CommsConfig())
-    model_b = run_comms_model(CommsConfig(iridium=IridiumDials()))
+def test_iridium_baseline_shares_hb_cellular_trajectory() -> None:
+    """The Iridium baseline shares the High-Bandwidth Cellular Pure Play trajectory.
+
+    The two runs differ only in the per-satellite density (the strong equality
+    check).
+    """
+    hb_cellular = run_comms_model(CommsConfig())
+    iridium_run = run_comms_model(CommsConfig(iridium=IridiumDials()))
     # The shared build / cost / revenue fields are identical (the strong equality check).
-    assert model_b.fleet_target == model_a.fleet_target
-    assert model_b.binding_regime is model_a.binding_regime
-    assert model_b.subscribers_served == model_a.subscribers_served
-    assert model_b.full_coverage_reached_year == model_a.full_coverage_reached_year
-    assert model_b.total_build_and_hold_cost_musd == pytest.approx(
-        model_a.total_build_and_hold_cost_musd
+    assert iridium_run.fleet_target == hb_cellular.fleet_target
+    assert iridium_run.binding_regime is hb_cellular.binding_regime
+    assert iridium_run.subscribers_served == hb_cellular.subscribers_served
+    assert iridium_run.full_coverage_reached_year == hb_cellular.full_coverage_reached_year
+    assert iridium_run.total_build_and_hold_cost_musd == pytest.approx(
+        hb_cellular.total_build_and_hold_cost_musd
     )
-    assert model_b.cost_per_subscriber_annual_usd == pytest.approx(
-        model_a.cost_per_subscriber_annual_usd
+    assert iridium_run.cost_per_subscriber_annual_usd == pytest.approx(
+        hb_cellular.cost_per_subscriber_annual_usd
     )
-    assert model_b.steady_state_revenue_cost_plus_musd == pytest.approx(
-        model_a.steady_state_revenue_cost_plus_musd
+    assert iridium_run.steady_state_revenue_cost_plus_musd == pytest.approx(
+        hb_cellular.steady_state_revenue_cost_plus_musd
     )
-    assert model_b.steady_state_gross_margin_cost_plus_pct == pytest.approx(
-        model_a.steady_state_gross_margin_cost_plus_pct
+    assert iridium_run.steady_state_gross_margin_cost_plus_pct == pytest.approx(
+        hb_cellular.steady_state_gross_margin_cost_plus_pct
     )
-    # The one intended difference: the derived density vs the fixed Model A dial.
-    assert model_b.subscribers_per_satellite == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE
-    assert model_a.subscribers_per_satellite == MODEL_A_SUBS_PER_SAT
-    assert model_b.subscribers_per_satellite != model_a.subscribers_per_satellite
+    # The one intended difference: the derived density vs the fixed dial.
+    assert iridium_run.subscribers_per_satellite == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE
+    assert hb_cellular.subscribers_per_satellite == HB_CELLULAR_SUBS_PER_SAT
+    assert iridium_run.subscribers_per_satellite != hb_cellular.subscribers_per_satellite
 
 
-def test_model_b_rich_tier_flips_to_capacity() -> None:
+def test_iridium_rich_tier_flips_to_capacity() -> None:
     """The rich 2.5 Mbps tier shrinks the density and flips to the capacity regime."""
     traj = run_comms_model(
         CommsConfig(iridium=IridiumDials(active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS))
@@ -302,7 +313,7 @@ def test_model_b_rich_tier_flips_to_capacity() -> None:
     assert traj.binding_regime is BindingRegime.CAPACITY
 
 
-def test_model_b_terminal_class_capacity() -> None:
+def test_iridium_terminal_class_capacity() -> None:
     """The large-terminal class resolves SE 2.5 and reproduces the 3.0 Gbps per-satellite anchor."""
     traj = run_comms_model(
         CommsConfig(iridium=IridiumDials(device_class=DeviceClass.TERMINAL_CLASS))
@@ -314,7 +325,7 @@ def test_model_b_terminal_class_capacity() -> None:
     )
 
 
-def test_model_b_aperture_60_what_if() -> None:
+def test_iridium_aperture_60_what_if() -> None:
     """The 60 m^2 what-if freezes the fewer-bigger physics and carries the fold caveat."""
     traj = run_comms_model(CommsConfig(iridium=IridiumDials(aperture_m2=WHAT_IF_APERTURE_M2)))
     assert traj.iridium is not None
@@ -342,7 +353,7 @@ def test_model_b_aperture_60_what_if() -> None:
 
 
 def test_iridium_yaml_scenario_loads_and_runs() -> None:
-    """The minimal Model B YAML loads (iridium, factory metadata) and runs the baseline."""
+    """The Iridium scenario YAML loads (iridium, factory metadata) and runs the baseline."""
     config = load_comms_config(_SCENARIO_YAML)
     assert config.iridium is not None
     assert config.iridium.scenario_name == IRIDIUM_SCENARIO_NAME_DEFAULT
@@ -376,3 +387,39 @@ def test_iridium_assumptions_states_ecosystem_and_ops() -> None:
     assert "deferred" in joined
     # 25.0 is AT, not above, the no-fold limit, so the default output omits the fold caveat.
     assert APERTURE_FOLD_CAVEAT_NOTE not in lines
+
+
+# ---------------------------------------------------------------------------
+# The promoted-JSON export (communications.json_output).
+# ---------------------------------------------------------------------------
+
+
+def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
+    """The export runs the Iridium scenario and the JSON carries the frozen baseline.
+
+    Objective: the promoted-JSON writer end to end (scenario YAML in, artifact
+    file out). Success: the file exists, the provenance names the model
+    'iridium' and echoes the stamp, and the frozen baseline keys/values are in
+    the payload (subscribers_per_satellite 31,200 in both blocks, fleet target
+    340, the stated-assumptions lines present).
+    """
+    out_path = tmp_path / "iridium_default.json"
+    written = export_iridium_json(_SCENARIO_YAML, out_path, version_stamp="test-stamp")
+    assert written == out_path
+    payload = json.loads(written.read_text(encoding="utf-8"))
+    assert payload["provenance"]["model_name"] == MODEL_NAME
+    assert payload["provenance"]["version_stamp"] == "test-stamp"
+    assert payload["provenance"]["scenario_name"] == IRIDIUM_SCENARIO_NAME_DEFAULT
+    assert (
+        payload["trajectory_summary"]["subscribers_per_satellite"]
+        == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE
+    )
+    assert payload["trajectory_summary"]["fleet_target"] == EXPECTED_FLEET_TARGET_BASELINE
+    assert (
+        payload["iridium_physics"]["subscribers_per_satellite"]
+        == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE
+    )
+    assert payload["iridium_physics"]["per_satellite_capacity_gbps"] == pytest.approx(
+        EXPECTED_PER_SAT_CAPACITY_GBPS
+    )
+    assert ECOSYSTEM_ASSUMPTION_NOTE in payload["assumptions"]
