@@ -1,0 +1,52 @@
+{
+  "provenance": {
+    "model_name": "iridium",
+    "schema_version": "iridium-v1",
+    "scenario_name": "Iridium L-band max-outcome (phone-class baseline)",
+    "source_scenario_path": "code/scenarios/iridium.yaml",
+    "version_stamp": "2026-07-08"
+  },
+  "trajectory_summary": {
+    "total_build_and_hold_cost_musd": 1085.2209965817483,
+    "fleet_target": 340,
+    "subscribers_per_satellite": 31200,
+    "binding_regime": "coverage",
+    "full_coverage_reached_year": 2035,
+    "steady_state_annual_replacement_cost_musd": 79.51337204338448,
+    "subscribers_served": 10000000,
+    "cost_per_subscriber_annual_usd": 7.951337204338448,
+    "steady_state_annual_cost_musd": 167.67825445261315,
+    "steady_state_revenue_cost_plus_musd": 251.51738167891972,
+    "steady_state_gross_margin_cost_plus_pct": 33.33333333333333,
+    "steady_state_revenue_arpu_musd": 6000.0,
+    "steady_state_gross_margin_arpu_pct": 97.20536242578977
+  },
+  "iridium_physics": {
+    "spectrum_mhz": 8.0,
+    "aperture_m2": 25.0,
+    "device_class": "phone_class",
+    "spectral_efficiency_bps_per_hz": 0.65,
+    "per_satellite_capacity_gbps": 0.78,
+    "fleet_aggregate_capacity_gbps": 265.2,
+    "subscribers_per_satellite": 31200,
+    "effective_satellites_per_launch": 12,
+    "active_user_rate_mbps": 1.0,
+    "concurrency_peak": 0.025,
+    "concurrency_offpeak": 0.005,
+    "beam_pool_mbps": 5.2,
+    "per_user_rate_peak_mbps": 1.0,
+    "per_user_rate_offpeak_mbps": 5.0,
+    "iot_devices": 10000000,
+    "operations_cost_musd": 0.0,
+    "ecosystem_assumption": "The Iridium model's phone-class tier assumes phone-form-factor devices with in-chipset support for Iridium's 1616 to 1626.5 MHz L-band (0 dBi, no external antenna). A literally-unmodified 2026 phone receives nothing on this band: no phone has an L-band MSS radio and the band is not a deployed 3GPP NTN band (COMM-668 / COMM-669 / COMM-670). Today's real in-chipset path on this band is Project Stardust (NB-IoT NTN): messaging and IoT, kbps-class, no voice (COMM-661 to COMM-676). The phone-class data-grade tier (active rate ~1 Mbps) is therefore a forward assumption: a future where standard chipsets include the band grown up from the Stardust path, 0 dBi, no external antenna, at the cost of the low phone-class SE tier (a knowingly-taken ~4x capacity haircut versus a gain terminal). Boosted-antenna devices are purpose-built (our hardware, no chipset assumption). The Iridium model is the MSS lane and never claims to reach an unmodified handset; the unmodified-phone lane stays on cellular spectrum (the High-Bandwidth Cellular Pure Play model)."
+  },
+  "assumptions": [
+    "The Iridium model's phone-class tier assumes phone-form-factor devices with in-chipset support for Iridium's 1616 to 1626.5 MHz L-band (0 dBi, no external antenna). A literally-unmodified 2026 phone receives nothing on this band: no phone has an L-band MSS radio and the band is not a deployed 3GPP NTN band (COMM-668 / COMM-669 / COMM-670). Today's real in-chipset path on this band is Project Stardust (NB-IoT NTN): messaging and IoT, kbps-class, no voice (COMM-661 to COMM-676). The phone-class data-grade tier (active rate ~1 Mbps) is therefore a forward assumption: a future where standard chipsets include the band grown up from the Stardust path, 0 dBi, no external antenna, at the cost of the low phone-class SE tier (a knowingly-taken ~4x capacity haircut versus a gain terminal). Boosted-antenna devices are purpose-built (our hardware, no chipset assumption). The Iridium model is the MSS lane and never claims to reach an unmodified handset; the unmodified-phone lane stays on cellular spectrum (the High-Bandwidth Cellular Pure Play model).",
+    "Operations cost is assumed zero (0.0 USD millions per year): an explicit founder-instructed assumption, a fixed operations line to research and add later, stated here rather than silently omitted.",
+    "Spectral efficiency is estimate-tier and founder-owned: the phone-class band is 0.5 to 0.8, the small-terminal-class band 1.5 to 2.5, the large-terminal-class band 2.0 to 3.0 bps/Hz (class centrals 0.65 / 2.0 / 2.5).",
+    "The reuse calibration (0.15 Gbps per MHz per unit spectral efficiency) is calibrated at the 25.0 m^2 reference aperture; per-satellite capacity scales linearly with aperture area, which is conservative (it ignores the additional per-link SNR lift a larger aperture also gives).",
+    "The busy-hour concurrency pair (peak 0.025, off-peak 0.005) and the per-subscriber active rate (1.0 Mbps) are estimate-tier, founder-owned values.",
+    "The prices-today ARPU revenue case is DEFERRED for the Iridium model: cost-plus (revenue equals annualized cost times the revenue multiple) is the load-bearing Iridium-model revenue, and the per-tier MSS ARPUs plug in later.",
+    "The Iridium model is the MSS lane (owned L-band, purpose-built or in-chipset devices), never the cellular direct-to-cell unmodified-phone lane (the High-Bandwidth Cellular Pure Play model)."
+  ]
+}

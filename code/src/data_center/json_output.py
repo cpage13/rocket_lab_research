@@ -406,8 +406,24 @@ def _model_version() -> str | None:
         return None
 
 
+# Formula-id prefixes owned by OTHER ventures that share the common FORMULAS
+# registry. FORMULAS moved to common.provenance (Phase 0 of the comms build) and
+# is shared; the communications model appends comms_-prefixed entries to it. The
+# data-center artifact documents only its OWN formulas, so foreign entries are
+# excluded here. Without this filter the promoted DC default JSON gains the comms
+# formulas on every regeneration, silently breaking its exactness (the parity gate
+# locks per-year values, not the meta.formula_definitions block).
+_FOREIGN_VENTURE_FORMULA_PREFIXES: Final[tuple[str, ...]] = ("comms_",)
+
+
 def _build_formula_definitions() -> list[FormulaDefinition]:
-    """Build public formula metadata from the authoritative formula table."""
+    """Build public formula metadata from the authoritative formula table.
+
+    Documents only data-center formulas: entries in the shared FORMULAS registry
+    that belong to another venture (see :data:`_FOREIGN_VENTURE_FORMULA_PREFIXES`)
+    are excluded, so the promoted DC artifact stays exact as the shared registry
+    grows.
+    """
     return [
         FormulaDefinition(
             formula_id=formula_id,
@@ -419,6 +435,7 @@ def _build_formula_definitions() -> list[FormulaDefinition]:
             scenario_notes=None,
         )
         for formula_id, spec in sorted(FORMULAS.items())
+        if not formula_id.startswith(_FOREIGN_VENTURE_FORMULA_PREFIXES)
     ]
 
 

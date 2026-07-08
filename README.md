@@ -11,10 +11,14 @@ New to Rocket Lab, Electron, or Neutron? Start with the [primer](rocket_lab_prim
 | Application | Vehicle | Status |
 |---|---|---|
 | Orbital AI-inference data center | Neutron | Modeled (current) |
-| Communications | (TBD) | Planned |
+| Communications: the Iridium model | Neutron | Modeled (current) |
 
-The data center is the only modeled application today. Communications is a
-reserved workstream with no model claims in this release.
+Two applications are modeled today. The communications workstream holds model
+families by communication paradigm; the first is the Iridium model, exploring
+the maximum practical performance of Iridium's owned L-band spectrum on a
+Neutron-launched next generation fleet. Start with
+[communications/conclusion.md](communications/conclusion.md); the promoted
+default output is `communications/models/iridium/default.json`.
 
 ## Data Center
 
@@ -55,13 +59,45 @@ The full data-center case, with every number traced to a source:
 - [`models/space/default.json`](data_center/models/space/default.json): every number with its formula, units, and source.
 - [Rocket Lab Primer](rocket_lab_primer.md): a one-page catch-up on Rocket Lab, Electron, and Neutron for readers new to the company.
 
+## Communications: The Iridium Model
+
+In June 2026 Rocket Lab agreed to acquire Iridium, and with it the owned,
+globally coordinated L-band spectrum at 1.6 GHz. The second application asks
+what that spectrum could do at maximum practical performance: replace the
+66-satellite 1990s-architecture fleet with next generation flat-panel
+satellites (25 square meters, digital beamforming, laser crosslinks, about 12
+per Neutron launch) and scale out.
+
+The headline contrast: today's entire Iridium fleet moves about **174 Mbps**,
+less than one home internet connection; a single modern flat panel on the same
+spectrum carries roughly **1,000x** that. At **340 satellites**, deployed by
+about **2035** on an 18% share of Neutron's cadence (about 29 launches), the
+fleet serves about **10 million subscribers** at about **31,200 per satellite**
+on just the **8 MHz** Iridium owns outright: about **1 Mbps** per phone at peak
+and **5 Mbps** off peak, roughly 3 and 16 for a small boosted antenna, 4 and 20
+mounted, with IoT devices in the tens of millions riding nearly free. At the
+data-center revenue convention the fleet earns about **$252M a year at a 33%
+gross margin**.
+
+The ceiling is spectrum, not satellites: the fleet saturates near **2,000
+satellites** (about 25 to 62 million subscribers depending on service tier),
+and winning the full coordinated 10.5 MHz would add about 31%. The load-bearing
+assumption is stated plainly throughout: phones need chipmakers to adopt the
+band, while purpose-built devices and IoT carry no such assumption. The full
+case, with every number traced:
+
+- [communications/conclusion.md](communications/conclusion.md): the verdict, the saturation ceiling, and why Starlink's 11,000-satellite fleet does not contradict it.
+- [communications/assumptions.md](communications/assumptions.md): every dial with its source class, including why the cadence share is what it is.
+- [communications/design.md](communications/design.md): the model-family structure and how future paradigms get added.
+- [`models/iridium/default.json`](communications/models/iridium/default.json): every number as produced by the model.
+
 ## Repository Map
 
 ```text
 rklb_space_data_center/
 ├── README.md            # this file: the program and its applications
 ├── data_center/         # the data-center application (conclusion, structural case, guide, models)
-├── communications/      # reserved, not yet modeled
+├── communications/      # the communications application (Iridium model conclusion, assumptions, design, promoted models)
 ├── research/            # shared evidence wiki and source ledger
 ├── code/                # the model engine (rklb-value)
 └── docs/                # architecture intent, ADRs, agent guide
