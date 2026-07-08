@@ -11,10 +11,14 @@ New to Rocket Lab, Electron, or Neutron? Start with the [primer](rocket_lab_prim
 | Application | Vehicle | Status |
 |---|---|---|
 | Orbital AI-inference data center | Neutron | Modeled (current) |
-| Communications | (TBD) | Planned |
+| Communications: the Iridium model | Neutron | Modeled (current) |
 
-The data center is the only modeled application today. Communications is a
-reserved workstream with no model claims in this release.
+Two applications are modeled today. The communications workstream holds model
+families by communication paradigm; the first is the Iridium model, exploring
+the maximum practical performance of Iridium's owned L-band spectrum on a
+Neutron-launched next generation fleet. Start with
+[communications/conclusion.md](communications/conclusion.md); the promoted
+default output is `communications/models/iridium/default.json`.
 
 ## Data Center
 
@@ -61,7 +65,7 @@ The full data-center case, with every number traced to a source:
 rklb_space_data_center/
 ├── README.md            # this file: the program and its applications
 ├── data_center/         # the data-center application (conclusion, structural case, guide, models)
-├── communications/      # reserved, not yet modeled
+├── communications/      # the communications application (Iridium model conclusion, assumptions, design, promoted models)
 ├── research/            # shared evidence wiki and source ledger
 ├── code/                # the model engine (rklb-value)
 └── docs/                # architecture intent, ADRs, agent guide

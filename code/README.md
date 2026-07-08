@@ -1,9 +1,12 @@
 # rklb-value Code Guide
 
-`code/` contains the runnable Python model for the data-center workstream. It
-turns YAML scenarios into typed JSON artifacts and text reports. The package is
-data-center first; `communications` is reserved for a future researched
-workstream in this release.
+`code/` contains the runnable Python models for two workstreams. It turns YAML
+scenarios into typed JSON artifacts and text reports. The data-center model is
+the first application; `communications` holds the communications model families
+(the Iridium model first, with the High-Bandwidth Cellular Pure Play model as
+the second family). The Iridium promotion command:
+`uv run python -m communications.json_output scenarios/iridium.yaml
+communications/models/iridium/default.json`.
 
 The project configuration in `pyproject.toml` requires Python `>=3.14` and uses
 `uv` for environment and command execution. No `uvx` or `uvnx` command is
