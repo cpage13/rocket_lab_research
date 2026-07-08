@@ -106,7 +106,7 @@ class BindingRegime(StrEnum):
 
 
 class DeviceClass(StrEnum):
-    """The Model B device class, which sets the spectral-efficiency tier.
+    """The Iridium model (formerly Model B) device class, which sets the SE tier.
 
     The founder's three device categories (2026-07-07; the 9c device ladder).
     ``PHONE_CLASS`` is the cell phone: the 0-dBi in-chipset phone-form-factor baseline
@@ -117,9 +117,10 @@ class DeviceClass(StrEnum):
     ``TERMINAL_CLASS`` is the LARGE boosted / custom-antenna tier: mounted or pointed,
     15+ dBi (drones, fixed sites, vehicles; SE band 2.0 to 3.0, central
     :data:`TERMINAL_CLASS_SE_CENTRAL`). See the ecosystem assumption
-    (:data:`ECOSYSTEM_ASSUMPTION_NOTE`): Model B reaches purpose-built or in-chipset
-    devices on Iridium's owned L-band (the MSS lane), NEVER an unmodified phone (that
-    is the cellular lane, Model A). One class per run in v1 (no mixed fleet).
+    (:data:`ECOSYSTEM_ASSUMPTION_NOTE`): the Iridium model reaches purpose-built or
+    in-chipset devices on Iridium's owned L-band (the MSS lane), NEVER an unmodified
+    phone (that is the cellular lane, the High-Bandwidth Cellular Pure Play model,
+    formerly Model A). One class per run in v1 (no mixed fleet).
     """
 
     PHONE_CLASS = "phone_class"
@@ -308,16 +309,17 @@ SCHEMA_VERSION: Final[str] = "comms-v1"
 (Phase 5). ``v1`` is the clean-rewrite schema (no provenance envelope)."""
 
 # ===========================================================================
-# Model B: Iridium L-band max-outcome scenario (the MSS lane) dials + physics
+# The Iridium model: L-band max-outcome scenario (the MSS lane) dials + physics
 # ===========================================================================
 #
-# Model B DERIVES the per-satellite subscriber density from L-band physics (held
-# spectrum, device spectral efficiency, active rate, busy-hour concurrency) instead
-# of reading the fixed Model A ``subscribers_per_satellite`` dial, then feeds the SAME
-# ``compute_fleet_target``. These are its named-constant defaults and physics
-# calibrations. THE THREE LANES stay separate: Model B is the MSS lane (purpose-built
-# or in-chipset devices on owned L-band), NOT cellular direct-to-cell to an unmodified
-# phone (Model A) and NOT broadband.
+# The Iridium model DERIVES the per-satellite subscriber density from L-band physics
+# (held spectrum, device spectral efficiency, active rate, busy-hour concurrency)
+# instead of reading the High-Bandwidth Cellular Pure Play model's fixed
+# ``subscribers_per_satellite`` dial, then feeds the SAME ``compute_fleet_target``.
+# These are its named-constant defaults and physics calibrations. THE THREE LANES
+# stay separate: the Iridium model is the MSS lane (purpose-built or in-chipset
+# devices on owned L-band), NOT cellular direct-to-cell to an unmodified phone (the
+# High-Bandwidth Cellular Pure Play model) and NOT broadband.
 
 SPECTRUM_MHZ_DEFAULT: Final[float] = 8.0
 """FOUNDER_SET (flagged; session state, Iridium spectrum reconciled). The Iridium
@@ -326,8 +328,8 @@ EXCLUSIVE L-band holding (~7.775 MHz rounded to 8.0), a WIDTH held, NOT a freque
 documented variant (:data:`SPECTRUM_MHZ_COORDINATED`), not the default."""
 
 SPECTRUM_MHZ_COORDINATED: Final[float] = 10.5
-"""SCENARIO. The coordinated L-band span (1616 to 1626.5 MHz), a documented Model B
-variant WIDTH, not the default (the exclusive ~8 MHz is the default)."""
+"""SCENARIO. The coordinated L-band span (1616 to 1626.5 MHz), a documented
+Iridium-model variant WIDTH, not the default (the exclusive ~8 MHz is the default)."""
 
 PHONE_CLASS_SE_CENTRAL: Final[float] = 0.65
 """SOURCED_ESTIMATE (COMM-428 / COMM-429). Central of the 0.5 to 0.8 bps/Hz
@@ -441,7 +443,7 @@ APERTURE_FOLD_CAVEAT_NOTE: Final[str] = (
     "of folding is not otherwise modeled. This is a documented what-if caveat, not a "
     "validation error."
 )
-"""SCENARIO (0.8a caveat text). Emitted by the Model B assumptions output when
+"""SCENARIO (0.8a caveat text). Emitted by the Iridium-model assumptions output when
 ``aperture_m2`` exceeds :data:`APERTURE_NO_FOLD_LIMIT_M2`. A documented note, not an
 error, so the above-limit what-if stays computable."""
 
@@ -450,7 +452,7 @@ GBPS_TO_MBPS: Final[float] = 1000.0
 denominator scaling. A unit constant, not a tunable."""
 
 ECOSYSTEM_ASSUMPTION_NOTE: Final[str] = (
-    "Model B's phone-class tier assumes phone-form-factor devices with in-chipset "
+    "The Iridium model's phone-class tier assumes phone-form-factor devices with in-chipset "
     "support for Iridium's 1616 to 1626.5 MHz L-band (0 dBi, no external antenna). A "
     "literally-unmodified 2026 phone receives nothing on this band: no phone has an "
     "L-band MSS radio and the band is not a deployed 3GPP NTN band (COMM-668 / COMM-669 "
@@ -461,24 +463,25 @@ ECOSYSTEM_ASSUMPTION_NOTE: Final[str] = (
     "Stardust path, 0 dBi, no external antenna, at the cost of the low phone-class SE "
     "tier (a knowingly-taken ~4x capacity haircut versus a gain terminal). "
     "Boosted-antenna devices are purpose-built (our hardware, no chipset assumption). "
-    "Model B is the MSS lane and never claims to reach an unmodified handset; the "
-    "unmodified-phone lane stays on cellular spectrum (Model A)."
+    "The Iridium model is the MSS lane and never claims to reach an unmodified handset; "
+    "the unmodified-phone lane stays on cellular spectrum (the High-Bandwidth Cellular "
+    "Pure Play model)."
 )
 """SOURCED_ESTIMATE (0.8 ecosystem assumption; COMM-661 to COMM-676). The stated
-ecosystem assumption behind Model B's phone-class tier, carried on the Model B result
-and surfaced in the assumptions output. Keeps the three lanes separate: Model B is the
-MSS lane, never the unmodified-phone cellular lane (Model A)."""
+ecosystem assumption behind the Iridium model's phone-class tier, carried on the
+Iridium-model result and surfaced in the assumptions output. Keeps the three lanes
+separate: the Iridium model is the MSS lane, never the unmodified-phone cellular lane
+(the High-Bandwidth Cellular Pure Play model)."""
 
 IRIDIUM_OPERATIONS_COST_MUSD: Final[float] = 0.0
-"""FOUNDER_SET (assumption). Model B operations cost assumed zero (Model A carries no
-operations line, so Model B inherits zero): a fixed line to research and add later,
-stated explicitly in the assumptions output rather than silently omitted."""
+"""FOUNDER_SET (assumption). The Iridium model's operations cost assumed zero (the
+High-Bandwidth Cellular Pure Play model carries no operations line, so the Iridium
+model inherits zero): a fixed line to research and add later, stated explicitly in the
+assumptions output rather than silently omitted."""
 
-IRIDIUM_SCENARIO_NAME_DEFAULT: Final[str] = (
-    "Iridium L-band max-outcome (Model B, phone-class baseline)"
-)
-"""SCENARIO. The default Model B scenario label, carried on the ``IridiumDials`` block
-(the optional block's single label home, mirroring ``GroundInterfaceDials``)."""
+IRIDIUM_SCENARIO_NAME_DEFAULT: Final[str] = "Iridium L-band max-outcome (phone-class baseline)"
+"""SCENARIO. The default Iridium-model scenario label, carried on the ``IridiumDials``
+block (the optional block's single label home, mirroring ``GroundInterfaceDials``)."""
 
 # ===========================================================================
 # Placeholder-dial flag map (read by Phase 5 ``check_no_placeholder_inputs``)
@@ -503,7 +506,7 @@ PLACEHOLDER_DIAL_FLAGS: Final[dict[DialPath, bool]] = {
     "subscribers.subscribers_per_satellite": False,  # SOURCED_ESTIMATE 75,000 (not a sentinel)
     "revenue.revenue_multiple": False,  # FOUNDER_SET 1.5 (mirrors the DC R; not a sentinel)
     "revenue.arpu_usd_per_month": False,  # SCENARIO 50.0 supportable median (not a sentinel)
-    # Model B (Iridium L-band) input dials, all real in-band values (not sentinels).
+    # Iridium-model (L-band) input dials, all real in-band values (not sentinels).
     "iridium.spectrum_mhz": False,  # FOUNDER_SET 8.0 exclusive holding (not a sentinel)
     "iridium.aperture_m2": False,  # FOUNDER_SET 25.0 Flatellite reference (not a sentinel)
     "iridium.device_class": False,  # FOUNDER_SET PHONE_CLASS baseline (not a sentinel)
@@ -552,7 +555,7 @@ __all__ = [
     "SCHEMA_VERSION",
     "SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT",
     "SUBSCRIBERS_PER_SATELLITE_DEFAULT",
-    # Model B (Iridium L-band max-outcome) additions.
+    # Iridium-model (L-band max-outcome) additions.
     "ACTIVE_USER_RATE_MBPS_DEFAULT",
     "ACTIVE_USER_RATE_MBPS_RICH",
     "APERTURE_FOLD_CAVEAT_NOTE",

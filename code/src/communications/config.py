@@ -38,10 +38,11 @@ a household). It is NOT a market-share, demand, or revenue/DCF model. The blocks
 * ``ground: GroundInterfaceDials | None`` -- the marked, TWO-REGIME ground
   INTERFACE (Phase 4), default ``None`` so the cost side never blocks on a ground
   number. The dense + sparse baselines are individually None-able caller inputs.
-* ``iridium: IridiumDials | None`` -- the optional Model B (Iridium L-band
-  max-outcome) MSS dials, default ``None`` so the config stays Model A. Present, it
-  selects the Model B derivation (the per-satellite density is derived from L-band
-  physics instead of read from the fixed Model A dial).
+* ``iridium: IridiumDials | None`` -- the optional Iridium model (formerly Model B;
+  L-band max-outcome) MSS dials, default ``None`` so the config stays the
+  High-Bandwidth Cellular Pure Play model (formerly Model A). Present, it selects
+  the Iridium derivation (the per-satellite density is derived from L-band physics
+  instead of read from the High-Bandwidth Cellular Pure Play model's fixed dial).
 
 This model imports only from ``common.*`` and ``communications.*`` (never
 ``data_center``, per the cross-import guard) and uses none of the forbidden
@@ -478,18 +479,19 @@ class GroundInterfaceDials(BaseModel):
 
 
 class IridiumDials(BaseModel):
-    """Model B (Iridium L-band max-outcome) input dials: the MSS lane.
+    """The Iridium model's (L-band max-outcome) input dials: the MSS lane.
 
-    Present (non-None on :class:`CommsConfig`) selects the Model B derivation: the
+    Present (non-None on :class:`CommsConfig`) selects the Iridium derivation: the
     engine DERIVES the per-satellite subscriber density from L-band physics (held
     spectrum, device spectral efficiency, active rate, busy-hour concurrency) instead
-    of reading the fixed Model A ``subscribers_per_satellite`` dial, then feeds the SAME
-    ``compute_fleet_target``. The subscriber TARGET is the existing
-    ``subscribers.subscribers_at_full_coverage`` dial (not duplicated here). Subscribers
-    are PEOPLE; ``iot_devices`` is a separate DEVICE passthrough. ``spectrum_mhz`` is a
-    WIDTH held (not a frequency). See the ecosystem assumption: this is the MSS lane
-    (purpose-built or in-chipset devices on owned L-band), never an unmodified phone
-    (that is the cellular lane, Model A).
+    of reading the High-Bandwidth Cellular Pure Play model's fixed
+    ``subscribers_per_satellite`` dial, then feeds the SAME ``compute_fleet_target``.
+    The subscriber TARGET is the existing ``subscribers.subscribers_at_full_coverage``
+    dial (not duplicated here). Subscribers are PEOPLE; ``iot_devices`` is a separate
+    DEVICE passthrough. ``spectrum_mhz`` is a WIDTH held (not a frequency). See the
+    ecosystem assumption: this is the MSS lane (purpose-built or in-chipset devices on
+    owned L-band), never an unmodified phone (that is the cellular lane, the
+    High-Bandwidth Cellular Pure Play model).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -580,10 +582,10 @@ class IridiumDials(BaseModel):
     scenario_name: str = Field(
         default=IRIDIUM_SCENARIO_NAME_DEFAULT,
         description=(
-            "The Model B scenario label's SINGLE home (mirroring the "
+            "The Iridium-model scenario label's SINGLE home (mirroring the "
             "GroundInterfaceDials.scenario_name precedent: an optional block carries "
-            "its own label). The Model B scenario YAML sets no metadata block, so the "
-            "Model B label lives here. Configurable."
+            "its own label). The Iridium scenario YAML sets no metadata block, so the "
+            "Iridium-model label lives here. Configurable."
         ),
     )
 
@@ -604,8 +606,9 @@ class CommsConfig(BaseModel):
     a plain None) so a config constructed with no arguments, or a YAML omitting a
     block, gets a fully valid all-default block. The ``ground`` field is ``None`` by
     default, which is what makes the cost side run with no ground number; the
-    ``iridium`` field is ``None`` by default, which selects the Model A path (a
-    non-None ``iridium`` selects the Model B MSS derivation).
+    ``iridium`` field is ``None`` by default, which selects the High-Bandwidth
+    Cellular Pure Play path (a non-None ``iridium`` selects the Iridium MSS
+    derivation).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, validate_assignment=True)
@@ -652,9 +655,9 @@ class CommsConfig(BaseModel):
     iridium: IridiumDials | None = Field(
         default=None,
         description=(
-            "Model B (Iridium L-band max-outcome) dials. None by default so the config "
-            "is Model A (cellular direct-to-cell); set it to select the Model B MSS "
-            "derivation."
+            "The Iridium model's (L-band max-outcome) dials. None by default so the "
+            "config is the High-Bandwidth Cellular Pure Play model (cellular "
+            "direct-to-cell); set it to select the Iridium MSS derivation."
         ),
     )
 
