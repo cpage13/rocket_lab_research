@@ -2,9 +2,12 @@
 
 This repository is the agent-first research and modeling system for Rocket Lab
 Research. The repository-level umbrella covers Rocket Lab-focused research,
-communications, and future rocket-related investigations. The first public
-release is data-center first: it models an orbital AI-inference data-center
-workstream and reserves communications for a future researched workstream.
+communications, and future rocket-related investigations. Two applications are
+modeled: the orbital AI-inference data-center workstream (the first public
+release) and the communications workstream, whose first model family is the
+Iridium model (the maximum practical performance of Iridium's owned L-band on a
+Neutron-launched fleet; see communications/design.md for the model-family
+structure).
 
 ## System Shape
 
@@ -143,7 +146,11 @@ model runs and promotion.
 - Ground comparison anchors to the 2036 deployed-year cohort.
 - The ground reference is a source-backed order-of-magnitude screen, not a
   parity claim.
-- Communications is reserved for a future researched workstream.
+- Communications is a modeled workstream: model families by communication
+  paradigm (the Iridium model first, the High-Bandwidth Cellular Pure Play
+  model second), sharing the common cadence spine, never importing data_center
+  (the cross-import guard enforces it), with the DC promotion pattern
+  (scenario, promoted JSON, static conclusion) mirrored under communications/.
 - The old flat public model alias is not restored.
 
 ## Current Open Concerns
@@ -155,8 +162,10 @@ model runs and promotion.
   extrapolation remain the load-bearing data-center uncertainties.
 - The static conclusion must be re-reviewed whenever the default scenario or
   promoted JSON changes.
-- Communications needs its own research and model before it becomes a public
-  modeling workstream.
+- The communications ARPU revenue case is deferred until per-tier prices are
+  set; operations cost is an explicit zero assumption pending research; the
+  Iridium-model ecosystem assumption (in-chipset band support for the phone
+  tier) is the stated load-bearing conditional.
 
 ## Test Coverage Expectations
 
