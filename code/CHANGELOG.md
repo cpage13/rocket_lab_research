@@ -1,7 +1,48 @@
 # Changelog
 
-All notable changes to the `rklb-value` orbital data-center valuation
-calculator. Versions track the output JSON **schema version**.
+All notable changes to the `code/` model package: the `rklb-value` orbital
+data-center valuation calculator and, from July 2026, the communications model
+families. Versions track each output JSON **schema version** (data center: v8;
+the Iridium model: iridium-v1).
+
+## The Iridium model, schema iridium-v1 (2026-07-07/08), the communications model family
+
+The first communications model family, built per the approved
+`plan_iridium_model_07_03` in three phases and audited end to end (91 numbers
+traced, zero numeric errors; four docstring citation ids corrected).
+
+### Added
+
+- **The Iridium model** in `src/communications/`: `IridiumDials` (spectrum 8.0
+  MHz exclusive with the 10.5 coordinated variant, three device classes with
+  spectral-efficiency tiers 0.65/2.0/2.5 bps/Hz, active rate 1.0 Mbps with the
+  2.5 rich variant, concurrency 2.5/0.5 percent, aperture 25.0 m^2 with the
+  no-fold caveat above the limit, IoT passthrough), the derivation spine
+  (per-satellite capacity = spectrum x SE x 0.15 calibration x aperture
+  factor; subscribers per satellite derived, not hard-coded), per-user peak and
+  off-peak rates, `IridiumResult` on the trajectory, `iridium_assumptions()`,
+  the documented `scenarios/iridium.yaml`, the promoted
+  `communications/models/iridium/default.json` via the new
+  `communications.json_output` (the DC promotion pattern), and 16 frozen tests
+  including the equality tripwire (the Iridium baseline shares the
+  High-Bandwidth Cellular Pure Play default trajectory, both coverage-bound at
+  340).
+
+### Changed
+
+- **Descriptive model naming**: "the High-Bandwidth Cellular Pure Play model"
+  (formerly Model A) and "the Iridium model" (formerly Model B) everywhere a
+  reader sees them, including four frozen runtime strings with lockstep tests.
+- **The cross-import guard** repoints its scenario check to
+  `scenarios/iridium.yaml` and parametrizes per live source file (27 tests).
+
+### Removed
+
+- **The pre-rewrite comms tree** (29 files: 10 dead modules, 15 stale test
+  files, the failing `comms_default.yaml`, the three old promoted artifacts
+  under `communications/models/`, and the dangling `rklb-comms` console
+  script), retired per the audit's import census. The whole tree is 548 tests
+  green with the communications directory collecting cleanly.
 
 ## v8, Cycle 4 (2026-05-30), service-life cliff fix + 7-year flat-R scenario
 
