@@ -8,7 +8,8 @@ subscribers per satellite**, deployed by **2035** at an 18 percent share of
 Neutron's ramping cadence (about **29 launches**, 12 satellites each). This is
 not a precision forecast or a DCF. It is a bounded feasibility exercise built
 from visible, source-linked assumptions, and every number here traces to the
-frozen model baseline or a cited research claim.
+frozen model baseline, a cited research claim, or an explicitly labeled
+scenario range.
 
 In plain terms: Iridium serves about 2.5 million subscribers today on 66
 satellites flying a 1990s architecture, and the whole fleet moves about 174
@@ -67,6 +68,50 @@ thousand times the roughly 174 Mbps the entire 66-satellite Iridium fleet moves
 today. The gain is almost all architecture: more beams, digital beamforming,
 and dense cell reuse on the same held megahertz.
 
+## How The Capacity Numbers Arise
+
+The per-satellite chain is short enough to hold in your head, and every link
+carries a labeled status:
+
+| Link | Value | Status |
+|---|---:|---|
+| Spectrum held (a width) | 8.0 MHz | Fact (7.775 MHz exclusive, rounded; COMM-611) |
+| Phone spectral efficiency | 0.65 bits per hertz | Measured in the wild (COMM-428/429) |
+| Effective spectrum reuse | ~150x | Calibrated estimate (corpus band 130 to 200x; COMM-410/411) |
+| Busy-hour concurrency | 2.5 percent | Corpus-central (1 to 5 percent; COMM-543) |
+| Active rate (the tier) | 1.0 Mbps | Chosen service tier |
+
+Walk it forward. One beam running the whole 8 MHz at phone-class efficiency
+carries 8 x 0.65 = **5.2 Mbps**: the beam pool, and the hard per-person
+ceiling. A modern digital-beamforming satellite does not light one beam: it
+lights hundreds of narrow spot beams and reuses the same 8 MHz across
+non-overlapping patches of ground, exactly the way a terrestrial network
+reuses its band across cells. The corpus anchor for a modern flat-panel
+array implies an effective multiplier (beam count times how densely the band
+is re-run across the beams) of about **130 to 200 times**; the model
+calibrates at **150**. So one satellite moves 5.2 x 150 = 780 Mbps, the
+**0.78 Gbps** quoted above. The code packages the reuse as a constant, 0.15
+Gbps per MHz per unit of spectral efficiency: the 0.15 is just 150 reuses
+divided by 1,000 (the megabit-to-gigabit conversion), and "per unit" means
+it is quoted at a spectral efficiency of 1.0 so the same constant serves
+every device tier (multiply by 0.65 for a phone, 2.5 for a mounted
+terminal).
+
+The last step is people. At the busy hour 2.5 percent of subscribers are
+active at once, so 31,200 subscribers put 780 simultaneous users on the
+satellite, and 780 Mbps across 780 active users is **1.0 Mbps each**. The
+density is the same equation run backwards: 780 / (1.0 x 0.025) = 31,200.
+
+Two of the five links carry the real uncertainty. The spectral efficiency is
+the strongest external anchor in the model: it was measured over the air on
+Starlink's operating phone service (mean 0.79, median 0.64 bits per hertz),
+and it already embeds real-world interference, so nothing is inflated and
+then clawed back. The reuse calibration is the widest error bar and the
+number real engineering would move first. Across the corpus band edges the
+per-satellite capacity spans roughly 0.3 to 1.5 Gbps against the 0.78
+central. The model quotes the calibrated centrals and treats everything else
+as sweepable dials.
+
 ## Per Subscriber, By Device
 
 The per-person ceiling is the beam pool, not the satellite total. A phone lives
@@ -95,6 +140,34 @@ kilobit-class narrowband rates the binding limit is random-access contention,
 not spectrum, so the model passes through 10 million IoT devices with zero
 sizing effect on the subscriber service.
 
+## Beyond The Phone: Reliability And The Edge-Device Case
+
+The phone tier is the narrowest doorway into this service, not the service
+itself. It is the one tier that rides the ecosystem assumption; the boosted
+tiers need nobody's permission. The small terminal is a paperback-size puck
+(about 10 dBi, unpointed, purpose-built hardware Rocket Lab can ship
+itself), and it already sees about **3.1 Mbps at peak and 15.4 lightly
+loaded**. No dish, no pointing, no installer.
+
+The band itself is the reliability story. At 1.6 GHz path loss is low and
+weather is nearly transparent: the rain and cloud fade that degrades Ku- and
+Ka-band broadband barely touches L-band, and the band tolerates foliage and
+reaches building edges that higher bands cannot (the physics is
+COMM-426/COMM-563 territory; see
+[`research/direct_communication/spectrum_and_phased_array_fundamentals.md`](../research/direct_communication/spectrum_and_phased_array_fundamentals.md)).
+A link that holds in rain, under trees, and in motion is a different product
+from a dish that needs clear sky, even at a fraction of the speed.
+
+That is the edge-device frame: an owned, globally coordinated band
+delivering kilobit-to-megabit service everywhere is enough for most IoT
+devices and many personal devices. Telemetry, tracking, messaging, voice,
+maps, photos, software updates, browsing-class data: all of it fits;
+streaming video does not, and the service does not pretend otherwise. The
+alternatives make the same point from the other side: broadband dishes buy
+speed with pointed hardware and a clear sky; cellular direct-to-cell rides
+rented carrier spectrum; this lane is owned spectrum to a simple device you
+can hold, mount, or embed.
+
 ## Revenue And Cost
 
 The default revenue case is cost-plus, the same discipline as the data-center
@@ -115,6 +188,64 @@ subscriber per year at 10 million), and aligning the model to the annualized
 basis is a tracked open item. Operations cost is held at **zero** by explicit
 assumption, a fixed line to research and add later, and it is stated in every
 model output rather than hidden.
+
+### What The Service Could Earn (Scenario Ranges)
+
+The model's published revenue is the cost-plus case above; the ARPU case
+stays deferred in code until the per-tier price sheet is set. But the shape
+of the opportunity is visible from two grounded anchors plus one stated
+founder range, and it is worth setting out plainly.
+
+The first anchor is what Iridium's customers pay today (reported FY2025
+ARPUs, fact-tier, COMM-618): IoT devices **$7.78 per month**, voice and data
+**$47 per month**, Certus broadband **$259 per month** for a 0.7 Mbps-class
+service, plus the fixed **~$108M per year** government contract. Those are
+premium-niche prices on a starved network (the whole 66-satellite fleet
+moves about 174 Mbps): evidence of what captive segments will bear, not
+mass-market comps. At $259 for 0.7 Mbps the incumbent price per megabit is
+roughly 650 times terrestrial broadband. A modernized fleet with about
+1,500 times today's supply on the same spectrum is what breaks that pricing
+regime: it can sell abundance at mass prices while keeping the premium book
+(today's Certus buyer gets roughly 4 Mbps instead of 0.7).
+
+The second anchor is the mass-market range the founder has set for the
+standard phone-class tier: **$10 to $20 per month**, positioned so the
+service can stand in for a phone plan where none exists (the subscriber
+target is a slice of the ~300 million people without coverage, COMM-021).
+What that range produces, as plain arithmetic (price times subscribers
+times 12, estimate-tier; the saturation column uses the ~62 million
+standard-tier ceiling detailed in the saturation section below and inherits
+its density-chain caveat):
+
+| Price per month | Revenue at 10M subscribers | Revenue at the ~62M cap |
+|---|---:|---:|
+| $10 | $1.2B per year | $7.4B per year |
+| $15 | $1.8B per year | $11.2B per year |
+| $20 | $2.4B per year | $14.9B per year |
+
+Against those revenues the fleet is the cheap part: the whole 340-satellite
+build-and-hold is about **$1,085M** (roughly $170M per year annualized), so
+the pre-operations margin at the founder range runs roughly **86 to 93
+percent**, and the fleet repays inside its first year at the middle of the
+range. The honest caveat is the word pre-operations: operations cost is the
+model's explicit zero, and Iridium today spends about **$376M per year** of
+real cash operating cost (revenue $871.7M minus operational EBITDA $495.3M),
+so a true operating line lands the margin meaningfully below the pre-ops
+figure. Sizing that line is the tracked open item.
+
+Separately, IoT rides the same fleet nearly free: 10 million devices at
+today's $7.78 add about **$0.9B per year** with zero effect on fleet sizing,
+and the corpus envelope is tens of millions of devices. And the existing
+business does not stop: the acquisition brings **$871.7M per year** of
+revenue at a 57 percent operational-EBITDA margin with it (COMM-615/616).
+
+The structural read follows: the expensive part of this business was never
+the satellites, it was the spectrum position, and that came with the ~$8.0B
+acquisition (COMM-602). At the founder's range the new mass-market service
+alone would repay the acquisition in a few years, on top of the existing
+book. All of the above is scenario arithmetic on stated dials: the per-tier
+price sheet (terminal tiers, carrier-wholesale lines, IoT, government) is
+founder-owned and still open, and the code's ARPU seam waits for it.
 
 ## The Spectrum Upside, And The Aperture Story
 
@@ -235,6 +366,11 @@ The baseline is the reference case, and a handful of assumptions carry it:
   calibrated chain and its roughly factor-of-two tension with the corpus rule.
 - **Operations cost.** Held at zero by explicit assumption. A real operating
   line will lower every margin.
+- **Pricing.** The revenue scenarios rest on founder-set scenario prices
+  ($10 to $20 per month for the standard tier) and unproven willingness to
+  pay in an uncovered-market base. The model's own ARPU case stays deferred
+  until the per-tier sheet is set; cost-plus is the only revenue the model
+  publishes today.
 
 ## Structural Context
 
