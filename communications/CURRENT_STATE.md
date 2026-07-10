@@ -26,13 +26,12 @@ conclusion.
 The Iridium baseline is coverage-bound, not capacity-bound: 340 satellites by
 2035 at an 18 percent cadence share serve about 10 million subscribers at
 31,200 per satellite on the owned 8 MHz, at 1.0 Mbps peak and 5.0 off peak to
-a phone, with cost-plus revenue of 217.5 million dollars per year at a
-33.3 percent margin. The cost model is founder-flat (simplification
+a phone. The cost model is founder-flat (simplification
 2026-07-09): satellites 1.0 million dollars each and launches 13.0 million at
 any cadence, scenario overrides only (the shared-spine defaults untouched),
 giving a 900.0 million dollar build-and-hold and a 145.0 million dollar
-steady-state annual cost. Beside that cost-plus floor the model publishes the
-four-bucket ARPU case (Sheet A, founder-set 2026-07-09): about 8,250.8 million
+steady-state annual cost. The model publishes the four-bucket ARPU case (Sheet
+A, founder-set 2026-07-09): about 8,250.8 million
 dollars per year at the baseline under full sell-through on capacity, about a
 98.2 percent margin against the steady-state fleet cost (operating-style:
 measured against the fleet's full build, launch, and replacement cost, with

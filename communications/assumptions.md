@@ -59,7 +59,7 @@ family and the equality tripwire still see the defaults.
 | Busy-hour concurrency | 2.5 percent | `scenario`, corpus-central | `COMM-543`: working direct-to-cell concurrency about 1 to 5 percent, central 2 to 3. |
 | Subscriber base at coverage | 10,000,000 people | `scenario` | Founder-set conservative slice of the coverage-gap pool (`COMM-021`: about 300 million people without mobile coverage; context `COMM-390`, `COMM-065`). |
 | IoT devices | 10,000,000 devices | `scenario`, cosmetic | Contention-limited, not population-capped (`COMM-654/659`); zero sizing effect on the subscriber service. Superseded on the promoted artifact when the ARPU case is on (the IoT count then derives from the revenue mix, about 51.7M). |
-| Cost-plus revenue multiple | 1.5x | `scenario` | Mirrors the data-center central band (`RLDC-REVENUE-MULTIPLE-1_5X`); produces the flat 33.3 percent margin. |
+| Cost-plus revenue multiple | 1.5x | `scenario` | Shared-engine machinery, not an Iridium revenue case: the cost-recovery convention (revenue equals annualized cost times the multiple) the cellular family uses, mirroring the data-center central band (`RLDC-REVENUE-MULTIPLE-1_5X`). Computed on the shared trajectory but NOT published on the Iridium artifact as of iridium-v3 (founder direction 2026-07-10); the published Iridium revenue is the four-bucket ARPU case. |
 | ARPU standard mix | 15.0 percent | `scenario`, founder-set | Sheet A (2026-07-09). Standard personal (phone-class) people share; loosely anchored with premium on the FY2025 book's like-for-like people share (`COMM-617/618`). |
 | ARPU premium mix | 2.0 percent | `scenario`, founder-set | Sheet A. Premium terminal (gain-antenna) people share (`COMM-618`). |
 | ARPU IoT mix | 82.805 percent | `scenario`, founder-set | Sheet A. The residual that closes the mix to 100; DEVICES (`COMM-654/659`), about 51.7M at the baseline. |
@@ -90,11 +90,13 @@ design citation was also re-pointed from `COMM-251` (the comms-first read)
 to `COMM-262/263` (the no-deployable quotes and the flat-aperture choice).
 Values were untouched throughout.
 
-Machine-name note: the promoted artifact's cost-plus margin field keeps its
-legacy machine name (`steady_state_gross_margin_cost_plus_pct`, a shared
-engine field). The metric it carries is the margin as defined in the
-conclusion (an operating-style margin, not a gross margin); renaming the
-field is a candidate for a future schema revision.
+Machine-name note: the shared engine field
+`steady_state_gross_margin_cost_plus_pct` (the cellular family's cost-plus
+margin) is no longer emitted on the promoted Iridium artifact as of iridium-v3
+(founder direction 2026-07-10); it stays on the shared trajectory for the
+cellular family and the equality tripwire. The published Iridium margin is
+`arpu_margin_vs_steady_state_cost_pct`, an operating-style margin (not a gross
+margin) as defined in the conclusion, measured against steady-state cost.
 
 ## The Assumptions Register
 
@@ -121,7 +123,7 @@ and stated explicitly; rows 39 onward were added as the model grew.
 | 11 | Saturation cap (the tiling/interference dial) | 2,000 satellites |
 | 12 | Communications share of Neutron cadence | 0.18 |
 | 13 | Satellite build cost (founder-flat 2026-07-09, below the prior 1.05 dial and the V3 anchor; the shared config default 1.05 untouched) | 1.0 million dollars |
-| 14 | Cost-plus revenue multiple (data-center mirror) | 1.5x |
+| 14 | Cost-plus revenue multiple (data-center mirror): shared-engine machinery, computed but not published on the Iridium artifact as of iridium-v3 (founder direction 2026-07-10) | 1.5x |
 | 15 | IoT device passthrough (devices, not people); superseded on the promoted artifact when the ARPU case is on (the published IoT count then derives from the revenue mix, the IoT bucket, about 51.7M at the baseline) | 10,000,000 |
 | 16 | ARPU revenue case: the PUBLISHED four-bucket case (standard personal, premium terminal, IoT devices, government), founder-set Sheet A 2026-07-09, mixes 15.0 / 2.0 / 82.805 / 0.195 percent at prices 15 / 100 / 8 / 74 dollars per month (about 8,250.8 million dollars per year at the baseline under full sell-through). The cellular-family 50-dollar ARPU is a separate case value, no longer carried on the promoted Iridium artifact | published |
 
@@ -224,7 +226,6 @@ All are `derived_estimate`.
 | Coverage complete | 2035 |
 | Build-and-hold cost through FY2036 (flat cost model: 432 satellites x 1.0 + 36 launches x 13.0) | 900.0 million dollars |
 | Steady-state annual fleet cost (annualized basis) | 145.0 million dollars per year |
-| Cost-plus revenue at 33.3 percent margin | 217.5 million dollars per year |
 | Cash cost per subscriber (final-year replacement-cost artifact, see conclusion caveat) | 7.50 dollars per year |
 | ARPU margin vs steady-state cost (operating-style; the conclusion carries the definition) | about 98.2 percent |
 | ARPU standard bucket (people) | 9,360,000 at 15 dollars, 1,684.8 million dollars per year |

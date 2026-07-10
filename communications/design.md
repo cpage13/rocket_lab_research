@@ -99,12 +99,15 @@ off peak is the smaller of the single-beam pool (spectrum times efficiency,
 per launch couples inversely to aperture, floored, never below one:
 max(1, floor(12 x 25 / aperture)), which is 12 at the baseline and 5 at the
 60-square-meter what-if. The result rides the unchanged fleet machinery for
-cost, launches, and cost-plus revenue. When the ARPU block is set, the
-published revenue case derives beside it: one pool anchored to fleet capacity
-(fleet target times density, 62,400,000 connections at the baseline), four
-bucket counts by mix percentage (standard the exact residual, so the people
-identity holds by construction), revenue per bucket as count times price
-times twelve months, and the margin against the steady-state fleet cost.
+cost and launches. The engine also computes the cellular family's cost-plus
+revenue line on the shared trajectory, but the Iridium artifact does not
+publish it as of iridium-v3 (founder direction 2026-07-10). When the ARPU block
+is set, the published four-bucket revenue case derives: one pool anchored to
+fleet capacity (fleet target times density, 62,400,000 connections at the
+baseline), four bucket counts by mix percentage (standard the exact residual,
+so the people identity holds by construction), revenue per bucket as count
+times price times twelve months, and the margin against the steady-state fleet
+cost.
 
 **The frozen-test discipline.** The family's test suite locks every baseline
 number (capacity, density, fleet, pool, rates, aggregate, launch identity,

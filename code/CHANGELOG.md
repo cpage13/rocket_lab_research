@@ -3,7 +3,56 @@
 All notable changes to the `code/` model package: the `rklb-value` orbital
 data-center valuation calculator and, from July 2026, the communications model
 families. Versions track each output JSON **schema version** (data center: v8;
-the Iridium model: iridium-v2).
+the Iridium model: iridium-v3).
+
+## The Iridium model, schema iridium-v3 (2026-07-10), the cost-plus revenue case removed from the artifact
+
+Per founder direction: the synthetic cost-plus revenue convention (price at
+1.5x annualized cost, the automatic 33.3 percent margin) is the data center's
+no-prices-available discipline. The Iridium model now has a real published
+revenue case (the four-bucket ARPU case, schema iridium-v2) with real cost and
+margin, so cost-plus is ruled out of every Iridium-facing surface. The
+shared-engine machinery is untouched: the cellular family still earns cost-plus
+revenue and the equality tripwire still rides the shared trajectory, exactly
+like the earlier placeholder-ARPU removal.
+
+### Removed
+
+- **The two cost-plus fields dropped from the promoted Iridium artifact**
+  (`json_output.py`): `steady_state_revenue_cost_plus_musd` and
+  `steady_state_gross_margin_cost_plus_pct` are removed from
+  `TrajectorySummaryBlock`, which now carries the cost and fleet story only (no
+  revenue case; the published Iridium revenue lives in `revenue_arpu_buckets`).
+  The ENGINE still computes both on the shared `CommsTrajectory` (the cellular
+  family reads them, the equality tripwire rides that shared trajectory), fenced
+  with a comment extended from the placeholder-ARPU removal so a future cleanup
+  pass keeps the engine seam. `IRIDIUM_SCHEMA_VERSION` bumped to `iridium-v3`.
+- **The cost-plus prose dropped from the Iridium assumptions output**
+  (`engine.py`, `iridium_assumptions`): the revenue-case lines no longer assert
+  cost-plus is published (the ARPU path) or load-bearing (the no-ARPU path) for
+  Iridium, so the regenerated artifact carries no cost-plus claim. The cost-plus
+  computation, the `CommsTrajectory` fields, and the cellular family's path are
+  untouched.
+
+### Changed
+
+- The published ARPU margin (`arpu_margin_vs_steady_state_cost_pct`) is
+  unchanged: it is measured against steady-state COST, not cost-plus, so it
+  stays exactly as is (98.242595 percent at the baseline).
+- **Tests**: `test_promoted_json_export_writes_frozen_baseline` asserts the two
+  cost-plus fields ABSENT and freezes schema `iridium-v3`; the 217.5 cost-plus
+  freeze (and its now-dead constant) is removed while the cost freezes 900.0 /
+  75.0 / 145.0 / 7.5 and the full ARPU block including the 98.242595 margin stay.
+  The equality tripwire and the cellular family's cost-plus engine tests are
+  untouched (554 passed, DC parity 8).
+- Docs refreshed in tandem: `communications/conclusion.md` (the cost-plus floor
+  paragraph removed from the money section), `communications/assumptions.md`
+  (the cost-plus dial row and register row 14 reframed as shared-engine
+  machinery not published for Iridium, the cost-plus output-anchor row dropped,
+  the machine-name note refreshed), the root `README.md` (the comms revenue
+  sentence reworked to the published case only), `communications/CURRENT_STATE.md`,
+  and `communications/design.md`. The promoted `default.json` re-promoted at
+  stamp 2026-07-10.
 
 ## The Iridium model, schema iridium-v2 (2026-07-09), the flat cost model and the published ARPU margin
 

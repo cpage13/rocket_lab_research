@@ -1,10 +1,10 @@
 {
   "provenance": {
     "model_name": "iridium",
-    "schema_version": "iridium-v2",
+    "schema_version": "iridium-v3",
     "scenario_name": "Iridium L-band max-outcome (phone-class baseline)",
     "source_scenario_path": "code/scenarios/iridium.yaml",
-    "version_stamp": "2026-07-09"
+    "version_stamp": "2026-07-10"
   },
   "trajectory_summary": {
     "total_build_and_hold_cost_musd": 900.0,
@@ -15,9 +15,7 @@
     "steady_state_annual_replacement_cost_musd": 75.0,
     "subscribers_served": 10000000,
     "cost_per_subscriber_annual_usd": 7.5,
-    "steady_state_annual_cost_musd": 145.0,
-    "steady_state_revenue_cost_plus_musd": 217.5,
-    "steady_state_gross_margin_cost_plus_pct": 33.33333333333333
+    "steady_state_annual_cost_musd": 145.0
   },
   "iridium_physics": {
     "spectrum_mhz": 8.0,
@@ -79,7 +77,7 @@
     "Spectral efficiency is estimate-tier and founder-owned: the phone-class band is 0.5 to 0.8, the small-terminal-class band 1.5 to 2.5, the large-terminal-class band 2.0 to 3.0 bps/Hz (class centrals 0.65 / 2.0 / 2.5).",
     "The reuse calibration (0.15 Gbps per MHz per unit spectral efficiency) is calibrated at the 25.0 m^2 reference aperture; per-satellite capacity scales linearly with aperture area, which is conservative (it ignores the additional per-link SNR lift a larger aperture also gives).",
     "The busy-hour concurrency pair (peak 0.025, off-peak 0.005) and the per-subscriber active rate (1.0 Mbps) are estimate-tier, founder-owned values.",
-    "The prices-today ARPU revenue case is PUBLISHED for the Iridium model as the four-bucket case (standard personal, premium terminal, IoT devices, government): a founder-set price-and-mix sheet dated 2026-07-09. Cost-plus (revenue equals annualized cost times the revenue multiple) stays published beside it as the cost-recovery floor.",
+    "The prices-today ARPU revenue case is PUBLISHED for the Iridium model as the four-bucket case (standard personal, premium terminal, IoT devices, government): a founder-set price-and-mix sheet dated 2026-07-09. It is the Iridium model's only published revenue case.",
     "Full sell-through on capacity: the four-bucket case assumes every serveable billable-connection slot the built fleet can carry is sold, so revenue rides the built fleet's people capacity (fleet_target x density), above the served target, with no penetration or utilization haircut. Clearly optimistic, stated, founder-owned.",
     "Mix posture (stated honestly): the people-and-government share (17.2 percent of the billable-connection pool) is loosely anchored on the FY2025 book's like-for-like people-plus-government share (about 21.2 percent, COMM-617/618); government is deliberately de-anchored from the book's 4.8 percent to 0.195 percent so the baseline government line reproduces today's one fixed EMSS contract (COMM-619) rather than scaling a share; IoT is the residual that closes the mix to 100. The mix is held constant as the fleet grows (v1); a time-varying mix schedule is the documented v2 extension.",
     "Built-fleet convention: the revenue case is computed once at the built fleet (fleet_target), so on a scenario that does not complete its build inside the horizon the case describes the completed fleet, not the final horizon year's smaller actual fleet.",
