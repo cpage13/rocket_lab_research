@@ -93,7 +93,7 @@ six rows are modeling posture the audit surfaced and stated explicitly.
 | 13 | Satellite build cost (below the V3 anchor) | 1.05 million dollars |
 | 14 | Cost-plus revenue multiple (data-center mirror) | 1.5x |
 | 15 | IoT device passthrough (devices, not people) | 10,000,000 |
-| 16 | ARPU 50 dollars per month: a High-Bandwidth Cellular Pure Play case value; for the Iridium model the ARPU case is deferred until per-tier prices are set | deferred |
+| 16 | ARPU 50 dollars per month: a High-Bandwidth Cellular Pure Play case value; for the Iridium model the ARPU case is deferred until the per-tier sheet is set (founder range stated 2026-07-09: 10 to 20 dollars per month for the standard phone-class tier; IoT about 8 dollars per device per month) | deferred |
 
 ### Why The Cadence Share Is 0.18
 
@@ -108,10 +108,11 @@ launches of 12 satellites, spread over the ramp years), and the five-year
 replacement treadmill at steady state needs about 68 satellites a year, roughly
 6 launches, well inside the share. It also deliberately leaves the large
 majority of Neutron capacity for the rest of the business. The dial is the
-deployment-speed lever: at a higher share the same 29-launch build lands in 3
-to 7 years instead of about 10 (the conclusion states both), and the rich-tier
-and saturation scenarios need a higher share to complete inside the model
-horizon. The model reports below-target deployment truthfully rather than
+deployment-speed lever: at a higher share the same 29-launch build lands
+years earlier instead of about 10 (model runs: a 0.5 share completes coverage
+in 2033, 0.8 in 2032, 0.9 in 2031, and 2031 is the ramp-bound floor even at a
+1.0 share; the conclusion states the sweep), and the rich-tier and saturation
+scenarios need a higher share to complete inside the model horizon. The model reports below-target deployment truthfully rather than
 hiding it, so an under-provisioned share is visible in the output, not papered
 over.
 
@@ -160,14 +161,15 @@ All are `derived_estimate`.
 | Cost-plus revenue at 33.3 percent margin | about 251.5 million dollars per year |
 | Cash cost per subscriber (build-year artifact, see conclusion caveat) | about 7.95 dollars per year |
 
-## Catalog Reconciliation Caveat
+## Catalog Status
 
-`research/SOURCE_INDEX.md` currently tops out at `COMM-560`. The claim blocks
-`COMM-561` through `COMM-710` (the spectrum fundamentals, Iridium acquisition,
-band designations, Iridium capacity and modernization, the device gate, and
-MSS spectrum expansion) live in their source documents' own claims ledgers
-pending catalog reconciliation. The claims are written and sourced; only the
-central index rows are pending.
+The catalog reconciliation is complete: `research/SOURCE_INDEX.md` carries
+every claim block this model cites, end to end through `COMM-710` (the
+spectrum fundamentals, Iridium acquisition, band designations, Iridium
+capacity and modernization, the device gate, and MSS spectrum expansion were
+indexed as Waves 8 and 9 on 2026-07-08). The only gaps in the id space are
+the two documented reserved-unused ranges (`COMM-575..600` and
+`COMM-677..685`).
 
 ## Maintenance Rule
 
