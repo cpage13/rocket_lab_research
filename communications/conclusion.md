@@ -115,7 +115,8 @@ the strongest external anchor in the model: it was measured over the air on
 Starlink's operating phone service (mean 0.79, median 0.64 bits per hertz),
 and it already embeds real-world interference, so nothing is inflated and
 then clawed back. The reuse calibration is the widest error bar and the
-number real engineering would move first. Across the corpus band edges the
+number real engineering would move first. Across the corpus band edges (the
+spectral-efficiency band and the supply-anchor band taken together) the
 per-satellite capacity spans roughly 0.3 to 1.5 Gbps against the 0.78
 central. The model quotes the calibrated centrals and treats everything else
 as sweepable dials.
@@ -162,7 +163,7 @@ The band itself is the reliability story. At 1.6 GHz path loss is low and
 weather is nearly transparent: the rain and cloud fade that degrades Ku- and
 Ka-band broadband barely touches L-band, and the band tolerates foliage and
 reaches building edges that higher bands cannot (the physics is
-COMM-426/COMM-563 territory; see
+COMM-426/COMM-563 territory, and the L-band-specific row is COMM-627; see
 [`research/direct_communication/spectrum_and_phased_array_fundamentals.md`](../research/direct_communication/spectrum_and_phased_array_fundamentals.md)).
 A link that holds in rain, under trees, and in motion is a different product
 from a dish that needs clear sky, even at a fraction of the speed.
@@ -179,10 +180,11 @@ can hold, mount, or embed.
 
 ## Revenue And Cost
 
-The model's solid ground here is the cost side. The build-and-hold cost of
-the 340-satellite fleet is about **1,085 million dollars**: 340 satellites at
-1.05 million dollars each plus about 29 launches priced on the model's
-cadence-indexed launch-cost curve. The cash cost per subscriber is about
+The model's solid ground here is the cost side. The build-and-hold cost is
+about **1,085 million dollars**: every satellite built and every launch flown
+through FY2036, meaning the 29-launch build to the 340-satellite fleet plus
+the five-year replacement treadmill behind it (432 satellites across 36
+launches in total, priced on the model's cadence-indexed launch-cost curve). The cash cost per subscriber is about
 **7.95 dollars per year**, with a caveat: that figure is the final-year
 steady-state replacement cost per subscriber (one lumpy hold-phase year of
 satellite replacement spread over the base), not a life-amortized number. On an annualized basis the per-subscriber cost is
@@ -243,11 +245,11 @@ its density-chain caveat):
 | $15 | $1.8B per year | $11.2B per year |
 | $20 | $2.4B per year | $14.9B per year |
 
-Against those revenues the fleet is the cheap part: the whole 340-satellite
-build-and-hold is about **$1,085M** (roughly $170M per year annualized), so
-the pre-operations margin at the founder range runs roughly **86 to 93
-percent**, and the fleet repays inside its first year at the middle of the
-range. The honest caveat is the word pre-operations: the operations line is
+Against those revenues the fleet is the cheap part: the whole build-and-hold
+through FY2036 is about **$1,085M**, the steady-state annual cost is roughly
+**$170M per year**, so the pre-operations margin at the founder range runs
+roughly **86 to 93 percent**, and the fleet repays inside its first year at
+the middle of the range. The honest caveat is the word pre-operations: the operations line is
 the explicit zero stated above, and Iridium today spends about **$376M per year** of
 real cash operating cost (revenue $871.7M minus operational EBITDA $495.3M),
 so a true operating line lands the margin meaningfully below the pre-ops
@@ -257,7 +259,7 @@ Separately, IoT rides the same fleet nearly free: 10 million devices at
 today's $7.78 add about **$0.9B per year** with zero effect on fleet sizing,
 and the corpus envelope is tens of millions of devices. And the existing
 business does not stop: the acquisition brings **$871.7M per year** of
-revenue at a 57 percent operational-EBITDA margin with it (COMM-615/616).
+revenue at a 56.8 percent operational-EBITDA margin with it (COMM-615/616).
 
 The structural read follows: the expensive part of this business was never
 the satellites, it was the spectrum position, and that came with the ~$8.0B

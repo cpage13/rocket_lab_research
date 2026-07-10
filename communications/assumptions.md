@@ -47,7 +47,7 @@ The dials below carry the physics. Every one is a named constant in
 | Aperture reference | 25.0 square meters | `sourced_estimate` | The corpus flat-array class (`COMM-408/410`, about 20 to 24 square meters, called 25-square-meter class). Flatellite's own dimensions are unpublished; the 25 is a render-read working number, flagged as such. |
 | No-fold aperture limit | 25.0 square meters | `derived_estimate` (geometry) | A 60 square meter flat square is about 7.7 meters across, past Neutron's 5.5 meter fairing; a 25 square meter square is 5.0 meters and fits. The no-deployable design philosophy is `COMM-251`. |
 | Satellites per launch | 12 | `derived_estimate`, estimate-bound | `COMM-258/260`: about 9,500 kg to SSO over the roughly 800 kg single-source mass estimate (`COMM-253/256`) gives about 12. |
-| Satellite build cost | 1.05 million dollars | `scenario` | Founder-set, in-band below the Starlink V3 hardware anchor of about 1.2 million dollars (`COMM-082`, a projection, hardware-cost analogy only). |
+| Satellite build cost | 1.05 million dollars | `scenario` | Founder-set, in-band below the Starlink V3 hardware anchor of about 1.2 million dollars (`COMM-080`, the consolidated unit-cost trajectory row; a projection, hardware-cost analogy only). |
 | Satellite lifetime | 5 years | `scenario` | The corpus Starlink operating-life lineage (`COMM-097`). |
 | Coverage floor | 340 satellites | `scenario` on a computed basis | The project coverage simulation's 95 percent column reads 341 at 450 km and a 25 degree mask, founder-rounded to 340; inside `COMM-216`'s 290 to 960 floor band. |
 | Saturation cap | 2,000 satellites | `scenario` | Founder-set dial encoding the tiling/interference ceiling (`COMM-413` to `COMM-416` own the mechanism; `COMM-550/553` the fleet scale). |
@@ -59,13 +59,18 @@ The dials below carry the physics. Every one is a named constant in
 Citation-precision note: a two-round traceability audit (converged 2026-07-08)
 verified 91 numbers across the constants, dials, scenario, and frozen anchors
 with zero numeric discrepancies, and found four citation ids pointing at the
-wrong ledger rows. All four were corrected in code on 2026-07-08: the
-build-cost anchor now cites `COMM-082` (previously `COMM-080`, the V1 row),
-the 5-year lifetime now cites `COMM-097` (previously `COMM-091`), the aperture
-reference now cites the flat-array class `COMM-408/410` for area (the
-`COMM-253/256` rows are the mass estimate and now say so), and the
-terminal-class band now cites `COMM-650` (previously `COMM-647`, the aggregate
-row). Values were untouched.
+wrong ledger rows. All four were corrected in code on 2026-07-08: the 5-year
+lifetime now cites `COMM-097` (previously `COMM-091`), the aperture reference
+now cites the flat-array class `COMM-408/410` for area (the `COMM-253/256`
+rows are the mass estimate and now say so), the terminal-class band now cites
+`COMM-650` (previously `COMM-647`, the aggregate row), and the build-cost
+anchor was moved to `COMM-082`. A second review pass (2026-07-09) found that
+last move went the wrong way: the global `COMM-080` row is the consolidated
+Starlink unit-cost trajectory (V1 through V3, including the ~1.2 million
+dollar V3 anchor) and the global `COMM-082` is the fleet-size row; the 07-08
+pass had read the supply-cost doc's internal ids, which are offset from the
+global index in that range. The build-cost anchor cites `COMM-080` again.
+Values were untouched throughout.
 
 ## The Assumptions Register
 

@@ -77,8 +77,8 @@ about **2035** on an 18% share of Neutron's cadence (about 29 launches), the
 fleet serves about **10 million subscribers** at about **31,200 per satellite**
 on just the **8 MHz** Iridium owns outright. The service is device-diverse:
 about **1 Mbps** at peak and **5 Mbps** off peak on the weakest device class (a
-phone-class radio with no external antenna), roughly 3 and 16 through a small
-antenna (a puck, or a USB device on a laptop), 4 and 20 mounted, with IoT
+phone-class radio with no external antenna), roughly 3 and 15 through a small
+antenna (a puck, or a USB device on a laptop), 4 and 19 mounted, with IoT
 devices in the tens of millions riding nearly free. At the data-center revenue
 convention the fleet earns about **$252M a year at a 33% gross margin**.
 
