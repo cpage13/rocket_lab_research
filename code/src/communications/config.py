@@ -57,11 +57,22 @@ import logging
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from communications.constants import (
     ACTIVE_USER_RATE_MBPS_DEFAULT,
     APERTURE_REFERENCE_M2,
+    ARPU_GOVERNMENT_MIX_PCT_DEFAULT,
+    ARPU_GOVERNMENT_PRICE_USD_MONTH_DEFAULT,
+    ARPU_IOT_MIX_PCT_DEFAULT,
+    ARPU_IOT_PRICE_USD_MONTH_DEFAULT,
+    ARPU_MIX_SUM_EPSILON,
+    ARPU_MIX_TOTAL_PCT,
+    ARPU_PREMIUM_MIX_PCT_DEFAULT,
+    ARPU_PREMIUM_PRICE_USD_MONTH_DEFAULT,
+    ARPU_PRICE_CEILING_USD_MONTH,
+    ARPU_STANDARD_MIX_PCT_DEFAULT,
+    ARPU_STANDARD_PRICE_USD_MONTH_DEFAULT,
     ARPU_USD_PER_MONTH_DEFAULT,
     BASE_YEAR_DEFAULT,
     CADENCE_CEILING_DEFAULT,
@@ -478,6 +489,139 @@ class GroundInterfaceDials(BaseModel):
     )
 
 
+class IridiumArpuDials(BaseModel):
+    """The Iridium four-bucket ARPU revenue case dials (founder-set, Sheet A).
+
+    The PUBLISHED Iridium ARPU case: four billable-connection buckets (standard
+    personal / premium terminal / IoT devices / government), each a PERCENTAGE mix of
+    ONE pool anchored to fleet CAPACITY (``fleet_target x subscribers_per_satellite``),
+    so every bucket scales with the satellite count (the founder's requirement: a mix
+    cannot be half absolute numbers and half percentages). The four mixes and four
+    monthly prices are the founder-set dials here; the counts are DERIVED
+    (:func:`communications.engine.derive_arpu_buckets`, the residual rule for standard
+    so the people identity is exact). Subscribers are PEOPLE (standard and premium);
+    IoT are DEVICES; government is a contract line: the pool is a BILLABLE-CONNECTIONS
+    accounting frame (Iridium's own reporting convention folds IoT devices into
+    "billable subscribers", COMM-617), NOT one summed people population.
+
+    Nested as the OPTIONAL ``arpu`` field on :class:`IridiumDials` (None = no bucket
+    case). The two people mixes carry a strictly-positive lower bound so
+    ``people_share`` (their sum) can never be zero; a model validator enforces the
+    four mixes sum to :data:`~communications.constants.ARPU_MIX_TOTAL_PCT` within
+    :data:`~communications.constants.ARPU_MIX_SUM_EPSILON`. Sheet A is the blessed
+    default; Sheet B (18.7 / 2.5 / 78.55 / 0.25 at the same prices) is the documented
+    alternative in ``scenarios/iridium.yaml``.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    standard_mix_pct: float = Field(
+        default=ARPU_STANDARD_MIX_PCT_DEFAULT,
+        gt=0,
+        le=ARPU_MIX_TOTAL_PCT,
+        description=(
+            "The STANDARD personal (phone-class) bucket's share of the "
+            "billable-connection pool, percent. A PEOPLE bucket. FOUNDER_SET to 15.0 "
+            "(Sheet A). Strictly positive so people_share (standard + premium) is never "
+            "zero. Configurable."
+        ),
+    )
+    premium_mix_pct: float = Field(
+        default=ARPU_PREMIUM_MIX_PCT_DEFAULT,
+        gt=0,
+        le=ARPU_MIX_TOTAL_PCT,
+        description=(
+            "The PREMIUM terminal (gain-antenna) bucket's share of the pool, percent. A "
+            "PEOPLE bucket. FOUNDER_SET to 2.0 (Sheet A). Strictly positive (the second "
+            "people mix). Configurable."
+        ),
+    )
+    iot_mix_pct: float = Field(
+        default=ARPU_IOT_MIX_PCT_DEFAULT,
+        ge=0,
+        le=ARPU_MIX_TOTAL_PCT,
+        description=(
+            "The IoT DEVICE bucket's share of the pool, percent: the residual that "
+            "closes the mix to 100. DEVICES, never folded into the people count. "
+            "FOUNDER_SET to 82.805 (Sheet A). Configurable."
+        ),
+    )
+    government_mix_pct: float = Field(
+        default=ARPU_GOVERNMENT_MIX_PCT_DEFAULT,
+        ge=0,
+        le=ARPU_MIX_TOTAL_PCT,
+        description=(
+            "The GOVERNMENT bucket's share of the pool, percent. FOUNDER_SET to 0.195 "
+            "(Sheet A), calibrated so the baseline government line reproduces today's "
+            "fixed EMSS contract (COMM-619) rather than scaling a 4.8 percent share. "
+            "Configurable."
+        ),
+    )
+    standard_price_usd_month: float = Field(
+        default=ARPU_STANDARD_PRICE_USD_MONTH_DEFAULT,
+        gt=0,
+        le=ARPU_PRICE_CEILING_USD_MONTH,
+        description=(
+            "The STANDARD personal monthly price, dollars. FOUNDER_SET to 15.0 (Sheet A), "
+            "the midpoint of the founder's 10-to-20 mass-market range (COMM-618 context). "
+            "Configurable."
+        ),
+    )
+    premium_price_usd_month: float = Field(
+        default=ARPU_PREMIUM_PRICE_USD_MONTH_DEFAULT,
+        gt=0,
+        le=ARPU_PRICE_CEILING_USD_MONTH,
+        description=(
+            "The PREMIUM terminal monthly price, dollars. FOUNDER_SET to 100.0 (Sheet A), "
+            "between Iridium voice/data 47 and Certus 259 for 0.7 Mbps-class (COMM-618). "
+            "Configurable."
+        ),
+    )
+    iot_price_usd_month: float = Field(
+        default=ARPU_IOT_PRICE_USD_MONTH_DEFAULT,
+        gt=0,
+        le=ARPU_PRICE_CEILING_USD_MONTH,
+        description=(
+            "The IoT DEVICE monthly price, dollars. FOUNDER_SET to 8.0 (Sheet A), the "
+            "founder's confirmed about-8 (Iridium IoT ARPU is 7.78 today, COMM-618). "
+            "Configurable."
+        ),
+    )
+    government_price_usd_month: float = Field(
+        default=ARPU_GOVERNMENT_PRICE_USD_MONTH_DEFAULT,
+        gt=0,
+        le=ARPU_PRICE_CEILING_USD_MONTH,
+        description=(
+            "The GOVERNMENT monthly price, dollars. FOUNDER_SET to 74.0 (Sheet A), "
+            "today's per-connection EMSS equivalent (COMM-619). Configurable."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _mixes_sum_to_total(self) -> IridiumArpuDials:
+        """Enforce the four bucket mixes sum to 100 percent (within the epsilon).
+
+        The pool algebra (``total_connections = people_capacity / people_share``) is
+        only well-defined when the mixes partition the pool, so a sheet that does not
+        sum to :data:`~communications.constants.ARPU_MIX_TOTAL_PCT` (within
+        :data:`~communications.constants.ARPU_MIX_SUM_EPSILON`, absorbing float
+        representation error) is rejected at config load.
+        """
+        total = (
+            self.standard_mix_pct
+            + self.premium_mix_pct
+            + self.iot_mix_pct
+            + self.government_mix_pct
+        )
+        if abs(total - ARPU_MIX_TOTAL_PCT) > ARPU_MIX_SUM_EPSILON:
+            raise ValueError(
+                "the four ARPU bucket mixes (standard, premium, iot, government) must "
+                f"sum to {ARPU_MIX_TOTAL_PCT} percent within {ARPU_MIX_SUM_EPSILON}; "
+                f"got {total}"
+            )
+        return self
+
+
 class IridiumDials(BaseModel):
     """The Iridium model's (L-band max-outcome) input dials: the MSS lane.
 
@@ -586,6 +730,17 @@ class IridiumDials(BaseModel):
             "GroundInterfaceDials.scenario_name precedent: an optional block carries "
             "its own label). The Iridium scenario YAML sets no metadata block, so the "
             "Iridium-model label lives here. Configurable."
+        ),
+    )
+    arpu: IridiumArpuDials | None = Field(
+        default=None,
+        description=(
+            "The OPTIONAL four-bucket ARPU revenue case (:class:`IridiumArpuDials`). "
+            "None by default, so every bare-dials construction (including the equality "
+            "tripwire test) sees no buckets and the ARPU case is simply absent from the "
+            "result; set it (the promoted scenario does) to publish the four-bucket "
+            "revenue case. The first two-level-deep dial block in the config tree, "
+            "deliberate: the ARPU case belongs to the Iridium family."
         ),
     )
 
@@ -734,6 +889,7 @@ __all__ = [
     "CommsMetadataDials",
     "CoverageDials",
     "GroundInterfaceDials",
+    "IridiumArpuDials",
     "IridiumDials",
     "LaunchCostDials",
     "RevenueDials",

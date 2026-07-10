@@ -15,8 +15,9 @@ conclusion.
   families.
 - The test suite is green post-cleanup: the frozen Iridium suite, the
   High-Bandwidth Cellular Pure Play suites, the cross-import guard, and the
-  data-center parity gate (174 tests at build close; 166 comms plus parity
-  and 548 whole-tree as of 2026-07-09; mypy strict and ruff clean).
+  data-center parity gate (174 tests at build close; 172 comms plus parity
+  and 554 whole-tree as of 2026-07-09, the published four-bucket ARPU case
+  added; mypy strict and ruff clean).
 - The evidence library lives in `research/` under the `COMM-*` claim ledger.
 
 ## Current Read
@@ -25,7 +26,11 @@ The Iridium baseline is coverage-bound, not capacity-bound: 340 satellites by
 2035 at an 18 percent cadence share serve about 10 million subscribers at
 31,200 per satellite on the owned 8 MHz, at 1.0 Mbps peak and 5.0 off peak to
 a phone, with cost-plus revenue of about 251.5 million dollars per year at a
-33.3 percent margin. Treat those as traceable model outputs from
+33.3 percent margin. Beside that cost-plus floor the model now publishes the
+four-bucket ARPU case (Sheet A, founder-set 2026-07-09): about 8,250.8 million
+dollars per year at the baseline under full sell-through on capacity, about 98
+percent pre-operations margin against the roughly 170 million dollar
+steady-state fleet cost. Treat those as traceable model outputs from
 `communications/models/iridium/default.json`, not a final recommendation. A
 two-round traceability audit (converged 2026-07-08) verified 91 numbers with
 zero numeric discrepancies and four citation ids corrected in code (one of
@@ -34,8 +39,11 @@ consolidated unit-cost trajectory row).
 
 ## What Is Not Current
 
-- The ARPU revenue case is deferred: the seam is built, and the founder sets
-  per-tier MSS prices before the model publishes an ARPU number.
+- The ARPU revenue case is now PUBLISHED (the four-bucket Sheet A). What is not
+  yet current in that case: a time-varying per-year mix (the founder's "IoT
+  grows in volume at a smaller percentage over time") and a per-year revenue
+  trajectory are documented v2 extensions; v1 publishes the built-fleet point
+  at a constant mix under full sell-through on capacity.
 - Operations cost is explicitly zero, a stated assumption and a fixed line to
   research and add later.
 - The cash cost per subscriber (7.95 dollars per year) is the final-year
@@ -65,7 +73,8 @@ JSON and the static conclusion are the current communications output.
 
 - Keep `conclusion.md` tied to the promoted default JSON through deliberate
   review, not automatic promotion output.
-- The ARPU revenue case: founder sets per-tier prices, then the seam fills.
+- The ARPU case v2: a time-varying per-year mix and a per-year revenue
+  trajectory (v1 publishes the built-fleet point at a constant mix).
 - Operations cost: research the fixed line and replace the explicit zero.
 - Keep the three lanes exact in all prose: cellular phones, broadband dish,
   MSS on Iridium L-band. Subscribers are people; IoT are devices.

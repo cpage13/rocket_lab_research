@@ -80,7 +80,10 @@ about **1 Mbps** at peak and **5 Mbps** off peak on the weakest device class (a
 phone-class radio with no external antenna), roughly 3 and 15 through a small
 antenna (a puck, or a USB device on a laptop), 4 and 19 mounted, with IoT
 devices in the tens of millions riding nearly free. At the data-center revenue
-convention the fleet earns about **$252M a year at a 33% gross margin**.
+convention the fleet earns about **$252M a year at a 33% gross margin**; beside
+that cost-plus floor sits a published four-bucket ARPU case (standard, premium
+terminal, IoT, government, founder-set prices), on the order of $8B a year at the
+baseline under full sell-through on capacity (the conclusion has the breakdown).
 
 The ceiling is spectrum, not satellites: the fleet saturates near **2,000
 satellites** (about 25 to 62 million subscribers depending on service tier),

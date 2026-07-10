@@ -104,11 +104,12 @@ from common.cadence import (
 )
 from common.cohort import LivedCohort, cohort_is_alive_at, living_cohorts
 from common.provenance import ProvenanceCell
-from communications.config import CommsConfig, IridiumDials
+from communications.config import CommsConfig, IridiumArpuDials, IridiumDials
 from communications.constants import (
     APERTURE_FOLD_CAVEAT_NOTE,
     APERTURE_NO_FOLD_LIMIT_M2,
     APERTURE_REFERENCE_M2,
+    ARPU_MIX_TOTAL_PCT,
     ECOSYSTEM_ASSUMPTION_NOTE,
     GBPS_TO_MBPS,
     IRIDIUM_OPERATIONS_COST_MUSD,
@@ -928,6 +929,62 @@ class CommsTrajectory:
 
 
 @dataclass(frozen=True)
+class IridiumArpuBucket:
+    """One billable-connection ARPU revenue bucket (a mix slice of the pool).
+
+    Attributes:
+        mix_pct: The bucket's share of the billable-connection pool, percent (the
+            founder-set dial; for the standard bucket the reported count is the
+            people-identity residual, so the count is not exactly ``mix_pct`` of the
+            pool, off only by the premium bucket's rounding).
+        price_usd_month: The bucket's monthly price, USD per connection per month (the
+            founder-set dial).
+        count: The derived connection count in this bucket (people for standard and
+            premium, DEVICES for IoT, contracts for government); an integer.
+        revenue_musd_yr: The bucket's annual revenue, $M/yr
+            (``count x price_usd_month x MONTHS_PER_YEAR / 1e6``).
+    """
+
+    mix_pct: float
+    price_usd_month: float
+    count: int
+    revenue_musd_yr: float
+
+
+@dataclass(frozen=True)
+class IridiumArpuResult:
+    """The four-bucket ARPU revenue case computed at the built fleet's people capacity.
+
+    Attached to :attr:`IridiumResult.arpu` when the scenario carries a populated
+    :class:`~communications.config.IridiumArpuDials` block; ``None`` otherwise. The
+    four buckets partition ONE pool anchored to fleet CAPACITY
+    (``fleet_target x subscribers_per_satellite``), so every count is linear in the
+    satellite count. Subscribers are PEOPLE (standard, premium); IoT are DEVICES;
+    government is a contract line: :attr:`total_connections` is a BILLABLE-CONNECTIONS
+    accounting total, NOT one summed people population. The people identity
+    (``standard.count + premium.count == people_capacity``) is exact by construction
+    (standard is the residual). All revenues are estimate-tier.
+
+    Attributes:
+        standard: The STANDARD personal (phone-class) people bucket.
+        premium: The PREMIUM terminal (gain-antenna) people bucket.
+        iot: The IoT DEVICE bucket (the mix residual to 100).
+        government: The GOVERNMENT contract bucket.
+        total_connections: The billable-connection pool size, round-half-up of the
+            float pool ``people_capacity / people_share`` (an accounting total across
+            people, devices, and contracts, not a people count).
+        arpu_revenue_total_musd_yr: The sum of the four bucket revenues, $M/yr.
+    """
+
+    standard: IridiumArpuBucket
+    premium: IridiumArpuBucket
+    iot: IridiumArpuBucket
+    government: IridiumArpuBucket
+    total_connections: int
+    arpu_revenue_total_musd_yr: float
+
+
+@dataclass(frozen=True)
 class IridiumResult:
     """The Iridium model's (L-band max-outcome) physics result block.
 
@@ -968,6 +1025,11 @@ class IridiumResult:
             tier (:data:`ECOSYSTEM_ASSUMPTION_NOTE`): in-chipset L-band support, 0 dBi,
             a forward assumption; the Iridium model never claims to reach an
             unmodified handset.
+        arpu: The four-bucket ARPU revenue case (:class:`IridiumArpuResult`) computed
+            at the built fleet's people capacity, or ``None`` when the scenario carries
+            no ``arpu`` block. When set, its IoT bucket count is the model's published
+            IoT device count (the ``iot_devices`` passthrough above is superseded at the
+            output/assumptions layer; one IoT truth per artifact).
     """
 
     spectrum_mhz: float
@@ -987,6 +1049,85 @@ class IridiumResult:
     iot_devices: int
     operations_cost_musd: float
     ecosystem_assumption: str
+    arpu: IridiumArpuResult | None = None
+
+
+def _arpu_bucket(mix_pct: float, price_usd_month: float, count: int) -> IridiumArpuBucket:
+    """Build one ARPU bucket, computing its annual revenue from the count and price.
+
+    Args:
+        mix_pct: The bucket's mix share of the pool, percent (the dial, carried as-is).
+        price_usd_month: The bucket's monthly price, USD per connection per month.
+        count: The bucket's derived connection count.
+
+    Returns:
+        The populated :class:`IridiumArpuBucket` (revenue = count x price x months / 1e6).
+    """
+    revenue_musd_yr = count * price_usd_month * MONTHS_PER_YEAR / MUSD_TO_USD
+    return IridiumArpuBucket(
+        mix_pct=mix_pct,
+        price_usd_month=price_usd_month,
+        count=count,
+        revenue_musd_yr=revenue_musd_yr,
+    )
+
+
+def derive_arpu_buckets(people_capacity: int, dials: IridiumArpuDials) -> IridiumArpuResult:
+    """Derive the four ARPU revenue buckets from the people capacity and the mix dials.
+
+    Implements the design's pool algebra verbatim. One pool rides fleet CAPACITY (the
+    ``people_capacity`` passed in, ``fleet_target x subscribers_per_satellite``), so
+    every bucket count is linear in the satellite count. The people share (standard +
+    premium, as a fraction of 100) inverts the pool
+    (``total_connections = people_capacity / people_share``); the premium, IoT, and
+    government counts are round-half-up of their mix slice of that pool; and STANDARD
+    is the RESIDUAL (``people_capacity - premium_count``), so the people identity
+    (``standard_count + premium_count == people_capacity``) is exact by construction
+    (no rounding drift). Subscribers are PEOPLE (standard, premium); IoT are DEVICES;
+    government is a contract line: the pool is a billable-connections accounting frame,
+    not one summed people population.
+
+    Args:
+        people_capacity: The built fleet's people capacity
+            (``fleet_target x subscribers_per_satellite``), a positive integer.
+        dials: The validated :class:`~communications.config.IridiumArpuDials` (the four
+            mixes sum to 100 within the epsilon; both people mixes are strictly
+            positive, so ``people_share`` is never zero).
+
+    Returns:
+        The populated :class:`IridiumArpuResult`: the four buckets, the
+        billable-connection total, and the summed annual revenue.
+    """
+    people_share = (dials.standard_mix_pct + dials.premium_mix_pct) / ARPU_MIX_TOTAL_PCT
+    total_connections_float = people_capacity / people_share
+    premium_count = _round_half_up(
+        total_connections_float * dials.premium_mix_pct / ARPU_MIX_TOTAL_PCT
+    )
+    standard_count = people_capacity - premium_count
+    iot_count = _round_half_up(total_connections_float * dials.iot_mix_pct / ARPU_MIX_TOTAL_PCT)
+    government_count = _round_half_up(
+        total_connections_float * dials.government_mix_pct / ARPU_MIX_TOTAL_PCT
+    )
+    standard = _arpu_bucket(dials.standard_mix_pct, dials.standard_price_usd_month, standard_count)
+    premium = _arpu_bucket(dials.premium_mix_pct, dials.premium_price_usd_month, premium_count)
+    iot = _arpu_bucket(dials.iot_mix_pct, dials.iot_price_usd_month, iot_count)
+    government = _arpu_bucket(
+        dials.government_mix_pct, dials.government_price_usd_month, government_count
+    )
+    total_revenue_musd_yr = (
+        standard.revenue_musd_yr
+        + premium.revenue_musd_yr
+        + iot.revenue_musd_yr
+        + government.revenue_musd_yr
+    )
+    return IridiumArpuResult(
+        standard=standard,
+        premium=premium,
+        iot=iot,
+        government=government,
+        total_connections=_round_half_up(total_connections_float),
+        arpu_revenue_total_musd_yr=total_revenue_musd_yr,
+    )
 
 
 def build_iridium_result(
@@ -1006,7 +1147,10 @@ def build_iridium_result(
     :func:`run_comms_model`, so the density that sized the fleet and the density
     reported here cannot drift). The operations cost and the ecosystem assumption are
     the stated Iridium-model constants (:data:`IRIDIUM_OPERATIONS_COST_MUSD`,
-    :data:`ECOSYSTEM_ASSUMPTION_NOTE`).
+    :data:`ECOSYSTEM_ASSUMPTION_NOTE`). When the dials carry an ``arpu`` block, the
+    four-bucket revenue case is derived here at the built fleet's people capacity
+    (``fleet_target x subscribers_per_satellite``, :func:`derive_arpu_buckets`) and
+    attached; it is ``None`` otherwise.
 
     Args:
         dials: The Iridium-model :class:`~communications.config.IridiumDials` block.
@@ -1018,7 +1162,8 @@ def build_iridium_result(
             deployment used (echoed onto the result).
 
     Returns:
-        The populated :class:`IridiumResult` physics block.
+        The populated :class:`IridiumResult` physics block (with the ARPU revenue case
+        when the ``arpu`` dials are set).
     """
     spectral_efficiency = resolve_device_spectral_efficiency(dials)
     per_satellite_capacity_gbps = derive_per_satellite_capacity_gbps(
@@ -1031,6 +1176,14 @@ def build_iridium_result(
         active_user_rate_mbps=dials.active_user_rate_mbps,
         concurrency_peak=dials.concurrency_peak,
         concurrency_offpeak=dials.concurrency_offpeak,
+    )
+    # The ARPU revenue case rides the built fleet's people CAPACITY (not the served
+    # target), so every bucket count scales with the satellite count. None when the
+    # scenario carries no arpu block (the bare-dials path, including the tripwire).
+    arpu = (
+        derive_arpu_buckets(fleet_target * subscribers_per_satellite, dials.arpu)
+        if dials.arpu is not None
+        else None
     )
     return IridiumResult(
         spectrum_mhz=dials.spectrum_mhz,
@@ -1050,6 +1203,54 @@ def build_iridium_result(
         iot_devices=dials.iot_devices,
         operations_cost_musd=IRIDIUM_OPERATIONS_COST_MUSD,
         ecosystem_assumption=ECOSYSTEM_ASSUMPTION_NOTE,
+        arpu=arpu,
+    )
+
+
+def arpu_stated_assumptions(dials: IridiumArpuDials) -> tuple[str, ...]:
+    """Return the ARPU case's stated-assumption lines (one source of truth).
+
+    The three posture statements the published four-bucket case carries: full
+    sell-through on capacity, the honest mix posture (people-and-government share,
+    the de-anchored government line, IoT the residual, the constant-mix convention),
+    and the built-fleet convention. Consumed both by :func:`iridium_assumptions` (spliced
+    into the full assumptions tuple) and by the promoted artifact's
+    ``revenue_arpu_buckets`` block, so the two never drift.
+
+    Args:
+        dials: The validated :class:`~communications.config.IridiumArpuDials` (its
+            mixes populate the honest posture line).
+
+    Returns:
+        The three ARPU-posture strings, in stable order.
+    """
+    people_and_gov_pct = dials.standard_mix_pct + dials.premium_mix_pct + dials.government_mix_pct
+    return (
+        (
+            "Full sell-through on capacity: the four-bucket case assumes every "
+            "serveable billable-connection slot the built fleet can carry is sold, so "
+            "revenue rides the built fleet's people capacity (fleet_target x density), "
+            "above the served target, with no penetration or utilization haircut. "
+            "Clearly optimistic, stated, founder-owned."
+        ),
+        (
+            "Mix posture (stated honestly): the people-and-government share "
+            f"({people_and_gov_pct:.4g} percent of the billable-connection pool) is "
+            "loosely anchored on the FY2025 book's like-for-like people-plus-government "
+            "share (about 21.2 percent, COMM-617/618); government is deliberately "
+            "de-anchored from the book's 4.8 percent to "
+            f"{dials.government_mix_pct} percent so the baseline government line "
+            "reproduces today's one fixed EMSS contract (COMM-619) rather than scaling a "
+            "share; IoT is the residual that closes the mix to 100. The mix is held "
+            "constant as the fleet grows (v1); a time-varying mix schedule is the "
+            "documented v2 extension."
+        ),
+        (
+            "Built-fleet convention: the revenue case is computed once at the built "
+            "fleet (fleet_target), so on a scenario that does not complete its build "
+            "inside the horizon the case describes the completed fleet, not the final "
+            "horizon year's smaller actual fleet."
+        ),
     )
 
 
@@ -1063,10 +1264,13 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
     a fixed line to research and add later); the estimate tiers (the
     spectral-efficiency bands, the reuse calibration, the aperture reference and its
     linear conservative scaling, the concurrency pair, the active rate) as
-    estimate-tier, founder-owned values; that the prices-today ARPU case is DEFERRED
-    for the Iridium model (cost-plus is the load-bearing revenue, the per-tier MSS
-    ARPUs plug in later); and that the Iridium model is the MSS lane (owned L-band,
-    purpose-built or in-chipset devices), never the cellular unmodified-phone lane.
+    estimate-tier, founder-owned values; and that the Iridium model is the MSS lane
+    (owned L-band, purpose-built or in-chipset devices), never the cellular
+    unmodified-phone lane. The revenue-case line is conditional on ``dials.arpu``: with
+    the four-bucket ARPU case set it states the PUBLISHED case plus the full
+    sell-through assumption, the honest mix posture, the built-fleet convention, and
+    the IoT-count supersession; with no ``arpu`` block it states the DEFERRED case
+    (cost-plus is the load-bearing revenue, the per-tier MSS ARPUs plug in later).
     Conditionally
     appends :data:`APERTURE_FOLD_CAVEAT_NOTE` when ``dials.aperture_m2`` exceeds
     :data:`APERTURE_NO_FOLD_LIMIT_M2` (0.8a: a documented note, never a validation
@@ -1075,7 +1279,8 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
     Args:
         dials: The Iridium-model :class:`~communications.config.IridiumDials` block
             (its aperture drives the conditional fold caveat, its concurrency and
-            active rate populate the estimate-tier lines).
+            active rate populate the estimate-tier lines, and its optional ``arpu``
+            block selects the published-case vs deferred-case revenue lines).
 
     Returns:
         The stated-assumptions lines, in stable order, as a tuple of strings.
@@ -1110,18 +1315,34 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
             f"({dials.active_user_rate_mbps} Mbps) are estimate-tier, founder-owned "
             "values."
         ),
-        (
+    ]
+    if dials.arpu is not None:
+        lines.append(
+            "The prices-today ARPU revenue case is PUBLISHED for the Iridium model as "
+            "the four-bucket case (standard personal, premium terminal, IoT devices, "
+            "government): a founder-set price-and-mix sheet dated 2026-07-09. Cost-plus "
+            "(revenue equals annualized cost times the revenue multiple) stays published "
+            "beside it as the cost-recovery floor."
+        )
+        lines.extend(arpu_stated_assumptions(dials.arpu))
+        lines.append(
+            "IoT count supersession (one IoT truth): with the ARPU case on, the "
+            "published IoT device count derives from the revenue mix (the IoT bucket "
+            "count), and the former fixed iot_devices passthrough dial is superseded "
+            "(reported only on the no-ARPU path)."
+        )
+    else:
+        lines.append(
             "The prices-today ARPU revenue case is DEFERRED for the Iridium model: "
             "cost-plus (revenue equals annualized cost times the revenue multiple) is "
             "the load-bearing Iridium-model revenue, and the per-tier MSS ARPUs plug "
             "in later."
-        ),
-        (
-            "The Iridium model is the MSS lane (owned L-band, purpose-built or "
-            "in-chipset devices), never the cellular direct-to-cell unmodified-phone "
-            "lane (the High-Bandwidth Cellular Pure Play model)."
-        ),
-    ]
+        )
+    lines.append(
+        "The Iridium model is the MSS lane (owned L-band, purpose-built or "
+        "in-chipset devices), never the cellular direct-to-cell unmodified-phone "
+        "lane (the High-Bandwidth Cellular Pure Play model)."
+    )
     if dials.aperture_m2 > APERTURE_NO_FOLD_LIMIT_M2:
         lines.append(APERTURE_FOLD_CAVEAT_NOTE)
     return tuple(lines)
@@ -1624,9 +1845,13 @@ __all__ = [
     "CommsCohortYear",
     "CommsTrajectory",
     "CommsYear",
+    "IridiumArpuBucket",
+    "IridiumArpuResult",
     "IridiumResult",
+    "arpu_stated_assumptions",
     "build_iridium_result",
     "compute_fleet_target",
+    "derive_arpu_buckets",
     "derive_iridium_per_user_rates",
     "derive_iridium_satellites_per_launch",
     "derive_iridium_subscribers_per_satellite",

@@ -1,10 +1,10 @@
 {
   "provenance": {
     "model_name": "iridium",
-    "schema_version": "iridium-v1",
+    "schema_version": "iridium-v2",
     "scenario_name": "Iridium L-band max-outcome (phone-class baseline)",
     "source_scenario_path": "code/scenarios/iridium.yaml",
-    "version_stamp": "2026-07-08"
+    "version_stamp": "2026-07-09"
   },
   "trajectory_summary": {
     "total_build_and_hold_cost_musd": 1085.2209965817483,
@@ -17,9 +17,7 @@
     "cost_per_subscriber_annual_usd": 7.951337204338448,
     "steady_state_annual_cost_musd": 167.67825445261315,
     "steady_state_revenue_cost_plus_musd": 251.51738167891972,
-    "steady_state_gross_margin_cost_plus_pct": 33.33333333333333,
-    "steady_state_revenue_arpu_musd": 6000.0,
-    "steady_state_gross_margin_arpu_pct": 97.20536242578977
+    "steady_state_gross_margin_cost_plus_pct": 33.33333333333333
   },
   "iridium_physics": {
     "spectrum_mhz": 8.0,
@@ -36,9 +34,42 @@
     "beam_pool_mbps": 5.2,
     "per_user_rate_peak_mbps": 1.0,
     "per_user_rate_offpeak_mbps": 5.0,
-    "iot_devices": 10000000,
+    "iot_devices": 51670320,
     "operations_cost_musd": 0.0,
     "ecosystem_assumption": "The Iridium model's phone-class tier assumes phone-form-factor devices with in-chipset support for Iridium's 1616 to 1626.5 MHz L-band (0 dBi, no external antenna). A literally-unmodified 2026 phone receives nothing on this band: no phone has an L-band MSS radio and the band is not a deployed 3GPP NTN band (COMM-668 / COMM-669 / COMM-670). Today's real in-chipset path on this band is Project Stardust (NB-IoT NTN): messaging and IoT, kbps-class, no voice (COMM-661 to COMM-676). The phone-class data-grade tier (active rate ~1 Mbps) is therefore a forward assumption: a future where standard chipsets include the band grown up from the Stardust path, 0 dBi, no external antenna, at the cost of the low phone-class SE tier (a knowingly-taken ~4x capacity haircut versus a gain terminal). Boosted-antenna devices are purpose-built (our hardware, no chipset assumption). The Iridium model is the MSS lane and never claims to reach an unmodified handset; the unmodified-phone lane stays on cellular spectrum (the High-Bandwidth Cellular Pure Play model)."
+  },
+  "revenue_arpu_buckets": {
+    "standard": {
+      "mix_pct": 15.0,
+      "price_usd_per_month": 15.0,
+      "count": 9360000,
+      "annual_revenue_musd": 1684.8
+    },
+    "premium": {
+      "mix_pct": 2.0,
+      "price_usd_per_month": 100.0,
+      "count": 1248000,
+      "annual_revenue_musd": 1497.6
+    },
+    "iot": {
+      "mix_pct": 82.805,
+      "price_usd_per_month": 8.0,
+      "count": 51670320,
+      "annual_revenue_musd": 4960.35072
+    },
+    "government": {
+      "mix_pct": 0.195,
+      "price_usd_per_month": 74.0,
+      "count": 121680,
+      "annual_revenue_musd": 108.05184
+    },
+    "total_connections": 62400000,
+    "arpu_revenue_total_musd": 8250.80256,
+    "stated_assumptions": [
+      "Full sell-through on capacity: the four-bucket case assumes every serveable billable-connection slot the built fleet can carry is sold, so revenue rides the built fleet's people capacity (fleet_target x density), above the served target, with no penetration or utilization haircut. Clearly optimistic, stated, founder-owned.",
+      "Mix posture (stated honestly): the people-and-government share (17.2 percent of the billable-connection pool) is loosely anchored on the FY2025 book's like-for-like people-plus-government share (about 21.2 percent, COMM-617/618); government is deliberately de-anchored from the book's 4.8 percent to 0.195 percent so the baseline government line reproduces today's one fixed EMSS contract (COMM-619) rather than scaling a share; IoT is the residual that closes the mix to 100. The mix is held constant as the fleet grows (v1); a time-varying mix schedule is the documented v2 extension.",
+      "Built-fleet convention: the revenue case is computed once at the built fleet (fleet_target), so on a scenario that does not complete its build inside the horizon the case describes the completed fleet, not the final horizon year's smaller actual fleet."
+    ]
   },
   "assumptions": [
     "The Iridium model's phone-class tier assumes phone-form-factor devices with in-chipset support for Iridium's 1616 to 1626.5 MHz L-band (0 dBi, no external antenna). A literally-unmodified 2026 phone receives nothing on this band: no phone has an L-band MSS radio and the band is not a deployed 3GPP NTN band (COMM-668 / COMM-669 / COMM-670). Today's real in-chipset path on this band is Project Stardust (NB-IoT NTN): messaging and IoT, kbps-class, no voice (COMM-661 to COMM-676). The phone-class data-grade tier (active rate ~1 Mbps) is therefore a forward assumption: a future where standard chipsets include the band grown up from the Stardust path, 0 dBi, no external antenna, at the cost of the low phone-class SE tier (a knowingly-taken ~4x capacity haircut versus a gain terminal). Boosted-antenna devices are purpose-built (our hardware, no chipset assumption). The Iridium model is the MSS lane and never claims to reach an unmodified handset; the unmodified-phone lane stays on cellular spectrum (the High-Bandwidth Cellular Pure Play model).",
@@ -46,7 +77,11 @@
     "Spectral efficiency is estimate-tier and founder-owned: the phone-class band is 0.5 to 0.8, the small-terminal-class band 1.5 to 2.5, the large-terminal-class band 2.0 to 3.0 bps/Hz (class centrals 0.65 / 2.0 / 2.5).",
     "The reuse calibration (0.15 Gbps per MHz per unit spectral efficiency) is calibrated at the 25.0 m^2 reference aperture; per-satellite capacity scales linearly with aperture area, which is conservative (it ignores the additional per-link SNR lift a larger aperture also gives).",
     "The busy-hour concurrency pair (peak 0.025, off-peak 0.005) and the per-subscriber active rate (1.0 Mbps) are estimate-tier, founder-owned values.",
-    "The prices-today ARPU revenue case is DEFERRED for the Iridium model: cost-plus (revenue equals annualized cost times the revenue multiple) is the load-bearing Iridium-model revenue, and the per-tier MSS ARPUs plug in later.",
+    "The prices-today ARPU revenue case is PUBLISHED for the Iridium model as the four-bucket case (standard personal, premium terminal, IoT devices, government): a founder-set price-and-mix sheet dated 2026-07-09. Cost-plus (revenue equals annualized cost times the revenue multiple) stays published beside it as the cost-recovery floor.",
+    "Full sell-through on capacity: the four-bucket case assumes every serveable billable-connection slot the built fleet can carry is sold, so revenue rides the built fleet's people capacity (fleet_target x density), above the served target, with no penetration or utilization haircut. Clearly optimistic, stated, founder-owned.",
+    "Mix posture (stated honestly): the people-and-government share (17.2 percent of the billable-connection pool) is loosely anchored on the FY2025 book's like-for-like people-plus-government share (about 21.2 percent, COMM-617/618); government is deliberately de-anchored from the book's 4.8 percent to 0.195 percent so the baseline government line reproduces today's one fixed EMSS contract (COMM-619) rather than scaling a share; IoT is the residual that closes the mix to 100. The mix is held constant as the fleet grows (v1); a time-varying mix schedule is the documented v2 extension.",
+    "Built-fleet convention: the revenue case is computed once at the built fleet (fleet_target), so on a scenario that does not complete its build inside the horizon the case describes the completed fleet, not the final horizon year's smaller actual fleet.",
+    "IoT count supersession (one IoT truth): with the ARPU case on, the published IoT device count derives from the revenue mix (the IoT bucket count), and the former fixed iot_devices passthrough dial is superseded (reported only on the no-ARPU path).",
     "The Iridium model is the MSS lane (owned L-band, purpose-built or in-chipset devices), never the cellular direct-to-cell unmodified-phone lane (the High-Bandwidth Cellular Pure Play model)."
   ]
 }

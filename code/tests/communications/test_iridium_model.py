@@ -31,19 +31,24 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
-from communications.config import CommsConfig, IridiumDials, load_comms_config
+from communications.config import CommsConfig, IridiumArpuDials, IridiumDials, load_comms_config
 from communications.constants import (
     APERTURE_FOLD_CAVEAT_NOTE,
+    ARPU_MIX_TOTAL_PCT,
     BASE_YEAR_DEFAULT,
     ECOSYSTEM_ASSUMPTION_NOTE,
     HORIZON_YEARS_DEFAULT,
     IRIDIUM_SCENARIO_NAME_DEFAULT,
+    MONTHS_PER_YEAR,
     SUBSCRIBERS_PER_SATELLITE_DEFAULT,
     BindingRegime,
     DeviceClass,
 )
 from communications.engine import (
+    MUSD_TO_USD,
+    derive_arpu_buckets,
     derive_iridium_per_user_rates,
     derive_iridium_satellites_per_launch,
     derive_iridium_subscribers_per_satellite,
@@ -52,7 +57,12 @@ from communications.engine import (
     resolve_device_spectral_efficiency,
     run_comms_model,
 )
-from communications.json_output import MODEL_NAME, export_iridium_json
+from communications.json_output import (
+    MODEL_NAME,
+    build_iridium_artifact,
+    export_iridium_json,
+    render_json,
+)
 
 # ---------------------------------------------------------------------------
 # The frozen Iridium-model phone-class baseline (spectrum 8.0, aperture 25.0,
@@ -110,6 +120,29 @@ EXPECTED_FLEET_AGGREGATE_60M2_GBPS = 636.48  # 1.872 x 340.
 # A very large aperture that flies one satellite per launch (the AST pattern).
 VERY_LARGE_APERTURE_M2 = 400.0
 EXPECTED_EFFECTIVE_SPL_LARGE = 1  # max(1, floor(12 x 25 / 400)) = max(1, 0).
+
+# ---------------------------------------------------------------------------
+# The four-bucket ARPU revenue case, Sheet A (founder-set 2026-07-09). The frozen
+# baseline at 340 satellites: people capacity 10,608,000 = 340 x 31,200. Mixes
+# 15.0 / 2.0 / 82.805 / 0.195 (sum 100); prices 15 / 100 / 8 / 74 dollars per month.
+# Every value below is exact (the float pool 62,400,000 lands on integers).
+# ---------------------------------------------------------------------------
+ARPU_PEOPLE_CAPACITY_BASELINE = 10_608_000  # 340 x 31,200.
+ARPU_POOL_BASELINE = 62_400_000  # 10,608,000 / 0.17, exact.
+ARPU_STANDARD_COUNT = 9_360_000  # people (the residual: 10,608,000 - premium).
+ARPU_PREMIUM_COUNT = 1_248_000  # people (round_half_up(62,400,000 x 0.02)).
+ARPU_IOT_COUNT = 51_670_320  # devices (round_half_up(62,400,000 x 0.82805)).
+ARPU_GOVERNMENT_COUNT = 121_680  # contracts (round_half_up(62,400,000 x 0.00195)).
+ARPU_STANDARD_REVENUE_MUSD = 1_684.8  # 9,360,000 x 15 x 12 / 1e6.
+ARPU_PREMIUM_REVENUE_MUSD = 1_497.6  # 1,248,000 x 100 x 12 / 1e6.
+ARPU_IOT_REVENUE_MUSD = 4_960.350_72  # 51,670,320 x 8 x 12 / 1e6.
+ARPU_GOVERNMENT_REVENUE_MUSD = 108.051_84  # 121,680 x 74 x 12 / 1e6.
+ARPU_TOTAL_REVENUE_MUSD = 8_250.802_56  # the four summed.
+
+# Test-3 scaling base: a non-frozen capacity whose float pool is NOT integral, so the
+# round-half-up genuinely exercises the plus-or-minus-1 count tolerance at 2X.
+ARPU_SCALING_CAPACITY_X = 7_000_000
+ARPU_REVENUE_FLOAT_EPS_MUSD = 1e-9  # float slack on the one-count-quantum revenue bound.
 
 # The scenario YAML (anchored from this test file: tests/communications -> code ->
 # scenarios/iridium.yaml).
@@ -374,8 +407,10 @@ def test_iridium_yaml_scenario_loads_and_runs() -> None:
 
 
 def test_iridium_assumptions_states_ecosystem_and_ops() -> None:
-    """Default assumptions state ecosystem, ops-zero, and deferred-ARPU, no fold caveat."""
-    lines = iridium_assumptions(IridiumDials())
+    """With the ARPU case on, assumptions state ecosystem, ops-zero, the PUBLISHED case,
+    full sell-through, and the IoT supersession; no fold caveat at the reference aperture.
+    """
+    lines = iridium_assumptions(IridiumDials(arpu=IridiumArpuDials()))
     assert lines
     assert ECOSYSTEM_ASSUMPTION_NOTE in lines
     joined = " ".join(lines).lower()
@@ -384,7 +419,12 @@ def test_iridium_assumptions_states_ecosystem_and_ops() -> None:
     assert "operations" in joined
     assert "zero" in joined
     assert "arpu" in joined
-    assert "deferred" in joined
+    # The deferred line is replaced by the published-case, sell-through, and
+    # supersession statements when the four-bucket case is set.
+    assert "published" in joined
+    assert "sell-through" in joined
+    assert "superseded" in joined
+    assert "deferred" not in joined
     # 25.0 is AT, not above, the no-fold limit, so the default output omits the fold caveat.
     assert APERTURE_FOLD_CAVEAT_NOTE not in lines
 
@@ -399,9 +439,11 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
 
     Objective: the promoted-JSON writer end to end (scenario YAML in, artifact
     file out). Success: the file exists, the provenance names the model
-    'iridium' and echoes the stamp, and the frozen baseline keys/values are in
-    the payload (subscribers_per_satellite 31,200 in both blocks, fleet target
-    340, the stated-assumptions lines present).
+    'iridium', echoes the stamp, and carries schema iridium-v2; the frozen
+    baseline keys/values are in the payload (subscribers_per_satellite 31,200 in
+    both blocks, fleet target 340, the stated-assumptions lines present); the two
+    inherited placeholder ARPU fields are gone; and the published four-bucket
+    revenue_arpu_buckets block carries the frozen Sheet A values.
     """
     out_path = tmp_path / "iridium_default.json"
     written = export_iridium_json(_SCENARIO_YAML, out_path, version_stamp="test-stamp")
@@ -410,6 +452,7 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
     assert payload["provenance"]["model_name"] == MODEL_NAME
     assert payload["provenance"]["version_stamp"] == "test-stamp"
     assert payload["provenance"]["scenario_name"] == IRIDIUM_SCENARIO_NAME_DEFAULT
+    assert payload["provenance"]["schema_version"] == "iridium-v2"
     assert (
         payload["trajectory_summary"]["subscribers_per_satellite"]
         == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE
@@ -423,3 +466,174 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
         EXPECTED_PER_SAT_CAPACITY_GBPS
     )
     assert ECOSYSTEM_ASSUMPTION_NOTE in payload["assumptions"]
+    # The two inherited placeholder ARPU fields are gone from the trajectory summary
+    # (schema iridium-v2; they were the cellular-family $50 default, never Iridium's).
+    assert "steady_state_revenue_arpu_musd" not in payload["trajectory_summary"]
+    assert "steady_state_gross_margin_arpu_pct" not in payload["trajectory_summary"]
+    # The published four-bucket ARPU case, frozen Sheet A values.
+    buckets = payload["revenue_arpu_buckets"]
+    assert buckets["standard"]["count"] == ARPU_STANDARD_COUNT
+    assert buckets["standard"]["annual_revenue_musd"] == pytest.approx(ARPU_STANDARD_REVENUE_MUSD)
+    assert buckets["premium"]["count"] == ARPU_PREMIUM_COUNT
+    assert buckets["premium"]["annual_revenue_musd"] == pytest.approx(ARPU_PREMIUM_REVENUE_MUSD)
+    assert buckets["iot"]["count"] == ARPU_IOT_COUNT
+    assert buckets["iot"]["annual_revenue_musd"] == pytest.approx(ARPU_IOT_REVENUE_MUSD)
+    assert buckets["government"]["count"] == ARPU_GOVERNMENT_COUNT
+    assert buckets["government"]["annual_revenue_musd"] == pytest.approx(
+        ARPU_GOVERNMENT_REVENUE_MUSD
+    )
+    assert buckets["total_connections"] == ARPU_POOL_BASELINE
+    assert buckets["arpu_revenue_total_musd"] == pytest.approx(ARPU_TOTAL_REVENUE_MUSD)
+    # IoT supersession (one IoT truth): the physics IoT count is the bucket count.
+    assert payload["iridium_physics"]["iot_devices"] == ARPU_IOT_COUNT
+
+
+# ---------------------------------------------------------------------------
+# The four-bucket ARPU revenue case (derive_arpu_buckets and the artifact wiring).
+# ---------------------------------------------------------------------------
+
+
+def test_arpu_buckets_frozen_sheet_a() -> None:
+    """derive_arpu_buckets reproduces the frozen Sheet A baseline exactly.
+
+    Objective: the pure pool algebra at the blessed default (people capacity
+    10,608,000). Success: the four counts, the four revenues, the pool total, and
+    the summed revenue equal the founder-frozen Sheet A values.
+    """
+    result = derive_arpu_buckets(ARPU_PEOPLE_CAPACITY_BASELINE, IridiumArpuDials())
+    assert result.total_connections == ARPU_POOL_BASELINE
+    assert result.standard.count == ARPU_STANDARD_COUNT
+    assert result.premium.count == ARPU_PREMIUM_COUNT
+    assert result.iot.count == ARPU_IOT_COUNT
+    assert result.government.count == ARPU_GOVERNMENT_COUNT
+    assert result.standard.revenue_musd_yr == pytest.approx(ARPU_STANDARD_REVENUE_MUSD)
+    assert result.premium.revenue_musd_yr == pytest.approx(ARPU_PREMIUM_REVENUE_MUSD)
+    assert result.iot.revenue_musd_yr == pytest.approx(ARPU_IOT_REVENUE_MUSD)
+    assert result.government.revenue_musd_yr == pytest.approx(ARPU_GOVERNMENT_REVENUE_MUSD)
+    assert result.arpu_revenue_total_musd_yr == pytest.approx(ARPU_TOTAL_REVENUE_MUSD)
+
+
+def test_arpu_people_identity_exact_including_awkward_mix() -> None:
+    """standard_count + premium_count == people_capacity exactly (the residual rule).
+
+    Objective: the people identity holds by construction (standard is the residual),
+    so it is exact even on a deliberately awkward mix and a non-round capacity, where
+    independently rounding both people buckets would drift off by a person. Success:
+    the two people counts sum to the input capacity exactly, at the baseline and on
+    the awkward sheet.
+    """
+    baseline = derive_arpu_buckets(ARPU_PEOPLE_CAPACITY_BASELINE, IridiumArpuDials())
+    assert baseline.standard.count + baseline.premium.count == ARPU_PEOPLE_CAPACITY_BASELINE
+    awkward = IridiumArpuDials(
+        standard_mix_pct=11.5,
+        premium_mix_pct=3.5,
+        iot_mix_pct=84.7,
+        government_mix_pct=0.3,
+        standard_price_usd_month=15.0,
+        premium_price_usd_month=100.0,
+        iot_price_usd_month=8.0,
+        government_price_usd_month=74.0,
+    )
+    result = derive_arpu_buckets(ARPU_SCALING_CAPACITY_X, awkward)
+    assert result.standard.count + result.premium.count == ARPU_SCALING_CAPACITY_X
+
+
+def test_arpu_buckets_scale_linearly_with_capacity() -> None:
+    """derive_arpu_buckets scales with the fleet capacity (the founder's requirement).
+
+    Objective: called directly at X and 2X capacity (no dial-perturbation ambiguity),
+    the case scales. Success: the float pool doubles exactly (it is linear in
+    capacity), every integer count doubles within plus-or-minus 1 (independent
+    round-half-up of the pool slice), and every bucket revenue doubles within one
+    count quantum (its price times 12 over 1e6). X is a non-round base so the 2X
+    rounding genuinely exercises the plus-or-minus-1 tolerance.
+    """
+    dials = IridiumArpuDials()
+    people_share = (dials.standard_mix_pct + dials.premium_mix_pct) / ARPU_MIX_TOTAL_PCT
+    result_x = derive_arpu_buckets(ARPU_SCALING_CAPACITY_X, dials)
+    result_2x = derive_arpu_buckets(2 * ARPU_SCALING_CAPACITY_X, dials)
+    # The float pool is linear in capacity, so it doubles exactly.
+    pool_x = ARPU_SCALING_CAPACITY_X / people_share
+    pool_2x = (2 * ARPU_SCALING_CAPACITY_X) / people_share
+    assert pool_2x == pytest.approx(2 * pool_x)
+    # Every integer count doubles within +-1, every bucket revenue within one quantum.
+    pairs = (
+        (result_x.standard, result_2x.standard),
+        (result_x.premium, result_2x.premium),
+        (result_x.iot, result_2x.iot),
+        (result_x.government, result_2x.government),
+    )
+    for bucket_x, bucket_2x in pairs:
+        assert abs(bucket_2x.count - 2 * bucket_x.count) <= 1
+        quantum = bucket_x.price_usd_month * MONTHS_PER_YEAR / MUSD_TO_USD
+        assert abs(bucket_2x.revenue_musd_yr - 2 * bucket_x.revenue_musd_yr) <= (
+            quantum + ARPU_REVENUE_FLOAT_EPS_MUSD
+        )
+    assert abs(result_2x.total_connections - 2 * result_x.total_connections) <= 1
+
+
+def test_arpu_validator_rejects_bad_sheet() -> None:
+    """The config validator rejects a sheet that does not sum to 100 and a zero people mix.
+
+    Objective: the pool algebra needs a partition (sum 100) and a non-zero people
+    share. Success: a mix summing to 99 fails the model validator, and a standard mix
+    at zero fails its strictly-positive Field bound; both raise ValidationError at
+    construction.
+    """
+    with pytest.raises(ValidationError):
+        IridiumArpuDials(
+            standard_mix_pct=15.0,
+            premium_mix_pct=2.0,
+            iot_mix_pct=81.805,
+            government_mix_pct=0.195,
+        )  # sums to 99.0, off by 1.0.
+    with pytest.raises(ValidationError):
+        IridiumArpuDials(
+            standard_mix_pct=0.0,  # fails gt=0 (people_share could go to zero).
+            premium_mix_pct=17.0,
+            iot_mix_pct=82.805,
+            government_mix_pct=0.195,
+        )
+
+
+def test_arpu_none_path_omits_block_and_keeps_iot_passthrough() -> None:
+    """No arpu block: the result and artifact omit the case, the IoT passthrough stands.
+
+    Objective: the None path is inert. Success: IridiumResult.arpu is None, the
+    promoted artifact omits revenue_arpu_buckets (None in the model and the JSON), and
+    iridium_physics.iot_devices reports the fixed 10M passthrough, not a bucket count.
+    """
+    config = CommsConfig(iridium=IridiumDials())
+    trajectory = run_comms_model(config)
+    assert trajectory.iridium is not None
+    assert trajectory.iridium.arpu is None
+    artifact = build_iridium_artifact(
+        config=config,
+        trajectory=trajectory,
+        source_scenario_path="scenarios/iridium.yaml",
+        version_stamp="test",
+    )
+    assert artifact.revenue_arpu_buckets is None
+    assert artifact.iridium_physics.iot_devices == EXPECTED_IOT_DEVICES
+    payload = json.loads(render_json(artifact))
+    assert payload.get("revenue_arpu_buckets") is None
+
+
+def test_arpu_supersession_one_iot_truth() -> None:
+    """With the ARPU case on, the artifact carries exactly one IoT count (the bucket).
+
+    Objective: the IoT supersession at the output layer. Success: the artifact's
+    iridium_physics.iot_devices equals the revenue mix's IoT bucket count (the frozen
+    51,670,320), so no artifact ever carries two IoT counts.
+    """
+    config = CommsConfig(iridium=IridiumDials(arpu=IridiumArpuDials()))
+    trajectory = run_comms_model(config)
+    artifact = build_iridium_artifact(
+        config=config,
+        trajectory=trajectory,
+        source_scenario_path="scenarios/iridium.yaml",
+        version_stamp="test",
+    )
+    assert artifact.revenue_arpu_buckets is not None
+    assert artifact.iridium_physics.iot_devices == artifact.revenue_arpu_buckets.iot.count
+    assert artifact.iridium_physics.iot_devices == ARPU_IOT_COUNT

@@ -3,7 +3,64 @@
 All notable changes to the `code/` model package: the `rklb-value` orbital
 data-center valuation calculator and, from July 2026, the communications model
 families. Versions track each output JSON **schema version** (data center: v8;
-the Iridium model: iridium-v1).
+the Iridium model: iridium-v2).
+
+## The Iridium model, schema iridium-v2 (2026-07-09), the published four-bucket ARPU revenue case
+
+The Iridium ARPU revenue case, previously deferred, is now published: four
+billable-connection buckets (standard personal, premium terminal, IoT devices,
+government), each a percentage mix of one pool anchored to fleet capacity
+(`fleet_target x subscribers_per_satellite`), so every bucket scales with the
+satellite count. Founder-set Sheet A blessed 2026-07-09. Built per the approved
+`design_iridium_arpu_07_09`.
+
+### Added
+
+- **`IridiumArpuDials`** (`config.py`): a frozen, extra-forbid block nested as the
+  optional `arpu` field on `IridiumDials` (None by default, so every bare-dials
+  construction including the equality tripwire sees no buckets). Eight founder-set
+  dials (four percentage mixes, four monthly prices) with Field bounds (the two
+  people mixes strictly positive) and a model validator enforcing the four mixes
+  sum to 100 within `ARPU_MIX_SUM_EPSILON`.
+- **`derive_arpu_buckets`** with `IridiumArpuResult` / `IridiumArpuBucket`
+  (`engine.py`): the pure pool algebra (`total_connections = people_capacity /
+  people_share`; premium, IoT, and government counts round-half-up; standard the
+  residual so the people identity is exact by construction), carried on the
+  optional `IridiumResult.arpu` field and computed at the built fleet's people
+  capacity. `arpu_stated_assumptions` shares the three posture strings between the
+  assumptions output and the artifact block.
+- **`revenue_arpu_buckets`** top-level block on the promoted artifact
+  (`json_output.py`): per-bucket mix, price, count, and revenue, plus the pool
+  total, the summed revenue, and the stated-assumption strings. Omitted (None) on
+  the no-ARPU path.
+- The eight ARPU named constants plus `ARPU_PRICE_CEILING_USD_MONTH`,
+  `ARPU_MIX_TOTAL_PCT`, and `ARPU_MIX_SUM_EPSILON` (`constants.py`), eight
+  `iridium.arpu.*` placeholder-flag entries (all False), and the populated `arpu`
+  block on `scenarios/iridium.yaml` (Sheet A the default; Sheet B, the
+  today's-device-ratio alternative, documented in the comments).
+- Six new tests (frozen Sheet A, the exact people identity including an awkward
+  mix, linear scaling at X vs 2X, validator rejection of a bad sheet, the None
+  path, the IoT supersession); two updated (the promoted-JSON freeze to
+  iridium-v2 and the assumptions accessor to the published case).
+
+### Changed
+
+- **Schema `iridium-v1` to `iridium-v2`**: the two inherited placeholder ARPU
+  fields (`steady_state_revenue_arpu_musd`, `steady_state_gross_margin_arpu_pct`,
+  computed from the cellular family's $50/month default) are removed from the
+  promoted artifact's `TrajectorySummaryBlock`; the published `revenue_arpu_buckets`
+  block is added. The engine still computes the inert $50 field on the shared
+  trajectory (the cellular family reads it and the equality tripwire rides it), so
+  it stays on the engine path, fenced with a comment at the artifact-removal site.
+- **IoT supersession (one IoT truth)**: with the ARPU case on, the artifact's
+  `iridium_physics.iot_devices` reports the mix-derived IoT bucket count (about
+  51.7M at the baseline); the fixed passthrough dial reports only on the no-ARPU
+  path. No artifact ever carries two IoT counts.
+- Docs refreshed in tandem: `communications/assumptions.md` (eight dial rows, the
+  register updates, the Sheet A/B subsection, the output anchors),
+  `communications/conclusion.md` (the published four-number table and margin
+  framing, the IoT and existing-book reconciliations, the pricing bullet), the root
+  `README.md`, and `communications/CURRENT_STATE.md`.
 
 ## The Iridium model, schema iridium-v1 (2026-07-07/08), the communications model family
 
