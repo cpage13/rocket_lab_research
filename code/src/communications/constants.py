@@ -182,7 +182,8 @@ SATELLITE_BUILD_COST_MUSD_DEFAULT: Final[float] = 1.05
 """FOUNDER_SET (in-band; round 4, 2026-06-25). The flat MASS-MANUFACTURED
 CELLULAR-SATELLITE HARDWARE cost, ONE scalar, ~$1.0 to 1.1M (1.05 is the in-band
 default). This is a V3-CLASS HARDWARE analogy: the Starlink V3 per-satellite
-hardware cost is ~$1.2M (~1,500 kg), the upper hardware anchor (COMM-082). A
+hardware cost is ~$1.2M (~1,500 kg), the upper hardware anchor (COMM-080, the
+consolidated unit-cost trajectory row). A
 CELLULAR direct-to-cell payload is a bigger antenna and more power than a
 broadband panel, but FAR smaller than AST's giant phased array (so AST's
 ~$19 to 21M giant-array figure is the WRONG anchor). It is a HARDWARE
