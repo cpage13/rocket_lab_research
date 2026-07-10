@@ -67,15 +67,21 @@ identical, and a cross-import guard keeps the packages separate.
 
 ## The Iridium Model's Structure
 
-**The dials.** Nine, all defaulted from named constants: spectrum (8.0 MHz
-exclusive; 10.5 coordinated variant), aperture (25.0 square meters), device
-class (phone, small terminal, or terminal), an optional spectral-efficiency
-override, active user rate (1.0 Mbps; 2.5 rich variant), the concurrency pair
-(2.5 percent peak, 0.5 percent off peak), the IoT device passthrough
-(10 million), and the scenario label. The fleet dials (12 satellites per
-launch, 5-year life, 1.05 million dollar build cost, the 340 coverage floor,
-the 2,000 saturation cap, the 0.18 cadence share) are carried from the shared
-engine unchanged.
+**The dials.** Nine physics dials, all defaulted from named constants:
+spectrum (8.0 MHz exclusive; 10.5 coordinated variant), aperture (25.0 square
+meters), device class (phone, small terminal, or terminal), an optional
+spectral-efficiency override, active user rate (1.0 Mbps; 2.5 rich variant),
+the concurrency pair (2.5 percent peak, 0.5 percent off peak), the IoT device
+passthrough (10 million, superseded on the artifact when the ARPU case is
+on), and the scenario label. Plus the optional ARPU block (founder-set
+2026-07-09, Sheet A): four mix percentages validated to sum to 100 and four
+prices per month; None keeps the revenue case off. The fleet dials (12
+satellites per launch, 5-year life, the 340 coverage floor, the 2,000
+saturation cap, the 0.18 cadence share) are carried from the shared engine;
+the default scenario overrides two of them founder-flat (satellite build cost
+1.0 million dollars and a flat 13.0 million dollar launch cost at every
+cadence, set by equal curve anchors), leaving the shared config defaults
+untouched.
 
 **The derivation spine, in one paragraph.** Resolve the device class to a
 spectral efficiency (phone 0.65, small terminal 2.0, terminal 2.5 bits per
@@ -93,7 +99,12 @@ off peak is the smaller of the single-beam pool (spectrum times efficiency,
 per launch couples inversely to aperture, floored, never below one:
 max(1, floor(12 x 25 / aperture)), which is 12 at the baseline and 5 at the
 60-square-meter what-if. The result rides the unchanged fleet machinery for
-cost, launches, and cost-plus revenue.
+cost, launches, and cost-plus revenue. When the ARPU block is set, the
+published revenue case derives beside it: one pool anchored to fleet capacity
+(fleet target times density, 62,400,000 connections at the baseline), four
+bucket counts by mix percentage (standard the exact residual, so the people
+identity holds by construction), revenue per bucket as count times price
+times twelve months, and the margin against the steady-state fleet cost.
 
 **The frozen-test discipline.** The family's test suite locks every baseline
 number (capacity, density, fleet, pool, rates, aggregate, launch identity,

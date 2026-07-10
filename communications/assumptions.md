@@ -49,11 +49,11 @@ family and the equality tripwire still see the defaults.
 | Terminal-class spectral efficiency | 2.5 bps/Hz (band 2.0 to 3.0) | `sourced_estimate` | `COMM-650` and the capacity doc's modern-ACM band (about 2 to 3 bps/Hz to a gain terminal); `COMM-428` carries the AST claim to about 3. |
 | Reuse calibration | 0.15 Gbps per MHz per unit SE | `derived_estimate` (calibration) | `COMM-410`: a flat 25 square meter class array on about 25 MHz produces about 5 to 15 Gbps (central 8 to 10). 25 x 2.5 x 0.15 = 9.375 sits inside the central band; the implied 150x effective reuse sits inside `COMM-411`'s 130 to 200x. |
 | Aperture reference | 25.0 square meters | `sourced_estimate` | The corpus flat-array class (`COMM-408/410`, about 20 to 24 square meters, called 25-square-meter class). Flatellite's own dimensions are unpublished; the 25 is a render-read working number, flagged as such. |
-| No-fold aperture limit | 25.0 square meters | `derived_estimate` (geometry) | A 60 square meter flat square is about 7.7 meters across, past Neutron's 5.5 meter fairing; a 25 square meter square is 5.0 meters and fits. The no-deployable design philosophy is `COMM-251`. |
+| No-fold aperture limit | 25.0 square meters | `derived_estimate` (geometry) | A 60 square meter flat square is about 7.7 meters across, past Neutron's 5.5 meter fairing; a 25 square meter square is 5.0 meters and fits. The no-deployable design philosophy is `COMM-262/263`. |
 | Satellites per launch | 12 | `derived_estimate`, estimate-bound | `COMM-258/260`: about 9,500 kg to SSO over the roughly 800 kg single-source mass estimate (`COMM-253/256`) gives about 12. |
 | Satellite build cost | 1.0 million dollars | `scenario`, founder-flat | Founder simplification 2026-07-09, a deliberately flat cost model. Scenario override in `iridium.yaml`, deliberately diverging from the shared config default of 1.05 (untouched); in-band, just below that prior dial and the Starlink V3 hardware anchor of about 1.2 million dollars (`COMM-080`, the consolidated unit-cost trajectory row; a projection, hardware-cost analogy only). |
 | Launch cost (flat) | 13.0 million dollars per launch | `scenario`, founder-flat | Founder simplification 2026-07-09: both cadence anchors of the shared log-linear curve set equal in `iridium.yaml`, so the launch cost is flat at every cadence (no stepped pricing as launches scale). In-band, just below the shared curve's grounded 13.5 high-cadence floor; the shared-spine default curve (25.0 to 13.5) is untouched. |
-| Satellite lifetime | 5 years | `scenario` | The corpus Starlink operating-life lineage (`COMM-097`). |
+| Satellite lifetime | 5 years | `scenario` | The corpus Starlink operating-life lineage (`COMM-088`, the ~5-year depreciation and replacement treadmill). |
 | Coverage floor | 340 satellites | `scenario` on a computed basis | The project coverage simulation's 95 percent column reads 341 at 450 km and a 25 degree mask, founder-rounded to 340; inside `COMM-216`'s 290 to 960 floor band. |
 | Saturation cap | 2,000 satellites | `scenario` | Founder-set dial encoding the tiling/interference ceiling (`COMM-413` to `COMM-416` own the mechanism; `COMM-550/553` the fleet scale). |
 | Busy-hour concurrency | 2.5 percent | `scenario`, corpus-central | `COMM-543`: working direct-to-cell concurrency about 1 to 5 percent, central 2 to 3. |
@@ -72,18 +72,29 @@ family and the equality tripwire still see the defaults.
 Citation-precision note: a two-round traceability audit (converged 2026-07-08)
 verified 91 numbers across the constants, dials, scenario, and frozen anchors
 with zero numeric discrepancies, and found four citation ids pointing at the
-wrong ledger rows. All four were corrected in code on 2026-07-08: the 5-year
-lifetime now cites `COMM-097` (previously `COMM-091`), the aperture reference
-now cites the flat-array class `COMM-408/410` for area (the `COMM-253/256`
-rows are the mass estimate and now say so), the terminal-class band now cites
-`COMM-650` (previously `COMM-647`, the aggregate row), and the build-cost
-anchor was moved to `COMM-082`. A second review pass (2026-07-09) found that
-last move went the wrong way: the global `COMM-080` row is the consolidated
-Starlink unit-cost trajectory (V1 through V3, including the ~1.2 million
-dollar V3 anchor) and the global `COMM-082` is the fleet-size row; the 07-08
-pass had read the supply-cost doc's internal ids, which are offset from the
-global index in that range. The build-cost anchor cites `COMM-080` again.
+wrong ledger rows. All four were corrected in code on 2026-07-08: the
+aperture reference now cites the flat-array class `COMM-408/410` for area
+(the `COMM-253/256` rows are the mass estimate and now say so), the
+terminal-class band now cites `COMM-650` (previously `COMM-647`, the
+aggregate row), the 5-year lifetime was moved to `COMM-097`, and the
+build-cost anchor was moved to `COMM-082`. Later review passes (2026-07-09
+and the 2026-07-10 full review) found those last two moves went the wrong
+way, both by the same mechanism: the supply-cost doc's internal ids are
+offset from the global index in that range. The global `COMM-080` row is the
+consolidated Starlink unit-cost trajectory (V1 through V3, including the
+~1.2 million dollar V3 anchor) while `COMM-082` is the fleet-size row, and
+the global `COMM-088` row is the ~5-year depreciation and replacement
+treadmill while `COMM-097` is an incumbent-margins row. The build-cost
+anchor cites `COMM-080` and the lifetime cites `COMM-088` now. The no-fold
+design citation was also re-pointed from `COMM-251` (the comms-first read)
+to `COMM-262/263` (the no-deployable quotes and the flat-aperture choice).
 Values were untouched throughout.
+
+Machine-name note: the promoted artifact's cost-plus margin field keeps its
+legacy machine name (`steady_state_gross_margin_cost_plus_pct`, a shared
+engine field). The metric it carries is the margin as defined in the
+conclusion (an operating-style margin, not a gross margin); renaming the
+field is a candidate for a future schema revision.
 
 ## The Assumptions Register
 

@@ -72,7 +72,7 @@ binds and the fleet is **340 satellites**.
 
 That aggregate of about 265 Gbps across 340 modern satellites is more than a
 thousand times the roughly 174 Mbps the entire 66-satellite Iridium fleet moves
-today. The gain is architecture times scale: roughly 300x per satellite (more
+today (COMM-639). The gain is architecture times scale: roughly 300x per satellite (more
 beams, digital beamforming, and dense cell reuse on the same held megahertz)
 and about 5x from flying 340 satellites instead of 66.
 
@@ -146,8 +146,10 @@ Mbps active rate, the same antennas raise density rather than speed, to about
 Separately, and counted separately, the same fleet carries **tens of millions
 of IoT devices**. IoT are devices, not people. They ride nearly free: at
 kilobit-class narrowband rates the binding limit is random-access contention,
-not spectrum, so the model passes through 10 million IoT devices with zero
-sizing effect on the subscriber service.
+not spectrum, so IoT rides as zero load in the sizing. The published device
+count itself derives from the revenue mix (about 51.7 million at the
+baseline); the 10 million passthrough dial reports only when the ARPU case
+is off.
 
 ## Beyond The Phone: Reliability And The Edge-Device Case
 
@@ -335,7 +337,8 @@ frequencies, so the design point is many small satellites, not few large ones.
 25 square meters is also the no-fold maximum of Neutron's 5.5 meter fairing. A
 larger satellite of about **60 square meters** carries 2.4 times the capacity,
 which can be spent one way or the other: per-phone rates roughly double at
-today's density (about 2 Mbps at peak, closer to 10 lightly loaded), or
+today's density (about 2 Mbps at peak; the lightly-loaded reading stays
+capped by the class-fixed beam pool), or
 density rises to about **74,880 subscribers per satellite** at today's rates,
 about 25 million at the same 340 satellites (the model's what-if takes the
 density side). But a 60 square meter panel is about 7.7 meters on a side as a
