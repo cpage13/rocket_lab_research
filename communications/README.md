@@ -27,9 +27,11 @@ people; IoT are devices, counted separately.
 ## The Model Families
 
 The first and current focus is **the Iridium model** (formerly Model B): the
-maximum practical performance of Iridium's owned 8 to 10.5 MHz of L-band on a
-Neutron-launched next-generation fleet over the next 10 to 15 years, with a
-larger, heavier rocket as a possible later step. Rocket Lab's acquisition of
+maximum practical performance of Iridium's owned 8 to 10.5 MHz of L-band,
+delivered to a ladder of devices (purpose-built terminals, IoT modules, and
+conditionally phone-class chipsets), on a Neutron-launched next-generation
+fleet over the next 10 to 15 years, with a larger, heavier rocket as a
+possible later step. Rocket Lab's acquisition of
 Iridium makes this the incumbent-modernization question, and the
 [conclusion](conclusion.md) carries its verdict.
 
@@ -75,11 +77,15 @@ review the JSON and update the conclusion deliberately.
 
 ## Worth Knowing
 
-The phone-class numbers carry a stated ecosystem assumption: Iridium's band is
-in no standard phone chipset today, and the model states that in every output
-rather than assuming it silently. The terminal, device, and IoT tiers need no
-such assumption. Every load-bearing number is estimate-tier and traceable
-through the [assumptions ledger](assumptions.md) to the research wiki.
+The service is device-diverse, and the phone is one path rather than the
+focus: purpose-built terminals (a puck, a USB device with a small antenna on a
+laptop, mounted units) and IoT modules need no chipmaker's permission, and the
+baseline is computed at the weakest device class, so every other device does
+better on the same fleet. The phone-class numbers carry a stated ecosystem
+assumption: Iridium's band is in no standard phone chipset today, and the
+model states that in every output rather than assuming it silently. Every
+load-bearing number is estimate-tier and traceable through the
+[assumptions ledger](assumptions.md) to the research wiki.
 
 The data-center workstream is the sibling application; see
 [../data_center/README.md](../data_center/README.md).
