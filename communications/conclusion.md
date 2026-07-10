@@ -14,10 +14,13 @@ scenario range.
 In plain terms: Iridium serves about 2.5 million subscribers today on 66
 satellites flying a 1990s architecture, and the whole fleet moves about 174
 megabits per second, less than one home internet connection. The spectrum is
-not the limit. The old architecture is. A modern flat-panel satellite with
-digital beamforming carries roughly **1,000 times** the data of one Iridium
-satellite today on the very same spectrum. The rest of this document builds the
-outcome of that modernization from its parts.
+not the limit. The old architecture is. At the phone-class baseline this
+document builds, one modern flat-panel satellite with digital beamforming
+carries roughly **300 times** the data of one Iridium satellite today on the
+very same spectrum (loaded with gain terminals instead, the corpus
+modernization figure is about 1,000 times), and the 340-satellite fleet moves
+more than a thousand times what the whole 66-satellite fleet moves. The rest
+of this document builds that outcome from its parts.
 
 The service is device-diverse by design: purpose-built terminals (a puck, a
 USB device with a small antenna on a laptop, a mounted unit), IoT modules,
@@ -69,8 +72,9 @@ binds and the fleet is **340 satellites**.
 
 That aggregate of about 265 Gbps across 340 modern satellites is more than a
 thousand times the roughly 174 Mbps the entire 66-satellite Iridium fleet moves
-today. The gain is almost all architecture: more beams, digital beamforming,
-and dense cell reuse on the same held megahertz.
+today. The gain is architecture times scale: roughly 300x per satellite (more
+beams, digital beamforming, and dense cell reuse on the same held megahertz)
+and about 5x from flying 340 satellites instead of 66.
 
 ## How The Capacity Numbers Arise
 
@@ -179,16 +183,16 @@ The model's solid ground here is the cost side. The build-and-hold cost of
 the 340-satellite fleet is about **1,085 million dollars**: 340 satellites at
 1.05 million dollars each plus about 29 launches priced on the model's
 cadence-indexed launch-cost curve. The cash cost per subscriber is about
-**7.95 dollars per year**, with a caveat: that figure is a build-year cash
-artifact (fleet cost spread over the served base in the coverage year), not a
-life-amortized number. On an annualized basis the per-subscriber cost is
+**7.95 dollars per year**, with a caveat: that figure is the final-year
+steady-state replacement cost per subscriber (one lumpy hold-phase year of
+satellite replacement spread over the base), not a life-amortized number. On an annualized basis the per-subscriber cost is
 higher (roughly 17 dollars per subscriber per year at 10 million), and
 aligning the model to the annualized basis is a tracked open item. Operations
 cost is held at **zero** by explicit assumption, a fixed line to research and
 add later, and it is stated in every model output rather than hidden.
 
-The model's only published revenue number is deliberately a floor, and it
-should be read as one. The cost-plus case prices the service at a flat 1.5
+The only revenue number the model stands behind is deliberately a floor, and
+it should be read as one. The cost-plus case prices the service at a flat 1.5
 times annualized cost (the same discipline the data-center model uses,
 carried while the real price sheet was unset), which produces about **251.5
 million dollars per year at a 33.3 percent margin** on the baseline. That is
@@ -196,23 +200,30 @@ a cost-recovery discipline, not a market forecast: it implies charging about
 2.10 dollars per subscriber per month, far below every real price anchor in
 this document. The subscriber-price (ARPU) case in code stays deferred until
 the founder sets the per-tier MSS price sheet; until then, the scenario
-ranges below are the honest statement of what the service could earn.
+ranges below are the honest statement of what the service could earn. A
+bookkeeping note for readers of the promoted JSON: it also carries an
+inherited placeholder ARPU line (50 dollars per month, a cellular-family
+default), which is deferred bookkeeping, not an Iridium forecast, and no
+statement in this document rests on it.
 
 ### What The Service Could Earn (Scenario Ranges)
 
-The model's published revenue is the cost-plus case above; the ARPU case
-stays deferred in code until the per-tier price sheet is set. But the shape
+The revenue the model stands behind is the cost-plus case above; the ARPU
+case stays deferred in code until the per-tier price sheet is set. But the shape
 of the opportunity is visible from two grounded anchors plus one stated
 founder range, and it is worth setting out plainly.
 
 The first anchor is what Iridium's customers pay today (reported FY2025
-ARPUs, fact-tier, COMM-618): IoT devices **$7.78 per month**, voice and data
-**$47 per month**, Certus broadband **$259 per month** for a 0.7 Mbps-class
-service, plus the fixed **~$108M per year** government contract. Those are
+ARPUs, fact-tier, COMM-618; the government line is COMM-619): IoT devices
+**$7.78 per month**, voice and data **$47 per month**, Certus broadband
+**$259 per month** for a 0.7 Mbps-class service, plus the fixed **~$108M per
+year** government contract. Those are
 premium-niche prices on a starved network (the whole 66-satellite fleet
 moves about 174 Mbps): evidence of what captive segments will bear, not
 mass-market comps. At $259 for 0.7 Mbps the incumbent price per megabit is
-roughly 650 times terrestrial broadband. A modernized fleet with about
+roughly 650 times terrestrial broadband (a home line at about 100 dollars a
+month for about 180 Mbps is roughly 0.55 dollars per megabit; Certus is about
+370). A modernized fleet with about
 1,500 times today's supply on the same spectrum is what breaks that pricing
 regime: it can sell abundance at mass prices while keeping the premium book
 (today's Certus buyer gets roughly 4 Mbps instead of 0.7).
@@ -236,8 +247,8 @@ Against those revenues the fleet is the cheap part: the whole 340-satellite
 build-and-hold is about **$1,085M** (roughly $170M per year annualized), so
 the pre-operations margin at the founder range runs roughly **86 to 93
 percent**, and the fleet repays inside its first year at the middle of the
-range. The honest caveat is the word pre-operations: operations cost is the
-model's explicit zero, and Iridium today spends about **$376M per year** of
+range. The honest caveat is the word pre-operations: the operations line is
+the explicit zero stated above, and Iridium today spends about **$376M per year** of
 real cash operating cost (revenue $871.7M minus operational EBITDA $495.3M),
 so a true operating line lands the margin meaningfully below the pre-ops
 figure. Sizing that line is the tracked open item.
@@ -272,11 +283,13 @@ The second is aperture. At 1.6 GHz, frequency does the work of area: a 25
 square meter array has the gain and cell size of a much larger array at cellular
 frequencies, so the design point is many small satellites, not few large ones.
 25 square meters is also the no-fold maximum of Neutron's 5.5 meter fairing. A
-larger satellite of about **60 square meters** roughly doubles per-phone rates
-(a phone would see about 2 Mbps at peak and closer to 10 off peak) and lifts
-per-satellite density to about 74,880 subscribers, about 25 million at the same
-340 satellites. But a 60 square meter panel is about 7.7 meters across its
-smallest dimension. It does not stow flat in Neutron's fairing without folding,
+larger satellite of about **60 square meters** carries 2.4 times the capacity,
+which can be spent one way or the other: per-phone rates roughly double at
+today's density (about 2 Mbps at peak, closer to 10 lightly loaded), or
+density rises to about **74,880 subscribers per satellite** at today's rates,
+about 25 million at the same 340 satellites (the model's what-if takes the
+density side). But a 60 square meter panel is about 7.7 meters on a side as a
+square. It does not stow flat in Neutron's fairing without folding,
 which the flat-panel design philosophy rejects, and a no-fold 60 square meter
 satellite needs a roughly 7-to-8-meter-class fairing, a larger and heavier
 rocket. That vehicle does not exist, so the larger-aperture case stays out of
@@ -384,7 +397,7 @@ The baseline is the reference case, and a handful of assumptions carry it:
   ($10 to $20 per month for the standard tier) and unproven willingness to
   pay in an uncovered-market base. The model's own ARPU case stays deferred
   until the per-tier sheet is set; cost-plus is the only revenue the model
-  publishes today.
+  stands behind today.
 
 ## Structural Context
 

@@ -69,8 +69,10 @@ satellites (25 square meters, digital beamforming, laser crosslinks, about 12
 per Neutron launch) and scale out.
 
 The headline contrast: today's entire Iridium fleet moves about **174 Mbps**,
-less than one home internet connection; a single modern flat panel on the same
-spectrum carries roughly **1,000x** that. At **340 satellites**, deployed by
+less than one home internet connection; one modern flat panel carries roughly
+**300x** what one of today's satellites moves (about 1,000x loaded with gain
+terminals), and the modeled fleet moves more than **1,000x** today's whole
+fleet. At **340 satellites**, deployed by
 about **2035** on an 18% share of Neutron's cadence (about 29 launches), the
 fleet serves about **10 million subscribers** at about **31,200 per satellite**
 on just the **8 MHz** Iridium owns outright. The service is device-diverse:
