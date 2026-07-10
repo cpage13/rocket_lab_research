@@ -202,25 +202,16 @@ aligning the model to the annualized basis is a tracked open item. Operations
 cost is held at **zero** by explicit assumption, a fixed line to research and
 add later, and it is stated in every model output rather than hidden.
 
-The model's cost-recovery revenue number is deliberately a floor, and it
-should be read as one. The cost-plus case prices the service at a flat 1.5
-times annualized cost (the same discipline the data-center model uses,
-carried while the real price sheet was unset), which produces **217.5
-million dollars per year at a 33.3 percent margin** on the baseline. That is
-a cost-recovery discipline, not a market forecast: it implies charging about
-1.81 dollars per subscriber per month, far below every real price anchor in
-this document. The subscriber-price (ARPU) case is now published beside it: the
+The model's published revenue case is the subscriber-price (ARPU) sheet: the
 four-bucket case (standard personal, premium terminal, IoT devices, government),
 a founder-set price-and-mix sheet dated 2026-07-09, detailed below. The two
-inherited placeholder ARPU fields are gone from the promoted artifact (schema
-iridium-v2); nothing in this document rests on the old cellular-family 50-dollar
-line.
+inherited placeholder ARPU fields are gone from the promoted artifact; nothing
+in this document rests on the old cellular-family 50-dollar line.
 
 ### What The Service Could Earn (Scenario Ranges)
 
 The published revenue case is the four-bucket ARPU sheet (Sheet A, founder-set
-2026-07-09); cost-plus above stays beside it as the cost-recovery floor. Revenue
-first, at the 340-satellite baseline (people capacity 10,608,000, a
+2026-07-09). Revenue first, at the 340-satellite baseline (people capacity 10,608,000, a
 billable-connection pool of 62,400,000 under full sell-through on capacity):
 
 | Bucket | Mix | Price per month | Count | Revenue per year |
@@ -449,9 +440,9 @@ The baseline is the reference case, and a handful of assumptions carry it:
 - **Pricing.** The published four-bucket ARPU case rests on founder-set scenario
   prices (Sheet A: 15 / 100 / 8 / 74 dollars per month across the four buckets)
   and unproven willingness to pay in an uncovered-market base, plus the
-  full-sell-through-on-capacity assumption. That case is now what the model
-  carries beside the cost-plus floor; the prices and the sell-through are the
-  open levers, and the per-bucket mix is held constant as the fleet grows.
+  full-sell-through-on-capacity assumption. That case is now the model's
+  published revenue case; the prices and the sell-through are the open levers,
+  and the per-bucket mix is held constant as the fleet grows.
 
 ## Structural Context
 

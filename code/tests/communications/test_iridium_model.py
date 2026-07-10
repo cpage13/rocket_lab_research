@@ -150,7 +150,6 @@ FLAT_BUILD_AND_HOLD_COST_MUSD = 900.0  # 432 satellites x 1.0 + 36 launches x 13
 FLAT_STEADY_STATE_REPLACEMENT_COST_MUSD = 75.0  # the final-year hold-phase replacement.
 FLAT_COST_PER_SUBSCRIBER_ANNUAL_USD = 7.5  # 75.0 M USD / 10,000,000 subscribers.
 FLAT_STEADY_STATE_ANNUAL_COST_MUSD = 145.0  # the annualized fleet cost basis.
-FLAT_STEADY_STATE_REVENUE_COST_PLUS_MUSD = 217.5  # 145.0 x the 1.5 cost-plus multiple.
 # The published ARPU margin against that flat-cost steady-state annual cost:
 # (8,250.80256 - 145.0) / 8,250.80256 x 100.
 ARPU_MARGIN_VS_STEADY_STATE_COST_PCT = 98.242_595_202_762_91
@@ -455,14 +454,17 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
 
     Objective: the promoted-JSON writer end to end (scenario YAML in, artifact
     file out). Success: the file exists, the provenance names the model
-    'iridium', echoes the stamp, and carries schema iridium-v2; the frozen
+    'iridium', echoes the stamp, and carries schema iridium-v3; the frozen
     baseline keys/values are in the payload (subscribers_per_satellite 31,200 in
     both blocks, fleet target 340, the stated-assumptions lines present); the
     flat-cost model (founder simplification 2026-07-09) freezes exact (900.0 M
-    build-and-hold, 75.0 M replacement, 7.5 USD/sub, 145.0 M annual cost, 217.5 M
-    cost-plus revenue); the two inherited placeholder ARPU fields are gone; and the
-    published four-bucket revenue_arpu_buckets block carries the frozen Sheet A
-    values plus the published margin (98.2 percent) against the steady-state cost.
+    build-and-hold, 75.0 M replacement, 7.5 USD/sub, 145.0 M annual cost); the two
+    cost-plus revenue fields are ABSENT from the trajectory summary (schema
+    iridium-v3, founder direction 2026-07-10; the engine still computes them for the
+    cellular family and the equality tripwire); the two inherited placeholder ARPU
+    fields are gone; and the published four-bucket revenue_arpu_buckets block carries
+    the frozen Sheet A values plus the published margin (98.2 percent) against the
+    steady-state cost.
     """
     out_path = tmp_path / "iridium_default.json"
     written = export_iridium_json(_SCENARIO_YAML, out_path, version_stamp="test-stamp")
@@ -471,7 +473,7 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
     assert payload["provenance"]["model_name"] == MODEL_NAME
     assert payload["provenance"]["version_stamp"] == "test-stamp"
     assert payload["provenance"]["scenario_name"] == IRIDIUM_SCENARIO_NAME_DEFAULT
-    assert payload["provenance"]["schema_version"] == "iridium-v2"
+    assert payload["provenance"]["schema_version"] == "iridium-v3"
     assert (
         payload["trajectory_summary"]["subscribers_per_satellite"]
         == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE
@@ -488,9 +490,12 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
         FLAT_COST_PER_SUBSCRIBER_ANNUAL_USD
     )
     assert ts["steady_state_annual_cost_musd"] == pytest.approx(FLAT_STEADY_STATE_ANNUAL_COST_MUSD)
-    assert ts["steady_state_revenue_cost_plus_musd"] == pytest.approx(
-        FLAT_STEADY_STATE_REVENUE_COST_PLUS_MUSD
-    )
+    # The two cost-plus revenue fields are ABSENT from the artifact (schema iridium-v3,
+    # founder direction 2026-07-10); the engine still computes them on the shared
+    # trajectory for the cellular family and the equality tripwire (see
+    # test_iridium_baseline_shares_hb_cellular_trajectory).
+    assert "steady_state_revenue_cost_plus_musd" not in ts
+    assert "steady_state_gross_margin_cost_plus_pct" not in ts
     assert (
         payload["iridium_physics"]["subscribers_per_satellite"]
         == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE

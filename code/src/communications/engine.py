@@ -1276,11 +1276,14 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
     estimate-tier, founder-owned values; and that the Iridium model is the MSS lane
     (owned L-band, purpose-built or in-chipset devices), never the cellular
     unmodified-phone lane. The revenue-case line is conditional on ``dials.arpu``: with
-    the four-bucket ARPU case set it states the PUBLISHED case plus the full
-    sell-through assumption, the honest mix posture, the built-fleet convention, and
-    the IoT-count supersession; with no ``arpu`` block it states the DEFERRED case
-    (cost-plus is the load-bearing revenue, the per-tier MSS ARPUs plug in later).
-    Conditionally
+    the four-bucket ARPU case set it states the PUBLISHED case (the Iridium model's
+    only published revenue case) plus the full sell-through assumption, the honest mix
+    posture, the built-fleet convention, and the IoT-count supersession; with no
+    ``arpu`` block it states the DEFERRED case (no revenue case is published on that
+    path; the per-tier MSS ARPUs plug in via the ARPU block). The synthetic cost-plus
+    line is off every Iridium-facing surface as of iridium-v3 (founder direction
+    2026-07-10); it stays the cellular family's shared-engine convention on the
+    trajectory. Conditionally
     appends :data:`APERTURE_FOLD_CAVEAT_NOTE` when ``dials.aperture_m2`` exceeds
     :data:`APERTURE_NO_FOLD_LIMIT_M2` (0.8a: a documented note, never a validation
     error, so the above-limit what-if stays computable).
@@ -1329,9 +1332,8 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
         lines.append(
             "The prices-today ARPU revenue case is PUBLISHED for the Iridium model as "
             "the four-bucket case (standard personal, premium terminal, IoT devices, "
-            "government): a founder-set price-and-mix sheet dated 2026-07-09. Cost-plus "
-            "(revenue equals annualized cost times the revenue multiple) stays published "
-            "beside it as the cost-recovery floor."
+            "government): a founder-set price-and-mix sheet dated 2026-07-09. It is the "
+            "Iridium model's only published revenue case."
         )
         lines.extend(arpu_stated_assumptions(dials.arpu))
         lines.append(
@@ -1342,10 +1344,11 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
         )
     else:
         lines.append(
-            "The prices-today ARPU revenue case is DEFERRED for the Iridium model: "
-            "cost-plus (revenue equals annualized cost times the revenue multiple) is "
-            "the load-bearing Iridium-model revenue, and the per-tier MSS ARPUs plug "
-            "in later."
+            "The prices-today ARPU revenue case is DEFERRED for the Iridium model on "
+            "this no-ARPU configuration: the four-bucket ARPU case is the Iridium "
+            "model's published revenue when its block is set, so on this configuration "
+            "the Iridium model publishes no revenue case, and the per-tier MSS ARPUs "
+            "plug in via the ARPU block."
         )
     lines.append(
         "The Iridium model is the MSS lane (owned L-band, purpose-built or "

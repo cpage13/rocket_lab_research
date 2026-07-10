@@ -50,12 +50,18 @@ logger = logging.getLogger(__name__)
 MODEL_NAME: Final[str] = "iridium"
 """The promoted artifact's model name (the provenance header's fixed identity)."""
 
-IRIDIUM_SCHEMA_VERSION: Final[str] = "iridium-v2"
-"""The promoted Iridium artifact's schema version tag. ``iridium-v2`` (2026-07-09)
-removes the two inherited placeholder ARPU fields from the trajectory summary and adds
-the published four-bucket ``revenue_arpu_buckets`` block, which carries the per-bucket
-lines plus the published ARPU margin against the fleet's steady-state annual cost
-(``arpu_margin_vs_steady_state_cost_pct``)."""
+IRIDIUM_SCHEMA_VERSION: Final[str] = "iridium-v3"
+"""The promoted Iridium artifact's schema version tag. ``iridium-v3`` (2026-07-10)
+removes the two cost-plus revenue fields (``steady_state_revenue_cost_plus_musd``,
+``steady_state_gross_margin_cost_plus_pct``) from the trajectory summary: the Iridium
+model now has a real published revenue case (the four-bucket ARPU case), so the
+synthetic cost-plus line is off every Iridium-facing surface (it stays the cellular
+family's shared-engine cost-recovery convention). The prior ``iridium-v2`` (2026-07-09)
+removed the two inherited placeholder ARPU fields and added the published four-bucket
+``revenue_arpu_buckets`` block, which carries the per-bucket lines plus the published
+ARPU margin against the fleet's steady-state annual cost
+(``arpu_margin_vs_steady_state_cost_pct``, unchanged: measured against cost, not
+cost-plus)."""
 
 JSON_INDENT: Final[int] = 2
 """Indentation for the emitted JSON (the house ``model_dump_json`` convention)."""
@@ -164,11 +170,14 @@ class TrajectorySummaryBlock(BaseModel):
 
     These are the fields every comms run reports (the fleet machinery the
     Iridium model shares with the High-Bandwidth Cellular Pure Play model):
-    the build-and-hold cost, the fleet sizing and its binding regime, the
-    steady-state cost basis, and the COST-PLUS revenue case. The Iridium ARPU
-    revenue is now the published four-bucket ``revenue_arpu_buckets`` block on the
-    artifact (schema iridium-v2), not a field here: the two inherited placeholder
-    ARPU fields (from the cellular family's $50 default) were removed from this block.
+    the build-and-hold cost, the fleet sizing and its binding regime, and the
+    steady-state cost basis. After schema iridium-v3 (founder direction
+    2026-07-10) this block carries the cost and fleet story ONLY, no revenue
+    case: the two cost-plus revenue fields were removed from the Iridium
+    artifact (the cellular family still earns cost-plus on the shared engine),
+    and the published Iridium revenue is the four-bucket ``revenue_arpu_buckets``
+    block on the artifact. The two inherited placeholder ARPU fields (from the
+    cellular family's $50 default) were removed earlier in schema iridium-v2.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -200,20 +209,19 @@ class TrajectorySummaryBlock(BaseModel):
     steady_state_annual_cost_musd: float = Field(
         description="Representative HOLD-phase ANNUALIZED fleet cost, $M/yr."
     )
-    steady_state_revenue_cost_plus_musd: float = Field(
-        description="Steady-state COST-PLUS annual revenue, $M/yr (the load-bearing case)."
-    )
-    steady_state_gross_margin_cost_plus_pct: float = Field(
-        description="Steady-state COST-PLUS gross margin, percent."
-    )
-    # The two inherited placeholder ARPU fields (steady_state_revenue_arpu_musd,
-    # steady_state_gross_margin_arpu_pct) were REMOVED here in schema iridium-v2: they
-    # were computed from the cellular family's $50/month default and never described
-    # the Iridium model. The ENGINE still computes them on the shared CommsTrajectory
-    # (the cellular family reads them, and the equality tripwire rides that shared
-    # trajectory), so they must NOT be removed from the engine path: they are
-    # computed-but-unpublished for Iridium. The published Iridium ARPU revenue is the
-    # revenue_arpu_buckets block below.
+    # Two families of shared-engine fields are computed-but-unpublished for Iridium:
+    # removed from this block but KEPT on the engine's shared CommsTrajectory (the
+    # cellular family reads them, and the equality tripwire rides that shared
+    # trajectory), so they must NOT be removed from the engine path:
+    #   - the cost-plus revenue case (steady_state_revenue_cost_plus_musd,
+    #     steady_state_gross_margin_cost_plus_pct), REMOVED here in schema iridium-v3
+    #     (founder direction 2026-07-10): the Iridium model now has a real published
+    #     revenue case, so the synthetic cost-plus line is off every Iridium-facing
+    #     surface, while it stays the cellular family's cost-recovery convention;
+    #   - the two inherited placeholder ARPU fields (steady_state_revenue_arpu_musd,
+    #     steady_state_gross_margin_arpu_pct), REMOVED in schema iridium-v2: computed
+    #     from the cellular family's $50/month default, they never described Iridium.
+    # The published Iridium revenue is the revenue_arpu_buckets block below.
 
 
 class ArpuBucketBlock(BaseModel):
@@ -439,10 +447,6 @@ def build_iridium_artifact(
         subscribers_served=trajectory.subscribers_served,
         cost_per_subscriber_annual_usd=trajectory.cost_per_subscriber_annual_usd,
         steady_state_annual_cost_musd=trajectory.steady_state_annual_cost_musd,
-        steady_state_revenue_cost_plus_musd=trajectory.steady_state_revenue_cost_plus_musd,
-        steady_state_gross_margin_cost_plus_pct=(
-            trajectory.steady_state_gross_margin_cost_plus_pct
-        ),
     )
     # IoT SUPERSESSION (one IoT truth): with the ARPU case on, the published IoT device
     # count is the revenue mix's IoT bucket count; the fixed iot_devices passthrough

@@ -79,11 +79,12 @@ on just the **8 MHz** Iridium owns outright. The service is device-diverse:
 about **1 Mbps** at peak and **5 Mbps** off peak on the weakest device class (a
 phone-class radio with no external antenna), roughly 3 and 15 through a small
 antenna (a puck, or a USB device on a laptop), 4 and 19 mounted, with IoT
-devices in the tens of millions riding nearly free. At the data-center revenue
-convention the fleet earns about **$218M a year at a 33% margin**; beside
-that cost-plus floor sits a published four-bucket ARPU case (standard, premium
-terminal, IoT, government, founder-set prices), on the order of $8B a year at the
-baseline under full sell-through on capacity (the conclusion has the breakdown).
+devices in the tens of millions riding nearly free. The published revenue case
+is a four-bucket ARPU sheet (standard, premium terminal, IoT, government),
+founder-set prices anchored on Iridium's current book: on the order of **$8B a
+year** at the baseline under full sell-through on capacity, against about
+**$145M a year** of fleet cost, an operating-style margin near **98%** before
+operations costs (the conclusion has the breakdown and caveats).
 
 The ceiling is spectrum, not satellites: the fleet saturates near **2,000
 satellites** (about 25 to 62 million subscribers depending on service tier),
