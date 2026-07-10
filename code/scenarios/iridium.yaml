@@ -44,10 +44,11 @@
 # target 10M, revenue multiple 1.5) are the shared config defaults, inherited
 # unchanged. Operations cost is assumed zero: an explicit stated assumption
 # (IRIDIUM_OPERATIONS_COST_MUSD), a fixed line to research and add later. The
-# prices-today ARPU revenue case is DEFERRED for the Iridium model (cost-plus is
-# the load-bearing revenue; per-tier MSS ARPUs plug in later). `spectrum_mhz` is a
-# WIDTH held (8 MHz exclusive), not a frequency. This file computes no conclusion:
-# it is the input contract, and the engine writes the trajectory.
+# prices-today ARPU revenue case is PUBLISHED as the four-bucket case (the `arpu:`
+# block at the end of this file, founder-set Sheet A 2026-07-09); cost-plus stays
+# beside it as the cost-recovery floor. `spectrum_mhz` is a WIDTH held (8 MHz
+# exclusive), not a frequency. This file computes no conclusion: it is the input
+# contract, and the engine writes the trajectory.
 
 iridium:
   # The held L-band WIDTH in MHz (a width, not a frequency; the dial position is
@@ -102,3 +103,49 @@ iridium:
 
   # The Iridium-model scenario label's single home.
   scenario_name: "Iridium L-band max-outcome (phone-class baseline)"
+
+  # ===========================================================================
+  # The four-bucket ARPU revenue case (Sheet A, founder-set 2026-07-09)
+  # ===========================================================================
+  #
+  # The PUBLISHED Iridium revenue case: four billable-connection buckets (standard
+  # personal / premium terminal / IoT devices / government), each a PERCENTAGE mix
+  # of ONE pool anchored to fleet CAPACITY (fleet_target x subscribers_per_satellite
+  # = 340 x 31,200 = 10,608,000 people at the baseline), so every bucket scales with
+  # the satellite count (mechanically, the 2,000-satellite saturation cap reads about
+  # 5.882x this). The four mixes and four monthly prices are the founder-set dials;
+  # the counts are DERIVED (engine.derive_arpu_buckets, standard the residual so the
+  # people identity is exact). Subscribers are PEOPLE (standard, premium); IoT are
+  # DEVICES; government is a contract line: the pool is a billable-connections
+  # accounting frame (Iridium's own convention folds IoT devices into "billable
+  # subscribers", COMM-617), NOT one summed people population.
+  #
+  # SHEET A (this block, the blessed default) at 340 satellites, all exact:
+  #   people share = standard + premium = 17.0 percent
+  #   pool         = 10,608,000 / 0.17 = 62,400,000 connections
+  #   standard     = 9,360,000 people    at $15  = $1,684.8M per year
+  #   premium      = 1,248,000 people    at $100 = $1,497.6M per year
+  #   IoT          = 51,670,320 devices  at $8   = $4,960.35072M per year
+  #   government   = 121,680 contracts   at $74  = $108.05184M per year
+  #   total                                       = $8,250.80256M per year
+  # The government mix 0.195 is calibrated so the baseline government line reproduces
+  # today's fixed EMSS book (about $108M over ~121.7k connections, COMM-619).
+  #
+  # SHEET B (the documented alternative, NOT the default): standard 18.7, premium
+  # 2.5, IoT 78.55, government 0.25 (sum 100.00), the today's-device-ratio posture
+  # (about 3.7 devices per person, COMM-617/618): about 39.3M devices, about $3.77B
+  # per year from IoT, people counts nearly unchanged, total about $7.07B per year.
+  # To use Sheet B, replace the four mixes below with those values.
+  #
+  # RULES: the four mixes MUST sum to 100 (the config validator, within a tiny
+  # epsilon). Both people mixes (standard, premium) must be strictly positive so the
+  # people share is never zero. Prices are dollars per connection per month.
+  arpu:
+    standard_mix_pct: 15.0            # standard personal (phone-class) people share
+    premium_mix_pct: 2.0              # premium terminal (gain-antenna) people share
+    iot_mix_pct: 82.805              # IoT devices: the residual that closes the mix to 100
+    government_mix_pct: 0.195         # government: de-anchored to reproduce today's EMSS book
+    standard_price_usd_month: 15.0    # midpoint of the founder's $10 to $20 range
+    premium_price_usd_month: 100.0    # between Iridium voice/data $47 and Certus $259
+    iot_price_usd_month: 8.0          # about the $7.78 Iridium IoT ARPU today
+    government_price_usd_month: 74.0  # today's per-connection EMSS equivalent

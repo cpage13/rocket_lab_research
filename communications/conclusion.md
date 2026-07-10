@@ -193,27 +193,51 @@ aligning the model to the annualized basis is a tracked open item. Operations
 cost is held at **zero** by explicit assumption, a fixed line to research and
 add later, and it is stated in every model output rather than hidden.
 
-The only revenue number the model stands behind is deliberately a floor, and
-it should be read as one. The cost-plus case prices the service at a flat 1.5
+The model's cost-recovery revenue number is deliberately a floor, and it
+should be read as one. The cost-plus case prices the service at a flat 1.5
 times annualized cost (the same discipline the data-center model uses,
 carried while the real price sheet was unset), which produces about **251.5
 million dollars per year at a 33.3 percent margin** on the baseline. That is
 a cost-recovery discipline, not a market forecast: it implies charging about
 2.10 dollars per subscriber per month, far below every real price anchor in
-this document. The subscriber-price (ARPU) case in code stays deferred until
-the founder sets the per-tier MSS price sheet; until then, the scenario
-ranges below are the honest statement of what the service could earn. A
-bookkeeping note for readers of the promoted JSON: it also carries an
-inherited placeholder ARPU line (50 dollars per month, a cellular-family
-default), which is deferred bookkeeping, not an Iridium forecast, and no
-statement in this document rests on it.
+this document. The subscriber-price (ARPU) case is now published beside it: the
+four-bucket case (standard personal, premium terminal, IoT devices, government),
+a founder-set price-and-mix sheet dated 2026-07-09, detailed below. The two
+inherited placeholder ARPU fields are gone from the promoted artifact (schema
+iridium-v2); nothing in this document rests on the old cellular-family 50-dollar
+line.
 
 ### What The Service Could Earn (Scenario Ranges)
 
-The revenue the model stands behind is the cost-plus case above; the ARPU
-case stays deferred in code until the per-tier price sheet is set. But the shape
-of the opportunity is visible from two grounded anchors plus one stated
-founder range, and it is worth setting out plainly.
+The published revenue case is the four-bucket ARPU sheet (Sheet A, founder-set
+2026-07-09); cost-plus above stays beside it as the cost-recovery floor. Revenue
+first, at the 340-satellite baseline (people capacity 10,608,000, a
+billable-connection pool of 62,400,000 under full sell-through on capacity):
+
+| Bucket | Mix | Price per month | Count | Revenue per year |
+|---|---:|---:|---:|---:|
+| Standard personal | 15.0 percent | 15 dollars | 9,360,000 people | 1,684.8M |
+| Premium terminal | 2.0 percent | 100 dollars | 1,248,000 people | 1,497.6M |
+| IoT devices | 82.805 percent | 8 dollars | 51,670,320 devices | 4,960.4M |
+| Government | 0.195 percent | 74 dollars | 121,680 | 108.1M |
+| Total | 100 percent |  | 62,400,000 connections | 8,250.8M |
+
+Subscribers are people, IoT are devices, government is a contract line: the pool
+is a billable-connections accounting frame, never one summed population. Against
+that revenue the fleet is the cheap part. The steady-state fleet cost is roughly
+**170 million dollars per year** (satellites at 1.05M each, launches 25 down to
+13.5M on the cadence curve), so the pre-operations margin is about **98
+percent**. The honest caveat stays loud: operations is the explicit zero, and
+Iridium spends about **376 million dollars per year** of real cash operating
+cost today, so an Iridium-scaled operating line still leaves the margin north of
+**90 percent** (the founder's 90-percent-plus frame). Sizing that line is the
+tracked open item.
+
+One reconciliation before the sweep: the four-bucket total (about **8.25 billion
+dollars per year**) exceeds the single-tier sweep table below because it adds the
+premium, IoT, and government lines on top of the standard tier and rides capacity
+under full sell-through; the sweep tables that follow are the standard-tier price
+sensitivity around the published point, not a competing total.
 
 The first anchor is what Iridium's customers pay today (reported FY2025
 ARPUs, fact-tier, COMM-618; the government line is COMM-619): IoT devices
@@ -255,19 +279,25 @@ real cash operating cost (revenue $871.7M minus operational EBITDA $495.3M),
 so a true operating line lands the margin meaningfully below the pre-ops
 figure. Sizing that line is the tracked open item.
 
-Separately, IoT rides the same fleet nearly free: 10 million devices at
-today's $7.78 add about **$0.9B per year** with zero effect on fleet sizing,
-and the corpus envelope is tens of millions of devices. And the existing
-business does not stop: the acquisition brings **$871.7M per year** of
-revenue at a 56.8 percent operational-EBITDA margin with it (COMM-615/616).
+The IoT line is now one of the four published buckets, not a separate add-on:
+51,670,320 devices at 8 dollars, about **$4,960M per year**, still with zero
+effect on fleet sizing (the former 10-million passthrough is superseded by the
+mix-derived bucket count when the ARPU case is on). The corpus envelope is tens
+of millions of devices. And the existing business does not stop: the acquisition
+brings **$871.7M per year** of revenue at a 56.8 percent operational-EBITDA
+margin with it (COMM-615/616). The four-bucket case models the modernized
+fleet's own book, which replaces today's Iridium book as the old 66-satellite
+fleet retires; the two are never summed (nor are the people and device counts
+ever summed as one population).
 
 The structural read follows: the expensive part of this business was never
 the satellites, it was the spectrum position, and that came with the ~$8.0B
 acquisition (COMM-602). At the founder's range the new mass-market service
 alone would repay the acquisition in a few years, on top of the existing
-book. All of the above is scenario arithmetic on stated dials: the per-tier
-price sheet (terminal tiers, carrier-wholesale lines, IoT, government) is
-founder-owned and still open, and the code's ARPU seam waits for it.
+book. All of the above is scenario arithmetic on stated dials: the four-bucket
+price-and-mix sheet is published (Sheet A), and the finer per-tier detail
+(terminal sub-tiers, carrier-wholesale lines) plus the prices and the mix stay
+founder-owned and open.
 
 ## The Spectrum Upside, And The Aperture Story
 
@@ -395,11 +425,12 @@ The baseline is the reference case, and a handful of assumptions carry it:
   calibrated chain and its roughly factor-of-two tension with the corpus rule.
 - **Operations cost.** Held at zero by explicit assumption. A real operating
   line will lower every margin.
-- **Pricing.** The revenue scenarios rest on founder-set scenario prices
-  ($10 to $20 per month for the standard tier) and unproven willingness to
-  pay in an uncovered-market base. The model's own ARPU case stays deferred
-  until the per-tier sheet is set; cost-plus is the only revenue the model
-  stands behind today.
+- **Pricing.** The published four-bucket ARPU case rests on founder-set scenario
+  prices (Sheet A: 15 / 100 / 8 / 74 dollars per month across the four buckets)
+  and unproven willingness to pay in an uncovered-market base, plus the
+  full-sell-through-on-capacity assumption. That case is now what the model
+  carries beside the cost-plus floor; the prices and the sell-through are the
+  open levers, and the per-bucket mix is held constant as the fleet grows.
 
 ## Structural Context
 

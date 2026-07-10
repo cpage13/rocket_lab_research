@@ -413,7 +413,11 @@ IOT_DEVICES_DEFAULT: Final[int] = 10_000_000
 """ESTIMATE (COMM-654 / COMM-659). A passthrough DEVICE counter (low end of "tens of
 millions"), founder-owned (flagged). Counted as DEVICES, never folded into the people
 subscriber count; it is negligible-load and contention-limited, so it has ZERO effect
-on fleet sizing (its value is cosmetic on the result)."""
+on fleet sizing (its value is cosmetic on the result). SUPERSEDED WHEN THE ARPU CASE
+IS ON: with a populated :class:`~communications.config.IridiumArpuDials` block, the
+published IoT DEVICE count derives from the revenue mix (the IoT bucket count), and
+this fixed passthrough is reported only on the None-ARPU path (one IoT truth per
+artifact; see :func:`communications.engine.derive_arpu_buckets`)."""
 
 APERTURE_REFERENCE_M2: Final[float] = 25.0
 """SOURCED_ESTIMATE (COMM-408 / COMM-410, the corpus flat ~25 m^2-class array;
@@ -485,6 +489,89 @@ IRIDIUM_SCENARIO_NAME_DEFAULT: Final[str] = "Iridium L-band max-outcome (phone-c
 block (the optional block's single label home, mirroring ``GroundInterfaceDials``)."""
 
 # ===========================================================================
+# The Iridium four-bucket ARPU revenue case (founder-set, Sheet A, 2026-07-09)
+# ===========================================================================
+#
+# The PUBLISHED Iridium ARPU case: four billable-connection buckets (standard
+# personal / premium terminal / IoT devices / government), each a PERCENTAGE of one
+# pool anchored to fleet CAPACITY (``fleet_target x subscribers_per_satellite``), so
+# every bucket scales with the satellite count. The four mix percentages and the
+# four monthly prices are the FOUNDER-SET dials below; the counts are DERIVED
+# (:func:`communications.engine.derive_arpu_buckets`). Subscribers are PEOPLE (the
+# standard and premium buckets consume the physics density); IoT are DEVICES;
+# government is a contract line. The pool is a BILLABLE-CONNECTIONS accounting frame
+# (Iridium's own reporting convention: its ~2.5M "billable subscribers" fold in ~2.0M
+# IoT DEVICES, COMM-617), NOT one summed people population. Precedent frame: Iridium
+# FY2025 billable mix (COMM-617/618/619). Sheet A (below) is the blessed default;
+# Sheet B (18.7 / 2.5 / 78.55 / 0.25 at the same prices, the today's-device-ratio
+# posture) is the documented alternative in ``scenarios/iridium.yaml``.
+
+ARPU_STANDARD_MIX_PCT_DEFAULT: Final[float] = 15.0
+"""FOUNDER_SET (Sheet A, 2026-07-09). The STANDARD personal (phone-class) bucket's
+share of the billable-connection pool, percent. A PEOPLE bucket (it consumes the
+physics density). Loosely anchored, paired with premium, on the FY2025 book's
+like-for-like people share (COMM-617/618). One of the two people mixes, so its config
+Field lower bound is strictly positive (``people_share`` cannot be zero)."""
+
+ARPU_PREMIUM_MIX_PCT_DEFAULT: Final[float] = 2.0
+"""FOUNDER_SET (Sheet A, 2026-07-09). The PREMIUM terminal bucket's share of the
+pool, percent. A PEOPLE bucket: the gain-terminal tier (a Certus-class service on our
+own hardware, COMM-618). The second of the two people mixes (strictly-positive Field
+lower bound)."""
+
+ARPU_IOT_MIX_PCT_DEFAULT: Final[float] = 82.805
+"""FOUNDER_SET (Sheet A, 2026-07-09). The IoT DEVICE bucket's share of the pool,
+percent: the RESIDUAL that closes the mix to 100. Counted as DEVICES, never folded
+into the people count (COMM-654/659). At the baseline it implies about 51.7 million
+devices, above the corpus tens-of-millions center, carried as a stated MARKET-SHAPE
+assumption (contention-limited, zero fleet-sizing effect)."""
+
+ARPU_GOVERNMENT_MIX_PCT_DEFAULT: Final[float] = 0.195
+"""FOUNDER_SET (Sheet A, 2026-07-09). The GOVERNMENT bucket's share of the pool,
+percent. Deliberately DE-ANCHORED from the FY2025 book's 4.8 percent down to 0.195,
+calibrated so the baseline government line reproduces today's one fixed EMSS contract
+(about 108 million dollars over about 121.7k connections, COMM-619) rather than
+scaling a 4.8 percent share. Held uniform with the fleet as a stated scenario
+assumption."""
+
+ARPU_STANDARD_PRICE_USD_MONTH_DEFAULT: Final[float] = 15.0
+"""FOUNDER_SET (Sheet A, 2026-07-09). The STANDARD personal monthly price, dollars:
+the midpoint of the founder's stated 10-to-20 mass-market phone-class range
+(COMM-618 context)."""
+
+ARPU_PREMIUM_PRICE_USD_MONTH_DEFAULT: Final[float] = 100.0
+"""FOUNDER_SET (Sheet A, 2026-07-09). The PREMIUM terminal monthly price, dollars:
+between Iridium's reported voice/data 47 and Certus 259 for a 0.7 Mbps-class service
+(COMM-618), while the modernized fleet delivers about 4 Mbps to the same buyer."""
+
+ARPU_IOT_PRICE_USD_MONTH_DEFAULT: Final[float] = 8.0
+"""FOUNDER_SET (Sheet A, 2026-07-09). The IoT DEVICE monthly price, dollars: the
+founder's confirmed about-8 (Iridium's reported IoT ARPU is 7.78 today, COMM-618)."""
+
+ARPU_GOVERNMENT_PRICE_USD_MONTH_DEFAULT: Final[float] = 74.0
+"""FOUNDER_SET (Sheet A, 2026-07-09). The GOVERNMENT monthly price, dollars: today's
+per-connection equivalent on the EMSS book (about 74, COMM-619)."""
+
+ARPU_PRICE_CEILING_USD_MONTH: Final[float] = 5000.0
+"""The upper Field bound on every ARPU bucket monthly price, dollars: a generous
+sanity ceiling well above the Certus 259 premium anchor (COMM-618), guarding a
+fat-fingered price without constraining any real MSS tier. A fixed bound, not a
+tunable."""
+
+ARPU_MIX_TOTAL_PCT: Final[float] = 100.0
+"""The billable-connection mix total, percent. Two roles, one constant: the four
+bucket mixes must SUM to this (the config validator, within
+:data:`ARPU_MIX_SUM_EPSILON`), and the engine DIVIDES each percentage mix by this to
+get its fraction of the pool (the percent-to-fraction base). A fixed unit constant,
+not a tunable."""
+
+ARPU_MIX_SUM_EPSILON: Final[float] = 1e-9
+"""The absolute tolerance on the four-mix sum-to-100 validation (the config model
+validator): it absorbs float representation error (e.g. 82.805 has no exact binary
+form) without admitting a materially wrong sheet (a 99- or 101-sum sheet fails
+loudly, off by 1.0). A fixed epsilon, not a tunable."""
+
+# ===========================================================================
 # Placeholder-dial flag map (read by Phase 5 ``check_no_placeholder_inputs``)
 # ===========================================================================
 #
@@ -515,6 +602,15 @@ PLACEHOLDER_DIAL_FLAGS: Final[dict[DialPath, bool]] = {
     "iridium.concurrency_peak": False,  # FOUNDER_SET 0.025 peak (not a sentinel)
     "iridium.concurrency_offpeak": False,  # FOUNDER_SET 0.005 off-peak (not a sentinel)
     "iridium.iot_devices": False,  # ESTIMATE 10M passthrough (not a sentinel)
+    # Iridium four-bucket ARPU dials (Sheet A, founder-set 2026-07-09; not sentinels).
+    "iridium.arpu.standard_mix_pct": False,  # FOUNDER_SET 15.0 percent (not a sentinel)
+    "iridium.arpu.premium_mix_pct": False,  # FOUNDER_SET 2.0 percent (not a sentinel)
+    "iridium.arpu.iot_mix_pct": False,  # FOUNDER_SET 82.805 percent residual (not a sentinel)
+    "iridium.arpu.government_mix_pct": False,  # FOUNDER_SET 0.195 percent (not a sentinel)
+    "iridium.arpu.standard_price_usd_month": False,  # FOUNDER_SET 15.0 dollars (not a sentinel)
+    "iridium.arpu.premium_price_usd_month": False,  # FOUNDER_SET 100.0 dollars (not a sentinel)
+    "iridium.arpu.iot_price_usd_month": False,  # FOUNDER_SET 8.0 dollars (not a sentinel)
+    "iridium.arpu.government_price_usd_month": False,  # FOUNDER_SET 74.0 dollars (not a sentinel)
 }
 """FOUNDER_SET status per guarded dial. ``True`` = still an arbitrary placeholder
 sentinel; ``False`` = a real founder-set (or sourced) value. All are ``False``.
@@ -562,6 +658,18 @@ __all__ = [
     "APERTURE_FOLD_CAVEAT_NOTE",
     "APERTURE_NO_FOLD_LIMIT_M2",
     "APERTURE_REFERENCE_M2",
+    # The Iridium four-bucket ARPU revenue case (Sheet A, founder-set 2026-07-09).
+    "ARPU_GOVERNMENT_MIX_PCT_DEFAULT",
+    "ARPU_GOVERNMENT_PRICE_USD_MONTH_DEFAULT",
+    "ARPU_IOT_MIX_PCT_DEFAULT",
+    "ARPU_IOT_PRICE_USD_MONTH_DEFAULT",
+    "ARPU_MIX_SUM_EPSILON",
+    "ARPU_MIX_TOTAL_PCT",
+    "ARPU_PREMIUM_MIX_PCT_DEFAULT",
+    "ARPU_PREMIUM_PRICE_USD_MONTH_DEFAULT",
+    "ARPU_PRICE_CEILING_USD_MONTH",
+    "ARPU_STANDARD_MIX_PCT_DEFAULT",
+    "ARPU_STANDARD_PRICE_USD_MONTH_DEFAULT",
     "CONCURRENCY_OFFPEAK_DEFAULT",
     "CONCURRENCY_PEAK_DEFAULT",
     "DeviceClass",

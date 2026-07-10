@@ -53,8 +53,16 @@ The dials below carry the physics. Every one is a named constant in
 | Saturation cap | 2,000 satellites | `scenario` | Founder-set dial encoding the tiling/interference ceiling (`COMM-413` to `COMM-416` own the mechanism; `COMM-550/553` the fleet scale). |
 | Busy-hour concurrency | 2.5 percent | `scenario`, corpus-central | `COMM-543`: working direct-to-cell concurrency about 1 to 5 percent, central 2 to 3. |
 | Subscriber base at coverage | 10,000,000 people | `scenario` | Founder-set conservative slice of the coverage-gap pool (`COMM-021`: about 300 million people without mobile coverage; context `COMM-390`, `COMM-065`). |
-| IoT devices | 10,000,000 devices | `scenario`, cosmetic | Contention-limited, not population-capped (`COMM-654/659`); zero sizing effect on the subscriber service. |
+| IoT devices | 10,000,000 devices | `scenario`, cosmetic | Contention-limited, not population-capped (`COMM-654/659`); zero sizing effect on the subscriber service. Superseded on the promoted artifact when the ARPU case is on (the IoT count then derives from the revenue mix, about 51.7M). |
 | Cost-plus revenue multiple | 1.5x | `scenario` | Mirrors the data-center central band (`RLDC-REVENUE-MULTIPLE-1_5X`); produces the flat 33.3 percent margin. |
+| ARPU standard mix | 15.0 percent | `scenario`, founder-set | Sheet A (2026-07-09). Standard personal (phone-class) people share; loosely anchored with premium on the FY2025 book's like-for-like people share (`COMM-617/618`). |
+| ARPU premium mix | 2.0 percent | `scenario`, founder-set | Sheet A. Premium terminal (gain-antenna) people share (`COMM-618`). |
+| ARPU IoT mix | 82.805 percent | `scenario`, founder-set | Sheet A. The residual that closes the mix to 100; DEVICES (`COMM-654/659`), about 51.7M at the baseline. |
+| ARPU government mix | 0.195 percent | `scenario`, founder-set | Sheet A. Deliberately de-anchored from the book's 4.8 percent to reproduce today's fixed EMSS contract (`COMM-619`). |
+| ARPU standard price | 15 dollars per month | `scenario`, founder-set | Sheet A. Midpoint of the founder's 10-to-20 mass-market range (`COMM-618` context). |
+| ARPU premium price | 100 dollars per month | `scenario`, founder-set | Sheet A. Between Iridium voice/data 47 and Certus 259 for a 0.7 Mbps-class service (`COMM-618`). |
+| ARPU IoT price | 8 dollars per month | `scenario`, founder-set | Sheet A. About the 7.78 Iridium IoT ARPU today (`COMM-618`). |
+| ARPU government price | 74 dollars per month | `scenario`, founder-set | Sheet A. Today's per-connection EMSS equivalent (`COMM-619`). |
 
 Citation-precision note: a two-round traceability audit (converged 2026-07-08)
 verified 91 numbers across the constants, dials, scenario, and frozen anchors
@@ -97,8 +105,35 @@ six rows are modeling posture the audit surfaced and stated explicitly.
 | 12 | Communications share of Neutron cadence | 0.18 |
 | 13 | Satellite build cost (below the V3 anchor) | 1.05 million dollars |
 | 14 | Cost-plus revenue multiple (data-center mirror) | 1.5x |
-| 15 | IoT device passthrough (devices, not people) | 10,000,000 |
-| 16 | ARPU 50 dollars per month: a High-Bandwidth Cellular Pure Play case value; for the Iridium model the ARPU case is deferred until the per-tier sheet is set (founder range stated 2026-07-09: 10 to 20 dollars per month for the standard phone-class tier; IoT about 8 dollars per device per month) | deferred |
+| 15 | IoT device passthrough (devices, not people); superseded on the promoted artifact when the ARPU case is on (the published IoT count then derives from the revenue mix, the IoT bucket, about 51.7M at the baseline) | 10,000,000 |
+| 16 | ARPU revenue case: the PUBLISHED four-bucket case (standard personal, premium terminal, IoT devices, government), founder-set Sheet A 2026-07-09, mixes 15.0 / 2.0 / 82.805 / 0.195 percent at prices 15 / 100 / 8 / 74 dollars per month (about 8,250.8 million dollars per year at the baseline under full sell-through). The cellular-family 50-dollar ARPU is a separate case value, no longer carried on the promoted Iridium artifact | published |
+
+### The Published ARPU Sheet (Sheet A Default, Sheet B Alternative)
+
+Row 16 is the published four-bucket revenue case: four billable-connection
+buckets, each a percentage mix of one pool anchored to fleet capacity
+(`fleet_target x subscribers_per_satellite`), so every bucket scales with the
+satellite count. Subscribers are people (standard, premium); IoT are devices;
+government is a contract line. The pool is a billable-connections accounting
+frame (Iridium's own convention folds IoT devices into billable subscribers),
+never one summed people population.
+
+The default is Sheet A (founder-set 2026-07-09): mixes 15.0 / 2.0 / 82.805 /
+0.195 percent at prices 15 / 100 / 8 / 74 dollars per month. At the
+340-satellite baseline (people capacity 10,608,000, pool 62,400,000
+connections) it lands 9,360,000 standard people, 1,248,000 premium people,
+51,670,320 IoT devices, and 121,680 government connections, for about 8,250.8
+million dollars per year. The counts are derived, standard the residual so the
+people identity is exact. The government mix 0.195 is calibrated so the baseline
+government line reproduces today's fixed EMSS book (about 108 million dollars,
+`COMM-619`).
+
+Sheet B is the documented alternative, not the default: mixes 18.7 / 2.5 /
+78.55 / 0.25 percent at the same prices, the today's-device-ratio posture
+(about 3.7 devices per person from the FY2025 book, `COMM-617/618`). It reads
+about 39.3 million devices, about 3.77 billion dollars per year from IoT,
+people counts nearly unchanged, and a total of about 7.07 billion dollars per
+year. To use it, replace the four mixes in `code/scenarios/iridium.yaml`.
 
 ### Why The Cadence Share Is 0.18
 
@@ -147,6 +182,9 @@ over.
 | 36 | Deployment is generic build-and-hold from 2026, not deal-timed (close mid-2027; replacement window about 2035) | a shape, not a dated plan |
 | 37 | No spares, no launch failures, no satellite failures inside the five-year life | perfect fleet |
 | 38 | The equality tripwire premise: the Iridium baseline and the cellular default both bind at the 340 floor with the aperture identity at 25.0; a dial change breaks the test loudly by design | tripwire |
+| 39 | ARPU full sell-through: every serveable billable-connection slot the built fleet can carry is sold (revenue rides capacity, not the served target); clearly optimistic, stated, founder-owned | sell-through |
+| 40 | ARPU mix posture: the people-and-government share is loosely anchored on the FY2025 book's like-for-like share (about 21.2 percent); government is de-anchored to reproduce the one fixed EMSS contract; IoT is the residual; the mix is held constant as the fleet grows (v1) | market shape |
+| 41 | ARPU built-fleet convention: the revenue case is computed once at the built fleet (fleet_target), so a below-target build describes the completed fleet, not the final horizon year's smaller actual fleet | built fleet |
 
 ## Model Output Anchors
 
@@ -165,6 +203,12 @@ All are `derived_estimate`.
 | Coverage complete | 2035 |
 | Cost-plus revenue at 33.3 percent margin | about 251.5 million dollars per year |
 | Cash cost per subscriber (final-year replacement-cost artifact, see conclusion caveat) | about 7.95 dollars per year |
+| ARPU standard bucket (people) | 9,360,000 at 15 dollars, 1,684.8 million dollars per year |
+| ARPU premium bucket (people) | 1,248,000 at 100 dollars, 1,497.6 million dollars per year |
+| ARPU IoT bucket (devices) | 51,670,320 at 8 dollars, about 4,960.4 million dollars per year |
+| ARPU government bucket | 121,680 at 74 dollars, about 108.1 million dollars per year |
+| ARPU billable-connection pool | 62,400,000 connections |
+| ARPU total revenue (full sell-through on capacity) | about 8,250.8 million dollars per year |
 
 ## Catalog Status
 

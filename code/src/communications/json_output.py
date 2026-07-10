@@ -36,15 +36,24 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from communications.config import CommsConfig, load_comms_config
 from communications.constants import BindingRegime, DeviceClass
-from communications.engine import CommsTrajectory, iridium_assumptions, run_comms_model
+from communications.engine import (
+    CommsTrajectory,
+    IridiumArpuBucket,
+    IridiumArpuResult,
+    arpu_stated_assumptions,
+    iridium_assumptions,
+    run_comms_model,
+)
 
 logger = logging.getLogger(__name__)
 
 MODEL_NAME: Final[str] = "iridium"
 """The promoted artifact's model name (the provenance header's fixed identity)."""
 
-IRIDIUM_SCHEMA_VERSION: Final[str] = "iridium-v1"
-"""The promoted Iridium artifact's schema version tag."""
+IRIDIUM_SCHEMA_VERSION: Final[str] = "iridium-v2"
+"""The promoted Iridium artifact's schema version tag. ``iridium-v2`` (2026-07-09)
+removes the two inherited placeholder ARPU fields from the trajectory summary and adds
+the published four-bucket ``revenue_arpu_buckets`` block."""
 
 JSON_INDENT: Final[int] = 2
 """Indentation for the emitted JSON (the house ``model_dump_json`` convention)."""
@@ -143,7 +152,10 @@ class TrajectorySummaryBlock(BaseModel):
     These are the fields every comms run reports (the fleet machinery the
     Iridium model shares with the High-Bandwidth Cellular Pure Play model):
     the build-and-hold cost, the fleet sizing and its binding regime, the
-    steady-state cost basis, and the two revenue cases.
+    steady-state cost basis, and the COST-PLUS revenue case. The Iridium ARPU
+    revenue is now the published four-bucket ``revenue_arpu_buckets`` block on the
+    artifact (schema iridium-v2), not a field here: the two inherited placeholder
+    ARPU fields (from the cellular family's $50 default) were removed from this block.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -181,11 +193,69 @@ class TrajectorySummaryBlock(BaseModel):
     steady_state_gross_margin_cost_plus_pct: float = Field(
         description="Steady-state COST-PLUS gross margin, percent."
     )
-    steady_state_revenue_arpu_musd: float = Field(
-        description="Steady-state PRICES-TODAY ARPU annual revenue, $M/yr (deferred case)."
+    # The two inherited placeholder ARPU fields (steady_state_revenue_arpu_musd,
+    # steady_state_gross_margin_arpu_pct) were REMOVED here in schema iridium-v2: they
+    # were computed from the cellular family's $50/month default and never described
+    # the Iridium model. The ENGINE still computes them on the shared CommsTrajectory
+    # (the cellular family reads them, and the equality tripwire rides that shared
+    # trajectory), so they must NOT be removed from the engine path: they are
+    # computed-but-unpublished for Iridium. The published Iridium ARPU revenue is the
+    # revenue_arpu_buckets block below.
+
+
+class ArpuBucketBlock(BaseModel):
+    """One published ARPU revenue bucket (a mix slice of the billable-connection pool).
+
+    Counts are people for standard/premium, DEVICES for IoT, contracts for
+    government: never summed as one population (the pool is an accounting frame).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    mix_pct: float = Field(
+        description="The bucket's share of the billable-connection pool, percent."
     )
-    steady_state_gross_margin_arpu_pct: float = Field(
-        description="Steady-state ARPU gross margin, percent (deferred case)."
+    price_usd_per_month: float = Field(
+        description="The bucket's monthly price, USD per connection per month."
+    )
+    count: int = Field(
+        description="The derived connection count (people, IoT devices, or contracts)."
+    )
+    annual_revenue_musd: float = Field(description="The bucket's annual revenue, $M/yr.")
+
+
+class RevenueArpuBucketsBlock(BaseModel):
+    """The published four-bucket ARPU revenue case (a top-level artifact block).
+
+    Present only when the scenario carries an ``arpu`` block; the whole block is
+    omitted (the artifact field is None) on the no-ARPU path. The four buckets
+    partition ONE pool anchored to fleet capacity, so every count scales with the
+    satellite count. Subscribers are PEOPLE (standard, premium); IoT are DEVICES;
+    government is a contract line: ``total_connections`` is a billable-connections
+    accounting total, NOT one summed people population.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    standard: ArpuBucketBlock = Field(
+        description="The standard personal (phone-class) people bucket."
+    )
+    premium: ArpuBucketBlock = Field(
+        description="The premium terminal (gain-antenna) people bucket."
+    )
+    iot: ArpuBucketBlock = Field(description="The IoT DEVICE bucket (the mix residual to 100).")
+    government: ArpuBucketBlock = Field(description="The government contract bucket.")
+    total_connections: int = Field(
+        description="The billable-connection pool size (people + devices + contracts)."
+    )
+    arpu_revenue_total_musd: float = Field(
+        description="The summed annual revenue across the four buckets, $M/yr."
+    )
+    stated_assumptions: tuple[str, ...] = Field(
+        description=(
+            "The ARPU case's stated-assumption strings (full sell-through, the mix "
+            "posture, the built-fleet convention), from arpu_stated_assumptions()."
+        )
     )
 
 
@@ -200,6 +270,13 @@ class IridiumModelArtifact(BaseModel):
     )
     iridium_physics: IridiumPhysicsBlock = Field(
         description="The Iridium physics result block (the IridiumResult fields)."
+    )
+    revenue_arpu_buckets: RevenueArpuBucketsBlock | None = Field(
+        default=None,
+        description=(
+            "The published four-bucket ARPU revenue case; None (omitted) when the "
+            "scenario carries no arpu block."
+        ),
     )
     assumptions: tuple[str, ...] = Field(
         description="The stated-assumptions lines from iridium_assumptions(), in order."
@@ -219,6 +296,40 @@ def _repo_relative(path: Path) -> str:
         return path.relative_to(_REPO_ROOT).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+def _arpu_bucket_block(bucket: IridiumArpuBucket) -> ArpuBucketBlock:
+    """Map one engine ARPU bucket onto its promoted-artifact block."""
+    return ArpuBucketBlock(
+        mix_pct=bucket.mix_pct,
+        price_usd_per_month=bucket.price_usd_month,
+        count=bucket.count,
+        annual_revenue_musd=bucket.revenue_musd_yr,
+    )
+
+
+def _build_arpu_buckets_block(
+    result: IridiumArpuResult, stated_assumptions: tuple[str, ...]
+) -> RevenueArpuBucketsBlock:
+    """Map the engine's IridiumArpuResult onto the promoted revenue_arpu_buckets block.
+
+    Args:
+        result: The engine's computed four-bucket ARPU result.
+        stated_assumptions: The ARPU-case posture strings (from
+            :func:`~communications.engine.arpu_stated_assumptions`), carried inline.
+
+    Returns:
+        The populated :class:`RevenueArpuBucketsBlock`.
+    """
+    return RevenueArpuBucketsBlock(
+        standard=_arpu_bucket_block(result.standard),
+        premium=_arpu_bucket_block(result.premium),
+        iot=_arpu_bucket_block(result.iot),
+        government=_arpu_bucket_block(result.government),
+        total_connections=result.total_connections,
+        arpu_revenue_total_musd=result.arpu_revenue_total_musd_yr,
+        stated_assumptions=stated_assumptions,
+    )
 
 
 def build_iridium_artifact(
@@ -276,8 +387,12 @@ def build_iridium_artifact(
         steady_state_gross_margin_cost_plus_pct=(
             trajectory.steady_state_gross_margin_cost_plus_pct
         ),
-        steady_state_revenue_arpu_musd=trajectory.steady_state_revenue_arpu_musd,
-        steady_state_gross_margin_arpu_pct=trajectory.steady_state_gross_margin_arpu_pct,
+    )
+    # IoT SUPERSESSION (one IoT truth): with the ARPU case on, the published IoT device
+    # count is the revenue mix's IoT bucket count; the fixed iot_devices passthrough
+    # reports only on the no-ARPU path.
+    published_iot_devices = (
+        physics.arpu.iot.count if physics.arpu is not None else physics.iot_devices
     )
     iridium_physics = IridiumPhysicsBlock(
         spectrum_mhz=physics.spectrum_mhz,
@@ -294,14 +409,20 @@ def build_iridium_artifact(
         beam_pool_mbps=physics.beam_pool_mbps,
         per_user_rate_peak_mbps=physics.per_user_rate_peak_mbps,
         per_user_rate_offpeak_mbps=physics.per_user_rate_offpeak_mbps,
-        iot_devices=physics.iot_devices,
+        iot_devices=published_iot_devices,
         operations_cost_musd=physics.operations_cost_musd,
         ecosystem_assumption=physics.ecosystem_assumption,
+    )
+    revenue_arpu_buckets = (
+        _build_arpu_buckets_block(physics.arpu, arpu_stated_assumptions(config.iridium.arpu))
+        if physics.arpu is not None and config.iridium.arpu is not None
+        else None
     )
     return IridiumModelArtifact(
         provenance=provenance,
         trajectory_summary=trajectory_summary,
         iridium_physics=iridium_physics,
+        revenue_arpu_buckets=revenue_arpu_buckets,
         assumptions=iridium_assumptions(config.iridium),
     )
 
