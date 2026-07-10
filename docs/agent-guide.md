@@ -15,22 +15,34 @@ Start with this path before editing or interpreting claims:
 
 - `CONTEXT.md` for vocabulary.
 - `README.md` for repository orientation.
-- `data_center/README.md` for the workstream map.
-- `data_center/conclusion.md` for the current reviewed conclusion.
+- `data_center/README.md` for the data-center workstream map.
+- `data_center/conclusion.md` for its current reviewed conclusion.
 - `data_center/assumptions.md` and `research/SOURCE_INDEX.md` for source
   status and claim IDs.
+- For communications work: `communications/CURRENT_STATE.md` (where things
+  stand), then `communications/README.md` (the map), then
+  `communications/conclusion.md` (the reviewed Iridium verdict), with
+  `communications/assumptions.md` and `communications/design.md` beside them.
 - `research/README.md` for the research wiki front door.
 - `code/README.md` for run, promote, test, and query commands.
 - `docs/architecture-intent.md` for system invariants.
 - Relevant ADRs under `docs/adr/` before changing public artifact policy.
 
-The root repository is Rocket Lab Research. The current public artifact set is
-data-center first. Communications now has its own research and source ledger:
-research waves 1 through 4 live in the shared research wiki, with `COMM-*` claim
-IDs in `research/SOURCE_INDEX.md`. It still has no promoted model, tests, or
-public release artifact, so it stays a research-only workstream and must not be
-turned into a promoted model or a public claim until those remaining conditions
-are met.
+The root repository is Rocket Lab Research. TWO applications are modeled and
+public: the data center (under `data_center/`) and communications (under
+`communications/`, the Iridium model: a promoted default at
+`communications/models/iridium/default.json`, a frozen test suite in
+`code/tests/communications/`, and a reviewed conclusion). For any
+communications task, ground in this order: `communications/CURRENT_STATE.md`,
+`communications/README.md`, `communications/conclusion.md`,
+`communications/assumptions.md`, `communications/design.md`, then the code
+(`code/src/communications/`, `code/scenarios/iridium.yaml`) and the `COMM-*`
+rows in `research/SOURCE_INDEX.md` (complete through `COMM-710`). Hold the
+communications disciplines: the three lanes stay separate (cellular phones,
+broadband dish, MSS on Iridium's owned L-band); subscribers are people and
+IoT are devices, never summed; frequency (the ~1.6 GHz dial position) and
+bandwidth (the ~8 MHz width held) are different quantities; every published
+number traces to the promoted JSON, a `COMM-*` claim, or a founder-set dial.
 
 ## Research Wiki Map
 
@@ -45,7 +57,7 @@ Use these files as the wiki map:
 - `research/RESEARCH_TRACKER.md` records coverage, source-audit status, stale
   material, and open questions.
 - `research/SOURCE_INDEX.md` is the claim-level hard-number ledger for `RLDC-*`
-  IDs and source status.
+  and `COMM-*` IDs and source status.
 - Topic folders hold synthesis, evidence notes, peer review, and historical
   reasoning. Treat them as support for the source ledger, not as promoted model
   outputs.
@@ -226,10 +238,16 @@ Keep these boundaries visible in public docs:
 - Do not blur the default 90 percent token premium, the solar/radiator cost-down
   sensitivity toward 50 percent, and the separate thermal package-density
   sensitivity.
-- Communications now has its own research (waves 1 through 4) and a `COMM-*`
-  source ledger in `research/SOURCE_INDEX.md`. It still has no promoted model,
-  tests, or public release artifact, so do not turn it into a promoted model or
-  a public claim until those remaining conditions are met.
+- Communications is a modeled, public workstream (the Iridium model: promoted
+  JSON, frozen tests, a reviewed conclusion, `COMM-*` claims complete through
+  `COMM-710`). Ground in `communications/CURRENT_STATE.md` before touching it.
+  Do not blur the three lanes (cellular, broadband, MSS), do not sum people
+  and IoT devices, and do not change a dial without re-freezing the tests,
+  re-promoting the JSON, updating `communications/assumptions.md`, and
+  deliberately reviewing `communications/conclusion.md`. The Iridium
+  scenario's two flat cost dials deliberately diverge from the shared-spine
+  defaults, and the equality tripwire test runs on config defaults: keep both
+  facts true.
 - Do not add Electron as a data-center path.
 - Do not present training as the modeled product.
 - Do not collapse deployed-year capacity into living-fleet capacity.
@@ -244,8 +262,9 @@ Keep these boundaries visible in public docs:
   solar, radiator/thermal, integration, launch, operations, and possibly
   communications. GPUs and some networking hardware are the main outside
   purchases. Do not reduce this to generic "integration advantages."
-- Public-facing prose should use human labels and `RLDC-*` claim IDs. Raw JSON
-  paths belong in code documentation, query examples, and agent diagnostics.
+- Public-facing prose should use human labels and `RLDC-*` / `COMM-*` claim
+  IDs. Raw JSON paths belong in code documentation, query examples, and agent
+  diagnostics.
 - Do not use old large-capacity language as the current default.
 - Do not use em-dashes anywhere in the public documentation; use commas,
   colons, or parentheses instead.

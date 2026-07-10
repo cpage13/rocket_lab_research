@@ -9,8 +9,9 @@ the language.
 
 **Rocket Lab Research** - The repository-level umbrella for Rocket Lab-focused
 research, modeling, communications, and future rocket-related investigations.
-The current first investigation is data-center focused, but the repository scope
-is broader. Avoid: treating "data center" as the repository name or full scope.
+Two applications are modeled: the data-center investigation and the
+communications application (the Iridium model). Avoid: treating "data center"
+as the repository name or full scope.
 
 **data-center investigation** - The current first Rocket Lab Research
 investigation, focused on Neutron-launched orbital AI inference as a business
@@ -67,3 +68,49 @@ for active installed orbital capacity, and "market reference" for external data
 center capacity. Do not describe the modeled deployment as a market-share
 thesis. The default 2036 deployment is a small annual cohort measured against a
 large external market reference so readers can sanity-check scale.
+
+## Communications Terms
+
+**communications application** - The second modeled application: model
+families organized by communication paradigm under `communications/`. The
+first family is the Iridium model. Avoid: "Model B" except as a historical
+alias.
+
+**the Iridium model** - The maximum practical performance of Iridium's owned
+L-band on a Neutron-launched next-generation fleet: the promoted default is
+`communications/models/iridium/default.json`. Avoid: calling it a
+direct-to-cell or unmodified-phone model; it is the MSS lane.
+
+**High-Bandwidth Cellular Pure Play model** - The kept second family (formerly
+Model A): phones on cellular spectrum versus ground. Its defaults are the
+shared config defaults; the equality tripwire test rides them.
+
+**the three lanes** - Cellular (unmodified phones on cellular spectrum),
+broadband (a dish on Ku/Ka), and MSS (purpose-built or in-chipset devices on
+Iridium's owned L-band). Never blur them; a claim true in one lane is not a
+claim about another.
+
+**frequency versus bandwidth** - Frequency is where the signal sits on the
+dial (~1.6 GHz for Iridium); bandwidth is the width held (~8 MHz exclusive,
+10.5 coordinated). Capacity comes from the width, reach from the position.
+Avoid: quoting either number as if it were the other.
+
+**beam pool** - The per-beam data pool (bandwidth times spectral efficiency,
+5.2 Mbps at phone class on 8 MHz) and the hard per-person ceiling. The
+satellite total (about 150 beam reuses) multiplies people served, never one
+person's rate.
+
+**subscribers versus IoT devices** - Subscribers are people; IoT are devices.
+They are counted separately and never summed. With the ARPU case on, the
+published IoT count derives from the revenue mix.
+
+**ARPU buckets (Sheet A)** - The published four-bucket revenue case (standard
+personal, premium tier, IoT devices, government): founder-set mix percentages
+over one capacity-anchored pool plus founder-set prices, all scaling with the
+satellite count. The premium tier is a price tier, never a platform adoption
+claim.
+
+**equality tripwire** - The frozen test asserting the Iridium baseline and the
+cellular default share the same trajectory on config defaults. It proves the
+shared machinery; scenario overrides (the flat cost dials) deliberately do not
+touch it.

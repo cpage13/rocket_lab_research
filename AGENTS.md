@@ -4,16 +4,19 @@ This repository is **Rocket Lab Research**. It is the umbrella for
 Rocket Lab-focused research, modeling, communications, and future rocket-related
 investigations.
 
-The current first investigation is the Neutron-centered orbital AI-inference
-data-center case. Neutron is the relevant Rocket Lab vehicle for this scale
-today. Electron is not modeled for the data-center investigation.
+Two applications are modeled today, both Neutron-launched: the orbital
+AI-inference data center and the communications application (the Iridium
+model: the maximum practical performance of Iridium's owned L-band on a
+next-generation fleet). Electron is not modeled in either.
 
 Start here:
 
 - Read `CONTEXT.md` for project vocabulary.
 - Read `docs/agent-guide.md` for the canonical cold-start agent guide.
 - Read `README.md` for the public repository map.
-- Read `data_center/README.md` for the current investigation.
+- Read `data_center/README.md` for the data-center application.
+- Read `communications/CURRENT_STATE.md` then `communications/README.md` for
+  the communications application (the Iridium model).
 
 Use `docs/agent-guide.md` rather than duplicating agent instructions here. It
 explains the research wiki, promoted JSON artifacts, source ledger, code
