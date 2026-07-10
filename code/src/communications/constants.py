@@ -172,11 +172,13 @@ gives ~16. Default 12 (SSO), with ~16 the LEO upside. Estimate-bound on the
 single-source ~800 kg Flatellite mass read (COMM-253 / COMM-256)."""
 
 SATELLITE_LIFETIME_YEARS_DEFAULT: Final[int] = 5
-"""ESTIMATE (COMM-097, the ~$200 to 260/sub/yr replacement split implies a
-~5-year hardware lineage; corrected from COMM-091 per the traceability audit).
-Satellite operating life, the cohort cliff: after this many years a cohort retires
-and contributes zero coverage. A design/depreciation assumption (the Starlink
-replacement-capex anchor), not a certified field life."""
+"""ESTIMATE (COMM-088, the Starlink ~5-year depreciation and replacement
+treadmill; the ~$200 to 260/sub/yr split that lineage feeds is COMM-091. The
+07-08 audit's move to COMM-097 read the supply-cost doc's internal ids, which
+are offset from the global index; corrected 2026-07-09). Satellite operating
+life, the cohort cliff: after this many years a cohort retires and contributes
+zero coverage. A design/depreciation assumption (the Starlink replacement-capex
+anchor), not a certified field life."""
 
 SATELLITE_BUILD_COST_MUSD_DEFAULT: Final[float] = 1.05
 """FOUNDER_SET (in-band; round 4, 2026-06-25). The flat MASS-MANUFACTURED
@@ -436,7 +438,7 @@ APERTURE_NO_FOLD_LIMIT_M2: Final[float] = 25.0
 Neutron's 5.5 m fairing WITHOUT folding. Grounding: Neutron's fairing is 5.5 m payload
 diameter; a 60 m^2 flat panel is ~7.7 m in its smallest square dimension, so it cannot
 stow flat; folding a coherent array across hinges contradicts the Flatellite
-no-deployable design (COMM-251); the AST precedent shows the fold path's cost (223 m^2
+no-deployable design (COMM-262/263); the AST precedent shows the fold path's cost (223 m^2
 flies 1 per launch even on a 7 m fairing). Used ONLY by the assumptions caveat
 (:data:`APERTURE_FOLD_CAVEAT_NOTE`), NEVER as a config bound: the above-limit what-if
 stays computable."""
@@ -444,7 +446,7 @@ stays computable."""
 APERTURE_FOLD_CAVEAT_NOTE: Final[str] = (
     "The configured aperture exceeds the no-fold stow limit: a flat panel this large "
     "cannot stow in Neutron's 5.5 m fairing without folding, which contradicts the "
-    "Flatellite no-deployable design (COMM-251), and the deployment-complexity penalty "
+    "Flatellite no-deployable design (COMM-262/263), and the deployment-complexity penalty "
     "of folding is not otherwise modeled. This is a documented what-if caveat, not a "
     "validation error."
 )

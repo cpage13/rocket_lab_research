@@ -246,7 +246,8 @@ def _round_half_up(x: float) -> int:
     Mirrors ``common.cadence._integer_launch_count`` using the shared
     ``ROUND_TO_NEAREST_OFFSET`` authority (imported from ``common.cadence``, not
     redefined): ``floor(x + 0.5)``. Used to turn the comms slice's fractional
-    ``fleet_launches * share_of_fleet`` into a whole launch count.
+    ``fleet_launches * share_of_fleet`` into a whole launch count, and reused
+    for the subscriber-density and ARPU bucket counts.
 
     Args:
         x: A non-negative rate (the comms slice of the fleet launch count).
