@@ -1,80 +1,75 @@
 # The Iridium Model: Conclusion
 
-Under the current baseline, a Neutron-launched next-generation Iridium fleet
-looks strong enough to justify serious follow-on work. On the roughly **8 MHz**
-of L-band that Iridium already owns outright, a modern **340-satellite** fleet
-(the coverage floor) serves about **10 million subscribers** at about **31,200
-subscribers per satellite**, deployed by **2035** at an 18 percent share of
-Neutron's ramping cadence (about **29 launches**, 12 satellites each). This is
-not a precision forecast or a DCF. It is a bounded feasibility exercise built
-from visible, source-linked assumptions, and every number here traces to the
-frozen model baseline, a cited research claim, or an explicitly labeled
-scenario range.
+Rocket Lab is acquiring Iridium, and with it a rare asset: a globally
+coordinated L-band allocation it will own outright. This document is the
+feasibility verdict on modernizing that spectrum with a Neutron-launched
+fleet. The result, in one table:
 
-In plain terms: Iridium serves about 2.5 million subscribers today on 66
-satellites flying a 1990s architecture, and the whole fleet moves about 174
-megabits per second, less than one home internet connection. The spectrum is
-not the limit. The old architecture is. At the phone-class baseline this
-document builds, one modern flat-panel satellite with digital beamforming
-carries roughly **300 times** the data of one Iridium satellite today on the
-very same spectrum (loaded with gain terminals instead, the corpus
-modernization figure is about 1,000 times), and the 340-satellite fleet moves
-more than a thousand times what the whole 66-satellite fleet moves. The rest
-of this document builds that outcome from its parts.
+| The verdict at a glance | 340 satellites (baseline) | ~2,000 satellites (the ceiling) |
+|---|---:|---:|
+| Complete by | **2035** at an 18 percent launch share; **2031** at most of the manifest | about **2035** with 90 percent or more of the manifest |
+| Subscribers (people) | about **10.6 million** capacity | about **62 million** |
+| IoT devices (counted separately) | about **51.7 million** | about **304 million** |
+| Revenue per year (published sheet) | about **$8.25B** | about **$48.5B** |
+| Fleet cost per year | about **$145M** | about **$835M** |
+| Margin (operating-style, pre-operations) | about **98.2 percent** | about **98.3 percent** |
 
-The service is device-diverse by design: purpose-built terminals (a puck, a
-USB device with a small antenna on a laptop, a mounted unit), IoT modules,
-and, conditionally, phones. The phone is one path, not the dependency, and
-the baseline below is computed at the weakest device class, so every other
-device does better on the same fleet. One assumption sits underneath the
-phone numbers and is stated here up front, not buried: a literally unmodified
-2026 phone receives nothing on Iridium's 1616 to 1626.5 MHz band. The phone-class rates below assume the band enters
-standard phone chipsets (the in-chipset ecosystem assumption), the path
-Qualcomm and Iridium built and demonstrated once and then terminated in
-November 2023 with zero phone adoption. The barrier there is commercial, not physics.
-The terminal and device tiers below need no such assumption: they run on
-hardware Rocket Lab could build and ship itself.
+This is not a precision forecast or a DCF. It is a bounded feasibility
+exercise built from visible, source-linked assumptions, and every number here
+traces to the frozen model baseline, a cited research claim, or an explicitly
+labeled scenario dial. The assumptions that carry the table are stated where
+they bite and collected at the end.
 
 ## Source Snapshot
 
 The Iridium model is one input scenario promoted to one model output. The
-scenario YAML is the single set of input dials, and promoting it produces the
-Iridium model JSON. The conclusion is static editorial prose tied to that
-promoted default.
+scenario YAML is the single set of input dials; promoting it produces the
+model JSON; this conclusion is static editorial prose tied to that promoted
+default.
 
 | Item | File | What it is |
 |---|---|---|
 | Iridium model | [`communications/models/iridium/default.json`](models/iridium/default.json) | The promoted model: the frozen baseline, its derivation, units, and sources. |
-| Default scenario | [`code/scenarios/iridium.yaml`](../code/scenarios/iridium.yaml) | The input dials that produce the model; copy, edit, and re-run to test alternatives. |
+| Default scenario | [`code/scenarios/iridium.yaml`](../code/scenarios/iridium.yaml) | The input dials; copy, edit, and re-run to test alternatives. |
 | Assumptions ledger | [`communications/assumptions.md`](assumptions.md) | Every default assumption, its source status, and where it comes from. |
 | Design | [`communications/design.md`](design.md) | The workstream architecture and how the model is built. |
 | Evidence | [`research/SOURCE_INDEX.md`](../research/SOURCE_INDEX.md) | The `COMM-*` claim ledger and the research wiki. |
 
-## The Fleet, And What It Serves
+## The Spectrum
 
-The story is a modern fleet on old spectrum. Each satellite is a flat-panel
-digital-beamforming array of about 25 square meters, with laser crosslinks and
-Ka feeder links, so the L-band is spent entirely on user traffic. About 12 fit
-on a Neutron launch. The model sizes the fleet as the larger of the coverage
-floor (340 satellites for continuous coverage of the populated world) and the
-capacity need (321 satellites to hold 10 million subscribers), so coverage
-binds and the fleet is **340 satellites**.
+Two different quantities hide in "8 MHz of L-band at 1.6 GHz", and the whole
+model rests on keeping them apart. The frequency (about 1.6 GHz) is where the
+signal sits on the dial: it sets reach, and L-band's reach is the product
+story (rain, clouds, and foliage that degrade Ku- and Ka-band broadband
+barely touch it; COMM-627). The bandwidth is the width held: it sets
+capacity, and it is small on purpose to model conservatively.
 
-| Baseline output (8 MHz exclusive, phone class, 25 square meters) | Value |
-|---|---:|
-| Per-satellite capacity | about **0.78 Gbps** |
-| Subscribers per satellite | about **31,200** |
-| Fleet size (coverage floor binds) | **340 satellites** |
-| Subscribers served | about **10 million** |
-| Fleet aggregate capacity | about **265 Gbps** |
-| Coverage complete | **2035** |
-| Launches (12 satellites each) | about **29**, at an 18 percent cadence share |
+| Holding | Width | Status |
+|---|---:|---|
+| Exclusive (1618.725 to 1626.5 MHz) | **7.775 MHz** | Owned outright; the baseline models it as 8.0 (COMM-611) |
+| Shared with Globalstar | 0.95 MHz | Usable today under coordination |
+| Full coordinated span (1616 to 1626.5 MHz) | **10.5 MHz** | The upside variant: subject of a live FCC dispute (Rocket Lab versus Amazon after both deals close) |
 
-That aggregate of about 265 Gbps across 340 modern satellites is more than a
-thousand times the roughly 174 Mbps the entire 66-satellite Iridium fleet moves
-today (COMM-639). The gain is architecture times scale: roughly 300x per satellite (more
-beams, digital beamforming, and dense cell reuse on the same held megahertz)
-and about 5x from flying 340 satellites instead of 66.
+Winning the full 10.5 MHz adds about **31 percent** to everything in this
+document (about 40,950 subscribers per satellite instead of 31,200). It is
+gated on that coordination, so it is a labeled variant, never the baseline.
+
+## The Satellite
+
+Each modeled satellite is a flat-panel **phased array of about 25 square
+meters** with digital beamforming, laser crosslinks between satellites (so
+traffic routes in space and the L-band is spent entirely on users), and Ka
+feeder links. About **12 fit on one Neutron launch**. Against today's fleet:
+
+| Per satellite | Today's Iridium (66 satellites) | The modeled satellite |
+|---|---:|---:|
+| Throughput | about 2.64 Mbps (COMM-639) | about **780 Mbps** at the weakest device class |
+| The multiple | | roughly **300x** (about 1,000x to gain terminals, the corpus modernization figure) |
+
+Fleet against fleet, 340 modern satellites move about **265 Gbps** against
+the roughly 174 Mbps the whole 66-satellite fleet moves today: more than a
+thousandfold, of which roughly 300x is per-satellite architecture and about
+5x is flying 340 satellites instead of 66.
 
 ## How The Capacity Numbers Arise
 
@@ -84,372 +79,295 @@ carries a labeled status:
 | Link | Value | Status |
 |---|---:|---|
 | Spectrum held (a width) | 8.0 MHz | Fact (7.775 MHz exclusive, rounded; COMM-611) |
-| Phone spectral efficiency | 0.65 bits per hertz | Measured in the wild (COMM-428/429) |
+| Weakest-class spectral efficiency | 0.65 bits per hertz | Measured in the wild (COMM-428/429) |
 | Effective spectrum reuse | ~150x | Calibrated estimate (corpus band 130 to 200x; COMM-410/411) |
 | Busy-hour concurrency | 2.5 percent | Corpus-central (1 to 5 percent; COMM-543) |
-| Active rate (the tier) | 1.0 Mbps | Chosen service tier |
+| Active rate (the service tier) | 1.0 Mbps | Chosen dial |
 
-Walk it forward. One beam running the whole 8 MHz at phone-class efficiency
-carries 8 x 0.65 = **5.2 Mbps**: the beam pool, and the hard per-person
-ceiling. A modern digital-beamforming satellite does not light one beam: it
-lights hundreds of narrow spot beams and reuses the same 8 MHz across
-non-overlapping patches of ground, exactly the way a terrestrial network
-reuses its band across cells. The corpus anchor for a modern flat-panel
-array implies an effective multiplier (beam count times how densely the band
-is re-run across the beams) of about **130 to 200 times**; the model
-calibrates at **150**. So one satellite moves 5.2 x 150 = 780 Mbps, the
-**0.78 Gbps** quoted above. The code packages the reuse as a constant, 0.15
-Gbps per MHz per unit of spectral efficiency: the 0.15 is just 150 reuses
-divided by 1,000 (the megabit-to-gigabit conversion), and "per unit" means
-it is quoted at a spectral efficiency of 1.0 so the same constant serves
-every device tier (multiply by 0.65 for a phone, 2.5 for a mounted
-terminal).
+Walk it forward. One beam running the whole 8 MHz at the weakest device
+class's efficiency carries 8 x 0.65 = **5.2 Mbps**: the beam pool, and the
+hard per-person ceiling. The satellite does not light one beam: it aims about
+150 of them at different patches of ground and reuses the same 8 MHz in every
+one, the way a terrestrial network reuses its band across cells. So one
+satellite moves 5.2 x 150 = **780 Mbps**. The code packages the reuse as the
+0.15 constant (150 reuses divided by 1,000, quoted per unit of spectral
+efficiency so one constant serves every device tier). The last step is
+people: at the busy hour 2.5 percent of subscribers transmit at once, so
+780 Mbps across 31,200 x 0.025 = 780 active users is **1.0 Mbps each**, and
+the density is the same equation run backwards: 780 / (1.0 x 0.025) =
+**31,200 subscribers per satellite**.
 
-The last step is people. At the busy hour 2.5 percent of subscribers are
-active at once, so 31,200 subscribers put 780 simultaneous users on the
-satellite, and 780 Mbps across 780 active users is **1.0 Mbps each**. The
-density is the same equation run backwards: 780 / (1.0 x 0.025) = 31,200.
+Two links carry the real uncertainty. The 0.65 is the strongest external
+anchor in the model (measured over the air on Starlink's operating phone
+service, median 0.64, interference included). The 150x reuse calibration is
+the widest error bar and the number real engineering would move first:
+across the corpus band edges (the efficiency band and the supply-anchor band
+together) per-satellite capacity spans roughly 0.3 to 1.5 Gbps against the
+0.78 central. The model quotes calibrated centrals and treats everything
+else as sweepable dials.
 
-Two of the five links carry the real uncertainty. The spectral efficiency is
-the strongest external anchor in the model: it was measured over the air on
-Starlink's operating phone service (mean 0.79, median 0.64 bits per hertz),
-and it already embeds real-world interference, so nothing is inflated and
-then clawed back. The reuse calibration is the widest error bar and the
-number real engineering would move first. Across the corpus band edges (the
-spectral-efficiency band and the supply-anchor band taken together) the
-per-satellite capacity spans roughly 0.3 to 1.5 Gbps against the 0.78
-central. The model quotes the calibrated centrals and treats everything else
-as sweepable dials.
+## The Devices
 
-## Per Subscriber, By Device
+The service is device-diverse by design, and the ladder leads with the
+hardware Rocket Lab can build and ship without anyone's permission:
 
-The per-person ceiling is the beam pool, not the satellite total. A phone lives
-in one beam and shares that beam's pool with the other people in it. On the
-owned 8 MHz the phone-class beam pool is about 5.2 Mbps. The service is sized so
-a phone sees about **1.0 Mbps at peak** and about **5.0 Mbps off peak**, with no
-external antenna. Users who opt into a small antenna get more, because a larger
-antenna holds a higher spectral efficiency:
+| Device tier | Efficiency (bits/Hz) | Peak | Lightly loaded | Requires |
+|---|---:|---:|---:|---|
+| Small antenna (a puck, or a USB device on a laptop; ~10 dBi, unpointed) | 2.0 | about **3.1 Mbps** | about **15.4 Mbps** | Nothing: our hardware |
+| Mounted antenna (vehicles, ships, fixed sites; 15+ dBi) | 2.5 | about **3.9 Mbps** | about **19.2 Mbps** | Nothing: our hardware |
+| Phone, a possible later path (0 dBi, no external antenna) | 0.65 | about **1.0 Mbps** | about **5.0 Mbps** | The band in standard phone chipsets |
 
-| Device (same ~31,200 subscribers per satellite, 8 MHz) | Peak | Lightly loaded |
+Three facts organize the table:
+
+1. **The per-person ceiling is the beam pool, never the satellite total.** A
+   user lives in one beam and shares that beam's pool (bandwidth times the
+   tier's efficiency) with the other users in it. The ~150x reuse multiplies
+   how many people the satellite serves, never one person's rate.
+2. **The baseline is computed at the weakest tier on purpose.** The 31,200
+   density and every headline number use the phone-class 0.65, so the
+   published numbers are the conservative floor: every real device on the
+   ladder does better on the same fleet. Held at the same 1.0 Mbps rate, the
+   antenna tiers raise density instead of speed, to about **96,000** and
+   **120,000** subscribers per satellite.
+3. **Only the phone row carries an ecosystem assumption.** Iridium's band is
+   in no standard phone chipset today (Qualcomm and Iridium built and
+   demonstrated that chip once; it was terminated in November 2023 with zero
+   phone adoption: the barrier is commercial, not physics). The antenna
+   tiers need no such assumption, which is why the phone is one possible
+   later path and never the dependency.
+
+The rates support messaging, voice, browsing, maps, photos, and audio.
+Probably not streaming video, and the service does not pretend otherwise.
+The band's reliability carries the product: a link that holds in rain, under
+foliage, and in motion (COMM-426/563, and the L-band row COMM-627; the
+first-principles explainer is
+[`research/direct_communication/spectrum_and_phased_array_fundamentals.md`](../research/direct_communication/spectrum_and_phased_array_fundamentals.md))
+is a different product from a dish that needs clear sky, even at a fraction
+of the speed.
+
+Separately, and counted separately, the same fleet carries **tens of
+millions of IoT devices**. IoT are devices, not people, and they ride nearly
+free: at kilobit-class rates the binding limit is random-access contention,
+not spectrum, so IoT is zero load in the sizing. The published device count
+derives from the revenue mix (about 51.7 million at the baseline); the
+10-million passthrough dial reports only when the ARPU case is off.
+
+## The Fleet And The Timeline
+
+The model sizes the fleet as the larger of the coverage floor and the
+capacity need, capped at saturation: at the 10-million target, coverage
+binds (the capacity need is 321 satellites), so the fleet is **340**.
+
+| Fleet | Satellites | Launches (12 each) | Complete by | People capacity |
+|---|---:|---:|---|---:|
+| Coverage of the populated world | 340 | about 29 | see the share table | about 10.6 million |
+| The saturation ceiling | about 2,000 | about 167 | about 2035 at a 90+ percent share; past the modeled decade at smaller shares | about 62 million |
+
+Deployment speed is purely a manifest-share dial, and these are model runs,
+not estimates:
+
+| Share of Neutron's launches | The 340-satellite fleet completes |
+|---:|---:|
+| 18 percent (the conservative baseline) | 2035 |
+| 50 percent | 2033 |
+| 80 percent | 2032 |
+| 90 to 100 percent | **2031** (the floor: the early whole-fleet ramp of 2, 3, 5, 9, 14 launches a year through 2031 binds, not the share) |
+
+These timelines assume Neutron does the launching. 340 is a floor, not a
+ceiling, and the next section is what happens as the fleet grows past it.
+
+## The Ceiling
+
+Past some satellite count, more satellites stop helping: on a fixed band,
+capacity comes from beams reusing the spectrum over separated patches of
+ground, and once every patch is covered by a beam on the 8 MHz, additional
+satellites add overlapping co-channel beams that interfere rather than add.
+The model encodes this as a saturation cap of about **2,000 satellites**
+(the mechanism is multi-source:
+[`research/direct_communication/dtc_capacity_supply.md`](../research/direct_communication/dtc_capacity_supply.md),
+COMM-413 to COMM-416). At the cap, by service tier:
+
+| Tier | Subscribers per satellite | At the ~2,000-satellite cap |
 |---|---:|---:|
-| Phone, no external antenna | about **1.0 Mbps** | about **5.0 Mbps** |
-| Small boosted antenna | about **3.1 Mbps** | about **15.4 Mbps** |
-| Larger mounted antenna | about **3.9 Mbps** | about **19.2 Mbps** |
+| Standard (1.0 Mbps active, weakest-class efficiency) | 31,200 | about **62 million** |
+| Rich (2.5 Mbps active) | 12,480 | about **25 million** (a capacity-bound 802-satellite fleet serves the 10M target; at the 0.18 share it truthfully reaches only 576 of 802 by FY2036) |
 
-These rates support messaging, voice, browsing, maps, photos, and audio.
-Probably not streaming video. The rates are estimate-tier, derived from the
-model's own spectral-efficiency tiers (phone about 0.65 bits per hertz, small
-terminal about 2.0, larger terminal about 2.5). Held instead at the phone's 1.0
-Mbps active rate, the same antennas raise density rather than speed, to about
-96,000 and 120,000 subscribers per satellite.
+One warning travels with these numbers, loud on purpose. The corpus carries
+a second density chain, about 3,000 subscribers per satellite per megahertz,
+built on **gain-terminal** efficiency, and it implies roughly twice these
+densities (about 48 million at the cap for the rich tier). The two chains
+are different calculations at different device classes and must never be
+blended: the model's **31,200** (8 MHz, phone-class) and the corpus rule's
+**31,500** (10.5 MHz, gain-terminal chain) are numerically adjacent and
+conceptually different. This conclusion stands behind the model's calibrated
+chain, the conservative side; the gain-terminal chain is best read as the
+terminal-tier headroom above it.
 
-Separately, and counted separately, the same fleet carries **tens of millions
-of IoT devices**. IoT are devices, not people. They ride nearly free: at
-kilobit-class narrowband rates the binding limit is random-access contention,
-not spectrum, so IoT rides as zero load in the sizing. The published device
-count itself derives from the revenue mix (about 51.7 million at the
-baseline); the 10 million passthrough dial reports only when the ARPU case
-is off.
+### Why Starlink Flies Thousands More Satellites Than Our Ceiling
 
-## Beyond The Phone: Reliability And The Edge-Device Case
+The ceiling scales with spectrum and with what the user's hardware can do,
+so the honest comparison is a table:
 
-The phone tier is the narrowest doorway into this service, not the service
-itself. It is the one tier that rides the ecosystem assumption; the boosted
-tiers need nobody's permission. The small terminal is a paperback-size puck
-or a USB device with a small antenna plugged into a laptop (about 10 dBi,
-unpointed, purpose-built hardware Rocket Lab can ship itself), and it
-already sees about **3.1 Mbps at peak and 15.4 lightly loaded**. No dish, no
-pointing, no installer.
+| Factor | Starlink broadband | This fleet |
+|---|---|---|
+| User spectrum | **2,000+ MHz** of Ku (eight 250 MHz channels; 20+ GHz system-wide with backhaul) | **8 to 10.5 MHz** of L-band |
+| User hardware | A pointed dish: real aperture, angular discrimination | The same physics on our antenna tiers (puck ~10 dBi, mounted 15+ dBi); none on the phone tier |
+| Constellation | Multiple shells and inclinations (the Gen2 plan is ~30,000 satellites near 340 to 360, 525 to 535, and 604 to 614 km) | One constellation (orbit selection is open design work) |
+| The wall, normalized | ~15,000 D2C satellites filed on ~65 MHz: about **230 satellites per MHz** | ~2,000 on 8 MHz: about **250 satellites per MHz** |
 
-The band itself is the reliability story. At 1.6 GHz path loss is low and
-weather is nearly transparent: the rain and cloud fade that degrades Ku- and
-Ka-band broadband barely touches L-band, and the band tolerates foliage and
-reaches building edges that higher bands cannot (the physics is
-COMM-426/COMM-563 territory, and the L-band-specific row is COMM-627; see
-[`research/direct_communication/spectrum_and_phased_array_fundamentals.md`](../research/direct_communication/spectrum_and_phased_array_fundamentals.md)).
-A link that holds in rain, under trees, and in motion is a different product
-from a dish that needs clear sky, even at a fraction of the speed.
+The bottom row is the point: nearly the same satellites-per-megahertz ratio.
+It is the same physics and the same wall, scaled by the spectrum each system
+holds. Starlink does not escape the ceiling; it buys a higher one with
+spectrum breadth, which is the dominant factor by far.
 
-That is the edge-device frame: an owned, globally coordinated band
-delivering kilobit-to-megabit service everywhere is enough for most IoT
-devices and many personal devices. Telemetry, tracking, messaging, voice,
-maps, photos, software updates, browsing-class data: all of it fits;
-streaming video does not, and the service does not pretend otherwise. The
-alternatives make the same point from the other side: broadband dishes buy
-speed with pointed hardware and a clear sky; cellular direct-to-cell rides
-rented carrier spectrum; this lane is owned spectrum to a simple device you
-can hold, mount, or embed.
+The hardware row deserves one honest clarification, because it is not a
+gap between companies: it is a gap between device tiers. A terminal with
+real aperture discriminates angularly (it can tell satellites apart by sky
+position), which lets many satellites reuse the same frequencies to
+neighboring users: an extra reuse dimension. **Our puck and mounted tiers
+have exactly that physics**: it is why their efficiency is 2.0 to 2.5
+against the phone's 0.65, and it is where the corpus's roughly-2x
+gain-terminal density chain comes from. The tier that cannot discriminate
+is the phone, and the model deliberately computes its headline numbers at
+that weakest tier. So the published ceiling is the phone-lane ceiling, the
+tightest one; a terminal-weighted service has documented headroom above it.
 
-## Revenue And Cost
+## The Money
 
-The model's solid ground here is the cost side, and the cost model is
-deliberately flat (a founder simplification, 2026-07-09): every satellite costs
-**1.0 million dollars** to build and every launch costs **13.0 million
-dollars**, at any cadence, with no stepped pricing as launches scale. Both
-values are founder-set and in-band of the research anchors (13.0 sits just
-below the shared launch-cost curve's grounded 13.5 high-cadence floor; 1.0 sits
-just below the prior 1.05 dial and the roughly 1.2 million Starlink V3 hardware
-anchor). The build-and-hold cost is **900 million dollars** exactly: every
-satellite built and every launch flown through FY2036, meaning the 29-launch
-build to the 340-satellite fleet plus the five-year replacement treadmill
-behind it (432 satellites across 36 launches in total: 432 x 1.0 plus 36 x
-13.0). The cash cost per subscriber is
-**7.50 dollars per year**, with a caveat: that figure is the final-year
-steady-state replacement cost per subscriber (one lumpy hold-phase year of
-satellite replacement spread over the base), not a life-amortized number. On an annualized basis the per-subscriber cost is
-higher (14.50 dollars per subscriber per year at 10 million), and
-aligning the model to the annualized basis is a tracked open item. Operations
-cost is held at **zero** by explicit assumption, a fixed line to research and
-add later, and it is stated in every model output rather than hidden.
+The cost model is deliberately flat (a founder simplification, 2026-07-09),
+and both dials sit in-band of the research anchors:
 
-The model's published revenue case is the subscriber-price (ARPU) sheet: the
-four-bucket case (standard personal, premium terminal, IoT devices, government),
-a founder-set price-and-mix sheet dated 2026-07-09, detailed below. The two
-inherited placeholder ARPU fields are gone from the promoted artifact; nothing
-in this document rests on the old cellular-family 50-dollar line.
+| Cost line | Value | Grounding |
+|---|---:|---|
+| Satellite build | **$1.0M each** | Just below the prior 1.05 dial and the ~$1.2M Starlink V3 hardware anchor (COMM-080) |
+| Launch, flat at any cadence | **$13.0M** | Just below the shared curve's grounded $13.5M high-cadence floor |
+| Build-and-hold through FY2036 | **$900M exactly** | The 29-launch build plus the replacement treadmill: 432 satellites across 36 launches |
+| Steady-state fleet cost | **$145M per year** | Satellites are replaced on a five-year life |
+| Per subscriber | $7.50 per year (final-year replacement artifact); about $14.50 annualized | Aligning to the annualized basis is a tracked open item |
 
-### What The Service Could Earn (Scenario Ranges)
+Operations cost is held at **zero** by explicit assumption, a fixed line to
+research and add later, stated in every model output rather than hidden.
 
-The published revenue case is the four-bucket ARPU sheet (Sheet A, founder-set
-2026-07-09). Revenue first, at the 340-satellite baseline (people capacity 10,608,000, a
-billable-connection pool of 62,400,000 under full sell-through on capacity):
+The published revenue case is the four-bucket ARPU sheet (Sheet A,
+founder-set 2026-07-09): each bucket is a set price and a percentage of the
+fleet's billable-connection pool, so every bucket scales with the satellite
+count. The prices are anchored on what Iridium's customers pay today; the
+mix is a set split, loosely guided by the shape of Iridium's base, with
+government pinned to reproduce today's fixed contract.
+
+At **340 satellites** (people capacity 10,608,000; pool 62,400,000 under
+full sell-through on capacity):
 
 | Bucket | Mix | Price per month | Count | Revenue per year |
 |---|---:|---:|---:|---:|
-| Standard personal | 15.0 percent | 15 dollars | 9,360,000 people | 1,684.8M |
-| Premium terminal | 2.0 percent | 100 dollars | 1,248,000 people | 1,497.6M |
-| IoT devices | 82.805 percent | 8 dollars | 51,670,320 devices | 4,960.4M |
-| Government | 0.195 percent | 74 dollars | 121,680 | 108.1M |
-| Total | 100 percent |  | 62,400,000 connections | 8,250.8M |
+| Standard personal | 15.0 percent | $15 | 9,360,000 people | $1,684.8M |
+| Premium terminal | 2.0 percent | $100 | 1,248,000 people | $1,497.6M |
+| IoT devices | 82.805 percent | $8 | 51,670,320 devices | $4,960.4M |
+| Government | 0.195 percent | $74 | 121,680 | $108.1M |
+| **Total** | 100 percent | | 62,400,000 connections | **$8,250.8M** |
 
-Subscribers are people, IoT are devices, government is a contract line: the pool
-is a billable-connections accounting frame, never one summed population. The
-premium terminal bucket is likewise a price tier, not a platform claim: example
-applications (ships, aircraft, premium IoT, government uses, remote enterprise)
-are illustrative of who buys a higher-price service tier, never a statement of
-where the 1.25 million premium units sit.
+The same sheet at the **~2,000-satellite ceiling** (pool 367,058,824):
 
-Against that revenue the fleet is the cheap part. The steady-state fleet cost is
-**145 million dollars per year** (the flat cost model: satellites at 1.0M each,
-launches at 13.0M at any cadence), so the margin is about **98.2 percent**, and
-the promoted artifact now carries that figure as its published margin metric.
-The definition travels with the number: the margin measures revenue against the
-fleet's full build, launch, and replacement cost (the steady-state annual cost);
-operations cost is the explicit zero pending research and corporate overhead is
-never included, so this is an operating-style margin in the data-center model's
-convention, not a gross margin and not a net margin. The honest caveat stays
-loud: Iridium spends about **376 million dollars per year** of real cash
-operating cost today, so an Iridium-scaled operating line still leaves the
-margin north of **90 percent** (the founder's 90-percent-plus frame). Sizing
-that line is the tracked open item.
-
-One reconciliation before the sweep: the four-bucket total (about **8.25 billion
-dollars per year**) exceeds the single-tier sweep table below because it adds the
-premium, IoT, and government lines on top of the standard tier and rides capacity
-under full sell-through; the sweep tables that follow are the standard-tier price
-sensitivity around the published point, not a competing total.
-
-The first anchor is what Iridium's customers pay today (reported FY2025
-ARPUs, fact-tier, COMM-618; the government line is COMM-619): IoT devices
-**$7.78 per month**, voice and data **$47 per month**, Certus broadband
-**$259 per month** for a 0.7 Mbps-class service, plus the fixed **~$108M per
-year** government contract. Those are
-premium-niche prices on a starved network (the whole 66-satellite fleet
-moves about 174 Mbps): evidence of what captive segments will bear, not
-mass-market comps. At $259 for 0.7 Mbps the incumbent price per megabit is
-roughly 650 times terrestrial broadband (a home line at about 100 dollars a
-month for about 180 Mbps is roughly 0.55 dollars per megabit; Certus is about
-370). A modernized fleet with about
-1,500 times today's supply on the same spectrum is what breaks that pricing
-regime: it can sell abundance at mass prices while keeping the premium book
-(today's Certus buyer gets roughly 4 Mbps instead of 0.7).
-
-The second anchor is the mass-market range the founder has set for the
-standard phone-class tier: **$10 to $20 per month**, positioned so the
-service can stand in for a phone plan where none exists (the subscriber
-target is a slice of the ~300 million people without coverage, COMM-021).
-What that range produces, as plain arithmetic (price times subscribers
-times 12, estimate-tier; the saturation column uses the ~62 million
-standard-tier ceiling detailed in the saturation section below and inherits
-its density-chain caveat):
-
-| Price per month | Revenue at 10M subscribers | Revenue at the ~62M cap |
+| Bucket | Count at the cap | Revenue per year |
 |---|---:|---:|
+| Standard personal | 55,058,824 people | $9,910.6M |
+| Premium terminal | 7,341,176 people | $8,809.4M |
+| IoT devices | 303,943,059 devices | $29,178.5M |
+| Government | 715,765 | $635.6M |
+| **Total** | 367,058,824 connections | **about $48.5B** |
+
+And the margin, at both fleet sizes:
+
+| Fleet | Revenue per year | Fleet cost per year | Margin |
+|---|---:|---:|---:|
+| 340 satellites | about $8.25B | about $145M | about **98.2 percent** |
+| ~2,000 satellites | about $48.5B | about $835M | about **98.3 percent** |
+
+The definition travels with the number: the margin measures revenue against
+the fleet's full build, launch, and replacement cost; operations cost is the
+explicit zero pending research and corporate overhead is never included, so
+it is an operating-style margin in the data-center model's convention, not a
+gross margin and not a net margin. For scale, Iridium spends about **$376M a
+year** of real operating cost today (revenue $871.7M minus operational
+EBITDA $495.3M, COMM-615/616), so an Iridium-scaled operating line still
+leaves the margin north of **90 percent**. Three postures are stated, not hidden: full
+sell-through (every serveable slot sells), the constant mix as the fleet
+grows, and the premium bucket as a **price tier** (ships, aircraft, premium
+IoT, and government uses are illustrative examples of who buys it, never a
+claim about where 1.25 million units sit). A documented alternative sheet
+(Sheet B: today's device ratio, about 39.3 million devices, about $7.07B a
+year) sits in the scenario file and the ledger.
+
+Two anchors ground the prices:
+
+| Anchor | The numbers |
+|---|---|
+| What Iridium's customers pay today (FY2025, COMM-618/619) | IoT $7.78; voice and data $47; Certus broadband $259 for a 0.7 Mbps-class service; the fixed ~$108M/yr government contract |
+| The founder's standard-tier range | $10 to $20 per month, sized for the ~300 million people without coverage (COMM-021) |
+
+Today's prices are premium-niche prices on a starved network: at $259 for
+0.7 Mbps, the incumbent price per megabit runs roughly 650 times terrestrial
+broadband (a home line at about $100 a month for about 180 Mbps is roughly
+$0.55 per megabit; Certus is about $370). A modernized fleet with about 1,500 times today's supply on the
+same spectrum is what breaks that regime: it sells abundance at mass prices
+while keeping the premium book (today's Certus buyer gets roughly 4 Mbps
+instead of 0.7). The standard-tier price sensitivity around the published
+point:
+
+| Standard-tier price | Revenue at 10M subscribers | At the ~62M cap |
+|---:|---:|---:|
 | $10 | $1.2B per year | $7.4B per year |
 | $15 | $1.8B per year | $11.2B per year |
 | $20 | $2.4B per year | $14.9B per year |
 
-Against those revenues the fleet is the cheap part: the whole build-and-hold
-through FY2036 is **$900M**, the steady-state annual cost is
-**$145M per year**, so the margin at the founder range (measured as defined
-above, with operations still the zero-held line) runs
-roughly **88 to 94 percent**, and the fleet repays inside its first year
-across the whole range. The honest caveat repeats: the operations line is
-the explicit zero stated above, and Iridium today spends about **$376M per year** of
-real cash operating cost (revenue $871.7M minus operational EBITDA $495.3M),
-so a true operating line lands the margin meaningfully below that
-figure. Sizing that line is the tracked open item.
+The structural read: the expensive part of this business was never the
+satellites ($900M builds the whole baseline fleet), it was the spectrum
+position, and that came with the ~$8.0B acquisition (COMM-602). The
+modernized fleet's book replaces today's $871.7M-a-year Iridium book as the
+old fleet retires; the two are never summed, and neither are people and
+devices.
 
-The IoT line is now one of the four published buckets, not a separate add-on:
-51,670,320 devices at 8 dollars, about **$4,960M per year**, still with zero
-effect on fleet sizing (the former 10-million passthrough is superseded by the
-mix-derived bucket count when the ARPU case is on). The corpus envelope is tens
-of millions of devices. And the existing business does not stop: the acquisition
-brings **$871.7M per year** of revenue at a 56.8 percent operational-EBITDA
-margin with it (COMM-615/616). The four-bucket case models the modernized
-fleet's own book, which replaces today's Iridium book as the old 66-satellite
-fleet retires; the two are never summed (nor are the people and device counts
-ever summed as one population).
+## The Aperture What-If
 
-The structural read follows: the expensive part of this business was never
-the satellites, it was the spectrum position, and that came with the ~$8.0B
-acquisition (COMM-602). At the founder's range the new mass-market service
-alone would repay the acquisition in a few years, on top of the existing
-book. All of the above is scenario arithmetic on stated dials: the four-bucket
-price-and-mix sheet is published (Sheet A), and the finer per-tier detail
-(terminal sub-tiers, carrier-wholesale lines) plus the prices and the mix stay
-founder-owned and open.
-
-## The Spectrum Upside, And The Aperture Story
-
-Two levers move the baseline, and both are labeled so they are never mistaken
-for the default.
-
-The first is spectrum. The 8 MHz baseline is the exclusive holding. Iridium's
-full coordinated span is **10.5 MHz**, including a Globalstar-shared sliver that
-is the subject of a live FCC dispute (which becomes Rocket Lab versus Amazon
-after both acquisitions close). Winning the full 10.5 MHz adds about **31
-percent** to everything, to about 40,950 subscribers per satellite. It is gated
-on that coordination, so it is an upside variant, not the baseline.
-
-The second is aperture. At 1.6 GHz, frequency does the work of area: a 25
-square meter array has the gain and cell size of a much larger array at cellular
-frequencies, so the design point is many small satellites, not few large ones.
-25 square meters is also the no-fold maximum of Neutron's 5.5 meter fairing. A
-larger satellite of about **60 square meters** carries 2.4 times the capacity,
-which can be spent one way or the other: per-phone rates roughly double at
-today's density (about 2 Mbps at peak; the lightly-loaded reading stays
-capped by the class-fixed beam pool), or
-density rises to about **74,880 subscribers per satellite** at today's rates,
-about 25 million at the same 340 satellites (the model's what-if takes the
-density side). But a 60 square meter panel is about 7.7 meters on a side as a
-square. It does not stow flat in Neutron's fairing without folding,
-which the flat-panel design philosophy rejects, and a no-fold 60 square meter
-satellite needs a roughly 7-to-8-meter-class fairing, a larger and heavier
-rocket. That vehicle does not exist, so the larger-aperture case stays out of
-the model and lives here in prose as a labeled hypothetical: a real later step,
-not a slight stretch.
-
-Deployment speed is the third dial. At the conservative 18 percent cadence
-share the coverage fleet completes in 2035. A higher launch share pulls that
-in: model runs put a 50 percent share at **2033**, an 80 percent share at
-**2032**, and a 90 percent share at **2031**, and 2031 is the floor, because
-the early whole-fleet ramp itself (2, 3, 5, 9, 14 launches a year through
-2031) means even a 100 percent share cannot finish sooner on the default
-ramp. Faster than that is a faster-ramp scenario, not a share scenario. 340
-is a floor, not a ceiling, and the saturation section below is what happens
-as the fleet grows past it.
-
-## The Saturation Ceiling
-
-The founder's load-bearing point: past some number of satellites, more
-satellites stop helping. On a fixed band, capacity comes from beams reusing the
-spectrum over non-overlapping patches of ground. Once every patch under the
-fleet is already covered by a beam on the 8 MHz, adding more satellites adds
-overlapping co-channel beams that interfere rather than add, and the system goes
-interference-limited. The model encodes this as a saturation cap of about
-**2,000 satellites**. The mechanism is multi-source in the corpus
-([`research/direct_communication/dtc_capacity_supply.md`](../research/direct_communication/dtc_capacity_supply.md),
-COMM-413 through COMM-416).
-
-At the cap, the model's own numbers by service tier:
-
-| Tier | Subscribers per satellite | At the 2,000-satellite cap |
-|---|---:|---:|
-| Standard (1.0 Mbps active) | 31,200 | about **62 million** |
-| Rich (2.5 Mbps active) | 12,480 | about **25 million** |
-
-A warning must travel with these numbers, and it is loud on purpose: the
-corpus carries two density chains, and they are different-meaning numbers. The
-model's chain is capacity-first: per-satellite Gbps calibrated to the corpus
-supply anchor, then divided by the per-user load at phone-class efficiency,
-giving the 31,200 and the cap figures above. The corpus separately carries a
-density rule of about 3,000 subscribers per satellite per megahertz, built on
-gain-terminal spectral efficiency, and at these tiers it implies roughly twice
-these densities (about 24,000 per satellite at the 2.5 Mbps rate on 8 MHz,
-about 48 million at the cap). Both chains are estimate-tier, and they are not
-the same calculation, so they must never be blended. The sharpest trap is a
-near-collision: the model's **31,200** (8 MHz, 1.0 Mbps, phone-class
-efficiency) and the corpus rule's **31,500** (10.5 MHz, the
-3,000-per-megahertz chain) are numerically adjacent and conceptually
-different. Never conflate them. The numbers this conclusion stands behind are
-the model's calibrated numbers, the conservative side at these tiers.
-
-### Why Can Starlink Fly 11,000-Plus Satellites When We Saturate At 2,000?
-
-The saturation ceiling scales with the spectrum held, so the honest answer is
-that Starlink's ceiling sits far higher because Starlink holds far more
-spectrum, discriminates with a dish that a phone cannot, and spreads its fleet
-across orbital shells. Three grounded reasons, in order of weight:
-
-1. **Spectrum breadth.** Starlink's broadband service rides on the order of
-   **2,000-plus megahertz** of Ku-band user spectrum (eight 250 MHz channels),
-   and the whole system incorporates more than 20 GHz once the Ka and E-band
-   backhaul are counted. That is against our **8 to 10.5 MHz** of L-band. The
-   saturation ceiling is linear in spectrum, so a fleet on hundreds of times the
-   bandwidth saturates at hundreds of times the satellite count.
-
-2. **Terminal gain.** A Starlink dish has real aperture and discriminates
-   angularly: it can distinguish satellites in different sky positions, so many
-   satellites can reuse the same frequencies to neighboring dishes at the same
-   time. That angular reuse is a whole extra dimension a zero-gain phone
-   physically cannot offer. Our phone tier has no such discrimination, which is
-   exactly why the phone lane is the tightest one.
-
-3. **Shells and inclinations.** Starlink flies multiple orbital shells at
-   different altitudes and inclinations (the Gen2 plan is roughly 30,000
-   satellites across shells near 340 to 360, 525 to 535, and 604 to 614
-   kilometers). Inclination concentrates satellites over the latitudes where
-   demand is, and multiple shells ease coordination. This is the smallest of the
-   three factors, and interference between Starlink's own satellites is real but
-   managed, with narrow beams on both ends plus frequency coordination.
-
-The clean check, and it is estimate-tier: Starlink's own dedicated
-direct-to-cell fleet is filed at **15,000 satellites on about 65 MHz** of
-cellular spectrum, roughly **230 satellites per megahertz**. Our saturation cap
-is **2,000 satellites on 8 MHz**, roughly **250 satellites per megahertz**.
-Almost the same satellites-per-megahertz ratio. It is the same physics and the
-same wall, scaled by the spectrum each system holds. Starlink does not escape
-the ceiling. It buys a higher one.
+At 1.6 GHz, frequency does the work of area: a 25 square meter array has the
+gain and cell size of a much larger array at cellular frequencies, so the
+design point is many small satellites, not few large ones, and 25 square
+meters is the no-fold class for Neutron's 5.5 meter fairing. A **60 square
+meter** satellite carries 2.4x the capacity, spendable one way or the other:
+per-user rates roughly double at today's density, or density rises to about
+**74,880 per satellite** (about 25 million at the same 340 satellites; the
+model's what-if takes the density side). But a 60 square meter panel is
+about 7.7 meters on a side as a square: it does not stow in Neutron without
+folding, which the flat-panel philosophy rejects, so the case needs a
+7-to-8-meter-class fairing, a larger rocket that does not exist. It stays
+out of the model as a labeled hypothetical: a real later step, not a slight
+stretch.
 
 ## What Would Change The Verdict
 
-The baseline is the reference case, and a handful of assumptions carry it:
-
-- **The ecosystem assumption.** If Iridium's band never enters standard phone
-  chipsets, the phone-class rates do not reach unmodified phones at all, and the
-  reachable service is the terminal and device tiers plus IoT. The barrier is
-  commercial, not physical, but it is real and unresolved.
+- **The ecosystem assumption, scoped to the phone row only.** If Iridium's
+  band never enters standard phone chipsets, the phone tier stays closed and
+  the service is the antenna tiers plus IoT, which carry the published
+  economics on their own. Commercial barrier, not physical.
 - **Concurrency.** The per-user rates rest on 2.5 percent busy-hour and 0.5
-  percent off-peak concurrency. The peak figure is corpus-central; the off-peak
-  figure is a founder-set pair with no corpus anchor.
-- **The density chains.** The 62-million and 25-million cap figures inherit the
-  calibrated chain and its roughly factor-of-two tension with the corpus rule.
-- **Operations cost.** Held at zero by explicit assumption. A real operating
-  line will lower every margin.
-- **Pricing.** The published four-bucket ARPU case rests on founder-set scenario
-  prices (Sheet A: 15 / 100 / 8 / 74 dollars per month across the four buckets)
-  and unproven willingness to pay in an uncovered-market base, plus the
-  full-sell-through-on-capacity assumption. That case is now the model's
-  published revenue case; the prices and the sell-through are the open levers,
-  and the per-bucket mix is held constant as the fleet grows.
+  percent off-peak. The peak figure is corpus-central; the off-peak figure
+  is a founder-set pair with no corpus anchor.
+- **The density chains.** The cap figures inherit the calibrated phone-class
+  chain and its roughly factor-of-two tension with the corpus gain-terminal
+  rule (read: terminal-tier headroom, never blended).
+- **Operations cost.** The explicit zero. A real operating line lowers every
+  margin; Iridium's own $376M a year is the scale hint.
+- **Pricing and sell-through.** The published revenue rests on founder-set
+  prices (Sheet A: 15 / 100 / 8 / 74), full sell-through on capacity, and a
+  constant mix as the fleet grows: stated scenario dials, unproven demand.
 
 ## Structural Context
 
-This model exists because Rocket Lab bought Iridium, which reframes Rocket Lab
-from a greenfield entrant into an incumbent MSS operator with owned,
-globally-coordinated spectrum, an operating fleet, ground infrastructure, and
-2.5 million customers, plus the modernization decision this model sizes (see
+This model exists because Rocket Lab bought Iridium, which reframes Rocket
+Lab from a greenfield entrant into an incumbent MSS operator with owned,
+globally coordinated spectrum, an operating fleet, ground infrastructure,
+and 2.5 million customers, plus the modernization decision this model sizes
+(see
 [`research/rocket_lab/iridium_acquisition.md`](../research/rocket_lab/iridium_acquisition.md)).
 The broader argument for why Rocket Lab, almost alone, owns the parts, the
 rocket, and the production lines to build a fleet like this is the shared
