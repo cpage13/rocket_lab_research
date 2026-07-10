@@ -243,7 +243,7 @@ and both dials sit in-band of the research anchors:
 | Launch, flat at any cadence | **$13.0M** | Just below the shared curve's grounded $13.5M high-cadence floor |
 | Build-and-hold through FY2036 | **$900M exactly** | The 29-launch build plus the replacement treadmill: 432 satellites across 36 launches |
 | Steady-state fleet cost | **$145M per year** | Satellites are replaced on a five-year life |
-| Per subscriber | $7.50 per year (final-year replacement artifact); about $14.50 annualized | Aligning to the annualized basis is a tracked open item |
+| Per subscriber | $7.50 per year (one lumpy final year of satellite replacement spread over the base, not life-amortized); about $14.50 annualized | Aligning to the annualized basis is a tracked open item |
 
 Operations cost is held at **zero** by explicit assumption, a fixed line to
 research and add later, stated in every model output rather than hidden.
@@ -265,6 +265,10 @@ full sell-through on capacity):
 | IoT devices | 82.805 percent | $8 | 51,670,320 devices | $4,960.4M |
 | Government | 0.195 percent | $74 | 121,680 | $108.1M |
 | **Total** | 100 percent | | 62,400,000 connections | **$8,250.8M** |
+
+The pool is a billable-connections accounting frame over which the mix
+percentages are defined: subscribers are people, IoT are devices, government
+is a contract line, and the three are never summed as one population.
 
 The same sheet at the **~2,000-satellite ceiling** (pool 367,058,824):
 
@@ -312,7 +316,8 @@ $0.55 per megabit; Certus is about $370). A modernized fleet with about 1,500 ti
 same spectrum is what breaks that regime: it sells abundance at mass prices
 while keeping the premium book (today's Certus buyer gets roughly 4 Mbps
 instead of 0.7). The standard-tier price sensitivity around the published
-point:
+point (a sensitivity view pricing the standard tier alone, not a competing
+total):
 
 | Standard-tier price | Revenue at 10M subscribers | At the ~62M cap |
 |---:|---:|---:|
@@ -334,7 +339,8 @@ gain and cell size of a much larger array at cellular frequencies, so the
 design point is many small satellites, not few large ones, and 25 square
 meters is the no-fold class for Neutron's 5.5 meter fairing. A **60 square
 meter** satellite carries 2.4x the capacity, spendable one way or the other:
-per-user rates roughly double at today's density, or density rises to about
+per-user peak rates roughly double at today's density (the lightly-loaded
+reading stays capped by the class-fixed beam pool), or density rises to about
 **74,880 per satellite** (about 25 million at the same 340 satellites; the
 model's what-if takes the density side). But a 60 square meter panel is
 about 7.7 meters on a side as a square: it does not stow in Neutron without
