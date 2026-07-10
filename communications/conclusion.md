@@ -19,9 +19,13 @@ digital beamforming carries roughly **1,000 times** the data of one Iridium
 satellite today on the very same spectrum. The rest of this document builds the
 outcome of that modernization from its parts.
 
-One assumption sits underneath the phone numbers and is stated here up front,
-not buried: a literally unmodified 2026 phone receives nothing on Iridium's
-1616 to 1626.5 MHz band. The phone-class rates below assume the band enters
+The service is device-diverse by design: purpose-built terminals (a puck, a
+USB device with a small antenna on a laptop, a mounted unit), IoT modules,
+and, conditionally, phones. The phone is one path, not the dependency, and
+the baseline below is computed at the weakest device class, so every other
+device does better on the same fleet. One assumption sits underneath the
+phone numbers and is stated here up front, not buried: a literally unmodified
+2026 phone receives nothing on Iridium's 1616 to 1626.5 MHz band. The phone-class rates below assume the band enters
 standard phone chipsets (the in-chipset ecosystem assumption), the path
 Qualcomm and Iridium built and demonstrated once and then terminated in
 November 2023 with zero phone adoption. The barrier there is commercial, not physics.
@@ -145,9 +149,10 @@ sizing effect on the subscriber service.
 The phone tier is the narrowest doorway into this service, not the service
 itself. It is the one tier that rides the ecosystem assumption; the boosted
 tiers need nobody's permission. The small terminal is a paperback-size puck
-(about 10 dBi, unpointed, purpose-built hardware Rocket Lab can ship
-itself), and it already sees about **3.1 Mbps at peak and 15.4 lightly
-loaded**. No dish, no pointing, no installer.
+or a USB device with a small antenna plugged into a laptop (about 10 dBi,
+unpointed, purpose-built hardware Rocket Lab can ship itself), and it
+already sees about **3.1 Mbps at peak and 15.4 lightly loaded**. No dish, no
+pointing, no installer.
 
 The band itself is the reliability story. At 1.6 GHz path loss is low and
 weather is nearly transparent: the rain and cloud fade that degrades Ku- and

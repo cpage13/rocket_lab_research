@@ -73,18 +73,21 @@ less than one home internet connection; a single modern flat panel on the same
 spectrum carries roughly **1,000x** that. At **340 satellites**, deployed by
 about **2035** on an 18% share of Neutron's cadence (about 29 launches), the
 fleet serves about **10 million subscribers** at about **31,200 per satellite**
-on just the **8 MHz** Iridium owns outright: about **1 Mbps** per phone at peak
-and **5 Mbps** off peak, roughly 3 and 16 for a small boosted antenna, 4 and 20
-mounted, with IoT devices in the tens of millions riding nearly free. At the
-data-center revenue convention the fleet earns about **$252M a year at a 33%
-gross margin**.
+on just the **8 MHz** Iridium owns outright. The service is device-diverse:
+about **1 Mbps** at peak and **5 Mbps** off peak on the weakest device class (a
+phone-class radio with no external antenna), roughly 3 and 16 through a small
+antenna (a puck, or a USB device on a laptop), 4 and 20 mounted, with IoT
+devices in the tens of millions riding nearly free. At the data-center revenue
+convention the fleet earns about **$252M a year at a 33% gross margin**.
 
 The ceiling is spectrum, not satellites: the fleet saturates near **2,000
 satellites** (about 25 to 62 million subscribers depending on service tier),
-and winning the full coordinated 10.5 MHz would add about 31%. The load-bearing
-assumption is stated plainly throughout: phones need chipmakers to adopt the
-band, while purpose-built devices and IoT carry no such assumption. The full
-case, with every number traced:
+and winning the full coordinated 10.5 MHz would add about 31%. The phone is one
+device path, not the focus: purpose-built terminals and IoT modules need no
+chipmaker's permission, while phone-class service needs the band in standard
+chipsets, an assumption stated plainly throughout. The baseline is computed at
+the weakest device class, so every other device does better on the same fleet.
+The full case, with every number traced:
 
 - [communications/conclusion.md](communications/conclusion.md): the verdict, the saturation ceiling, and why Starlink's 11,000-satellite fleet does not contradict it.
 - [communications/assumptions.md](communications/assumptions.md): every dial with its source class, including why the cadence share is what it is.
