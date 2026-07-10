@@ -159,7 +159,7 @@ All are `derived_estimate`.
 | Build launches (12 per launch) | 29 |
 | Coverage complete | 2035 |
 | Cost-plus revenue at 33.3 percent margin | about 251.5 million dollars per year |
-| Cash cost per subscriber (build-year artifact, see conclusion caveat) | about 7.95 dollars per year |
+| Cash cost per subscriber (final-year replacement-cost artifact, see conclusion caveat) | about 7.95 dollars per year |
 
 ## Catalog Status
 
