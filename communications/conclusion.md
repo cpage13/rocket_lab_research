@@ -170,24 +170,28 @@ can hold, mount, or embed.
 
 ## Revenue And Cost
 
-The default revenue case is cost-plus, the same discipline as the data-center
-model: price at a flat 1.5 times annualized cost, which produces a **33.3
-percent margin**. On the 340-satellite baseline the cost-plus revenue is about
-**251.5 million dollars per year** at that margin. The subscriber-price (ARPU)
-revenue case is deliberately deferred: it awaits the founder setting per-tier
-MSS prices, so the model does not yet publish an ARPU revenue number. As a
-grounded shape datapoint, Iridium today turns 2.54 million subscribers into
-about 872 million dollars a year of total revenue.
+The model's solid ground here is the cost side. The build-and-hold cost of
+the 340-satellite fleet is about **1,085 million dollars**: 340 satellites at
+1.05 million dollars each plus about 29 launches priced on the model's
+cadence-indexed launch-cost curve. The cash cost per subscriber is about
+**7.95 dollars per year**, with a caveat: that figure is a build-year cash
+artifact (fleet cost spread over the served base in the coverage year), not a
+life-amortized number. On an annualized basis the per-subscriber cost is
+higher (roughly 17 dollars per subscriber per year at 10 million), and
+aligning the model to the annualized basis is a tracked open item. Operations
+cost is held at **zero** by explicit assumption, a fixed line to research and
+add later, and it is stated in every model output rather than hidden.
 
-The build-and-hold cost of the 340-satellite fleet is about **1,085 million
-dollars**. The cash cost per subscriber is about **7.95 dollars per year**,
-with a caveat: that figure is a build-year cash artifact (fleet cost spread over
-the served base in the coverage year), not a life-amortized number. On an
-annualized basis the per-subscriber cost is higher (roughly 17 dollars per
-subscriber per year at 10 million), and aligning the model to the annualized
-basis is a tracked open item. Operations cost is held at **zero** by explicit
-assumption, a fixed line to research and add later, and it is stated in every
-model output rather than hidden.
+The model's only published revenue number is deliberately a floor, and it
+should be read as one. The cost-plus case prices the service at a flat 1.5
+times annualized cost (the same discipline the data-center model uses,
+carried while the real price sheet was unset), which produces about **251.5
+million dollars per year at a 33.3 percent margin** on the baseline. That is
+a cost-recovery discipline, not a market forecast: it implies charging about
+2.10 dollars per subscriber per month, far below every real price anchor in
+this document. The subscriber-price (ARPU) case in code stays deferred until
+the founder sets the per-tier MSS price sheet; until then, the scenario
+ranges below are the honest statement of what the service could earn.
 
 ### What The Service Could Earn (Scenario Ranges)
 
@@ -274,10 +278,15 @@ rocket. That vehicle does not exist, so the larger-aperture case stays out of
 the model and lives here in prose as a labeled hypothetical: a real later step,
 not a slight stretch.
 
-Deployment speed is the third dial. At the conservative 18 percent cadence share
-the coverage fleet completes in 2035. At a higher launch share the same 29
-launches compress into a **3 to 7 year** build. 340 is a floor, not a ceiling,
-and the next section is what happens as the fleet grows past it.
+Deployment speed is the third dial. At the conservative 18 percent cadence
+share the coverage fleet completes in 2035. A higher launch share pulls that
+in: model runs put a 50 percent share at **2033**, an 80 percent share at
+**2032**, and a 90 percent share at **2031**, and 2031 is the floor, because
+the early whole-fleet ramp itself (2, 3, 5, 9, 14 launches a year through
+2031) means even a 100 percent share cannot finish sooner on the default
+ramp. Faster than that is a faster-ramp scenario, not a share scenario. 340
+is a floor, not a ceiling, and the saturation section below is what happens
+as the fleet grows past it.
 
 ## The Saturation Ceiling
 
