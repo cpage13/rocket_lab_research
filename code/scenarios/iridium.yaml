@@ -22,8 +22,12 @@
 # spectral efficiency, aperture area, active rate, busy-hour concurrency) instead
 # of reading the fixed `subscribers_per_satellite` dial, then feeds the SAME
 # `compute_fleet_target` and fleet machinery (cadence, cohorts, cost, cost-plus
-# revenue). Every value below is set EXPLICITLY and equals the schema default, so
-# this file is a faithful, self-documenting statement of the phone-class baseline.
+# revenue). Every value below is set EXPLICITLY. All values EXCEPT the two cost
+# dials equal the schema default; the launch cost and the satellite build cost
+# deliberately DIVERGE from the shared-spine defaults (founder simplification
+# 2026-07-09, a flat cost model, see the `launch_cost:` and `satellite:` blocks
+# below). This file stays a faithful, self-documenting statement of the
+# phone-class baseline.
 #
 # THE BASELINE NUMBERS this file reproduces (frozen in
 # tests/communications/test_iridium_model.py): per-satellite capacity
@@ -39,16 +43,49 @@
 # label lives in exactly one home, `iridium.scenario_name` (mirroring the
 # `GroundInterfaceDials` precedent: an optional block carries its own label).
 #
-# All fleet dials (cadence, launch cost, satellite build cost 1.05 $M, lifetime
-# 5 years, coverage floor 340, saturation cap 2,000, comms share 0.18, subscriber
-# target 10M, revenue multiple 1.5) are the shared config defaults, inherited
-# unchanged. Operations cost is assumed zero: an explicit stated assumption
+# The fleet dials (cadence, lifetime 5 years, coverage floor 340, saturation cap
+# 2,000, comms share 0.18, subscriber target 10M, revenue multiple 1.5) are the
+# shared config defaults, inherited unchanged. The TWO EXCEPTIONS are the cost
+# dials: this scenario sets a deliberately FLAT cost model (founder simplification
+# 2026-07-09), a flat launch cost of 13.0 $M at every cadence and a satellite build
+# cost of 1.0 $M, both founder-set overrides of the shared-spine defaults (the
+# config defaults themselves, the 25 to 13.5 $M launch curve and the 1.05 $M build
+# cost, are UNTOUCHED, so the cellular family and the equality tripwire are
+# unaffected). Operations cost is assumed zero: an explicit stated assumption
 # (IRIDIUM_OPERATIONS_COST_MUSD), a fixed line to research and add later. The
 # prices-today ARPU revenue case is PUBLISHED as the four-bucket case (the `arpu:`
 # block at the end of this file, founder-set Sheet A 2026-07-09); cost-plus stays
 # beside it as the cost-recovery floor. `spectrum_mhz` is a WIDTH held (8 MHz
 # exclusive), not a frequency. This file computes no conclusion: it is the input
 # contract, and the engine writes the trajectory.
+
+# =============================================================================
+# The FLAT cost model (founder simplification 2026-07-09)
+# =============================================================================
+#
+# A deliberate simplification: no stepped pricing as launches scale. Both cost
+# dials are founder-set and in-band of the research anchors, and both OVERRIDE the
+# shared-spine config defaults (left untouched, so the cellular family and the
+# equality tripwire still see the defaults). At the baseline this freezes the
+# whole build-and-hold at 900.0 $M (432 satellites x 1.0 + 36 launches x 13.0), a
+# 145.0 $M/yr steady-state annual cost, and a 7.50 $/subscriber/yr final-year
+# replacement figure.
+#
+# The shared launch-cost spine is a log-linear curve from 25.0 $M at 5 launches
+# per year down to a 13.5 $M high-cadence floor at 100. Setting BOTH cadence
+# anchors equal makes the curve FLAT at 13.0 $M for every cadence (the log-linear
+# machinery handles equal endpoints as a zero slope). 13.0 sits just below the
+# grounded 13.5 high-cadence floor. The two launches anchors (5 and 100 launches
+# per year) stay at their defaults.
+launch_cost:
+  low_cadence_cost_musd: 13.0   # founder-flat: the low-cadence anchor, set equal to high
+  high_cadence_cost_musd: 13.0  # founder-flat: the high-cadence anchor (the curve is flat at 13.0)
+
+# Only the flat hardware build cost is overridden here; the per-launch count (12)
+# and the 5-year lifetime stay at their defaults. 1.0 sits just below the prior
+# 1.05 dial and the ~1.2 $M Starlink V3 hardware anchor (COMM-080).
+satellite:
+  satellite_build_cost_musd: 1.0  # founder-flat hardware cost, just below the 1.05 default
 
 iridium:
   # The held L-band WIDTH in MHz (a width, not a frequency; the dial position is
@@ -119,6 +156,13 @@ iridium:
   # DEVICES; government is a contract line: the pool is a billable-connections
   # accounting frame (Iridium's own convention folds IoT devices into "billable
   # subscribers", COMM-617), NOT one summed people population.
+  #
+  # The PREMIUM bucket is a PRICE TIER, not a population claim about specific
+  # platforms: the 1,248,000 premium connections are simply the higher-price
+  # service tier. Example applications (ships, aircraft, premium IoT, government
+  # uses, remote enterprise) are purely ILLUSTRATIVE, never a claim about which
+  # platforms hold the 1.25M units (the world merchant fleet, for one, is far
+  # smaller).
   #
   # SHEET A (this block, the blessed default) at 340 satellites, all exact:
   #   people share = standard + premium = 17.0 percent

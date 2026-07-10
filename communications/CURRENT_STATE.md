@@ -17,7 +17,8 @@ conclusion.
   High-Bandwidth Cellular Pure Play suites, the cross-import guard, and the
   data-center parity gate (174 tests at build close; 172 comms plus parity
   and 554 whole-tree as of 2026-07-09, the published four-bucket ARPU case
-  added; mypy strict and ruff clean).
+  and the flat-cost simplification both landed that day; mypy strict and
+  ruff clean).
 - The evidence library lives in `research/` under the `COMM-*` claim ledger.
 
 ## Current Read
@@ -25,12 +26,18 @@ conclusion.
 The Iridium baseline is coverage-bound, not capacity-bound: 340 satellites by
 2035 at an 18 percent cadence share serve about 10 million subscribers at
 31,200 per satellite on the owned 8 MHz, at 1.0 Mbps peak and 5.0 off peak to
-a phone, with cost-plus revenue of about 251.5 million dollars per year at a
-33.3 percent margin. Beside that cost-plus floor the model now publishes the
+a phone, with cost-plus revenue of 217.5 million dollars per year at a
+33.3 percent margin. The cost model is founder-flat (simplification
+2026-07-09): satellites 1.0 million dollars each and launches 13.0 million at
+any cadence, scenario overrides only (the shared-spine defaults untouched),
+giving a 900.0 million dollar build-and-hold and a 145.0 million dollar
+steady-state annual cost. Beside that cost-plus floor the model publishes the
 four-bucket ARPU case (Sheet A, founder-set 2026-07-09): about 8,250.8 million
-dollars per year at the baseline under full sell-through on capacity, about 98
-percent pre-operations margin against the roughly 170 million dollar
-steady-state fleet cost. Treat those as traceable model outputs from
+dollars per year at the baseline under full sell-through on capacity, about a
+98.2 percent margin against the steady-state fleet cost (operating-style:
+measured against the fleet's full build, launch, and replacement cost, with
+operations the explicit zero and corporate overhead excluded; the promoted
+artifact carries the metric). Treat those as traceable model outputs from
 `communications/models/iridium/default.json`, not a final recommendation. A
 two-round traceability audit (converged 2026-07-08) verified 91 numbers with
 zero numeric discrepancies and four citation ids corrected in code (one of
@@ -46,9 +53,9 @@ consolidated unit-cost trajectory row).
   at a constant mix under full sell-through on capacity.
 - Operations cost is explicitly zero, a stated assumption and a fixed line to
   research and add later.
-- The cash cost per subscriber (7.95 dollars per year) is the final-year
+- The cash cost per subscriber (7.50 dollars per year) is the final-year
   replacement-cost artifact (one lumpy hold-phase year); aligning to the
-  annualized basis (about 17 dollars per subscriber per year at 10 million)
+  annualized basis (14.50 dollars per subscriber per year at 10 million)
   is a tracked open item.
 - The old pre-rewrite communications tree (the former CLI, output, comparison,
   and validation layers and their tests) was retired 2026-07-07. The live tree
