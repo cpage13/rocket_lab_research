@@ -180,15 +180,22 @@ can hold, mount, or embed.
 
 ## Revenue And Cost
 
-The model's solid ground here is the cost side. The build-and-hold cost is
-about **1,085 million dollars**: every satellite built and every launch flown
-through FY2036, meaning the 29-launch build to the 340-satellite fleet plus
-the five-year replacement treadmill behind it (432 satellites across 36
-launches in total, priced on the model's cadence-indexed launch-cost curve). The cash cost per subscriber is about
-**7.95 dollars per year**, with a caveat: that figure is the final-year
+The model's solid ground here is the cost side, and the cost model is
+deliberately flat (a founder simplification, 2026-07-09): every satellite costs
+**1.0 million dollars** to build and every launch costs **13.0 million
+dollars**, at any cadence, with no stepped pricing as launches scale. Both
+values are founder-set and in-band of the research anchors (13.0 sits just
+below the shared launch-cost curve's grounded 13.5 high-cadence floor; 1.0 sits
+just below the prior 1.05 dial and the roughly 1.2 million Starlink V3 hardware
+anchor). The build-and-hold cost is **900 million dollars** exactly: every
+satellite built and every launch flown through FY2036, meaning the 29-launch
+build to the 340-satellite fleet plus the five-year replacement treadmill
+behind it (432 satellites across 36 launches in total: 432 x 1.0 plus 36 x
+13.0). The cash cost per subscriber is
+**7.50 dollars per year**, with a caveat: that figure is the final-year
 steady-state replacement cost per subscriber (one lumpy hold-phase year of
 satellite replacement spread over the base), not a life-amortized number. On an annualized basis the per-subscriber cost is
-higher (roughly 17 dollars per subscriber per year at 10 million), and
+higher (14.50 dollars per subscriber per year at 10 million), and
 aligning the model to the annualized basis is a tracked open item. Operations
 cost is held at **zero** by explicit assumption, a fixed line to research and
 add later, and it is stated in every model output rather than hidden.
@@ -196,10 +203,10 @@ add later, and it is stated in every model output rather than hidden.
 The model's cost-recovery revenue number is deliberately a floor, and it
 should be read as one. The cost-plus case prices the service at a flat 1.5
 times annualized cost (the same discipline the data-center model uses,
-carried while the real price sheet was unset), which produces about **251.5
+carried while the real price sheet was unset), which produces **217.5
 million dollars per year at a 33.3 percent margin** on the baseline. That is
 a cost-recovery discipline, not a market forecast: it implies charging about
-2.10 dollars per subscriber per month, far below every real price anchor in
+1.81 dollars per subscriber per month, far below every real price anchor in
 this document. The subscriber-price (ARPU) case is now published beside it: the
 four-bucket case (standard personal, premium terminal, IoT devices, government),
 a founder-set price-and-mix sheet dated 2026-07-09, detailed below. The two
@@ -223,15 +230,25 @@ billable-connection pool of 62,400,000 under full sell-through on capacity):
 | Total | 100 percent |  | 62,400,000 connections | 8,250.8M |
 
 Subscribers are people, IoT are devices, government is a contract line: the pool
-is a billable-connections accounting frame, never one summed population. Against
-that revenue the fleet is the cheap part. The steady-state fleet cost is roughly
-**170 million dollars per year** (satellites at 1.05M each, launches 25 down to
-13.5M on the cadence curve), so the pre-operations margin is about **98
-percent**. The honest caveat stays loud: operations is the explicit zero, and
-Iridium spends about **376 million dollars per year** of real cash operating
-cost today, so an Iridium-scaled operating line still leaves the margin north of
-**90 percent** (the founder's 90-percent-plus frame). Sizing that line is the
-tracked open item.
+is a billable-connections accounting frame, never one summed population. The
+premium terminal bucket is likewise a price tier, not a platform claim: example
+applications (ships, aircraft, premium IoT, government uses, remote enterprise)
+are illustrative of who buys a higher-price service tier, never a statement of
+where the 1.25 million premium units sit.
+
+Against that revenue the fleet is the cheap part. The steady-state fleet cost is
+**145 million dollars per year** (the flat cost model: satellites at 1.0M each,
+launches at 13.0M at any cadence), so the margin is about **98.2 percent**, and
+the promoted artifact now carries that figure as its published margin metric.
+The definition travels with the number: the margin measures revenue against the
+fleet's full build, launch, and replacement cost (the steady-state annual cost);
+operations cost is the explicit zero pending research and corporate overhead is
+never included, so this is an operating-style margin in the data-center model's
+convention, not a gross margin and not a net margin. The honest caveat stays
+loud: Iridium spends about **376 million dollars per year** of real cash
+operating cost today, so an Iridium-scaled operating line still leaves the
+margin north of **90 percent** (the founder's 90-percent-plus frame). Sizing
+that line is the tracked open item.
 
 One reconciliation before the sweep: the four-bucket total (about **8.25 billion
 dollars per year**) exceeds the single-tier sweep table below because it adds the
@@ -270,13 +287,14 @@ its density-chain caveat):
 | $20 | $2.4B per year | $14.9B per year |
 
 Against those revenues the fleet is the cheap part: the whole build-and-hold
-through FY2036 is about **$1,085M**, the steady-state annual cost is roughly
-**$170M per year**, so the pre-operations margin at the founder range runs
-roughly **86 to 93 percent**, and the fleet repays inside its first year at
-the middle of the range. The honest caveat is the word pre-operations: the operations line is
+through FY2036 is **$900M**, the steady-state annual cost is
+**$145M per year**, so the margin at the founder range (measured as defined
+above, with operations still the zero-held line) runs
+roughly **88 to 94 percent**, and the fleet repays inside its first year
+across the whole range. The honest caveat repeats: the operations line is
 the explicit zero stated above, and Iridium today spends about **$376M per year** of
 real cash operating cost (revenue $871.7M minus operational EBITDA $495.3M),
-so a true operating line lands the margin meaningfully below the pre-ops
+so a true operating line lands the margin meaningfully below that
 figure. Sizing that line is the tracked open item.
 
 The IoT line is now one of the four published buckets, not a separate add-on:

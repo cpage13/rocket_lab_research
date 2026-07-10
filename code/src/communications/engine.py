@@ -1210,19 +1210,20 @@ def build_iridium_result(
 def arpu_stated_assumptions(dials: IridiumArpuDials) -> tuple[str, ...]:
     """Return the ARPU case's stated-assumption lines (one source of truth).
 
-    The three posture statements the published four-bucket case carries: full
+    The four posture statements the published four-bucket case carries: full
     sell-through on capacity, the honest mix posture (people-and-government share,
     the de-anchored government line, IoT the residual, the constant-mix convention),
-    and the built-fleet convention. Consumed both by :func:`iridium_assumptions` (spliced
-    into the full assumptions tuple) and by the promoted artifact's
-    ``revenue_arpu_buckets`` block, so the two never drift.
+    the built-fleet convention, and the margin definition (how the published margin
+    is measured). Consumed both by :func:`iridium_assumptions` (spliced into the full
+    assumptions tuple) and by the promoted artifact's ``revenue_arpu_buckets`` block,
+    so the two never drift.
 
     Args:
         dials: The validated :class:`~communications.config.IridiumArpuDials` (its
             mixes populate the honest posture line).
 
     Returns:
-        The three ARPU-posture strings, in stable order.
+        The four ARPU-posture strings, in stable order.
     """
     people_and_gov_pct = dials.standard_mix_pct + dials.premium_mix_pct + dials.government_mix_pct
     return (
@@ -1250,6 +1251,13 @@ def arpu_stated_assumptions(dials: IridiumArpuDials) -> tuple[str, ...]:
             "fleet (fleet_target), so on a scenario that does not complete its build "
             "inside the horizon the case describes the completed fleet, not the final "
             "horizon year's smaller actual fleet."
+        ),
+        (
+            "Margin definition: the published ARPU margin measures revenue against the "
+            "fleet's full build, launch, and replacement cost (the steady-state annual "
+            "cost). Operations cost is the explicit zero pending research and corporate "
+            "overhead is never included, so it is an operating-style margin (the "
+            "data-center model's convention), not a gross margin and not a net margin."
         ),
     )
 

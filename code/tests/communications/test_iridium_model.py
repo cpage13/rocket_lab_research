@@ -139,6 +139,22 @@ ARPU_IOT_REVENUE_MUSD = 4_960.350_72  # 51,670,320 x 8 x 12 / 1e6.
 ARPU_GOVERNMENT_REVENUE_MUSD = 108.051_84  # 121,680 x 74 x 12 / 1e6.
 ARPU_TOTAL_REVENUE_MUSD = 8_250.802_56  # the four summed.
 
+# ---------------------------------------------------------------------------
+# The FLAT cost model (founder simplification 2026-07-09). The iridium scenario
+# overrides the shared cost spine with a flat 13.0 $M launch (both cadence anchors
+# equal) and a 1.0 $M satellite build cost. Frozen exact at the 340-satellite
+# baseline (432 satellites across 36 launches over the horizon). These are SCENARIO
+# values, not the config defaults (25 to 13.5 $M and 1.05 $M), which are untouched.
+# ---------------------------------------------------------------------------
+FLAT_BUILD_AND_HOLD_COST_MUSD = 900.0  # 432 satellites x 1.0 + 36 launches x 13.0.
+FLAT_STEADY_STATE_REPLACEMENT_COST_MUSD = 75.0  # the final-year hold-phase replacement.
+FLAT_COST_PER_SUBSCRIBER_ANNUAL_USD = 7.5  # 75.0 M USD / 10,000,000 subscribers.
+FLAT_STEADY_STATE_ANNUAL_COST_MUSD = 145.0  # the annualized fleet cost basis.
+FLAT_STEADY_STATE_REVENUE_COST_PLUS_MUSD = 217.5  # 145.0 x the 1.5 cost-plus multiple.
+# The published ARPU margin against that flat-cost steady-state annual cost:
+# (8,250.80256 - 145.0) / 8,250.80256 x 100.
+ARPU_MARGIN_VS_STEADY_STATE_COST_PCT = 98.242_595_202_762_91
+
 # Test-3 scaling base: a non-frozen capacity whose float pool is NOT integral, so the
 # round-half-up genuinely exercises the plus-or-minus-1 count tolerance at 2X.
 ARPU_SCALING_CAPACITY_X = 7_000_000
@@ -441,9 +457,12 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
     file out). Success: the file exists, the provenance names the model
     'iridium', echoes the stamp, and carries schema iridium-v2; the frozen
     baseline keys/values are in the payload (subscribers_per_satellite 31,200 in
-    both blocks, fleet target 340, the stated-assumptions lines present); the two
-    inherited placeholder ARPU fields are gone; and the published four-bucket
-    revenue_arpu_buckets block carries the frozen Sheet A values.
+    both blocks, fleet target 340, the stated-assumptions lines present); the
+    flat-cost model (founder simplification 2026-07-09) freezes exact (900.0 M
+    build-and-hold, 75.0 M replacement, 7.5 USD/sub, 145.0 M annual cost, 217.5 M
+    cost-plus revenue); the two inherited placeholder ARPU fields are gone; and the
+    published four-bucket revenue_arpu_buckets block carries the frozen Sheet A
+    values plus the published margin (98.2 percent) against the steady-state cost.
     """
     out_path = tmp_path / "iridium_default.json"
     written = export_iridium_json(_SCENARIO_YAML, out_path, version_stamp="test-stamp")
@@ -458,6 +477,20 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
         == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE
     )
     assert payload["trajectory_summary"]["fleet_target"] == EXPECTED_FLEET_TARGET_BASELINE
+    # The flat-cost model (founder simplification 2026-07-09), frozen exact from the
+    # scenario's flat 13.0 $M launch and 1.0 $M build overrides.
+    ts = payload["trajectory_summary"]
+    assert ts["total_build_and_hold_cost_musd"] == pytest.approx(FLAT_BUILD_AND_HOLD_COST_MUSD)
+    assert ts["steady_state_annual_replacement_cost_musd"] == pytest.approx(
+        FLAT_STEADY_STATE_REPLACEMENT_COST_MUSD
+    )
+    assert ts["cost_per_subscriber_annual_usd"] == pytest.approx(
+        FLAT_COST_PER_SUBSCRIBER_ANNUAL_USD
+    )
+    assert ts["steady_state_annual_cost_musd"] == pytest.approx(FLAT_STEADY_STATE_ANNUAL_COST_MUSD)
+    assert ts["steady_state_revenue_cost_plus_musd"] == pytest.approx(
+        FLAT_STEADY_STATE_REVENUE_COST_PLUS_MUSD
+    )
     assert (
         payload["iridium_physics"]["subscribers_per_satellite"]
         == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE
@@ -484,6 +517,10 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
     )
     assert buckets["total_connections"] == ARPU_POOL_BASELINE
     assert buckets["arpu_revenue_total_musd"] == pytest.approx(ARPU_TOTAL_REVENUE_MUSD)
+    # The published ARPU margin against the flat-cost steady-state annual cost (145.0 M).
+    assert buckets["arpu_margin_vs_steady_state_cost_pct"] == pytest.approx(
+        ARPU_MARGIN_VS_STEADY_STATE_COST_PCT
+    )
     # IoT supersession (one IoT truth): the physics IoT count is the bucket count.
     assert payload["iridium_physics"]["iot_devices"] == ARPU_IOT_COUNT
 

@@ -34,7 +34,11 @@ evidence.
 ## Key Sourced And Derived Dials
 
 The dials below carry the physics. Every one is a named constant in
-`code/src/communications/constants.py` with its derivation in the docstring.
+`code/src/communications/constants.py` with its derivation in the docstring,
+except the two founder-flat cost dials (satellite build cost, launch cost),
+which are explicit scenario overrides in `code/scenarios/iridium.yaml`: the
+shared-spine config defaults they diverge from stay untouched, so the cellular
+family and the equality tripwire still see the defaults.
 
 | Dial | Default | Source status | Source |
 |---|---|---|---|
@@ -47,7 +51,8 @@ The dials below carry the physics. Every one is a named constant in
 | Aperture reference | 25.0 square meters | `sourced_estimate` | The corpus flat-array class (`COMM-408/410`, about 20 to 24 square meters, called 25-square-meter class). Flatellite's own dimensions are unpublished; the 25 is a render-read working number, flagged as such. |
 | No-fold aperture limit | 25.0 square meters | `derived_estimate` (geometry) | A 60 square meter flat square is about 7.7 meters across, past Neutron's 5.5 meter fairing; a 25 square meter square is 5.0 meters and fits. The no-deployable design philosophy is `COMM-251`. |
 | Satellites per launch | 12 | `derived_estimate`, estimate-bound | `COMM-258/260`: about 9,500 kg to SSO over the roughly 800 kg single-source mass estimate (`COMM-253/256`) gives about 12. |
-| Satellite build cost | 1.05 million dollars | `scenario` | Founder-set, in-band below the Starlink V3 hardware anchor of about 1.2 million dollars (`COMM-080`, the consolidated unit-cost trajectory row; a projection, hardware-cost analogy only). |
+| Satellite build cost | 1.0 million dollars | `scenario`, founder-flat | Founder simplification 2026-07-09, a deliberately flat cost model. Scenario override in `iridium.yaml`, deliberately diverging from the shared config default of 1.05 (untouched); in-band, just below that prior dial and the Starlink V3 hardware anchor of about 1.2 million dollars (`COMM-080`, the consolidated unit-cost trajectory row; a projection, hardware-cost analogy only). |
+| Launch cost (flat) | 13.0 million dollars per launch | `scenario`, founder-flat | Founder simplification 2026-07-09: both cadence anchors of the shared log-linear curve set equal in `iridium.yaml`, so the launch cost is flat at every cadence (no stepped pricing as launches scale). In-band, just below the shared curve's grounded 13.5 high-cadence floor; the shared-spine default curve (25.0 to 13.5) is untouched. |
 | Satellite lifetime | 5 years | `scenario` | The corpus Starlink operating-life lineage (`COMM-097`). |
 | Coverage floor | 340 satellites | `scenario` on a computed basis | The project coverage simulation's 95 percent column reads 341 at 450 km and a 25 degree mask, founder-rounded to 340; inside `COMM-216`'s 290 to 960 floor band. |
 | Saturation cap | 2,000 satellites | `scenario` | Founder-set dial encoding the tiling/interference ceiling (`COMM-413` to `COMM-416` own the mechanism; `COMM-550/553` the fleet scale). |
@@ -82,10 +87,11 @@ Values were untouched throughout.
 
 ## The Assumptions Register
 
-Distilled from the converged audit: the 30 assumption-class values in the
-model, with provenance. Founder-set means the founder chose or confirmed the
-value; convention means a stated modeling or engineering convention. The last
-six rows are modeling posture the audit surfaced and stated explicitly.
+Distilled from the converged audit and maintained as defaults change: the
+assumption-class values in the model, with provenance. Founder-set means the
+founder chose or confirmed the value; convention means a stated modeling or
+engineering convention. Rows 33 to 38 are modeling posture the audit surfaced
+and stated explicitly; rows 39 onward were added as the model grew.
 
 ### Founder-Set Values
 
@@ -103,7 +109,7 @@ six rows are modeling posture the audit surfaced and stated explicitly.
 | 10 | Coverage floor (simulation 341, rounded) | 340 satellites |
 | 11 | Saturation cap (the tiling/interference dial) | 2,000 satellites |
 | 12 | Communications share of Neutron cadence | 0.18 |
-| 13 | Satellite build cost (below the V3 anchor) | 1.05 million dollars |
+| 13 | Satellite build cost (founder-flat 2026-07-09, below the prior 1.05 dial and the V3 anchor; the shared config default 1.05 untouched) | 1.0 million dollars |
 | 14 | Cost-plus revenue multiple (data-center mirror) | 1.5x |
 | 15 | IoT device passthrough (devices, not people); superseded on the promoted artifact when the ARPU case is on (the published IoT count then derives from the revenue mix, the IoT bucket, about 51.7M at the baseline) | 10,000,000 |
 | 16 | ARPU revenue case: the PUBLISHED four-bucket case (standard personal, premium terminal, IoT devices, government), founder-set Sheet A 2026-07-09, mixes 15.0 / 2.0 / 82.805 / 0.195 percent at prices 15 / 100 / 8 / 74 dollars per month (about 8,250.8 million dollars per year at the baseline under full sell-through). The cellular-family 50-dollar ARPU is a separate case value, no longer carried on the promoted Iridium artifact | published |
@@ -116,7 +122,10 @@ buckets, each a percentage mix of one pool anchored to fleet capacity
 satellite count. Subscribers are people (standard, premium); IoT are devices;
 government is a contract line. The pool is a billable-connections accounting
 frame (Iridium's own convention folds IoT devices into billable subscribers),
-never one summed people population.
+never one summed people population. The premium bucket is a price tier, not a
+platform claim: example applications (ships, aircraft, premium IoT, government
+uses, remote enterprise) are illustrative of who buys the higher-price service
+tier, never a statement of where the 1.25 million premium units sit.
 
 The default is Sheet A (founder-set 2026-07-09): mixes 15.0 / 2.0 / 82.805 /
 0.195 percent at prices 15 / 100 / 8 / 74 dollars per month. At the
@@ -171,13 +180,13 @@ over.
 | 25 | Scenario label lives in one place on the Iridium block | single home |
 | 26 | Base year 2026, horizon 10 years (data-center mirror timeline) | FY2036 end |
 | 27 | Cadence ramp anchors: 14 at year 5, 90 at year 10, ceiling 150, first launch index 1 (scenario, not Rocket Lab guidance) | shared spine |
-| 28 | Launch-cost curve: 25.0 to 13.5 million dollars, log-linear over 5 to 100 launches per year | shared spine |
+| 28 | Launch-cost curve: 25.0 to 13.5 million dollars, log-linear over 5 to 100 launches per year; the iridium scenario overrides it FLAT at 13.0 (both cost anchors set equal, founder simplification 2026-07-09; the shared-spine default curve untouched) | shared spine, scenario-flattened |
 | 29 | Satellite lifetime, the five-year cohort cliff | 5 years |
 | 30 | Satellites per launch at the reference aperture (estimate-bound on the single-source mass) | 12 |
 | 31 | IoT load treated as exactly zero in sizing (contention-limited) | 0 load |
 | 32 | One device class per run (mixed fleets are a future extension) | single class |
 | 33 | Uniform-demand geography: every satellite counts as serving demand; ocean and empty-land time not modeled | fleet = target / density |
-| 34 | The purpose-built L-band payload is assumed cost-identical to the cellular-family satellite at 25 square meters (1.05 million dollars, 12 per launch); the equivalence is asserted, not argued | carried unchanged |
+| 34 | The purpose-built L-band payload is assumed cost-equivalent to the cellular-family satellite at 25 square meters (12 per launch); the iridium scenario prices the hardware founder-flat at 1.0 million dollars while the cellular default stays 1.05; the equivalence is asserted, not argued | carried |
 | 35 | The 10.5 MHz variant assumes winning the live FCC coordination (authorized today: 7.775 plus 0.95 shared) | contingent |
 | 36 | Deployment is generic build-and-hold from 2026, not deal-timed (close mid-2027; replacement window about 2035) | a shape, not a dated plan |
 | 37 | No spares, no launch failures, no satellite failures inside the five-year life | perfect fleet |
@@ -185,6 +194,7 @@ over.
 | 39 | ARPU full sell-through: every serveable billable-connection slot the built fleet can carry is sold (revenue rides capacity, not the served target); clearly optimistic, stated, founder-owned | sell-through |
 | 40 | ARPU mix posture: the people-and-government share is loosely anchored on the FY2025 book's like-for-like share (about 21.2 percent); government is de-anchored to reproduce the one fixed EMSS contract; IoT is the residual; the mix is held constant as the fleet grows (v1) | market shape |
 | 41 | ARPU built-fleet convention: the revenue case is computed once at the built fleet (fleet_target), so a below-target build describes the completed fleet, not the final horizon year's smaller actual fleet | built fleet |
+| 42 | The flat cost model (founder-set simplification, 2026-07-09): launch cost 13.0 million dollars at every cadence and satellite build cost 1.0 million dollars, no stepped pricing as launches scale; both in-band of the research anchors; scenario overrides only, the shared-spine defaults untouched (the cellular family and the equality tripwire still see the defaults) | flat 13.0 / 1.0 |
 
 ## Model Output Anchors
 
@@ -201,8 +211,11 @@ All are `derived_estimate`.
 | Fleet aggregate capacity | 265.2 Gbps |
 | Build launches (12 per launch) | 29 |
 | Coverage complete | 2035 |
-| Cost-plus revenue at 33.3 percent margin | about 251.5 million dollars per year |
-| Cash cost per subscriber (final-year replacement-cost artifact, see conclusion caveat) | about 7.95 dollars per year |
+| Build-and-hold cost through FY2036 (flat cost model: 432 satellites x 1.0 + 36 launches x 13.0) | 900.0 million dollars |
+| Steady-state annual fleet cost (annualized basis) | 145.0 million dollars per year |
+| Cost-plus revenue at 33.3 percent margin | 217.5 million dollars per year |
+| Cash cost per subscriber (final-year replacement-cost artifact, see conclusion caveat) | 7.50 dollars per year |
+| ARPU margin vs steady-state cost (operating-style; the conclusion carries the definition) | about 98.2 percent |
 | ARPU standard bucket (people) | 9,360,000 at 15 dollars, 1,684.8 million dollars per year |
 | ARPU premium bucket (people) | 1,248,000 at 100 dollars, 1,497.6 million dollars per year |
 | ARPU IoT bucket (devices) | 51,670,320 at 8 dollars, about 4,960.4 million dollars per year |

@@ -5,6 +5,51 @@ data-center valuation calculator and, from July 2026, the communications model
 families. Versions track each output JSON **schema version** (data center: v8;
 the Iridium model: iridium-v2).
 
+## The Iridium model, schema iridium-v2 (2026-07-09), the flat cost model and the published ARPU margin
+
+A same-day follow-on to the four-bucket ARPU case, per founder direction:
+the cost model is simplified to founder-flat dials, the promoted ARPU block
+now carries its margin metric, and the margin naming is corrected across the
+communications docs (it is not a gross margin).
+
+### Changed
+
+- **The flat cost model (scenario-level only, no config-schema change).**
+  `scenarios/iridium.yaml` now sets `launch_cost.low_cadence_cost_musd` and
+  `launch_cost.high_cadence_cost_musd` both to 13.0 (equal anchors make the
+  shared log-linear curve flat: 13.0 $M per launch at every cadence, just
+  below the grounded 13.5 high-cadence floor; the two launches anchors stay
+  default) and `satellite.satellite_build_cost_musd` to 1.0 (just below the
+  prior 1.05 dial and the ~1.2 $M Starlink V3 hardware anchor, COMM-080).
+  The shared-spine config defaults (the 25.0-to-13.5 curve, the 1.05 build
+  cost) are untouched, so the cellular family and the equality tripwire are
+  unaffected. New frozen baseline costs, all exact: build-and-hold 900.0 $M
+  (432 satellites x 1.0 + 36 launches x 13.0), steady-state replacement
+  75.0 $M/yr, steady-state annual cost 145.0 $M/yr, cost-plus revenue
+  217.5 $M/yr, cost per subscriber 7.50 USD/yr. The ARPU bucket block is
+  unchanged (total 8,250.80256 $M/yr).
+- **The published ARPU margin** (`json_output.py`, within schema iridium-v2,
+  same-day additive field): the `revenue_arpu_buckets` block gains
+  `arpu_margin_vs_steady_state_cost_pct`, ARPU revenue less the steady-state
+  annual cost over ARPU revenue (98.2426 percent at the baseline), computed by
+  a pure helper against the trajectory's `steady_state_annual_cost_musd` with
+  the engine's zero-revenue guard convention. `arpu_stated_assumptions`
+  (`engine.py`) gains a fourth posture line defining the metric honestly:
+  measured against the fleet's full build, launch, and replacement cost;
+  operations the explicit zero pending research; corporate overhead never
+  included; an operating-style margin, not a gross margin and not a net margin.
+- **Tests**: `test_promoted_json_export_writes_frozen_baseline` now freezes the
+  five flat-cost values and the margin exactly (new named constants); the
+  equality tripwire and every other test untouched (554 passed, DC parity 8).
+- Docs refreshed in tandem: `communications/conclusion.md` (the flat-cost
+  paragraph, the 217.5 cost-plus floor at about 1.81 dollars per subscriber
+  per month, the 98.2 percent margin with its definition, the 88-to-94
+  percent founder-range sweep, the premium price-tier reframe),
+  `communications/assumptions.md` (the two founder-flat dial rows, register
+  rows 13/28/34 plus the new row 42, the output anchors, the premium
+  price-tier note), the root `README.md` (about $218M a year at a 33 percent
+  margin), and `communications/CURRENT_STATE.md`.
+
 ## The Iridium model, schema iridium-v2 (2026-07-09), the published four-bucket ARPU revenue case
 
 The Iridium ARPU revenue case, previously deferred, is now published: four

@@ -53,10 +53,23 @@ MODEL_NAME: Final[str] = "iridium"
 IRIDIUM_SCHEMA_VERSION: Final[str] = "iridium-v2"
 """The promoted Iridium artifact's schema version tag. ``iridium-v2`` (2026-07-09)
 removes the two inherited placeholder ARPU fields from the trajectory summary and adds
-the published four-bucket ``revenue_arpu_buckets`` block."""
+the published four-bucket ``revenue_arpu_buckets`` block, which carries the per-bucket
+lines plus the published ARPU margin against the fleet's steady-state annual cost
+(``arpu_margin_vs_steady_state_cost_pct``)."""
 
 JSON_INDENT: Final[int] = 2
 """Indentation for the emitted JSON (the house ``model_dump_json`` convention)."""
+
+ARPU_MARGIN_PERCENT_SCALE: Final[float] = 100.0
+"""Percent scale for the published ARPU margin: ``(revenue - cost) / revenue`` times
+this yields a percentage (e.g. 0.982 -> 98.2), mirroring the model's fleet-margin
+convention so every margin in the workstream reads in the same unit."""
+
+ARPU_MARGIN_UNDEFINED_PCT: Final[float] = 0.0
+"""The ARPU margin when revenue is non-positive (an empty pool): undefined, so it
+reports 0.0 rather than dividing by zero. The block only exists on a populated pool
+(revenue strictly positive), so this guard is defensive, mirroring the engine's
+zero-revenue margin guard."""
 
 EXIT_OK: Final[int] = 0
 """Process exit code for a successful promotion."""
@@ -251,6 +264,14 @@ class RevenueArpuBucketsBlock(BaseModel):
     arpu_revenue_total_musd: float = Field(
         description="The summed annual revenue across the four buckets, $M/yr."
     )
+    arpu_margin_vs_steady_state_cost_pct: float = Field(
+        description=(
+            "The published ARPU margin: ARPU revenue less the fleet's full steady-state "
+            "annual cost (build, launch, replacement), over ARPU revenue, percent. "
+            "Operations is the explicit zero and corporate overhead is excluded: an "
+            "operating-style margin, not a gross margin and not a net margin."
+        )
+    )
     stated_assumptions: tuple[str, ...] = Field(
         description=(
             "The ARPU case's stated-assumption strings (full sell-through, the mix "
@@ -308,13 +329,45 @@ def _arpu_bucket_block(bucket: IridiumArpuBucket) -> ArpuBucketBlock:
     )
 
 
+def _arpu_margin_vs_steady_state_cost_pct(
+    arpu_revenue_total_musd: float, steady_state_annual_cost_musd: float
+) -> float:
+    """The published ARPU margin against the fleet's full steady-state annual cost.
+
+    ``(revenue - cost) / revenue x 100``. The cost basis is the fleet's full
+    build-launch-replacement steady-state annual cost; operations is the explicit
+    zero and corporate overhead is excluded, so this is an operating-style margin,
+    not a gross margin and not a net margin. Mirrors the engine's zero-revenue guard.
+
+    Args:
+        arpu_revenue_total_musd: The summed four-bucket ARPU revenue, $M/yr.
+        steady_state_annual_cost_musd: The fleet's representative HOLD-phase
+            annualized cost, $M/yr (build, launch, replacement).
+
+    Returns:
+        The margin in percent, or :data:`ARPU_MARGIN_UNDEFINED_PCT` when revenue is
+        not positive.
+    """
+    if arpu_revenue_total_musd <= 0.0:
+        return ARPU_MARGIN_UNDEFINED_PCT
+    return (
+        (arpu_revenue_total_musd - steady_state_annual_cost_musd)
+        / arpu_revenue_total_musd
+        * ARPU_MARGIN_PERCENT_SCALE
+    )
+
+
 def _build_arpu_buckets_block(
-    result: IridiumArpuResult, stated_assumptions: tuple[str, ...]
+    result: IridiumArpuResult,
+    steady_state_annual_cost_musd: float,
+    stated_assumptions: tuple[str, ...],
 ) -> RevenueArpuBucketsBlock:
     """Map the engine's IridiumArpuResult onto the promoted revenue_arpu_buckets block.
 
     Args:
         result: The engine's computed four-bucket ARPU result.
+        steady_state_annual_cost_musd: The trajectory's steady-state annual fleet cost,
+            $M/yr, the margin's cost basis.
         stated_assumptions: The ARPU-case posture strings (from
             :func:`~communications.engine.arpu_stated_assumptions`), carried inline.
 
@@ -328,6 +381,9 @@ def _build_arpu_buckets_block(
         government=_arpu_bucket_block(result.government),
         total_connections=result.total_connections,
         arpu_revenue_total_musd=result.arpu_revenue_total_musd_yr,
+        arpu_margin_vs_steady_state_cost_pct=_arpu_margin_vs_steady_state_cost_pct(
+            result.arpu_revenue_total_musd_yr, steady_state_annual_cost_musd
+        ),
         stated_assumptions=stated_assumptions,
     )
 
@@ -414,7 +470,11 @@ def build_iridium_artifact(
         ecosystem_assumption=physics.ecosystem_assumption,
     )
     revenue_arpu_buckets = (
-        _build_arpu_buckets_block(physics.arpu, arpu_stated_assumptions(config.iridium.arpu))
+        _build_arpu_buckets_block(
+            physics.arpu,
+            trajectory.steady_state_annual_cost_musd,
+            arpu_stated_assumptions(config.iridium.arpu),
+        )
         if physics.arpu is not None and config.iridium.arpu is not None
         else None
     )
