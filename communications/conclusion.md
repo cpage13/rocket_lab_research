@@ -6,10 +6,11 @@ feasibility verdict on modernizing that spectrum with a Neutron-launched
 fleet.
 
 The business meaning in one paragraph: for about **$900 million** of total
-hardware and launch spend, a 340-satellite fleet serves about 10 million
-subscribers plus about 52 million IoT devices and earns about **$8.25 billion
-a year** at set prices, an operating margin near **98 percent** against the
-$145 million a year it costs to keep the fleet flying. Scaled to the most
+hardware and launch spend, a 340-satellite fleet serves about 10.6 million
+subscribers plus about 51.7 million IoT devices and earns about **$8.25 billion
+a year** at set prices with every serveable slot sold, an operating margin
+near **98 percent** against the $145 million a year of satellite replacement
+that keeps the fleet flying. Scaled to the most
 satellites the spectrum can use, about 2,000, the same sheet reads about
 **$48.5 billion a year**. The bet is demand and the not-yet-modeled
 operations line, never the hardware.
@@ -307,7 +308,7 @@ Certus buyer gets roughly 4 Mbps instead of 0.7). The standard-tier price
 sensitivity around the published point (a sensitivity view pricing the
 standard tier alone, not a competing total):
 
-| Standard-tier price | Revenue at 10M subscribers | At the 62-million ceiling |
+| Standard-tier price | Revenue at 10M subscribers | At the 62-million ceiling (about 2,000 satellites) |
 |---|---|---|
 | $10 per month | $1.2B/yr | $7.4B/yr |
 | $15 per month | $1.8B/yr | $11.2B/yr |
