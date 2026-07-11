@@ -112,7 +112,9 @@ class DeviceClass(StrEnum):
     ``PHONE_CLASS`` is the cell phone: the 0-dBi in-chipset phone-form-factor baseline
     (SE band 0.5 to 0.8 bps/Hz, central :data:`PHONE_CLASS_SE_CENTRAL`).
     ``SMALL_TERMINAL_CLASS`` is the small boosted antenna: paperback/puck size, ~20 cm
-    integrated patch, ~10 dBi, unpointed, purpose-built with NO chipset assumption
+    integrated patch, ~10 dBi on a self-orienting mount (a fixed tilt or switched
+    elements; no user pointing, no moving parts; founder decision 2026-07-10),
+    purpose-built with NO chipset assumption
     (SE band 1.5 to 2.5, central :data:`SMALL_TERMINAL_CLASS_SE_CENTRAL`).
     ``TERMINAL_CLASS`` is the LARGE boosted / custom-antenna tier: mounted or pointed,
     15+ dBi (drones, fixed sites, vehicles; SE band 2.0 to 3.0, central
@@ -166,9 +168,13 @@ target year), matching the DC model's 10-year horizon."""
 
 SATELLITES_PER_LAUNCH_DEFAULT: Final[int] = 12
 """DERIVED (COMM-258 / COMM-260). Satellites per Neutron launch, a DIRECT input
-scalar. The mass-bound count for a Flatellite-class (~800 kg) bird against the
-Neutron reusable SSO envelope (~9,500 kg) is ~12; the LEO envelope (~13,000 kg)
-gives ~16. Default 12 (SSO), with ~16 the LEO upside. Estimate-bound on the
+scalar. The mass basis is the MISSION LEO envelope (founder steering 2026-07-10;
+this constellation does not target SSO): 12 x ~800 kg = ~9,600 kg loads the
+certified ~13,000 kg LEO figure (NTR-001) at 73.8 percent, a comfortable
+manifest. Recorded beside it: Neutron has had no block upgrade yet, one is
+likely within about five years, and no 3x-class capacity multiples are assumed.
+The ~9,500 kg SSO envelope (NTR-005, a sourced estimate) is the data-center
+mission's basis and stays only as that note. Estimate-bound on the
 single-source ~800 kg Flatellite mass read (COMM-253 / COMM-256)."""
 
 SATELLITE_LIFETIME_YEARS_DEFAULT: Final[int] = 5
@@ -348,10 +354,16 @@ PHONE_CLASS_SE_HIGH: Final[float] = 0.8
 spectral-efficiency sweep band."""
 
 SMALL_TERMINAL_CLASS_SE_CENTRAL: Final[float] = 2.0
-"""ESTIMATE (derived; brainstorming 9c device ladder). Central of the 1.5 to 2.5
-bps/Hz band for the SMALL boosted-antenna device: paperback/puck size, ~20 cm
-integrated patch, ~10 dBi, unpointed, purpose-built so NO chipset assumption (OUR
-hardware; the founder's 10 to 20 Mbps tier in 9c). Derivation anchor: phone-class SE
+"""ESTIMATE (derived; brainstorming 9c device ladder; device spec re-based by
+founder decision 2026-07-10). Central of the 1.5 to 2.5 bps/Hz band for the SMALL
+boosted-antenna device: paperback/puck size, ~20 cm integrated patch, ~10 dBi on a
+self-orienting mount (a fixed tilt or a few switched elements; no user pointing, no
+moving parts), purpose-built so NO chipset assumption (OUR hardware; the founder's
+10 to 20 Mbps tier in 9c). The mount is part of the spec because patch gain is
+directional: a bare flat face-up patch realizes the full ~10 dBi only at high
+elevations and slides toward phone-class at low ones (physics loop C-122 / C-213);
+the self-orienting spec recovers most of the gain at typical link elevations.
+Derivation anchor: phone-class SE
 0.65 implies SNR ~0.57 (2 ** 0.65 - 1); +10 dB of antenna gain is SNR ~5.7; Shannon
 log2(1 + 5.7) ~2.7; real systems reach ~60 to 80 percent of Shannon (~1.65 to 2.19),
 so ~2.0 central."""
@@ -380,10 +392,11 @@ TERMINAL_CLASS_SE_HIGH: Final[float] = 3.0
 spectral-efficiency sweep band."""
 
 REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE: Final[float] = 0.15
-"""DERIVED (COMM-410). The per-satellite capacity calibration, in Gbps per (MHz x
-bps/Hz), at the :data:`APERTURE_REFERENCE_M2` reference aperture. It is NOT a clean
-unit conversion: it folds the effective ~150x beam-count-times-frequency-reuse
-multiplier of a modern digital-beamforming satellite together with the Mbps-to-Gbps
+"""DERIVED (COMM-410 / COMM-411). The per-satellite capacity calibration, in Gbps per
+(MHz x bps/Hz), at the :data:`APERTURE_REFERENCE_M2` reference aperture. It is NOT a
+clean unit conversion: it folds the effective ~150x beam-count-times-frequency-reuse
+multiplier of a modern digital-beamforming satellite (inside COMM-411's 130 to 200x
+effective-reuse band) together with the Mbps-to-Gbps
 scaling (0.15 Gbps per (MHz x bps/Hz) = 150 effective reuse x (1 Gbps / 1000 Mbps)).
 CHOSEN so the corpus anchor reproduces: 25 MHz x 2.5 SE x 0.15 = 9.375 Gbps, the
 central of the grounded ~5 to 15 Gbps-per-satellite range (COMM-410). It also
