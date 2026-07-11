@@ -123,8 +123,8 @@ hardware Rocket Lab can build and ship without anyone's permission:
 
 | Device tier | Efficiency (bits/Hz) | Peak | Lightly loaded | Requires |
 |---|---|---|---|---|
-| Small antenna (a puck, or a USB device on a laptop; about 10 dBi, unpointed) | 2.0 | about 3.1 Mbps | about 15.4 Mbps | Nothing: our hardware |
-| Mounted antenna (vehicles, ships, fixed sites; 15+ dBi) | 2.5 | about 3.9 Mbps | about 19.2 Mbps | Nothing: our hardware |
+| Small antenna (a puck, or a USB device on a laptop; about 10 dBi, self-orienting, no pointing) | 2.0 | about 3.1 Mbps | about 15.4 Mbps | Nothing: our hardware |
+| Mounted antenna (vehicles, ships, fixed sites; 15+ dBi) | 2.5 | about 3.8 Mbps | about 19.2 Mbps | Nothing: our hardware |
 | Phone, a possible later path (0 dBi, no external antenna) | 0.65 | about 1.0 Mbps | about 5.0 Mbps | The band in standard phone chipsets |
 
 Three facts organize the table:
@@ -145,6 +145,14 @@ Three facts organize the table:
    phone adoption: the barrier is commercial, not physics). The antenna
    tiers need no such assumption, which is why the phone is one possible
    later path and never the dependency.
+
+One design note travels with the small-antenna row. Antenna gain is
+directional, so the tier is specified with a self-orienting mount: a fixed
+tilt or a few switched elements, nothing the user points and no moving
+parts. A bare flat puck lying face-up earns these rates only when a
+satellite is high overhead and slides toward phone-class between passes;
+the mount in the spec is what makes the row's rates typical rather than
+best-case.
 
 The rates support messaging, voice, browsing, maps, photos, and audio.
 Probably not streaming video, and the service does not pretend otherwise.
