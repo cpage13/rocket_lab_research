@@ -165,10 +165,15 @@ of the speed.
 
 Separately, and counted separately, the same fleet carries **tens of
 millions of IoT devices**. IoT are devices, not people, and they ride nearly
-free: at kilobit-class rates the binding limit is random-access contention,
-not spectrum, so IoT is zero load in the sizing. The published device count
-derives from the revenue mix (about 51.7 million at the baseline); the
-10-million passthrough dial reports only when the ARPU case is off.
+free: at kilobit-class rates their traffic is negligible against the
+satellite's 780 Mbps, so IoT carries zero traffic load in the sizing. One
+honest qualifier: the random-access channel that carries them does reserve
+about 7 percent of the 8 MHz, so a fully joint sizing reads about 29,000
+subscribers per satellite rather than 31,200. The bits are free, the spectrum
+is nearly so, and the published 31,200 is the zero-IoT-load design figure. The
+published device count derives from the revenue mix (about 51.7 million at the
+baseline); the 10-million passthrough dial reports only when the ARPU case is
+off.
 
 ## How It Deploys: Launches And The Ceiling
 
@@ -177,8 +182,12 @@ capacity need, capped at saturation: at the 10-million target, coverage
 binds (the capacity need is 321 satellites), so the baseline fleet is
 **340 satellites, about 29 Neutron launches**. The ceiling is about
 **2,000 satellites, about 167 launches** (the two columns of the verdict
-table). Deployment speed is purely a manifest-share dial, and these are
-model runs, not estimates:
+table). The fleet flies at about **450 kilometers** and **53 degrees**
+inclination, the orbit that maximizes coverage of people: it reaches about
+99.6 percent of the world's population and needs about 10 percent fewer
+satellites than a polar orbit for the same coverage, and it is the orbit the
+340-satellite floor already assumes. Deployment speed is purely a
+manifest-share dial, and these are model runs, not estimates:
 
 | Share of Neutron's launches | The 340-satellite fleet completes |
 |---|---|
@@ -212,9 +221,16 @@ twice these densities. The two chains are different calculations at
 different device classes and must never be blended: the model's **31,200**
 (8 MHz, phone-class) and the corpus rule's **31,500** (10.5 MHz,
 gain-terminal chain) are numerically adjacent and conceptually different.
-This conclusion stands behind the model's calibrated chain, the conservative
-side; the gain-terminal chain is best read as the terminal-tier headroom
-above it.
+Both come from one formula: density per megahertz equals the spectral
+efficiency times a fixed reuse constant divided by the per-user busy-hour
+load. The corpus rule is that formula at gain-terminal efficiency over a
+roughly twice-heavier load basis, so "roughly twice these densities" is really
+the efficiency ratio, and the two numbers are just different points of the
+same equation. The corpus source is itself ambiguous by about a factor of two
+in the load it assumes, one more reason to read the gain-terminal chain as
+headroom and never to blend it with the calibrated number. This conclusion
+stands behind the model's calibrated chain, the conservative side; the
+gain-terminal chain is best read as the terminal-tier headroom above it.
 
 ### Why Starlink Flies Thousands More Satellites Than Our Ceiling
 
@@ -225,7 +241,7 @@ so the honest comparison is a table:
 |---|---|---|
 | User spectrum | 2,000+ MHz of Ku (eight 250 MHz channels; 20+ GHz system-wide with backhaul) | 8 to 10.5 MHz of L-band |
 | User hardware | A pointed dish: real aperture, angular discrimination | The same physics on our antenna tiers (puck about 10 dBi, mounted 15+ dBi); none on the phone tier |
-| Constellation | Multiple shells and inclinations (the Gen2 plan is about 30,000 satellites near 340 to 360, 525 to 535, and 604 to 614 km) | One constellation (orbit selection is open design work) |
+| Constellation | Multiple shells and inclinations (the Gen2 plan is about 30,000 satellites near 340 to 360, 525 to 535, and 604 to 614 km) | One constellation at about 450 km and 53 degrees, the coverage-of-people optimum |
 | The wall, normalized | about 15,000 D2C satellites filed on about 65 MHz: about 230 satellites per MHz | about 2,000 on 8 MHz: about 250 satellites per MHz |
 
 The bottom row is the point: nearly the same satellites-per-megahertz
