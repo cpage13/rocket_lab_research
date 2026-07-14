@@ -21,11 +21,19 @@ node at the modeled scale. The current issue is whether the economics close
 under realistic launch cadence, customer pricing, service life, and hardware
 mass assumptions.
 
-The promoted default 2036 block-upgrade central case is mass-bound, with 37 GPU
-packages per node, about 422 kW per node, 90 launches in the year, 268 living
-nodes, about $6.31B in annual living-fleet revenue, and a flat 33.3 percent
-gross margin. Treat those as traceable model outputs from
-`data_center/models/space/default.json`, not a final recommendation.
+The promoted default 2036 block-upgrade central case is mass-bound, with 66 GPU
+packages per node, about 753 kW per node, 90 launches in the year, 268 living
+nodes, about $7.42B in annual living-fleet revenue, and a flat 33.3 percent
+margin, at about 1.28x the equivalent ground cohort's five-year cost. The
+2026-07-14 investor rebase set this posture: an AI-1-class deployed
+double-sided run-hot radiator at 0.00165 t/kW (semi-copying the architecture
+SpaceX's June 2026 AI-1 reveal validated) and solar and radiator cost dials of
+$0.02M/kW each, reasoned from assembly-line manufacturing scale with in-house
+vertical integration; the prior heavy co-mounted posture at $0.04M/kW (1.92x)
+is the labeled conservative exception. Treat those as traceable model outputs
+from `data_center/models/space/default.json`, not a final recommendation. A
+refreshed solar and radiator cost analysis is
+`research/node_design/solar_radiator_cost_refresh_2026_07.md`.
 
 The ground reference is an order-of-magnitude check for the same 2036
 deployed-year cohort. Its conclusion label is `same_order_of_magnitude` after
@@ -47,7 +55,9 @@ static conclusion are the current data-center output.
 
 - Keep `conclusion.md` tied to the promoted default JSON through deliberate
   review, not automatic promotion output.
-- Do not make parity claims; the current default remains about 1.92x ground.
+- Do not make parity claims; the current default is about 1.28x ground, and
+  only the AI-1-equivalent bracket at the same cost dials reads below parity
+  (about 0.91x), as a labeled scenario.
 - Keep model JSON under `models/` and conclusions at the workstream level.
 - Keep public launch and deployed-node counts as integers. The model may use a
   smooth curve to shape cadence, but raw fractional rates must never appear as

@@ -2,18 +2,28 @@
 
 Under the current baseline model, a Neutron-launched orbital AI-inference data
 center looks strong enough to justify serious follow-on work. By **2036** Rocket
-Lab is putting up **90 nodes a year** (about **38 MW**), and every cohort earns
-a **33% gross margin** across its five-year life, at about **1.92x** the cost of
-an equivalent ground build. This is not a precision forecast or a DCF. It is a
-bounded feasibility exercise built from visible, source-linked assumptions.
+Lab is putting up **90 nodes a year** (about **68 MW**), every cohort earns a
+**33% margin** across its five-year life, and the whole build-launch-operate
+program runs at about **1.28x** the cost of an equivalent ground build. This is
+not a precision forecast or a DCF. It is a bounded feasibility exercise built
+from visible, source-linked assumptions.
 
 In plain terms: the 33% margin means each year's nodes sell their computing at
-1.5 times their own cost, and the 1.92x means that cost, building, launching,
-and running the nodes for five years, is about twice what the same computing
-power costs on the ground. With both sides priced at the same margin, a
-customer would pay about 90% more per unit of orbital AI work than for the
-ground equivalent. The rest of this document builds those numbers from their
-parts.
+1.5 times their own cost, and the 1.28x means that cost, building, launching,
+and running the nodes for five years, is about a quarter more than what the
+same computing power costs on the ground. With both sides priced at the same
+margin, a customer would pay about 28% more per unit of orbital AI work than
+for the ground equivalent. The rest of this document builds those numbers from
+their parts.
+
+Why space can compete at all is worth stating plainly, because it is not
+sunlight. Ground data-center construction is construction: land, permits,
+grid interconnects, water, local politics, and skilled labor, coordinated
+site by site. Space converts that work into manufacturing: standardized
+nodes off an assembly line, launched on a repeating cadence, the way ground
+data centers and large communications networks standardize their racks and
+cells but applied to the whole facility. Economies of scale and repeatability
+are the product; orbit is where they happen to run.
 
 The interesting part is not "a data center in space" as a slogan. It is the
 machine Rocket Lab could build around it: integrate GPUs and networking on the
@@ -23,7 +33,14 @@ improve the whole stack through repeated cadence.
 
 That machine is the subject of a companion document, [the structural case](structural_case.md): the argument for why Rocket Lab, almost alone, already owns the parts, the rocket, and the production lines to build this, and why the numbers here read as a floor rather than a ceiling. This document is the numbers; the structural case is the why. Read them in either order.
 
-Since this was written, the comparison gained an external benchmark: SpaceX revealed its AI-1 satellite design in June 2026. Run this same model at AI-1's specs and the 1.92x falls to about **1.3x**. Add the cost-downs already tracked below and it reads **0.91x**, slightly cheaper than ground. Even these stay conservative (AI-1's own cost structure is credited nothing), and the numbers below remain the floor. That test is its own companion, [the AI-1 comparison](ai1_comparison.md).
+The baseline's thermal architecture follows the industry's direction rather
+than fighting it: SpaceX's June 2026 AI-1 reveal validated the deployed,
+double-sided, run-hot radiator, and this model semi-copies that design (a
+dedicated radiator wing, edge-on to the sun, not backed against the solar
+array where it would lose a radiating face). The default radiator is set
+within 10 percent of AI-1's implied mass. Run the model at full AI-1
+equivalence on the same cost dials and it reads about **0.91x**, below ground
+parity; that bracket is its own companion, [the AI-1 comparison](ai1_comparison.md).
 
 ## Source Snapshot
 
@@ -35,7 +52,7 @@ that share a filename, not copies.
 | Item | File | What it is |
 |---|---|---|
 | Space model | [`data_center/models/space/default.json`](models/space/default.json) | The promoted orbital model: every number in this document, with formula, units, and source per cell. |
-| Ground reference | [`data_center/models/ground/default.json`](models/ground/default.json) | A separate model: the same 2036 cohort costed as a terrestrial build, the denominator of the 1.92x. |
+| Ground reference | [`data_center/models/ground/default.json`](models/ground/default.json) | A separate model: the same 2036 cohort costed as a terrestrial build, the denominator of the 1.28x. |
 | Default scenario | [`code/scenarios/default.yaml`](../code/scenarios/default.yaml) | The input dials that produce both models; copy, edit, and re-run to test alternatives. |
 | Assumptions ledger | [`data_center/assumptions.md`](assumptions.md) | Every default assumption, its source status, and where it comes from. |
 | The structural case | [`data_center/structural_case.md`](structural_case.md) | The companion argument: why Rocket Lab specifically, and why these numbers read as a floor. |
@@ -45,29 +62,29 @@ that share a filename, not copies.
 
 The story is a ramp, not a single year. Each year puts up more nodes, and each
 year's cohort earns a fixed multiple on its own cost for its full five-year life
-at a constant **33% gross margin**. The growth comes from cadence and better
-GPUs, not from a moving margin. This is what each launch year deploys and what
-that year's nodes earn per year, on their own:
+at a constant **33% margin**. The growth comes from cadence and better GPUs,
+not from a moving margin. This is what each launch year deploys and what that
+year's nodes earn per year, on their own:
 
-| Launch year | Launches (one node each) | MW put up | Living fleet | This cohort: revenue/yr | This cohort: gross profit/yr |
+| Launch year | Launches (one node each) | MW put up | Living fleet | This cohort: revenue/yr | This cohort: profit/yr |
 |---|---:|---:|---:|---:|---:|
-| 2027 | 2 | 0.6 | 2 | $39M | $13M |
-| 2028 | 3 | 1.0 | 5 | $67M | $22M |
-| 2029 | 5 | 1.9 | 10 | $118M | $39M |
-| 2030 | 9 | 3.5 | 19 | $206M | $69M |
-| 2031 | 14 | 5.7 | 33 | $331M | $110M |
-| 2032 | 22 | 9.1 | 53 | $521M | $174M |
-| 2033 | 35 | 14.4 | 85 | $810M | $270M |
-| 2034 | 51 | 21.3 | 131 | $1.20B | $399M |
-| 2035 | 70 | 29.5 | 192 | $1.66B | $555M |
-| 2036 | 90 | 38.0 | 268 | $2.11B | $705M |
+| 2027 | 2 | 0.9 | 2 | $38M | $13M |
+| 2028 | 3 | 1.7 | 5 | $71M | $24M |
+| 2029 | 5 | 3.4 | 10 | $132M | $44M |
+| 2030 | 9 | 6.2 | 19 | $231M | $77M |
+| 2031 | 14 | 10.0 | 33 | $370M | $123M |
+| 2032 | 22 | 16.0 | 53 | $596M | $199M |
+| 2033 | 35 | 25.5 | 85 | $930M | $310M |
+| 2034 | 51 | 37.8 | 131 | $1.39B | $465M |
+| 2035 | 70 | 52.7 | 192 | $1.98B | $660M |
+| 2036 | 90 | 67.7 | 268 | $2.52B | $840M |
 
 Read down the cohort columns, not across into a fleet total. Each cohort holds
-that revenue and gross profit every year for five years. The 2036 cohort alone
-(90 nodes) earns about **$2.11B a year** and about **$705M of gross profit a
-year**. The shape is the point: launches run 2, 3, 5, 9, 14, 22, 35, 51, 70, 90,
-and the next year pushes past 100 toward the cadence ceiling. 2036 is the
-inflection, not the end.
+that revenue and profit every year for five years. The 2036 cohort alone (90
+nodes) earns about **$2.52B a year** and about **$840M of profit a year**. The
+shape is the point: launches run 2, 3, 5, 9, 14, 22, 35, 51, 70, 90, and the
+next year pushes past 100 toward the cadence ceiling. 2036 is the inflection,
+not the end.
 
 If you add up every cohort still alive, you get the installed fleet, which the
 Fleet Snapshot at the end tracks. That aggregate is a side effect of the cohort
@@ -82,14 +99,14 @@ top-down market estimate.
 
 Revenue is tied to that cost, not guessed on its own. The model prices at a flat
 **1.5x** of cost, the same every year since each cohort launches fresh, which is
-what produces the **33.3%** gross margin. The ground reference uses the same
-multiple, so both sides target the same margin. That is what makes the
-comparison fair: with margins held equal, the **1.92x** orbital-to-ground cost
-gap is also the price gap, so an orbital token would cost about **90% more**
-than a comparable ground token. The 1.5x multiple is not arbitrary: it is set to match where comparable cloud
-and GPU operators actually run their margins (see
+what produces the **33.3%** margin. The ground reference uses the same multiple,
+so both sides target the same margin. That is what makes the comparison fair:
+with margins held equal, the **1.28x** orbital-to-ground cost gap is also the
+price gap, so an orbital token would cost about **28% more** than a comparable
+ground token. The 1.5x multiple is not arbitrary: it is set to match where
+comparable cloud and GPU operators actually run their margins (see
 [`research/economics/operating_margins_and_revenue_multiple_2026.md`](../research/economics/operating_margins_and_revenue_multiple_2026.md)). It is
-still a dial, and changing it moves every margin together but not the 1.92x
+still a dial, and changing it moves every margin together but not the 1.28x
 cost gap, which is set by cost alone.
 
 ## Context: What The Model Is, And Is Not
@@ -97,19 +114,20 @@ cost gap, which is set by cost alone.
 The modeled product is orbital AI inference, not frontier-model training, and
 none of this stack has been designed or iterated for space yet. The default
 translates public terrestrial hardware assumptions into a Neutron-centered
-orbital scenario. That conservative translation is the point: even without a
-space-native design, the case already lands close enough to ground cost to study
-seriously, and it has room to improve. Production and iteration historically
-surface gains no one anticipated, so it would not be surprising if the costs
-here came down over the next decade. That upside is noted, not modeled. The
-baseline also predates SpaceX's June 2026 AI-1 reveal.
+orbital scenario, with two investor-set 2026-07-14 anchors stated plainly: the
+AI-1-class radiator (deployed, double-sided, run hot, within 10 percent of
+AI-1's implied mass) and solar and radiator cost dials of $20k/kW each,
+reasoned from assembly-line manufacturing scale and in-house vertical
+integration rather than from legacy one-off spacecraft procurement. Production
+and iteration historically surface gains no one anticipated, so it would not
+be surprising if the costs here came down further. That upside is noted, not
+modeled.
 
-Read it with a vertical-integration lens that the baseline does not pay for.
+Read it with a vertical-integration lens the baseline only partly pays for.
 Many cost lines behave like external buy prices, but in a Rocket Lab-operated
-program Rocket Lab would supply most of them to itself: bus, solar, radiator and
-thermal hardware, integration, launch, operations, and laser communications.
-GPUs and some networking are the clearest outside purchases. That internal-customer effect is upside the model leaves on
-the table, not a freebie baked in.
+program Rocket Lab would supply most of them to itself: bus, solar, radiator
+and thermal hardware, integration, launch, operations, and laser
+communications. GPUs and some networking are the clearest outside purchases.
 
 ## Core Default Assumptions
 
@@ -118,70 +136,48 @@ the table, not a freebie baked in.
 | 90 launches/year target by 2036 | Scenario input, not Rocket Lab guidance | `RLDC-CADENCE-90` |
 | 12.5 t SSO block-upgrade mass envelope | Scenario input, not a published payload guarantee | `RLDC-PAYLOAD-SSO-UPGRADE` |
 | Five-year service life | Scenario input | `RLDC-SERVICE-LIFE-5Y` |
-| Roughly 400 kW node simplification | Derived model scale | `RLDC-NODE-POWER-400KW` |
+| Roughly 750 kW node simplification | Derived model scale | `RLDC-NODE-POWER-400KW` |
 | High-cadence launch cost around $13M | Scenario input | `RLDC-LAUNCH-COST-2036` |
+| AI-1-class radiator: deployed double-sided, 1.65 kg/kW | Investor-set scenario (2026-07-14) | `RLDC-SOLAR-RADIATOR-MASS` |
+| Solar and radiator cost $20k/kW each | Investor-set scenario (2026-07-14) | `RLDC-SOLAR-RADIATOR-COST` |
 | Revenue multiple flat at 1.5x cost, no taper | Scenario input | `RLDC-REVENUE-MULTIPLE-1_5X` |
 | No separate secure-compute premium | Narrative boundary | Central cost-multiple path, not a premium scenario |
 
-The central output is a flat **33.3% gross margin**. The low and high
-revenue bands are sensitivity outputs, not the public default.
+The central output is a flat **33.3% margin**. The low and high revenue bands
+are sensitivity outputs, not the public default.
 
 ## Ground Reference
 
 As a sanity check, the model builds the same 2036 cohort on the ground: the same
-90 nodes, 3,330 GPU packages, and 38 MW of compute, but in a terrestrial data
+90 nodes, 5,940 GPU packages, and 68 MW of compute, but in a terrestrial data
 center instead of orbit. Over five years:
 
 | Same 2036 cohort, five-year cost | Value |
 |---|---:|
-| Built on the ground | about **$3.68B** |
-| Built and launched to orbit | about **$7.05B** |
-| Orbital vs ground | about **1.92x** |
+| Built on the ground | about **$6.56B** |
+| Built and launched to orbit | about **$8.40B** |
+| Orbital vs ground | about **1.28x** |
 
-In plain terms: orbital costs about **1.92x** what ground costs for the same
-compute, so a buyer pays roughly **90% more** for an orbital token than a ground
-token. That is not parity, but it is the same order of magnitude, which is the
-surprising part: a brand-new orbital build lands within about 2x of mature
-ground infrastructure. The ground figure is a rough cost screen, not a
-site-specific quote.
+In plain terms: orbital costs about a quarter more than ground for the same
+compute. A brand-new orbital build landing within about 1.3x of mature ground
+infrastructure, before any space-native design iteration, is the finding. The
+ground figure is a rough cost screen, not a site-specific quote.
 
-## Cost-Down And Thermal Sensitivities
+## Where The Cost Sits, And The Levers
 
-The base case is deliberately conservative, and there is real room to close the
-gap to ground. Two levers do most of the work, and both show up in the 2036
-cohort. The first is cost: the default pays `$40k/kW` for solar and `$40k/kW`
-for radiator, where research supports `$20k/kW` for solar and treats it as a
-weaker but plausible target for radiator. The second is mass: a lighter solar
-and radiator design frees envelope mass for more GPU packages per node, so the
-same 90 launches carry more compute.
+The 2036 node costs about $93M for five years, and the shares tell you where
+the leverage is: compute about **45%**, solar about **16%**, radiator about
+**16%**, launch about **15%**, bus about **7%**. Compute now dominates, which
+is what you want: the dead-weight support systems no longer carry the cost
+story. Launch is not where the leverage is: even halving the launch price
+moves the ratio only from about 1.28x to about 1.18x.
 
-Stacked against the 2036 base case (illustrative sensitivities, not the promoted
-default):
-
-| 2036 case | Packages/node | Living power | Orbital / ground | Token premium |
-|---|---:|---:|---:|---:|
-| Base (default) | 37 | ~112 MW | 1.92x | ~90% |
-| Solar and radiator at $20k/kW | 37 | ~112 MW | 1.50x | ~50% |
-| Plus ~25% lighter solar and radiator | 49 | ~149 MW | 1.38x | ~38% |
-| AI-1-spec node (mass dials, conservative costs) | 440 | ~242 MW | 1.29x | ~29% |
-| AI-1-spec node + solar and radiator at $20k/kW | 440 | ~242 MW | 0.91x | below ground |
-
-In the ambitious case the same 90 launches and 268-node fleet carry about a
-third more compute (49 packages per node instead of 37, about 149 MW of living
-power instead of 112) at the same roughly 33% margin, and the premium a customer
-would pay over a comparable ground token falls from about 90% to about 38%.
-Revenue is slightly lower because it is coupled to cost, but the token is far
-more competitive.
-
-The last two rows are the external bracket: SpaceX's AI-1 design (June 2026)
-run through this same model, the labeled upper bound, not the default; see
+The bracket above the default is full AI-1 equivalence: pin today's silicon
+(one GB300-class rack per 120 kW box), take AI-1's lighter solar and bus, and
+the same model at the same cost dials reads about **0.91x**, below ground
+parity. The default deliberately does not claim that: it keeps our
+frontier-silicon path and our heavier solar and bus. See
 [the AI-1 comparison](ai1_comparison.md).
-
-Launch is not where the leverage is. It is only about 18% of total system cost,
-against roughly 30% for compute and about 22% each for solar and radiator. Even
-halving the launch price moves the orbital-to-ground ratio only from 1.92x to
-about 1.75x, roughly a 9% cut in cost per token. The levers that matter are
-solar, radiator, and how much compute each launch carries, not the rocket.
 
 A further lever is service life. The base case amortizes each node over five
 years; building the node to last seven (not assumed in the default) spreads the
@@ -196,8 +192,8 @@ shielding), single-digit-percent on payload. See
 
 ## Why The Scale Is Not Outlandish
 
-The 2036 deployed-year capacity is about **38 MW** (rounded elsewhere to about
-40 MW/year) against a rough **100 GW** market reference. The modeled deployment
+The 2036 deployed-year capacity is about **68 MW** (rounded elsewhere to about
+70 MW/year) against a rough **100 GW** market reference. The modeled deployment
 is a small slice of expected AI capacity, not a market-share claim. The concept
 also does not require becoming a hyperscaler overnight: start as a focused
 wedge, learn the node and operations stack at small scale, then scale into orbit
@@ -211,20 +207,41 @@ water, grid, permitting, and local-politics siting fights; solar power once
 deployed; physical separation for sovereign, defense, or high-security
 workloads; and purpose-built connectivity through laser, narrowband, or RF
 links. The default prices none of these as a premium; they are reasons the
-market might tolerate a higher orbital cost, not hidden model inputs.
+market might tolerate the remaining cost gap, not hidden model inputs.
+
+## The Conservative Exception
+
+The 1.28x rests on two investor-set assumptions, stated here rather than
+hedged throughout. First, the radiator: the default asserts the AI-1-class
+deployed double-sided run-hot design at 1.65 kg/kW from day one; the physics
+lever is real (heat rejection scales with temperature to the fourth power)
+but the chip-to-coolant-to-panel path at that temperature is engineering, not
+heritage. Second, the cost dials: $20k/kW for solar and radiator is reasoned
+from assembly-line scale, Rocket Lab's own silicon-array program, and
+internalized supplier margin; solar's evidence is strong, the radiator's is
+directional (no public $/kW data exists, and a refreshed cost analysis is
+running as a parallel research task).
+
+If those assumptions fail, the model already carries the fallback: returning
+both cost dials to the old $40k/kW reads about **1.69x**, and the full prior
+posture (the heavy co-mounted radiator at 12 kg/kW plus $40k dials) reads
+about **1.92x**. That heavy posture was the public default until 2026-07-14
+and remains available as the labeled conservative exception; the ledger keeps
+the stress cases visible ($30-40k central-cautious, $60-100k radiator stress).
+The claim is not that 1.28x is proven. The claim is that 1.28x is what the
+industry-validated architecture and assembly-line economics imply, and that
+even the deliberately pessimistic posture stays under 2x.
 
 ## Refinement Roadmap
 
-The baseline is the reference case; the next work sharpens it: launch-cost
-sensitivity (`RLDC-LAUNCH-COST-2036`), payload-case comparisons
-(`RLDC-PAYLOAD-SSO-UPGRADE`), solar and radiator cost-down
-(`RLDC-SOLAR-RADIATOR-COST`), ground-scope refinement (`RLDC-GROUND-COST-BASIS`),
+The baseline is the reference case; the next work sharpens it: the refreshed
+solar and radiator cost analysis (in flight, `RLDC-SOLAR-RADIATOR-COST`),
+launch-cost sensitivity (`RLDC-LAUNCH-COST-2036`), payload-case comparisons
+(`RLDC-PAYLOAD-SSO-UPGRADE`), ground-scope refinement (`RLDC-GROUND-COST-BASIS`),
 GPU/package definition tracking, and market-scale updates
-(`RLDC-MARKET-100GW-2036`). Thermal and resilience work continues too:
-hotter-operation physics, long-life reliability, and radiation-shielding mass
-against the solar and radiator stack. One new watch item: if AI-1 flies at its
-published radiator spec, the THR-014 hot-loop sensitivity (0.006 to
-0.008 t/kW) moves toward central.
+(`RLDC-MARKET-100GW-2036`). Thermal and resilience work continues too: the
+chip-to-coolant-to-panel model behind the run-hot radiator, long-life
+reliability, and radiation-shielding mass against the solar and radiator stack.
 
 ## Fleet Snapshot
 
@@ -232,14 +249,14 @@ The living fleet is only the cohorts still inside their five-year window: nodes
 older than five years stop earning and drop out of the count, the power, and the
 revenue. Tracked every three years, the installed base grows like this:
 
-| Year | Launched to date | Living fleet | Living power | Annual revenue | Annual gross profit |
+| Year | Launched to date | Living fleet | Living power | Annual revenue | Annual profit |
 |---|---:|---:|---:|---:|---:|
-| 2030 | 19 | 19 | ~7 MW | $0.43B | $0.14B |
-| 2033 | 90 | 85 | ~35 MW | $1.99B | $0.66B |
-| 2036 | 301 | 268 | ~112 MW | $6.31B | $2.10B |
+| 2030 | 19 | 19 | ~12 MW | $0.47B | $0.16B |
+| 2033 | 90 | 85 | ~61 MW | $2.26B | $0.75B |
+| 2036 | 301 | 268 | ~200 MW | $7.42B | $2.47B |
 
 By 2036, 301 nodes have launched but only 268 are live: the 2027 to 2031 cohorts
 have aged past five years and no longer count toward power or revenue. Each
-living node carries about 420 kW, and the whole fleet runs at the same flat 33%
+living node carries about 750 kW, and the whole fleet runs at the same flat 33%
 margin. The point of this view is the slope, not the single-year total: the
 installed base roughly doubles every two to three years as cadence compounds.
