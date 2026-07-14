@@ -24,7 +24,7 @@ with three deliberate differences, all driven by the comms design:
    across the whole program, not the comms slice's own rate); the comms share
    sets only how many launches comms flies. This is the load-bearing
    distinction: cost is priced at fleet cadence, the count flown is the comms
-   share. (If the founder later wants the comms slice priced at its own lower
+   share. (If the investor later wants the comms slice priced at its own lower
    cadence, that is a documented alternative; the default is fleet-cadence
    pricing.)
 
@@ -291,7 +291,7 @@ def _ceil_to_launch(satellites_needed: int, satellites_per_launch: int) -> int:
 # whole satellite of capacity). The fleet target floors that at the coverage floor
 # (everyone must see a satellite) and caps it at the saturation cap (past which the
 # spread servable base is exhausted). Which term binds is reported as the
-# BindingRegime (the founder's coverage-vs-capacity question).
+# BindingRegime (the investor's coverage-vs-capacity question).
 # ---------------------------------------------------------------------------
 
 
@@ -363,7 +363,7 @@ def resolve_device_spectral_efficiency(dials: IridiumDials) -> float:
 
     Returns the explicit ``spectral_efficiency_bps_per_hz`` override when set,
     otherwise the central spectral-efficiency tier for the ``device_class`` (the
-    founder's three device categories, a three-row mapping): ``PHONE_CLASS`` to
+    investor's three device categories, a three-row mapping): ``PHONE_CLASS`` to
     :data:`PHONE_CLASS_SE_CENTRAL` (0.65), ``SMALL_TERMINAL_CLASS`` to
     :data:`SMALL_TERMINAL_CLASS_SE_CENTRAL` (2.0), ``TERMINAL_CLASS`` to
     :data:`TERMINAL_CLASS_SE_CENTRAL` (2.5).
@@ -864,7 +864,7 @@ class CommsTrajectory:
         subscribers_per_satellite: The attached-subscribers-per-satellite density
             used to size the fleet (echoed from the config for transparency).
         binding_regime: Which constraint set the fleet target (the coverage floor,
-            the capacity need, or the saturation cap), the founder's
+            the capacity need, or the saturation cap), the investor's
             coverage-vs-capacity answer for this scenario.
         full_coverage_reached_year: The first fiscal year the living fleet hit the
             FLEET TARGET (full deployment), or ``None`` if it is never reached within
@@ -935,11 +935,11 @@ class IridiumArpuBucket:
 
     Attributes:
         mix_pct: The bucket's share of the billable-connection pool, percent (the
-            founder-set dial; for the standard bucket the reported count is the
+            investor-set dial; for the standard bucket the reported count is the
             people-identity residual, so the count is not exactly ``mix_pct`` of the
             pool, off only by the premium bucket's rounding).
         price_usd_month: The bucket's monthly price, USD per connection per month (the
-            founder-set dial).
+            investor-set dial).
         count: The derived connection count in this bucket (people for standard and
             premium, DEVICES for IoT, contracts for government); an integer.
         revenue_musd_yr: The bucket's annual revenue, $M/yr
@@ -1233,7 +1233,7 @@ def arpu_stated_assumptions(dials: IridiumArpuDials) -> tuple[str, ...]:
             "serveable billable-connection slot the built fleet can carry is sold, so "
             "revenue rides the built fleet's people capacity (fleet_target x density), "
             "above the served target, with no penetration or utilization haircut. "
-            "Clearly optimistic, stated, founder-owned."
+            "Clearly optimistic, stated, investor-owned."
         ),
         (
             "Mix posture (stated honestly): the people-and-government share "
@@ -1269,11 +1269,11 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
     Takes the dials because one line is conditional on them (the aperture fold
     caveat, 0.8a). Always states: the ecosystem assumption
     (:data:`ECOSYSTEM_ASSUMPTION_NOTE`, 0.8); that operations cost is assumed zero
-    (:data:`IRIDIUM_OPERATIONS_COST_MUSD`, an explicit founder-instructed assumption,
+    (:data:`IRIDIUM_OPERATIONS_COST_MUSD`, an explicit investor-instructed assumption,
     a fixed line to research and add later); the estimate tiers (the
     spectral-efficiency bands, the reuse calibration, the aperture reference and its
     linear conservative scaling, the concurrency pair, the active rate) as
-    estimate-tier, founder-owned values; and that the Iridium model is the MSS lane
+    estimate-tier, investor-owned values; and that the Iridium model is the MSS lane
     (owned L-band, purpose-built or in-chipset devices), never the cellular
     unmodified-phone lane. The revenue-case line is conditional on ``dials.arpu``: with
     the four-bucket ARPU case set it states the PUBLISHED case (the Iridium model's
@@ -1281,7 +1281,7 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
     posture, the built-fleet convention, and the IoT-count supersession; with no
     ``arpu`` block it states the DEFERRED case (no revenue case is published on that
     path; the per-tier MSS ARPUs plug in via the ARPU block). The synthetic cost-plus
-    line is off every Iridium-facing surface as of iridium-v3 (founder direction
+    line is off every Iridium-facing surface as of iridium-v3 (investor direction
     2026-07-10); it stays the cellular family's shared-engine convention on the
     trajectory. Conditionally
     appends :data:`APERTURE_FOLD_CAVEAT_NOTE` when ``dials.aperture_m2`` exceeds
@@ -1301,12 +1301,12 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
         ECOSYSTEM_ASSUMPTION_NOTE,
         (
             f"Operations cost is assumed zero ({IRIDIUM_OPERATIONS_COST_MUSD} USD "
-            "millions per year): an explicit founder-instructed assumption, a fixed "
+            "millions per year): an explicit investor-instructed assumption, a fixed "
             "operations line to research and add later, stated here rather than "
             "silently omitted."
         ),
         (
-            "Spectral efficiency is estimate-tier and founder-owned: the phone-class "
+            "Spectral efficiency is estimate-tier and investor-owned: the phone-class "
             f"band is {PHONE_CLASS_SE_LOW} to {PHONE_CLASS_SE_HIGH}, the "
             f"small-terminal-class band {SMALL_TERMINAL_CLASS_SE_LOW} to "
             f"{SMALL_TERMINAL_CLASS_SE_HIGH}, the large-terminal-class band "
@@ -1324,7 +1324,7 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
         (
             f"The busy-hour concurrency pair (peak {dials.concurrency_peak}, off-peak "
             f"{dials.concurrency_offpeak}) and the per-subscriber active rate "
-            f"({dials.active_user_rate_mbps} Mbps) are estimate-tier, founder-owned "
+            f"({dials.active_user_rate_mbps} Mbps) are estimate-tier, investor-owned "
             "values."
         ),
     ]
@@ -1332,7 +1332,7 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
         lines.append(
             "The prices-today ARPU revenue case is PUBLISHED for the Iridium model as "
             "the four-bucket case (standard personal, premium terminal, IoT devices, "
-            "government): a founder-set price-and-mix sheet dated 2026-07-09. It is the "
+            "government): an investor-set price-and-mix sheet dated 2026-07-09. It is the "
             "Iridium model's only published revenue case."
         )
         lines.extend(arpu_stated_assumptions(dials.arpu))

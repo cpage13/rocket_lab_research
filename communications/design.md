@@ -30,9 +30,9 @@ How a new family gets added, in order:
 
 1. Ground it in the research wiki first: claims with `COMM-*` ids, estimate
    tiers labeled, the lane named.
-2. Brainstorm and design with the founder; the founder sets every assumption
+2. Brainstorm and design with the investor; the investor sets every assumption
    value (the model never invents one).
-3. Plan, adversarial review, founder approval, then build: a dials block in
+3. Plan, adversarial review, investor approval, then build: a dials block in
    `config.py`, named constants with derivation docstrings in `constants.py`,
    the derivation functions and one guarded branch in `engine.py`.
 4. A scenario YAML named for the family, and a frozen test suite locking the
@@ -73,7 +73,7 @@ meters), device class (phone, small terminal, or terminal), an optional
 spectral-efficiency override, active user rate (1.0 Mbps; 2.5 rich variant),
 the concurrency pair (2.5 percent peak, 0.5 percent off peak), the IoT device
 passthrough (10 million, superseded on the artifact when the ARPU case is
-on), and the scenario label. Plus the optional ARPU block (founder-set
+on), and the scenario label. Plus the optional ARPU block (investor-set
 2026-07-09, Sheet A): four mix percentages validated to sum to 100 and four
 prices per month; None keeps the revenue case off. The fleet dials (12
 satellites per launch, 5-year life, the 340 coverage floor, the 2,000
@@ -102,7 +102,7 @@ max(1, floor(12 x 25 / aperture)), which is 12 at the baseline and 5 at the
 60-square-meter what-if. The result rides the unchanged fleet machinery for
 cost and launches. The engine also computes the cellular family's cost-plus
 revenue line on the shared trajectory, but the Iridium artifact does not
-publish it as of iridium-v3 (founder direction 2026-07-10). When the ARPU block
+publish it as of iridium-v3 (investor direction 2026-07-10). When the ARPU block
 is set, the published four-bucket revenue case derives: one pool anchored to
 fleet capacity (fleet target times density, 62,400,000 connections at the
 baseline), four bucket counts by mix percentage (standard the exact residual,

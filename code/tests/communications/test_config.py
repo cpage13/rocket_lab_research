@@ -216,7 +216,7 @@ def test_cadence_defaults_match_common_authority() -> None:
     assert lc.high_cadence_launches == COMMON_HIGH_CADENCE_LAUNCHES_DEFAULT
 
 
-# -- the new dial defaults (the four founder-set values + spec dials) --
+# -- the new dial defaults (the four investor-set values + spec dials) --
 
 
 def test_satellite_dials_defaults() -> None:
@@ -226,28 +226,28 @@ def test_satellite_dials_defaults() -> None:
     assert sat.satellite_build_cost_musd == SATELLITE_BUILD_COST_MUSD_DEFAULT
 
 
-def test_coverage_dials_default_floor_is_founder_set_340() -> None:
-    """The coverage FLOOR default is the founder-set 340 (the lower fleet bound)."""
+def test_coverage_dials_default_floor_is_investor_set_340() -> None:
+    """The coverage FLOOR default is the investor-set 340 (the lower fleet bound)."""
     cov = CoverageDials()
     assert cov.satellites_for_full_coverage == SATELLITES_FOR_FULL_COVERAGE_DEFAULT
     assert cov.satellites_for_full_coverage == 340
 
 
-def test_coverage_dials_default_cap_is_founder_set_2000() -> None:
-    """The saturation CAP default is the founder-set 2,000 (the upper fleet bound)."""
+def test_coverage_dials_default_cap_is_investor_set_2000() -> None:
+    """The saturation CAP default is the investor-set 2,000 (the upper fleet bound)."""
     cov = CoverageDials()
     assert cov.max_fleet_satellites == MAX_FLEET_SATELLITES_DEFAULT
     assert cov.max_fleet_satellites == 2_000
 
 
-def test_comms_cadence_default_share_is_founder_set() -> None:
+def test_comms_cadence_default_share_is_investor_set() -> None:
     cc = CommsCadenceDials()
     assert cc.share_of_fleet == COMMS_SHARE_DEFAULT
     assert cc.share_of_fleet == pytest.approx(0.18)
 
 
 def test_subscriber_dials_defaults() -> None:
-    """The subscriber target default is the founder baseline 10M; density 75,000."""
+    """The subscriber target default is the investor baseline 10M; density 75,000."""
     subs = SubscriberDials()
     # The target (the base to serve) is the 10M baseline.
     assert subs.subscribers_at_full_coverage == SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT

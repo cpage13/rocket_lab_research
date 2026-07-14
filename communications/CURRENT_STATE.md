@@ -36,7 +36,7 @@ about 10 million subscribers at 31,200 per satellite on the owned 8 MHz, at
 defaults untouched), giving a 1,450.0 million dollar build-and-hold through
 FY2036 (the 29-launch 2031 build plus one full five-year fleet replacement)
 and a 145.0 million dollar steady-state annual cost. The model publishes the four-bucket ARPU case (Sheet
-A, founder-set 2026-07-09): about 8,250.8 million
+A, investor-set 2026-07-09): about 8,250.8 million
 dollars per year at the baseline under full sell-through on capacity, about a
 98.2 percent margin against the steady-state fleet cost (operating-style:
 measured against the fleet's full build, launch, and replacement cost, with
@@ -51,7 +51,7 @@ consolidated unit-cost trajectory row).
 ## What Is Not Current
 
 - The ARPU revenue case is now PUBLISHED (the four-bucket Sheet A). What is not
-  yet current in that case: a time-varying per-year mix (the founder's "IoT
+  yet current in that case: a time-varying per-year mix (the investor's "IoT
   grows in volume at a smaller percentage over time") and a per-year revenue
   trajectory are documented v2 extensions; v1 publishes the built-fleet point
   at a constant mix under full sell-through on capacity.

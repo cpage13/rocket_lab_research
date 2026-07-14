@@ -195,8 +195,8 @@ class CommsCadenceDials(BaseModel):
         gt=0,
         le=1.0,
         description=(
-            "Comms fraction of the whole-fleet per-year launch count. FOUNDER_SET "
-            "to 0.18 (~16 of the 90 FY2036 launches/year); the founder's ~15 to 20 "
+            "Comms fraction of the whole-fleet per-year launch count. INVESTOR_SET "
+            "to 0.18 (~16 of the 90 FY2036 launches/year); the investor's ~15 to 20 "
             "band maps to ~0.167 to ~0.222. Configurable."
         ),
     )
@@ -273,7 +273,7 @@ class SatelliteDials(BaseModel):
         gt=0,
         description=(
             "The flat MASS-MANUFACTURED CELLULAR-SATELLITE HARDWARE cost, ONE "
-            "scalar, ~$1.0 to 1.1M (FOUNDER_SET 1.05). A V3-class hardware analogy "
+            "scalar, ~$1.0 to 1.1M (INVESTOR_SET 1.05). A V3-class hardware analogy "
             "(Starlink V3 ~$1.2M, the upper anchor, COMM-080) for a direct-to-cell "
             "payload (bigger antenna and more power than a broadband panel, far "
             "smaller than AST's giant array, so AST ~$19 to 21M is the WRONG "
@@ -304,7 +304,7 @@ class CoverageDials(BaseModel):
         description=(
             "The coverage FLOOR: the minimum fleet for everyone in the served band "
             "to SEE a satellite (the lower bound on the fleet target, NOT the whole "
-            "fleet when the base is large). FOUNDER_SET to 340: the quality-link case "
+            "fleet when the base is large). INVESTOR_SET to 340: the quality-link case "
             "(25 degree elevation mask, populated mid-latitude band +/-55 deg at 95%, "
             "~450 km, ~53 deg). Coverage sim (.agent/other/coverage_sim/FINDINGS.md: "
             "341, rounded to 340) plus COMM-209 / COMM-216 / COMM-217 and "
@@ -318,7 +318,7 @@ class CoverageDials(BaseModel):
             "The saturation CAP: the largest fleet the model sizes to (the upper "
             "bound on the fleet target). Past this the spread, low-density servable "
             "base is exhausted and more satellites stop buying servable subscribers "
-            "(a dense cell saturates). FOUNDER_SET to 2,000: the ~100M ambitious "
+            "(a dense cell saturates). INVESTOR_SET to 2,000: the ~100M ambitious "
             "target (1,334 satellites at 75,000/sat) sits just under it. Source "
             "COMM-535..560. Configurable."
         ),
@@ -348,7 +348,7 @@ class SubscriberDials(BaseModel):
         description=(
             "The SUBSCRIBER TARGET: the served-PERSON base (phone subscribers) the "
             "fleet is sized to serve, the model's INPUT, NOT a demand estimate, NOT a "
-            "household count. FOUNDER_SET to a 10,000,000-person BASELINE (50,000,000 "
+            "household count. INVESTOR_SET to a 10,000,000-person BASELINE (50,000,000 "
             "and 100,000,000 are the scenarios) and flagged as the SWING DIAL that "
             "most moves cost-per-subscriber. Niche basis: the ~300M global "
             "coverage-gap people (COMM-021 / COMM-390) plus the developed-world "
@@ -411,7 +411,7 @@ class RevenueDials(BaseModel):
         gt=0,
         description=(
             "The COST-PLUS / MARGIN-TARGET revenue multiple: annual revenue = annual "
-            "cost x this. FOUNDER_SET to 1.5 (cost+50%, an implied (1.5 - 1) / 1.5 = "
+            "cost x this. INVESTOR_SET to 1.5 (cost+50%, an implied (1.5 - 1) / 1.5 = "
             "33.3% gross margin), mirroring the data-center central R = 1.5 "
             "(research/SOURCE_INDEX.md#REV-008). Each 5-year cohort earns this margin "
             "across its life. Configurable."
@@ -436,7 +436,7 @@ class GroundInterfaceDials(BaseModel):
     """The marked, TWO-REGIME CELLULAR-ground cost INTERFACE (Phase 4).
 
     INTERFACE INPUTS. These two ground baselines (dense-served incumbent-marginal
-    and sparse fresh-build) come from the ground research wave; the founder owns the
+    and sparse fresh-build) come from the ground research wave; the investor owns the
     final ground call and is still unsure about the comparison. Do not hardcode
     settled values in the comms src; supply them per-scenario. Either or both may be
     None, in which case that regime's ratio is skipped and the model still reports
@@ -480,7 +480,7 @@ class GroundInterfaceDials(BaseModel):
         ),
     )
     scenario_name: str = Field(
-        default="ground interface (research-grounded, founder owns the call)",
+        default="ground interface (research-grounded, investor owns the call)",
         description="Human-readable label for the supplied ground-interface scenario.",
     )
     source_note: str = Field(
@@ -490,14 +490,14 @@ class GroundInterfaceDials(BaseModel):
 
 
 class IridiumArpuDials(BaseModel):
-    """The Iridium four-bucket ARPU revenue case dials (founder-set, Sheet A).
+    """The Iridium four-bucket ARPU revenue case dials (investor-set, Sheet A).
 
     The PUBLISHED Iridium ARPU case: four billable-connection buckets (standard
     personal / premium terminal / IoT devices / government), each a PERCENTAGE mix of
     ONE pool anchored to fleet CAPACITY (``fleet_target x subscribers_per_satellite``),
-    so every bucket scales with the satellite count (the founder's requirement: a mix
+    so every bucket scales with the satellite count (the investor's requirement: a mix
     cannot be half absolute numbers and half percentages). The four mixes and four
-    monthly prices are the founder-set dials here; the counts are DERIVED
+    monthly prices are the investor-set dials here; the counts are DERIVED
     (:func:`communications.engine.derive_arpu_buckets`, the residual rule for standard
     so the people identity is exact). Subscribers are PEOPLE (standard and premium);
     IoT are DEVICES; government is a contract line: the pool is a BILLABLE-CONNECTIONS
@@ -521,7 +521,7 @@ class IridiumArpuDials(BaseModel):
         le=ARPU_MIX_TOTAL_PCT,
         description=(
             "The STANDARD personal (phone-class) bucket's share of the "
-            "billable-connection pool, percent. A PEOPLE bucket. FOUNDER_SET to 15.0 "
+            "billable-connection pool, percent. A PEOPLE bucket. INVESTOR_SET to 15.0 "
             "(Sheet A). Strictly positive so people_share (standard + premium) is never "
             "zero. Configurable."
         ),
@@ -532,7 +532,7 @@ class IridiumArpuDials(BaseModel):
         le=ARPU_MIX_TOTAL_PCT,
         description=(
             "The PREMIUM terminal (gain-antenna) bucket's share of the pool, percent. A "
-            "PEOPLE bucket. FOUNDER_SET to 2.0 (Sheet A). Strictly positive (the second "
+            "PEOPLE bucket. INVESTOR_SET to 2.0 (Sheet A). Strictly positive (the second "
             "people mix). Configurable."
         ),
     )
@@ -543,7 +543,7 @@ class IridiumArpuDials(BaseModel):
         description=(
             "The IoT DEVICE bucket's share of the pool, percent: the residual that "
             "closes the mix to 100. DEVICES, never folded into the people count. "
-            "FOUNDER_SET to 82.805 (Sheet A). Configurable."
+            "INVESTOR_SET to 82.805 (Sheet A). Configurable."
         ),
     )
     government_mix_pct: float = Field(
@@ -551,7 +551,7 @@ class IridiumArpuDials(BaseModel):
         ge=0,
         le=ARPU_MIX_TOTAL_PCT,
         description=(
-            "The GOVERNMENT bucket's share of the pool, percent. FOUNDER_SET to 0.195 "
+            "The GOVERNMENT bucket's share of the pool, percent. INVESTOR_SET to 0.195 "
             "(Sheet A), calibrated so the baseline government line reproduces today's "
             "fixed EMSS contract (COMM-619) rather than scaling a 4.8 percent share. "
             "Configurable."
@@ -562,8 +562,8 @@ class IridiumArpuDials(BaseModel):
         gt=0,
         le=ARPU_PRICE_CEILING_USD_MONTH,
         description=(
-            "The STANDARD personal monthly price, dollars. FOUNDER_SET to 15.0 (Sheet A), "
-            "the midpoint of the founder's 10-to-20 mass-market range (COMM-618 context). "
+            "The STANDARD personal monthly price, dollars. INVESTOR_SET to 15.0 (Sheet A), "
+            "the midpoint of the investor's 10-to-20 mass-market range (COMM-618 context). "
             "Configurable."
         ),
     )
@@ -572,7 +572,7 @@ class IridiumArpuDials(BaseModel):
         gt=0,
         le=ARPU_PRICE_CEILING_USD_MONTH,
         description=(
-            "The PREMIUM terminal monthly price, dollars. FOUNDER_SET to 100.0 (Sheet A), "
+            "The PREMIUM terminal monthly price, dollars. INVESTOR_SET to 100.0 (Sheet A), "
             "between Iridium voice/data 47 and Certus 259 for 0.7 Mbps-class (COMM-618). "
             "Configurable."
         ),
@@ -582,8 +582,8 @@ class IridiumArpuDials(BaseModel):
         gt=0,
         le=ARPU_PRICE_CEILING_USD_MONTH,
         description=(
-            "The IoT DEVICE monthly price, dollars. FOUNDER_SET to 8.0 (Sheet A), the "
-            "founder's confirmed about-8 (Iridium IoT ARPU is 7.78 today, COMM-618). "
+            "The IoT DEVICE monthly price, dollars. INVESTOR_SET to 8.0 (Sheet A), the "
+            "investor's confirmed about-8 (Iridium IoT ARPU is 7.78 today, COMM-618). "
             "Configurable."
         ),
     )
@@ -592,7 +592,7 @@ class IridiumArpuDials(BaseModel):
         gt=0,
         le=ARPU_PRICE_CEILING_USD_MONTH,
         description=(
-            "The GOVERNMENT monthly price, dollars. FOUNDER_SET to 74.0 (Sheet A), "
+            "The GOVERNMENT monthly price, dollars. INVESTOR_SET to 74.0 (Sheet A), "
             "today's per-connection EMSS equivalent (COMM-619). Configurable."
         ),
     )
@@ -645,7 +645,7 @@ class IridiumDials(BaseModel):
         gt=0,
         description=(
             "The L-band WIDTH held in MHz (a width, NOT a frequency; the frequency is "
-            "the ~1.6 GHz dial position). FOUNDER_SET to 8.0, the Iridium exclusive "
+            "the ~1.6 GHz dial position). INVESTOR_SET to 8.0, the Iridium exclusive "
             "holding (~7.775 rounded); 10.5 is the coordinated-span variant. Flagged. "
             "Configurable."
         ),
@@ -661,7 +661,7 @@ class IridiumDials(BaseModel):
             "gives); satellites-per-launch couples inversely (fewer, bigger satellites "
             "per launch). Above APERTURE_NO_FOLD_LIMIT_M2 the assumptions output carries "
             "the fold caveat, deliberately NOT a bound so the what-if stays computable. "
-            "FOUNDER-DIRECTED. Configurable."
+            "INVESTOR-DIRECTED. Configurable."
         ),
     )
     device_class: DeviceClass = Field(
@@ -690,7 +690,7 @@ class IridiumDials(BaseModel):
         gt=0,
         description=(
             "The per-subscriber active data rate in Mbps (the service tier; also the "
-            "peak per-user rate by construction). FOUNDER_SET to 1.0 (standard "
+            "peak per-user rate by construction). INVESTOR_SET to 1.0 (standard "
             "smartphone activity); 2.5 is the rich variant. Flagged. Configurable."
         ),
     )
@@ -700,7 +700,7 @@ class IridiumDials(BaseModel):
         le=1.0,
         description=(
             "The busy-hour PEAK concurrency fraction (share of subscribers "
-            "simultaneously active at peak). FOUNDER_SET to 0.025 (2.5%). Flagged as "
+            "simultaneously active at peak). INVESTOR_SET to 0.025 (2.5%). Flagged as "
             "the pair with concurrency_offpeak. Configurable."
         ),
     )
@@ -709,7 +709,7 @@ class IridiumDials(BaseModel):
         gt=0,
         le=1.0,
         description=(
-            "The OFF-PEAK concurrency fraction. FOUNDER_SET to 0.005 (0.5%). Flagged as "
+            "The OFF-PEAK concurrency fraction. INVESTOR_SET to 0.005 (0.5%). Flagged as "
             "the pair with concurrency_peak. Configurable."
         ),
     )
@@ -719,7 +719,7 @@ class IridiumDials(BaseModel):
         description=(
             "A separate DEVICE passthrough counter (NOT people, NOT folded into the "
             "subscriber count): IoT is negligible-load and does NOT affect fleet "
-            "sizing. ESTIMATE 10,000,000 (low end of tens of millions); founder-owned. "
+            "sizing. ESTIMATE 10,000,000 (low end of tens of millions); investor-owned. "
             "Configurable."
         ),
     )
