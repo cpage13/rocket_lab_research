@@ -33,7 +33,7 @@ scenario_name: "AI1-equivalent scenario (SpaceX AI1 mass/thermal specs, B300 sil
 metadata:
   workload_type: inference
   operator_model: b2b_dedicated_optical_rf
-  radiator_architecture: single_face_co_mounted
+  radiator_architecture: deployed_double_sided   # AI-1's own architecture (and, since 2026-07-14, the default's)
   deployment_philosophy: ground_validated_before_launch
   base_year: 2026
   horizon_years: 10
@@ -84,8 +84,8 @@ gospel:
   bus_base_musd: 8.0               # cost dial UNCHANGED (scenario scopes mass/thermal, not cost)
   bus_flatten_after_yr: 5
   bus_growth_pre: -0.03
-  solar_cost_musd_per_kw: 0.04     # cost dial UNCHANGED
-  radiator_cost_musd_per_kw: 0.04  # cost dial UNCHANGED
+  solar_cost_musd_per_kw: 0.02     # cost dial UNCHANGED (tracks the 2026-07-14 default; same-costs methodology)
+  radiator_cost_musd_per_kw: 0.02  # cost dial UNCHANGED (tracks the 2026-07-14 default; same-costs methodology)
   release_cadence_yr: 1.5
 
 slopes:             # AI1-EQUIV: ZEROED so frontier silicon stays B300/GB300 every year

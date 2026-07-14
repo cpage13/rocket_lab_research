@@ -4,6 +4,15 @@ Rocket Lab Research asks one practical question: what new orbital business could
 Rocket Lab build with the rockets and spacecraft it already makes? Each
 candidate application gets its own honest, source-linked feasibility study.
 
+The recurring answer across applications is not sunlight or altitude. Space
+wins where it converts construction into manufacturing. Ground data centers
+and ground networks are built site by site, constrained by regulations, labor
+markets, grid queues, and geography. An orbital fleet is standardized units
+off an assembly line, launched on a repeating cadence, the way data centers
+and large communications networks already standardize their racks and cells,
+applied to the whole facility. Economies of scale and repeatability are the
+product; orbit is where they run.
+
 New to Rocket Lab, Electron, or Neutron? Start with the [primer](rocket_lab_primer.md), a one-page catch-up on the company and its rockets.
 
 ## Applications
@@ -32,20 +41,23 @@ operate the result as laser-linked orbital compute.
 
 The model ramps for years, but **2036** is the takeoff. That year Rocket Lab
 launches **90 Neutron missions**, deploys **90 new orbital nodes**, and adds
-about **38 MW** of new orbital compute power. That is the cadence story.
+about **68 MW** of new orbital compute power. That is the cadence story.
 
-Each cohort then earns a flat **33% gross margin** for its full five-year life,
-and the cohorts compound. The 2036 launches alone earn about **$2.1B a year** in
-revenue and about **$700M of gross profit a year**. The build-and-launch program
-runs about **1.92x** the cost of an equivalent ground data center: not parity,
-but close enough to take seriously.
+Each cohort then earns a flat **33% margin** for its full five-year life, and
+the cohorts compound. The 2036 launches alone earn about **$2.5B a year** in
+revenue and about **$840M of profit a year**, and the living fleet reads about
+**$7.4B a year**. The build-and-launch program runs about **1.28x** the cost
+of an equivalent ground data center: not parity, but a quarter more, before
+any space-native design iteration.
 
-And that 1.92x is the deliberately conservative floor. Run the same model at
-the specs SpaceX revealed for its own AI-1 satellite (June 2026) and the 1.92x
-falls to about **1.3x**. Apply the cost-downs the model already tracks and it
-reads **0.91x, slightly cheaper than ground**. Each launch carries roughly
-**3x the compute at today's silicon**, and the 2036 cohort alone earns about **$3.3B a year** in
-revenue and **$1.1B in gross profit**, both still conservative. See
+The 1.28x stands on the architecture the industry itself validated: the model
+semi-copies the deployed, double-sided, run-hot radiator SpaceX revealed on
+its AI-1 satellite (June 2026), within 10 percent of AI-1's implied radiator
+mass, and prices solar and thermal hardware at assembly-line scale ($20k/kW
+each, investor-set with sourced directional support). Run the same model at
+AI-1's full spec on the same dials and it reads about **0.91x, cheaper than
+ground**. The old heavy-radiator posture at $40k/kW reads **1.92x** and is
+kept as the labeled conservative exception. See
 [the AI-1 comparison](data_center/ai1_comparison.md).
 
 ## Where To Read It
