@@ -1,7 +1,7 @@
 {
   "provenance": {
     "model_name": "iridium",
-    "schema_version": "iridium-v3",
+    "schema_version": "iridium-v4",
     "scenario_name": "Iridium L-band max-outcome (phone-class baseline)",
     "source_scenario_path": "code/scenarios/iridium.yaml",
     "version_stamp": "2026-07-14"
@@ -12,10 +12,22 @@
     "subscribers_per_satellite": 31200,
     "binding_regime": "coverage",
     "full_coverage_reached_year": 2031,
-    "steady_state_annual_replacement_cost_musd": 250.0,
     "subscribers_served": 10000000,
-    "cost_per_subscriber_annual_usd": 25.0,
-    "steady_state_annual_cost_musd": 144.99999999999997
+    "steady_state_annual_cost_musd": 144.99999999999997,
+    "cost_per_subscriber_annualized_usd": 14.499999999999996,
+    "final_year_replacement_cost_musd": 250.0,
+    "final_year_cash_cost_per_subscriber_usd": 25.0,
+    "living_fleet_final_year": 348,
+    "cumulative_launches_to_completion": 29,
+    "cumulative_launches_final_year": 58,
+    "people_capacity_target_fleet": 10608000,
+    "people_capacity_living_fleet_final_year": 10857600
+  },
+  "orbit_scenario": {
+    "altitude_km": 450.0,
+    "inclination_deg": 53.0,
+    "source_status": "scenario",
+    "basis": "Simulation-informed scenario, not an engine derivation: the project coverage simulation's 95 percent column reads 341 satellites at 450 km, 53 degrees, and a 25 degree elevation mask (investor-rounded to the 340 dial), and no polar candidate below 375 passed. Honest bounds (2026-07-14 audit): a fuller integer-phasing search finds 320 passing the same stored geographic metric, the saved 341 case is the robust one under equal-area weighting, the metric is geographic rather than population-weighted, the production minimum-search screens a single phasing family, and finite sampled periods do not prove continuous operational availability. 340 is a supported conservative scenario; the exact floor is an engineering decision."
   },
   "iridium_physics": {
     "spectrum_mhz": 8.0,

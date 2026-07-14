@@ -441,9 +441,11 @@ def derive_iridium_satellites_per_launch(
     array flies 1 per launch). Equals the configured value EXACTLY at the 25 m^2
     default aperture (the launch-coupling identity, so the High-Bandwidth Cellular
     Pure Play model's behavior is unchanged).
-    Mass rationale for the inverse-linear coupling: ~800 kg at the 25 m^2 reference
-    (COMM-256) scales roughly linearly with area, ~1,900 kg at 60 m^2, so ~5 per
-    launch by mass, agreeing with the stow-derived count.
+    Mass context for the inverse-linear coupling: ~800 kg at the 25 m^2 reference
+    (COMM-256) scales roughly linearly with area, ~1,920 kg at 60 m^2. The published
+    coupling is the inverse-AREA convention (5 per launch at 60 m^2); the separate
+    estimate-bound mass quotient reads 6 (floor of ~13,000 kg over ~1,920 kg). Close
+    but distinct conventions: this function implements the area convention.
 
     Args:
         configured_satellites_per_launch: The High-Bandwidth Cellular Pure Play

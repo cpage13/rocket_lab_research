@@ -186,6 +186,45 @@ life, the cohort cliff: after this many years a cohort retires and contributes
 zero coverage. A design/depreciation assumption (the Starlink replacement-capex
 anchor), not a certified field life."""
 
+ORBIT_ALTITUDE_KM_SCENARIO: Final[float] = 450.0
+"""SCENARIO (Part 7 physics loop, 2026-07-10). The published fleet altitude, km.
+Four couplings favor about 450 km (path loss, coverage economy, the saturation
+ceiling, the sun-angle power floor), robustly on the link budget and latency.
+A stated scenario input to the published orbit posture, NOT an engine input:
+nothing downstream computes from it. The promoted artifact carries it in the
+labeled ``orbit_scenario`` block (schema iridium-v4) so the public orbit claim
+has a typed model-contract anchor with its limitations attached."""
+
+ORBIT_INCLINATION_DEG_SCENARIO: Final[float] = 53.0
+"""SCENARIO (Part 7 physics loop, 2026-07-10). The published fleet inclination,
+degrees. Chosen because people live at mid-latitudes: the covered band holds
+about 99.6 percent of the world's population, and the project coverage
+simulation needs about 10 percent fewer satellites at 53 degrees than polar
+(341 versus 375 at the 95 percent threshold, 450 km, 25 degree mask). Same
+posture as the altitude: a stated scenario input, not an engine input."""
+
+ORBIT_SCENARIO_SOURCE_STATUS: Final[str] = "scenario"
+"""The assumptions-ledger source status carried on the promoted orbit block:
+the orbit is a chosen modeling assumption on a computed (simulation-informed)
+basis, per the public source-status taxonomy in communications/assumptions.md."""
+
+ORBIT_SCENARIO_BASIS: Final[str] = (
+    "Simulation-informed scenario, not an engine derivation: the project "
+    "coverage simulation's 95 percent column reads 341 satellites at 450 km, "
+    "53 degrees, and a 25 degree elevation mask (investor-rounded to the 340 "
+    "dial), and no polar candidate below 375 passed. Honest bounds (2026-07-14 "
+    "audit): a fuller integer-phasing search finds 320 passing the same stored "
+    "geographic metric, the saved 341 case is the robust one under equal-area "
+    "weighting, the metric is geographic rather than population-weighted, the "
+    "production minimum-search screens a single phasing family, and finite "
+    "sampled periods do not prove continuous operational availability. 340 is "
+    "a supported conservative scenario; the exact floor is an engineering "
+    "decision."
+)
+"""The orbit block's basis paragraph: the simulation support and every honest
+bound recorded by the 2026-07-11 calculation audit, carried verbatim on the
+promoted artifact so the limitations travel with the numbers."""
+
 SATELLITE_BUILD_COST_MUSD_DEFAULT: Final[float] = 1.05
 """INVESTOR_SET (in-band; round 4, 2026-06-25). The flat MASS-MANUFACTURED
 CELLULAR-SATELLITE HARDWARE cost, ONE scalar, ~$1.0 to 1.1M (1.05 is the in-band
