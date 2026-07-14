@@ -207,7 +207,7 @@ iridium:
   # epsilon). Both people mixes (standard, premium) must be strictly positive so the
   # people share is never zero. Prices are dollars per connection per month.
   arpu:
-    standard_mix_pct: 15.0            # standard personal (phone-class) people share
+    standard_mix_pct: 15.0            # standard personal people share (small antenna today; a phone if chipsets come)
     premium_mix_pct: 2.0              # premium terminal (gain-antenna) people share
     iot_mix_pct: 82.805              # IoT devices: the residual that closes the mix to 100
     government_mix_pct: 0.195         # government: de-anchored to reproduce today's EMSS book

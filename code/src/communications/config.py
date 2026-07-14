@@ -521,8 +521,10 @@ class IridiumArpuDials(BaseModel):
         gt=0,
         le=ARPU_MIX_TOTAL_PCT,
         description=(
-            "The STANDARD personal (phone-class) bucket's share of the "
-            "billable-connection pool, percent. A PEOPLE bucket. INVESTOR_SET to 15.0 "
+            "The STANDARD personal bucket's share of the billable-connection "
+            "pool, percent. A PEOPLE bucket: a person on a small self-orienting "
+            "antenna today, or a phone if the band enters chipsets (the capacity "
+            "math sizes at the weakest class either way). INVESTOR_SET to 15.0 "
             "(Sheet A). Strictly positive so people_share (standard + premium) is never "
             "zero. Configurable."
         ),
