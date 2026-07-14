@@ -259,6 +259,12 @@ particular completion year is secondary.
 
 ## What It Means For The Business
 
+This section runs in five parts: what the fleet costs, who the customers
+are, what they pay and why, the published sheet those prices produce, and
+what moves if the standard price moves. A structural read closes it.
+
+### What The Fleet Costs
+
 The cost model is deliberately flat (an investor simplification, 2026-07-09),
 and both dials sit in-band of the research anchors:
 
@@ -277,6 +283,8 @@ large 2031 cohort, so the final-year cash line reads $250 million, or $25 per
 configured person, while the annualized basis is $14.50. The promoted JSON
 names both bases directly: the final-year cash pair and the annualized line
 (schema iridium-v4).
+
+### Who The Customers Are
 
 The published revenue case is the four-bucket ARPU sheet (Sheet A,
 investor-set 2026-07-09): each bucket is a set price and a percentage of the
@@ -298,6 +306,8 @@ density (31,200 per satellite) is computed at the weakest device class, so a
 standard subscriber on the small antenna consumes less of the pool than the
 sizing assumes: conservative in the right direction.
 
+### What They Pay, And Why
+
 Each price is anchored, not invented:
 
 | Bucket price | Anchored on |
@@ -306,6 +316,19 @@ Each price is anchored, not invented:
 | Premium, $100 per month | Between today's $47 voice-and-data ARPU and the $259 Certus broadband book (COMM-618/619) |
 | IoT, $8 per month | About today's $7.78 Iridium IoT ARPU (COMM-618) |
 | Government, $74 per month | Pinned so the bucket reproduces today's fixed about-$108M-a-year EMSS contract (COMM-619) |
+
+Three of those prices sit at or inside today's book and need no defense. The
+standard $15 sits far below today's $47 voice-and-data ARPU, so it needs one:
+why would the price fall? Because today's prices ration scarce supply. The
+whole 66-satellite incumbent fleet moves about 174 Mbps, so it sells small
+allocations at premium prices: Certus delivers a 0.7 Mbps-class service for
+$259 a month, about $370 per megabit, where a terrestrial home line runs
+roughly $0.46 per megabit (about $80 a month for 170 to 180 Mbps, COMM-422).
+The modeled fleet carries roughly 1,500 times today's supply on the same
+spectrum, so it can sell at mass prices and keep the premium book: today's
+Certus buyer gets roughly 4 Mbps instead of 0.7.
+
+### The Published Sheet
 
 The mix percentages (a set split, loosely guided by the shape of Iridium's
 base, with government pinned) turn those prices into the published sheet.
@@ -342,21 +365,13 @@ Iridium-scaled operating line still leaves the margin north of **93
 percent**. The real commercial uncertainties are demand, sell-through, mix,
 prices, and actual operating cost.
 
-Why can $15 a month work where today's satellite services charge $47 to
-$259? Because today's prices ration scarce supply. The whole 66-satellite
-incumbent fleet moves about 174 Mbps, so it sells small allocations at
-premium prices: Certus delivers a 0.7 Mbps-class service for $259 a month,
-about $370 per megabit, where a terrestrial home line runs roughly $0.46 per
-megabit (about $80 a month for 170 to 180 Mbps, COMM-422). The modeled fleet
-carries roughly 1,500 times today's supply on the same spectrum. That is what
-lets it sell at mass prices while keeping the premium book: today's Certus
-buyer gets roughly 4 Mbps instead of 0.7.
+### If The Standard Price Moves
 
-The standard price is the one dial with a stated range rather than a
-current-book anchor, so its sensitivity is shown alone. The rows below move
-only the standard bucket's price, on the standard bucket's own headcount from
-the table above (9.36 million people at 340 satellites, 55.1 million at about
-2,000); nothing else moves:
+The $15 is a chosen point inside the stated $10 to $20 range, so the natural
+question is how much rides on the choice. The rows below answer only that:
+the standard bucket's price moves across its range, on the standard bucket's
+own headcount from the sheet above (9.36 million people at 340 satellites,
+55.1 million at about 2,000), and nothing else moves:
 
 | Standard-tier price | Standard revenue at 340 satellites | At about 2,000 satellites |
 |---|---|---|
@@ -364,11 +379,13 @@ the table above (9.36 million people at 340 satellites, 55.1 million at about
 | $15 per month (the published sheet) | $1.68B/yr | $9.9B/yr |
 | $20 per month | $2.2B/yr | $13.2B/yr |
 
-The structural read, scoped to this model: the expensive part of this case
-was never the satellites ($725M builds the whole baseline fleet), it was the
-spectrum position, and that came with the about-$8.0B acquisition (COMM-602).
-The modernized fleet's book replaces today's $871.7M-a-year Iridium book as
-the old fleet retires: the two are never summed, and neither are people and
+### The Structural Read
+
+Scoped to this model: the expensive part of this case was never the
+satellites ($725M builds the whole baseline fleet), it was the spectrum
+position, and that came with the about-$8.0B acquisition (COMM-602). The
+modernized fleet's book replaces today's $871.7M-a-year Iridium book as the
+old fleet retires: the two are never summed, and neither are people and
 devices.
 
 ## The Antenna Aperture: Why 25 Square Meters, And What 60 Would Buy
