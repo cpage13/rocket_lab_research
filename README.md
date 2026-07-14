@@ -86,7 +86,9 @@ saturates near **2,000 satellites by 2035**. The service is device-diverse:
 about **1 Mbps** at peak and **5 Mbps** off peak on the weakest device class
 (a phone-class radio with no external antenna), roughly 3 and 15 through a
 small self-orienting antenna (a puck, or a USB device on a laptop), 4 and 19
-mounted, with IoT devices riding nearly free. The published revenue case is a
+mounted, with IoT devices riding nearly free. The width sets how many times
+per second the wave can change; antenna quality sets how many bits each
+change carries, which is why a better antenna gets more from the same 8 MHz. The published revenue case is a
 four-bucket ARPU sheet (standard, premium terminal, IoT, government),
 investor-set prices anchored on Iridium's current book: about **$8.25B a
 year** at the baseline under full sell-through on capacity, against about

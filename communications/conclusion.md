@@ -138,6 +138,16 @@ Mbps each**, and the density is the same equation run backwards: **31,200
 people per satellite**. Reuse multiplies how many people a satellite serves,
 never one person's rate.
 
+What spectral efficiency means, in plain terms: the width sets how many times
+per second the wave may change state (about 8 million per second on 8 MHz;
+change it faster and the signal spreads outside the owned lane), and the
+link's signal quality sets how many distinguishable amplitude-and-phase
+states each change can carry, the way a clean wire can carry four voltage
+levels where a noisy one carries only two. Throughput is the product of the
+two. A better antenna does not widen the spectrum: it cleans the signal, so
+each change carries more bits. That one fact is the entire device ladder in
+the next section.
+
 These are conditional model outputs, not measured performance from a finished
 spacecraft. The reuse calibration is the number real engineering would move
 first: across the corpus band edges, per-satellite capacity spans roughly 0.3
@@ -271,10 +281,35 @@ names both bases directly: the final-year cash pair and the annualized line
 The published revenue case is the four-bucket ARPU sheet (Sheet A,
 investor-set 2026-07-09): each bucket is a set price and a percentage of the
 fleet's billable-connection pool, so every bucket scales with the satellite
-count. The prices are anchored on what Iridium's customers pay today; the mix
-is a set split, loosely guided by the shape of Iridium's base, with
-government pinned to reproduce today's fixed contract. One table carries the
-whole business at both fleet sizes:
+count. Before the money, here is who each bucket is, concretely, tied to the
+device ladder above:
+
+| Bucket | Who it is | The hardware, and the busy-hour rate it gets |
+|---|---|---|
+| Standard personal | A person who wants connectivity wherever they are: a laptop in the field, a cabin, a boat, a coverage gap | A small self-orienting antenna (a puck, or a USB device on a laptop): about 3.1 Mbps at the busy hour, about 15 lightly loaded. A phone (about 1.0 Mbps) if the band ever enters standard chipsets |
+| Premium terminal | A platform that needs the best link: a vehicle, ship, aircraft, or fixed site | A mounted higher-gain antenna: about 3.8 Mbps at the busy hour, about 19 lightly loaded |
+| IoT devices | A module inside a machine: sensors, meters, trackers, vehicle telemetry | Kilobit-class bursts on the random-access channel, near-zero traffic load |
+| Government | Today's fixed EMSS contract, carried at its current scale | The existing government user base |
+
+Terminal hardware is not modeled: these are service prices, and the fleet
+economics carry no device cost, subsidy, or retail line. Low-cost terminals
+are part of the product thesis, not yet a modeled number. The headline
+density (31,200 per satellite) is computed at the weakest device class, so a
+standard subscriber on the small antenna consumes less of the pool than the
+sizing assumes: conservative in the right direction.
+
+Each price is anchored, not invented:
+
+| Bucket price | Anchored on |
+|---|---|
+| Standard, $15 per month | The midpoint of the investor's $10 to $20 mass-market range, sized against the about 300 million people without coverage (COMM-021); today's Iridium voice-and-data ARPU is $47 (COMM-618/619) |
+| Premium, $100 per month | Between today's $47 voice-and-data ARPU and the $259 Certus broadband book (COMM-618/619) |
+| IoT, $8 per month | About today's $7.78 Iridium IoT ARPU (COMM-618) |
+| Government, $74 per month | Pinned so the bucket reproduces today's fixed about-$108M-a-year EMSS contract (COMM-619) |
+
+The mix percentages (a set split, loosely guided by the shape of Iridium's
+base, with government pinned) turn those prices into the published sheet.
+One table carries the whole business at both fleet sizes:
 
 | Bucket | Mix and price | At 340 satellites (2031) | At about 2,000 satellites (2035) |
 |---|---|---|---|
@@ -307,28 +342,27 @@ Iridium-scaled operating line still leaves the margin north of **93
 percent**. The real commercial uncertainties are demand, sell-through, mix,
 prices, and actual operating cost.
 
-Two anchors ground the prices:
+Why can $15 a month work where today's satellite services charge $47 to
+$259? Because today's prices ration scarce supply. The whole 66-satellite
+incumbent fleet moves about 174 Mbps, so it sells small allocations at
+premium prices: Certus delivers a 0.7 Mbps-class service for $259 a month,
+about $370 per megabit, where a terrestrial home line runs roughly $0.46 per
+megabit (about $80 a month for 170 to 180 Mbps, COMM-422). The modeled fleet
+carries roughly 1,500 times today's supply on the same spectrum. That is what
+lets it sell at mass prices while keeping the premium book: today's Certus
+buyer gets roughly 4 Mbps instead of 0.7.
 
-| Anchor | The numbers |
-|---|---|
-| What Iridium's customers pay today (FY2025, COMM-618/619) | IoT $7.78; voice and data $47; Certus broadband $259 for a 0.7 Mbps-class service; the fixed about-$108M/yr government contract |
-| The investor's standard-tier range | $10 to $20 per month, sized against the about 300 million people without coverage (COMM-021) |
+The standard price is the one dial with a stated range rather than a
+current-book anchor, so its sensitivity is shown alone. The rows below move
+only the standard bucket's price, on the standard bucket's own headcount from
+the table above (9.36 million people at 340 satellites, 55.1 million at about
+2,000); nothing else moves:
 
-Today's prices are premium-niche prices on a starved network: at $259 for 0.7
-Mbps, the incumbent price per megabit runs about $370, roughly 800 times a
-terrestrial line (about $80 a month for 170 to 180 Mbps, roughly $0.46 per
-megabit; COMM-422). A modernized fleet with about 1,500 times today's supply
-on the same spectrum is what breaks that regime: it sells abundance at mass
-prices while keeping the premium book (today's Certus buyer gets roughly 4
-Mbps instead of 0.7). The standard-tier price sensitivity around the
-published point (a sensitivity view pricing the standard tier alone, not a
-competing total):
-
-| Standard-tier price | Revenue at 10M subscribers | At the 62-million ceiling |
+| Standard-tier price | Standard revenue at 340 satellites | At about 2,000 satellites |
 |---|---|---|
-| $10 per month | $1.2B/yr | $7.4B/yr |
-| $15 per month | $1.8B/yr | $11.2B/yr |
-| $20 per month | $2.4B/yr | $14.9B/yr |
+| $10 per month | $1.1B/yr | $6.6B/yr |
+| $15 per month (the published sheet) | $1.68B/yr | $9.9B/yr |
+| $20 per month | $2.2B/yr | $13.2B/yr |
 
 The structural read, scoped to this model: the expensive part of this case
 was never the satellites ($725M builds the whole baseline fleet), it was the
@@ -337,21 +371,26 @@ The modernized fleet's book replaces today's $871.7M-a-year Iridium book as
 the old fleet retires: the two are never summed, and neither are people and
 devices.
 
-## The Aperture Explainer
+## The Antenna Aperture: Why 25 Square Meters, And What 60 Would Buy
 
-The 60-square-meter case is an explainer, not a model case: if the antenna
-were bigger, what would that buy? At 1.6 GHz, frequency does the work of
-area: a 25 square meter array already has the gain and cell size of a much
-larger array at cellular frequencies, which is why the design point is many
-small satellites. A **60 square meter** panel would carry 2.4x the capacity,
-spendable either way: roughly double per-user rates at today's density, or
-about **74,880 people per satellite** (about 25 million on the same 340
-satellites). But a 60 square meter square is about 7.7 meters on a side: it
-does not stow in Neutron without folding, which the flat-panel philosophy
-rejects, so it needs a larger fairing that does not exist. It stays out of
-the model as a labeled hypothetical. Its launch coupling is five satellites
-per launch by the inverse-area convention; the separate estimate-bound mass
-arithmetic reads six.
+The model's satellite carries a 25 square meter panel because that is what
+Neutron can launch without folding: a 25 square meter square is 5.0 meters on
+a side and stows edge-wise across the 5.5 meter fairing, and the flat-panel
+philosophy rejects folding mechanisms. The area is enough because frequency
+does the work of area at 1.6 GHz: a 25 square meter array has the gain and
+cell size of a much larger array at cellular frequencies, which is why the
+design point is many small satellites rather than a few large ones.
+
+A bigger antenna would buy capacity linearly, and the 60-square-meter case is
+the explainer for that lever, not a model case. A **60 square meter** panel
+would carry 2.4x the capacity, spendable either way: roughly double per-user
+rates at today's density, or about **74,880 people per satellite** (about 25
+million on the same 340 satellites). But 60 square meters is about 7.7 meters
+on a side. It does not stow in Neutron without folding, so it needs a larger
+fairing that does not exist, and it stays out of the model as a labeled
+hypothetical. Its launch coupling is five satellites per launch by the
+inverse-area convention; the separate estimate-bound mass arithmetic reads
+six.
 
 ## What Would Change The Verdict
 
@@ -381,12 +420,13 @@ arithmetic reads six.
 
 ## Structural Context
 
-This model exists because Rocket Lab agreed to acquire Iridium, which would
-reframe it from a greenfield entrant into an incumbent MSS operator with
-owned, globally coordinated spectrum, an operating fleet, ground
-infrastructure, and 2.5 million existing customers, plus the modernization
-decision this model sizes (see
+This model exists because Rocket Lab agreed to acquire Iridium. If the deal
+closes, Rocket Lab stops being a greenfield entrant and becomes an incumbent
+MSS operator: owned, globally coordinated spectrum, an operating fleet,
+ground infrastructure, and 2.5 million existing customers (see
 [`research/rocket_lab/iridium_acquisition.md`](../research/rocket_lab/iridium_acquisition.md)).
+The decision this model sizes is what a modern rebuild of that network could
+deliver.
 The broader argument for why Rocket Lab, almost alone, owns the parts, the
 rocket, and the production lines to build a fleet like this is the shared
 [structural case](../data_center/structural_case.md). This document is the
