@@ -148,6 +148,17 @@ two. A better antenna does not widen the spectrum: it cleans the signal, so
 each change carries more bits. That one fact is the entire device ladder in
 the next section.
 
+One more grounding note: the published rates are service rates, not download
+or upload figures. Like the incumbent network, the fleet time-shares the band
+between the two directions, and the model does not split them. The sizing
+discipline is that the harder direction closes: the device-to-satellite
+uplink is the power-limited side (a handheld transmits a fraction of a watt
+against the satellite's tens of watts, while antenna gain applies equally to
+both directions), and the project's physics validation verified the
+phone-class uplink closes at the modeled rate with roughly 8 to 21 dB of
+margin across the tested altitudes and elevations. The downlink carries
+headroom above every published figure.
+
 These are conditional model outputs, not measured performance from a finished
 spacecraft. The reuse calibration is the number real engineering would move
 first: across the corpus band edges, per-satellite capacity spans roughly 0.3
