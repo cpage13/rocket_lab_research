@@ -1,0 +1,53 @@
+# =============================================================================
+# The Iridium model: SATURATION build-out (2,000 satellites, pedal to the metal)
+# =============================================================================
+#
+# THE SATURATION COMPANION to scenarios/iridium.yaml: the same Iridium model,
+# the same all-in manifest share, the same flat cost dials, with ONE dial moved.
+# The subscriber target rises to 62,400,000, the most people the modeled
+# spectrum can serve (2,000 satellites x 31,200 people per satellite), so the
+# capacity need meets the 2,000-satellite saturation cap exactly and the engine
+# builds toward the cap. Run it from code/ with:
+#
+#   uv run python -m communications.json_output scenarios/iridium_saturation.yaml \
+#       <output.json>
+#
+# All commentary, sources, and rationale live in scenarios/iridium.yaml: this
+# file deliberately repeats its dials with one-line comments so the two files
+# stay diffable. The 62,400,000 equals the Sheet A allocation pool at the
+# baseline by construction (both are capacity x the same density chain); that
+# coincidence is deliberate and documented in the conclusion. The saturation
+# cap itself (2,000) is the investor-set scenario informed by the co-channel
+# interference mechanism, not a uniquely solved physical ceiling.
+
+comms_cadence:
+  share_of_fleet: 1.0  # investor-set all-in share (pedal to the metal, 2026-07-14)
+
+subscribers:
+  subscribers_at_full_coverage: 62400000  # the cap-binding target: 2,000 x 31,200
+
+launch_cost:
+  low_cadence_cost_musd: 13.0   # investor-flat: the low-cadence anchor, set equal to high
+  high_cadence_cost_musd: 13.0  # investor-flat: the high-cadence anchor (flat at 13.0)
+
+satellite:
+  satellite_build_cost_musd: 1.0  # investor-flat hardware cost, matching the baseline
+
+iridium:
+  spectrum_mhz: 8.0        # the held EXCLUSIVE width (a width, not a frequency)
+  aperture_m2: 25.0        # the Flatellite flat-body reference and no-fold stow limit
+  device_class: phone_class  # weakest modeled tier: the headline floor
+  active_user_rate_mbps: 1.0  # the service tier (peak per-user rate by construction)
+  concurrency_peak: 0.025     # busy-hour concurrency (corpus ~1-5% band center)
+  concurrency_offpeak: 0.005  # off-peak concurrency (investor-set pair value)
+  iot_devices: 10000000       # passthrough device counter (zero fleet-sizing effect)
+  scenario_name: "Iridium L-band saturation (2,000-satellite build-out)"
+  arpu:
+    standard_mix_pct: 15.0            # Sheet A mixes and prices, identical to baseline
+    premium_mix_pct: 2.0
+    iot_mix_pct: 82.805
+    government_mix_pct: 0.195
+    standard_price_usd_month: 15.0
+    premium_price_usd_month: 100.0
+    iot_price_usd_month: 8.0
+    government_price_usd_month: 74.0

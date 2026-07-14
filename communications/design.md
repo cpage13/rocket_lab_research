@@ -78,8 +78,9 @@ on), and the scenario label. Plus the optional ARPU block (founder-set
 prices per month; None keeps the revenue case off. The fleet dials (12
 satellites per launch, 5-year life, the 340 coverage floor, the 2,000
 saturation cap, the 0.18 cadence share) are carried from the shared engine;
-the default scenario overrides two of them founder-flat (satellite build cost
-1.0 million dollars and a flat 13.0 million dollar launch cost at every
+the default scenario overrides three of them (the cadence share all-in at 1.0,
+pedal to the metal, investor-set 2026-07-14; satellite build cost 1.0 million
+dollars investor-flat; and a flat 13.0 million dollar launch cost at every
 cadence, set by equal curve anchors), leaving the shared config defaults
 untouched.
 
@@ -115,8 +116,9 @@ cost per subscriber) as exact assertions, plus the named variants: the rich
 tier, the coordinated spectrum, the device ladder, the aperture what-if with
 its fold caveat, and the launch coupling. Two honesty features are themselves
 tested: the model reports below-target deployment truthfully (the rich tier
-reaches 576 of its 802-satellite fleet by FY2036 at the 0.18 share and says
-so), and the fold caveat emits strictly above 25.0 square meters.
+reaches 576 of its 802-satellite fleet by FY2036 at the config-default 0.18
+share and says so; the promoted all-in scenario completes the same 802 fleet
+in 2033), and the fold caveat emits strictly above 25.0 square meters.
 
 **The equality tripwire.** One test runs both families and asserts the Iridium
 baseline trajectory equals the cellular default trajectory field by field

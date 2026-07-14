@@ -4,18 +4,18 @@
     "schema_version": "iridium-v3",
     "scenario_name": "Iridium L-band max-outcome (phone-class baseline)",
     "source_scenario_path": "code/scenarios/iridium.yaml",
-    "version_stamp": "2026-07-10"
+    "version_stamp": "2026-07-14"
   },
   "trajectory_summary": {
-    "total_build_and_hold_cost_musd": 900.0,
+    "total_build_and_hold_cost_musd": 1450.0,
     "fleet_target": 340,
     "subscribers_per_satellite": 31200,
     "binding_regime": "coverage",
-    "full_coverage_reached_year": 2035,
-    "steady_state_annual_replacement_cost_musd": 75.0,
+    "full_coverage_reached_year": 2031,
+    "steady_state_annual_replacement_cost_musd": 250.0,
     "subscribers_served": 10000000,
-    "cost_per_subscriber_annual_usd": 7.5,
-    "steady_state_annual_cost_musd": 145.0
+    "cost_per_subscriber_annual_usd": 25.0,
+    "steady_state_annual_cost_musd": 144.99999999999997
   },
   "iridium_physics": {
     "spectrum_mhz": 8.0,
