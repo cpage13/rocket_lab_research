@@ -16,12 +16,10 @@ conclusion.
 - The active model code lives in `code/src/communications/`: five modules
   (constants, config, engine, ground, json_output) carrying both model
   families.
-- The test suite is green post-cleanup: the frozen Iridium suite, the
-  High-Bandwidth Cellular Pure Play suites, the cross-import guard, and the
-  data-center parity gate (174 tests at build close; 172 comms plus parity
-  and 554 whole-tree as of 2026-07-09, the published four-bucket ARPU case
-  and the flat-cost simplification both landed that day; mypy strict and
-  ruff clean).
+- The test suite is green: the frozen Iridium suite, the High-Bandwidth
+  Cellular Pure Play suites, the cross-import guard, and the data-center
+  parity gate (554 whole-tree tests as of 2026-07-14; mypy strict and ruff
+  clean).
 - The evidence library lives in `research/` under the `COMM-*` claim ledger.
 
 ## Current Read
@@ -59,10 +57,10 @@ consolidated unit-cost trajectory row).
   research and add later.
 - The cash cost per subscriber (25.00 dollars per year under the all-in
   share) is the final-year replacement-cost artifact (FY2036 replaces the
-  large 2031 cohort, 250.0 million dollars); aligning to the annualized basis
-  (14.50 dollars per subscriber per year at 10 million) is a tracked open
-  item, and the promoted field names for the final-year pair remain on the
-  rename queue.
+  large 2031 cohort, 250.0 million dollars). As of schema iridium-v4 the
+  promoted artifact names both bases directly (the final-year cash pair plus
+  the 14.50-dollar annualized line) and exposes the fleet, launch, and
+  capacity denominators and the labeled orbit scenario block.
 - The old pre-rewrite communications tree (the former CLI, output, comparison,
   and validation layers and their tests) was retired 2026-07-07. The live tree
   is the five-module engine plus its per-family tests.

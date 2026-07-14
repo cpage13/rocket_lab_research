@@ -41,9 +41,11 @@ subscriber against ground cellular. It is the greenfield direct-to-cell
 question, and it shares the fleet, cost, and cadence machinery with the Iridium
 model.
 
-More paradigms may follow. The broadband dish lane is deliberately unmodeled:
-it is the easier case, with abundant spectrum and proven terminal physics, and
-modeling effort goes where the constraint is.
+More paradigms may follow. The broadband dish lane is deliberately out of
+scope: it has abundant spectrum and established terminal physics, so it is a
+different, well-trodden problem, and this work focuses the modeling effort on
+the thin-spectrum MSS constraint. That is a research scope choice, not a
+verdict from this model.
 
 ## Reading Path
 

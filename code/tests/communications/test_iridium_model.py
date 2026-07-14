@@ -42,6 +42,10 @@ from communications.constants import (
     HORIZON_YEARS_DEFAULT,
     IRIDIUM_SCENARIO_NAME_DEFAULT,
     MONTHS_PER_YEAR,
+    ORBIT_ALTITUDE_KM_SCENARIO,
+    ORBIT_INCLINATION_DEG_SCENARIO,
+    ORBIT_SCENARIO_BASIS,
+    ORBIT_SCENARIO_SOURCE_STATUS,
     SUBSCRIBERS_PER_SATELLITE_DEFAULT,
     BindingRegime,
     DeviceClass,
@@ -157,6 +161,13 @@ FLAT_STEADY_STATE_REPLACEMENT_COST_MUSD = 250.0
 FLAT_COST_PER_SUBSCRIBER_ANNUAL_USD = 25.0
 FLAT_STEADY_STATE_ANNUAL_COST_MUSD = 145.0  # the annualized basis (share-independent).
 FULL_COVERAGE_YEAR_ALL_IN = 2031  # the 340-satellite build: 29 launches at 12 per launch.
+# The schema-v4 denominators, frozen exact at the all-in baseline.
+ANNUALIZED_COST_PER_SUBSCRIBER_USD = 14.5  # 145.0 M USD / 10,000,000 people.
+LIVING_FLEET_FINAL_YEAR = 348  # 29 whole launches x 12 satellites.
+CUM_LAUNCHES_TO_COMPLETION = 29  # cumulative launches through the 2031 completion.
+CUM_LAUNCHES_FINAL_YEAR = 58  # the 2031 build replaced exactly once by FY2036.
+PEOPLE_CAPACITY_TARGET_FLEET = 10_608_000  # 340 x 31,200.
+PEOPLE_CAPACITY_LIVING_FLEET = 10_857_600  # 348 x 31,200.
 # The published ARPU margin against that flat-cost steady-state annual cost:
 # (8,250.80256 - 145.0) / 8,250.80256 x 100.
 ARPU_MARGIN_VS_STEADY_STATE_COST_PCT = 98.242_595_202_762_91
@@ -461,19 +472,22 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
 
     Objective: the promoted-JSON writer end to end (scenario YAML in, artifact
     file out). Success: the file exists, the provenance names the model
-    'iridium', echoes the stamp, and carries schema iridium-v3; the frozen
+    'iridium', echoes the stamp, and carries schema iridium-v4; the frozen
     baseline keys/values are in the payload (subscribers_per_satellite 31,200 in
     both blocks, fleet target 340, full coverage reached 2031 under the all-in
     share, the stated-assumptions lines present); the flat-cost model (investor
     simplification 2026-07-09) under the all-in share freezes exact (1,450.0 M
-    build-and-hold, 250.0 M final-year replacement, 25.0 USD/sub final-year
-    cash, 145.0 M annual cost); the two
-    cost-plus revenue fields are ABSENT from the trajectory summary (schema
-    iridium-v3, investor direction 2026-07-10; the engine still computes them for the
-    cellular family and the equality tripwire); the two inherited placeholder ARPU
-    fields are gone; and the published four-bucket revenue_arpu_buckets block carries
-    the frozen Sheet A values plus the published margin (98.2 percent) against the
-    steady-state cost.
+    build-and-hold, 250.0 M final-year replacement under its honest v4 name,
+    25.0 USD/sub final-year cash beside the 14.50 annualized basis, 145.0 M
+    annual cost); the v4 denominators are exposed (348 living, 29 launches to
+    completion, 58 through FY2036, 10,608,000 and 10,857,600 people capacity);
+    the orbit scenario block carries the published 450 km / 53 degree posture
+    with its basis text; the two cost-plus revenue fields are ABSENT from the
+    trajectory summary (since schema iridium-v3; the engine still computes them
+    for the cellular family and the equality tripwire); the two inherited
+    placeholder ARPU fields are gone; and the published four-bucket
+    revenue_arpu_buckets block carries the frozen Sheet A values plus the
+    published margin (98.2 percent) against the steady-state cost.
     """
     out_path = tmp_path / "iridium_default.json"
     written = export_iridium_json(_SCENARIO_YAML, out_path, version_stamp="test-stamp")
@@ -482,7 +496,7 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
     assert payload["provenance"]["model_name"] == MODEL_NAME
     assert payload["provenance"]["version_stamp"] == "test-stamp"
     assert payload["provenance"]["scenario_name"] == IRIDIUM_SCENARIO_NAME_DEFAULT
-    assert payload["provenance"]["schema_version"] == "iridium-v3"
+    assert payload["provenance"]["schema_version"] == "iridium-v4"
     assert (
         payload["trajectory_summary"]["subscribers_per_satellite"]
         == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE
@@ -490,15 +504,32 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
     assert payload["trajectory_summary"]["fleet_target"] == EXPECTED_FLEET_TARGET_BASELINE
     assert payload["trajectory_summary"]["full_coverage_reached_year"] == FULL_COVERAGE_YEAR_ALL_IN
     # The flat-cost model (investor simplification 2026-07-09), frozen exact from the
-    # scenario's flat 13.0 $M launch, 1.0 $M build, and all-in share overrides.
+    # scenario's flat 13.0 $M launch, 1.0 $M build, and all-in share overrides. The
+    # final-year cash pair reads under its honest schema-v4 names.
     ts = payload["trajectory_summary"]
     assert ts["total_build_and_hold_cost_musd"] == pytest.approx(FLAT_BUILD_AND_HOLD_COST_MUSD)
-    assert ts["steady_state_annual_replacement_cost_musd"] == pytest.approx(
+    assert ts["final_year_replacement_cost_musd"] == pytest.approx(
         FLAT_STEADY_STATE_REPLACEMENT_COST_MUSD
     )
-    assert ts["cost_per_subscriber_annual_usd"] == pytest.approx(
+    assert ts["final_year_cash_cost_per_subscriber_usd"] == pytest.approx(
         FLAT_COST_PER_SUBSCRIBER_ANNUAL_USD
     )
+    assert ts["cost_per_subscriber_annualized_usd"] == pytest.approx(
+        ANNUALIZED_COST_PER_SUBSCRIBER_USD
+    )
+    # The schema-v4 fleet, launch, and capacity denominators (the bases the prose
+    # quotes), frozen exact at the all-in baseline.
+    assert ts["living_fleet_final_year"] == LIVING_FLEET_FINAL_YEAR
+    assert ts["cumulative_launches_to_completion"] == CUM_LAUNCHES_TO_COMPLETION
+    assert ts["cumulative_launches_final_year"] == CUM_LAUNCHES_FINAL_YEAR
+    assert ts["people_capacity_target_fleet"] == PEOPLE_CAPACITY_TARGET_FLEET
+    assert ts["people_capacity_living_fleet_final_year"] == PEOPLE_CAPACITY_LIVING_FLEET
+    # The orbit scenario block: the published posture with its limitations attached.
+    orbit = payload["orbit_scenario"]
+    assert orbit["altitude_km"] == pytest.approx(ORBIT_ALTITUDE_KM_SCENARIO)
+    assert orbit["inclination_deg"] == pytest.approx(ORBIT_INCLINATION_DEG_SCENARIO)
+    assert orbit["source_status"] == ORBIT_SCENARIO_SOURCE_STATUS
+    assert orbit["basis"] == ORBIT_SCENARIO_BASIS
     assert ts["steady_state_annual_cost_musd"] == pytest.approx(FLAT_STEADY_STATE_ANNUAL_COST_MUSD)
     # The two cost-plus revenue fields are ABSENT from the artifact (schema iridium-v3,
     # investor direction 2026-07-10); the engine still computes them on the shared

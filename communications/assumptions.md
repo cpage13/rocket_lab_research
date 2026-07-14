@@ -55,7 +55,7 @@ family and the equality tripwire still see the defaults.
 | Launch cost (flat) | 13.0 million dollars per launch | `scenario`, investor-flat | Investor simplification 2026-07-09: both cadence anchors of the shared log-linear curve set equal in `iridium.yaml`, so the launch cost is flat at every cadence (no stepped pricing as launches scale). In-band, just below the shared curve's grounded 13.5 high-cadence floor; the shared-spine default curve (25.0 to 13.5) is untouched. |
 | Satellite lifetime | 5 years | `scenario` | The corpus Starlink operating-life lineage (`COMM-088`, the ~5-year depreciation and replacement treadmill). |
 | Coverage floor | 340 satellites | `scenario` on a computed basis | The project coverage simulation's 95 percent column reads 341 at 450 km and a 25 degree mask, investor-rounded to 340; inside `COMM-216`'s 290 to 960 floor band. Honest bounds (2026-07-14 audit): a fuller integer-phasing search finds 320 passing the same stored geographic metric, while the saved 341 case is the robust one under equal-area weighting; the metric is geographic, not population-weighted, so 340 is a supported conservative scenario and the exact floor is an engineering decision. |
-| Orbit (altitude, inclination) | about 450 km, 53 degrees | `derived_estimate` (Part 7 physics loop) | The coverage-of-people choice: 53 degrees covers the latitudes holding about 99.6 percent of population and needs about 10 percent fewer satellites than polar (341 vs 375); the four couplings (path loss, coverage economy, the saturation ceiling, the sun-angle power floor) favor about 450 km, robustly on the link budget and latency. Supports the 340-satellite floor as a conservative scenario (not a solved optimum; see the coverage-floor row); orbit inputs are not yet in the promoted model contract. |
+| Orbit (altitude, inclination) | about 450 km, 53 degrees | `derived_estimate` (Part 7 physics loop) | The coverage-of-people choice: 53 degrees covers the latitudes holding about 99.6 percent of population and needs about 10 percent fewer satellites than polar (341 vs 375); the four couplings (path loss, coverage economy, the saturation ceiling, the sun-angle power floor) favor about 450 km, robustly on the link budget and latency. Supports the 340-satellite floor as a conservative scenario (not a solved optimum; see the coverage-floor row); the promoted artifact carries the orbit as a labeled scenario block with the bounds attached (schema iridium-v4). |
 | Saturation cap | 2,000 satellites | `scenario` | Investor-set dial encoding the tiling/interference ceiling (`COMM-413` to `COMM-416` own the mechanism; `COMM-550/553` the fleet scale). |
 | Busy-hour concurrency | 2.5 percent | `scenario`, corpus-central | `COMM-543`: working direct-to-cell concurrency about 1 to 5 percent, central 2 to 3. |
 | Subscriber base at coverage | 10,000,000 people | `scenario` | Investor-set conservative slice of the coverage-gap pool (`COMM-021`: about 300 million people without mobile coverage; context `COMM-390`, `COMM-065`). |
@@ -257,8 +257,9 @@ every claim block this model cites, end to end through `COMM-710` (the
 spectrum fundamentals, Iridium acquisition, band designations, Iridium
 capacity and modernization, the device gate, and MSS spectrum expansion were
 indexed as Waves 8 and 9 on 2026-07-08). The only gaps in the id space are
-the two documented reserved-unused ranges (`COMM-575..600` and
-`COMM-677..685`).
+the documented reserved-unused ranges: `COMM-191..196`, `COMM-366..370`,
+`COMM-379..385`, `COMM-440..480`, `COMM-513..520`, `COMM-575..600`, and
+`COMM-677..685`.
 
 ## Maintenance Rule
 

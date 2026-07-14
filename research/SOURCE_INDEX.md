@@ -2,8 +2,8 @@
 
 **Status:** draft public claim ledger
 **Created:** 2026-05-25
-**Updated:** 2026-06-26
-**Scope:** Rocket Lab Research data-center investigation source ledger
+**Updated:** 2026-07-14
+**Scope:** Rocket Lab Research source ledger: the data-center investigation and the communications application (the Iridium model)
 
 This file is the query surface for hard-number source status. It does not
 replace the topic documents. It records which claims are externally certified,

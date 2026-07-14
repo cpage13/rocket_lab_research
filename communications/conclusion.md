@@ -65,7 +65,7 @@ labeled scenario dial.
 
 | Item | File | What it is |
 |---|---|---|
-| Iridium model | [`communications/models/iridium/default.json`](models/iridium/default.json) | The promoted model: the frozen baseline, its derivation, units, and sources. It does not yet carry the orbit inputs or every trajectory denominator; those gaps are named where they matter |
+| Iridium model | [`communications/models/iridium/default.json`](models/iridium/default.json) | The promoted model: the frozen baseline, its derivation, units, and sources, including the fleet, launch, and capacity denominators and the labeled orbit scenario block (schema iridium-v4) |
 | Default scenario | [`code/scenarios/iridium.yaml`](../code/scenarios/iridium.yaml) | The input dials; copy, edit, and re-run to test alternatives |
 | Saturation companion | [`code/scenarios/iridium_saturation.yaml`](../code/scenarios/iridium_saturation.yaml) | The 2,000-satellite build-out: one dial moved (the target rises to the cap-binding 62,400,000) |
 | Assumptions ledger | [`communications/assumptions.md`](assumptions.md) | Every default assumption, its source status, and where it comes from |
@@ -206,9 +206,9 @@ percent threshold and a 25 degree mask). The honest bounds on that
 simulation: a fuller phasing search finds 320 satellites passing the same
 stored geographic metric, the saved 341 case is the robust one under
 equal-area weighting, and the metric is geographic rather than
-population-weighted. So 340 is a supported conservative scenario, the exact
-floor is an engineering decision, and the orbit inputs are not yet part of
-the promoted model contract.
+population-weighted. So 340 is a supported conservative scenario and the
+exact floor is an engineering decision. The promoted artifact carries this
+orbit posture as a labeled scenario block with those bounds attached.
 
 Why a ceiling exists at all: on a fixed band, capacity comes from beams
 reusing the spectrum over separated patches of ground, and once every patch
@@ -265,8 +265,8 @@ research and add later, stated in every model output rather than hidden. One
 accounting artifact worth naming: the final model year (FY2036) replaces the
 large 2031 cohort, so the final-year cash line reads $250 million, or $25 per
 configured person, while the annualized basis is $14.50. The promoted JSON
-still carries that final-year pair under legacy field names, a tracked
-rename.
+names both bases directly: the final-year cash pair and the annualized line
+(schema iridium-v4).
 
 The published revenue case is the four-bucket ARPU sheet (Sheet A,
 investor-set 2026-07-09): each bucket is a set price and a percentage of the

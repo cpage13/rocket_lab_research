@@ -35,8 +35,16 @@ from typing import Final
 from pydantic import BaseModel, ConfigDict, Field
 
 from communications.config import CommsConfig, load_comms_config
-from communications.constants import BindingRegime, DeviceClass
+from communications.constants import (
+    ORBIT_ALTITUDE_KM_SCENARIO,
+    ORBIT_INCLINATION_DEG_SCENARIO,
+    ORBIT_SCENARIO_BASIS,
+    ORBIT_SCENARIO_SOURCE_STATUS,
+    BindingRegime,
+    DeviceClass,
+)
 from communications.engine import (
+    MUSD_TO_USD,
     CommsTrajectory,
     IridiumArpuBucket,
     IridiumArpuResult,
@@ -50,18 +58,25 @@ logger = logging.getLogger(__name__)
 MODEL_NAME: Final[str] = "iridium"
 """The promoted artifact's model name (the provenance header's fixed identity)."""
 
-IRIDIUM_SCHEMA_VERSION: Final[str] = "iridium-v3"
-"""The promoted Iridium artifact's schema version tag. ``iridium-v3`` (2026-07-10)
-removes the two cost-plus revenue fields (``steady_state_revenue_cost_plus_musd``,
-``steady_state_gross_margin_cost_plus_pct``) from the trajectory summary: the Iridium
-model now has a real published revenue case (the four-bucket ARPU case), so the
-synthetic cost-plus line is off every Iridium-facing surface (it stays the cellular
-family's shared-engine cost-recovery convention). The prior ``iridium-v2`` (2026-07-09)
-removed the two inherited placeholder ARPU fields and added the published four-bucket
-``revenue_arpu_buckets`` block, which carries the per-bucket lines plus the published
-ARPU margin against the fleet's steady-state annual cost
-(``arpu_margin_vs_steady_state_cost_pct``, unchanged: measured against cost, not
-cost-plus)."""
+IRIDIUM_SCHEMA_VERSION: Final[str] = "iridium-v4"
+"""The promoted Iridium artifact's schema version tag. ``iridium-v4`` (2026-07-14)
+makes the trajectory summary's cost bases honest and its denominators complete:
+the two final-year cash fields are renamed to say what they are
+(``final_year_replacement_cost_musd`` and ``final_year_cash_cost_per_subscriber_usd``,
+previously published under steady-state-flavored names although they are the
+cohort-timed final-model-year cash), the annualized per-person basis is published
+beside them (``cost_per_subscriber_annualized_usd``), the fleet, launch, and
+capacity denominators the prose quotes are exposed (final-year living fleet,
+cumulative launches to completion and through the final year, target-fleet and
+final-year living-fleet people capacity), and the published orbit posture rides
+as the labeled ``orbit_scenario`` block with its limitations attached. The prior
+``iridium-v3`` (2026-07-10) removed the two cost-plus revenue fields from the
+trajectory summary (the Iridium model has a real published revenue case, the
+four-bucket ARPU block; cost-plus stays the cellular family's shared-engine
+convention), and ``iridium-v2`` (2026-07-09) removed the two inherited
+placeholder ARPU fields and added the published four-bucket
+``revenue_arpu_buckets`` block with the published ARPU margin against the
+fleet's steady-state annual cost."""
 
 JSON_INDENT: Final[int] = 2
 """Indentation for the emitted JSON (the house ``model_dump_json`` convention)."""
@@ -76,6 +91,11 @@ ARPU_MARGIN_UNDEFINED_PCT: Final[float] = 0.0
 reports 0.0 rather than dividing by zero. The block only exists on a populated pool
 (revenue strictly positive), so this guard is defensive, mirroring the engine's
 zero-revenue margin guard."""
+
+ANNUALIZED_COST_UNDEFINED_USD: Final[float] = 0.0
+"""The annualized cost per person when the served base is non-positive (an empty
+run): undefined, so it reports 0.0 rather than dividing by zero. Defensive, in
+the same pattern as :data:`ARPU_MARGIN_UNDEFINED_PCT`."""
 
 EXIT_OK: Final[int] = 0
 """Process exit code for a successful promotion."""
@@ -171,13 +191,16 @@ class TrajectorySummaryBlock(BaseModel):
     These are the fields every comms run reports (the fleet machinery the
     Iridium model shares with the High-Bandwidth Cellular Pure Play model):
     the build-and-hold cost, the fleet sizing and its binding regime, and the
-    steady-state cost basis. After schema iridium-v3 (investor direction
-    2026-07-10) this block carries the cost and fleet story ONLY, no revenue
-    case: the two cost-plus revenue fields were removed from the Iridium
-    artifact (the cellular family still earns cost-plus on the shared engine),
-    and the published Iridium revenue is the four-bucket ``revenue_arpu_buckets``
-    block on the artifact. The two inherited placeholder ARPU fields (from the
-    cellular family's $50 default) were removed earlier in schema iridium-v2.
+    cost bases. Schema iridium-v4 (2026-07-14) names the two cost bases
+    honestly and exposes the denominators the prose quotes: the final-year
+    cash pair carries ``final_year_`` names (the shared engine's internal
+    field names keep the older steady-state flavor; the ARTIFACT is the public
+    contract and says what the values are), the annualized per-person basis is
+    published beside the final-year cash one, and the living-fleet, launch,
+    and people-capacity denominators ride as first-class fields. After schema
+    iridium-v3 this block carries the cost and fleet story ONLY, no revenue
+    case: the published Iridium revenue is the four-bucket
+    ``revenue_arpu_buckets`` block on the artifact.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -197,17 +220,64 @@ class TrajectorySummaryBlock(BaseModel):
     full_coverage_reached_year: int | None = Field(
         description="First fiscal year the living fleet hit the target; None if never."
     )
-    steady_state_annual_replacement_cost_musd: float = Field(
-        description="Representative HOLD-phase annual replacement cost, $M."
-    )
     subscribers_served: int = Field(
         description="Served people at the final year's buildout fraction."
     )
-    cost_per_subscriber_annual_usd: float = Field(
-        description="Steady-state annual cost per subscriber, USD/sub/yr (the headline)."
-    )
     steady_state_annual_cost_musd: float = Field(
-        description="Representative HOLD-phase ANNUALIZED fleet cost, $M/yr."
+        description=(
+            "Representative HOLD-phase ANNUALIZED fleet cost, $M/yr (build, launch, "
+            "replacement on the satellite lifetime; the honest steady-state basis)."
+        )
+    )
+    cost_per_subscriber_annualized_usd: float = Field(
+        description=(
+            "The ANNUALIZED cost per person, USD/yr: the steady-state annual fleet "
+            "cost over the served-people base (the honest per-person headline)."
+        )
+    )
+    final_year_replacement_cost_musd: float = Field(
+        description=(
+            "The FINAL model year's cash replacement cost, $M: cohort-timed and "
+            "lumpy (the final year replaces whatever cohort expires then), NOT an "
+            "annualized or steady-state basis. Renamed in schema iridium-v4 from "
+            "the steady-state-flavored legacy key."
+        )
+    )
+    final_year_cash_cost_per_subscriber_usd: float = Field(
+        description=(
+            "The FINAL model year's cash replacement over the served-people base, "
+            "USD: the lumpy cash artifact, NOT the annualized per-person basis "
+            "(published beside it as cost_per_subscriber_annualized_usd). Renamed "
+            "in schema iridium-v4 from the legacy annual-flavored key."
+        )
+    )
+    living_fleet_final_year: int = Field(
+        description=(
+            "Living satellites at the final model year (whole-launch build minus "
+            "retired cohorts): the annualized cost's fleet basis."
+        )
+    )
+    cumulative_launches_to_completion: int | None = Field(
+        description=(
+            "Cumulative launches flown through the first full-coverage year "
+            "(replacements included); None if the target was never reached."
+        )
+    )
+    cumulative_launches_final_year: int = Field(
+        description="Cumulative launches flown through the final model year."
+    )
+    people_capacity_target_fleet: int = Field(
+        description=(
+            "The target fleet's people capacity: fleet_target times "
+            "subscribers_per_satellite (the revenue case's capacity anchor)."
+        )
+    )
+    people_capacity_living_fleet_final_year: int = Field(
+        description=(
+            "The final-year living fleet's people capacity: living satellites "
+            "times subscribers_per_satellite (physical capacity, above the "
+            "configured served target when whole launches overshoot)."
+        )
     )
     # Two families of shared-engine fields are computed-but-unpublished for Iridium:
     # removed from this block but KEPT on the engine's shared CommsTrajectory (the
@@ -222,6 +292,35 @@ class TrajectorySummaryBlock(BaseModel):
     #     steady_state_gross_margin_arpu_pct), REMOVED in schema iridium-v2: computed
     #     from the cellular family's $50/month default, they never described Iridium.
     # The published Iridium revenue is the revenue_arpu_buckets block below.
+
+
+class OrbitScenarioBlock(BaseModel):
+    """The published orbit posture, carried as a labeled SCENARIO block.
+
+    Not an engine derivation: nothing in the model computes from these values,
+    and no config dial sets them. The block exists (schema iridium-v4) so the
+    public orbit claim in the conclusion and the assumptions ledger has a typed
+    model-contract anchor that travels with its limitations. Values and basis
+    text come from the named constants in :mod:`communications.constants`.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    altitude_km: float = Field(
+        description="The published fleet altitude, km (a stated scenario, not derived)."
+    )
+    inclination_deg: float = Field(
+        description="The published fleet inclination, degrees (a stated scenario, not derived)."
+    )
+    source_status: str = Field(
+        description="The assumptions-ledger source status for the orbit: 'scenario'."
+    )
+    basis: str = Field(
+        description=(
+            "The simulation support and its honest bounds (metric, phasing, "
+            "weighting, availability limitations), carried verbatim."
+        )
+    )
 
 
 class ArpuBucketBlock(BaseModel):
@@ -297,6 +396,9 @@ class IridiumModelArtifact(BaseModel):
     trajectory_summary: TrajectorySummaryBlock = Field(
         description="The shared trajectory headline fields."
     )
+    orbit_scenario: OrbitScenarioBlock = Field(
+        description="The published orbit posture (a labeled scenario with its limitations)."
+    )
     iridium_physics: IridiumPhysicsBlock = Field(
         description="The Iridium physics result block (the IridiumResult fields)."
     )
@@ -325,6 +427,54 @@ def _repo_relative(path: Path) -> str:
         return path.relative_to(_REPO_ROOT).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+def _cost_per_subscriber_annualized_usd(
+    steady_state_annual_cost_musd: float, subscribers_served: int
+) -> float:
+    """The annualized per-person cost basis, USD per person per year.
+
+    The steady-state annual fleet cost (converted from $M to USD via the
+    engine's :data:`~communications.engine.MUSD_TO_USD`) over the served-people
+    base: the honest annualized headline, published beside the lumpy final-year
+    cash figure so the two bases can never be confused.
+
+    Args:
+        steady_state_annual_cost_musd: The representative HOLD-phase annualized
+            fleet cost, $M/yr.
+        subscribers_served: The served-people base at final buildout.
+
+    Returns:
+        The annualized cost per person, or
+        :data:`ANNUALIZED_COST_UNDEFINED_USD` when the served base is not
+        positive.
+    """
+    if subscribers_served <= 0:
+        return ANNUALIZED_COST_UNDEFINED_USD
+    return steady_state_annual_cost_musd * MUSD_TO_USD / subscribers_served
+
+
+def _cumulative_launches_to_completion(trajectory: CommsTrajectory) -> int | None:
+    """Cumulative launches flown through the first full-coverage year.
+
+    Counts every launch (build and replacement alike) in years up to and
+    including :attr:`~communications.engine.CommsTrajectory.full_coverage_reached_year`;
+    None when the trajectory never reached the target.
+
+    Args:
+        trajectory: The completed run.
+
+    Returns:
+        The through-completion launch count, or None if never completed.
+    """
+    completion_year = trajectory.full_coverage_reached_year
+    if completion_year is None:
+        return None
+    return sum(
+        year.comms_launches_flown_this_year
+        for year in trajectory.years
+        if year.year <= completion_year
+    )
 
 
 def _arpu_bucket_block(bucket: IridiumArpuBucket) -> ArpuBucketBlock:
@@ -435,18 +585,40 @@ def build_iridium_artifact(
         source_scenario_path=source_scenario_path,
         version_stamp=version_stamp,
     )
+    living_fleet_final_year = trajectory.years[-1].living_fleet
     trajectory_summary = TrajectorySummaryBlock(
         total_build_and_hold_cost_musd=trajectory.total_build_and_hold_cost_musd,
         fleet_target=trajectory.fleet_target,
         subscribers_per_satellite=trajectory.subscribers_per_satellite,
         binding_regime=trajectory.binding_regime,
         full_coverage_reached_year=trajectory.full_coverage_reached_year,
-        steady_state_annual_replacement_cost_musd=(
-            trajectory.steady_state_annual_replacement_cost_musd
-        ),
         subscribers_served=trajectory.subscribers_served,
-        cost_per_subscriber_annual_usd=trajectory.cost_per_subscriber_annual_usd,
         steady_state_annual_cost_musd=trajectory.steady_state_annual_cost_musd,
+        cost_per_subscriber_annualized_usd=_cost_per_subscriber_annualized_usd(
+            trajectory.steady_state_annual_cost_musd, trajectory.subscribers_served
+        ),
+        # The engine's internal names for the final-year cash pair keep the older
+        # steady-state flavor (shared with the cellular family); the artifact keys
+        # say what the values are (schema iridium-v4).
+        final_year_replacement_cost_musd=(trajectory.steady_state_annual_replacement_cost_musd),
+        final_year_cash_cost_per_subscriber_usd=trajectory.cost_per_subscriber_annual_usd,
+        living_fleet_final_year=living_fleet_final_year,
+        cumulative_launches_to_completion=_cumulative_launches_to_completion(trajectory),
+        cumulative_launches_final_year=sum(
+            year.comms_launches_flown_this_year for year in trajectory.years
+        ),
+        people_capacity_target_fleet=(
+            trajectory.fleet_target * trajectory.subscribers_per_satellite
+        ),
+        people_capacity_living_fleet_final_year=(
+            living_fleet_final_year * trajectory.subscribers_per_satellite
+        ),
+    )
+    orbit_scenario = OrbitScenarioBlock(
+        altitude_km=ORBIT_ALTITUDE_KM_SCENARIO,
+        inclination_deg=ORBIT_INCLINATION_DEG_SCENARIO,
+        source_status=ORBIT_SCENARIO_SOURCE_STATUS,
+        basis=ORBIT_SCENARIO_BASIS,
     )
     # IoT SUPERSESSION (one IoT truth): with the ARPU case on, the published IoT device
     # count is the revenue mix's IoT bucket count; the fixed iot_devices passthrough
@@ -485,6 +657,7 @@ def build_iridium_artifact(
     return IridiumModelArtifact(
         provenance=provenance,
         trajectory_summary=trajectory_summary,
+        orbit_scenario=orbit_scenario,
         iridium_physics=iridium_physics,
         revenue_arpu_buckets=revenue_arpu_buckets,
         assumptions=iridium_assumptions(config.iridium),

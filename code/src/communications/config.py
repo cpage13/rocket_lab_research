@@ -264,8 +264,9 @@ class SatelliteDials(BaseModel):
         description=(
             "Satellite operating life in years, the cohort cliff: after this a "
             "cohort retires and contributes zero coverage. ~5-year Starlink "
-            "replacement anchor (COMM-091), a design assumption not a certified "
-            "field life."
+            "depreciation and replacement-treadmill anchor (COMM-088; the "
+            "separate COMM-091 is the per-subscriber cost split that lineage "
+            "feeds), a design assumption not a certified field life."
         ),
     )
     satellite_build_cost_musd: float = Field(
