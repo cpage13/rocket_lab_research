@@ -504,7 +504,7 @@ def test_engine_output_roundtrips_via_model_validate() -> None:
     rebuilt = ValuationOutput.model_validate(json.loads(out.model_dump_json()))
     assert rebuilt.metadata.schema_version == "v8"
     assert len(rebuilt.physical.years) == 11
-    assert rebuilt.physical.years["2026"].gpus_per_node.value == 146
+    assert rebuilt.physical.years["2026"].gpus_per_node.value == 223
 
 
 # ---------------------------------------------------------------------------

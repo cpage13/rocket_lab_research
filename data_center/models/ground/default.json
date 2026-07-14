@@ -6,9 +6,9 @@
     "horizon_years": 10,
     "workload_type": "inference",
     "operator_model": "b2b_dedicated_optical_rf",
-    "radiator_architecture": "single_face_co_mounted",
+    "radiator_architecture": "deployed_double_sided",
     "deployment_philosophy": "ground_validated_before_launch",
-    "generated_at": "2026-06-01T17:29:06.470752+00:00",
+    "generated_at": "2026-07-14T18:40:38.629496+00:00",
     "model_package": "rklb-value",
     "model_version": "0.1.0",
     "artifact_role": "promoted_ground_default",
@@ -19,8 +19,8 @@
     "year": 2036,
     "basis": "deployed_this_year",
     "nodes": 90,
-    "gpu_packages": 3330,
-    "kw": 37977.98399999999,
+    "gpu_packages": 5940,
+    "kw": 67744.51199999999,
     "service_life_years": 5,
     "note": "Annual deployment cohort, not living fleet market share.",
     "source_paths": [
@@ -607,7 +607,7 @@
         "name": "gpu_package_acquisition",
         "label": "GPU/package acquisition",
         "cost": {
-          "value": 2139.9312600000003,
+          "value": 3817.17468,
           "unit": "MUSD",
           "formula": "anchor_gpu_packages x space_package_cost x ground_cost_multiplier",
           "formula_name": "ground_gpu_acquisition_from_space_package_cost",
@@ -636,7 +636,7 @@
         "name": "facility_shell_fitout",
         "label": "Facility shell / fit-out allocation",
         "cost": {
-          "value": 683.6037119999999,
+          "value": 1219.4012159999997,
           "unit": "MUSD",
           "formula": "anchor_mw x facility_shell_fitout_musd_per_mw",
           "formula_name": "ground_facility_cost_from_mw",
@@ -663,7 +663,7 @@
         "name": "racked_power_networking",
         "label": "Racked power and networking",
         "cost": {
-          "value": 266.4,
+          "value": 475.2,
           "unit": "MUSD",
           "formula": "anchor_gpu_packages x racked_power_network_musd_per_gpu_package",
           "formula_name": "ground_racked_power_network_from_package_count",
@@ -689,7 +689,7 @@
         "name": "energy",
         "label": "Five-year energy",
         "cost": {
-          "value": 150.22903658399997,
+          "value": 267.97611931199987,
           "unit": "MUSD",
           "formula": "anchor_kw x PUE x utilization x hours_per_year x years / 1000 x usd_per_mwh / 1_000_000",
           "formula_name": "ground_energy_cost_from_kw_pue_utilization",
@@ -724,7 +724,7 @@
         "name": "cooling",
         "label": "Cooling infrastructure",
         "cost": {
-          "value": 151.91193599999997,
+          "value": 270.97804799999994,
           "unit": "MUSD",
           "formula": "anchor_mw x cooling_cost_musd_per_mw",
           "formula_name": "ground_cooling_cost_from_mw",
@@ -751,7 +751,7 @@
         "name": "operations_maintenance_labor",
         "label": "Operations, maintenance, and labor",
         "cost": {
-          "value": 284.83487999999994,
+          "value": 508.0838399999999,
           "unit": "MUSD",
           "formula": "anchor_mw x operations_maintenance_musd_per_mw_year x years",
           "formula_name": "ground_operations_cost_from_mw_year",
@@ -776,7 +776,7 @@
       }
     ],
     "total_five_year_cost": {
-      "value": 3676.910824584,
+      "value": 6558.813903312,
       "unit": "MUSD",
       "formula": "sum(component_costs)",
       "formula_name": "total_cost_from_components",
@@ -796,7 +796,7 @@
       "notes": null
     },
     "annualized_cost": {
-      "value": 735.3821649168,
+      "value": 1311.7627806624,
       "unit": "MUSD/year",
       "formula": "total_cost / comparison_period_years",
       "formula_name": "annualized_cost_from_total_and_period",
@@ -876,7 +876,7 @@
         "name": "compute",
         "label": "Compute hardware",
         "cost": {
-          "value": 2139.9312600000003,
+          "value": 3817.17468,
           "unit": "MUSD",
           "formula": "space_per_node_component_cost x anchor_nodes",
           "formula_name": "orbital_component_cost_from_space_node_component",
@@ -927,7 +927,7 @@
         "name": "solar",
         "label": "Solar/power",
         "cost": {
-          "value": 1519.1193599999995,
+          "value": 1354.8902399999997,
           "unit": "MUSD",
           "formula": "space_per_node_component_cost x anchor_nodes",
           "formula_name": "orbital_component_cost_from_space_node_component",
@@ -953,7 +953,7 @@
         "name": "radiator",
         "label": "Radiator/thermal",
         "cost": {
-          "value": 1519.1193599999995,
+          "value": 1354.8902399999997,
           "unit": "MUSD",
           "formula": "space_per_node_component_cost x anchor_nodes",
           "formula_name": "orbital_component_cost_from_space_node_component",
@@ -1002,7 +1002,7 @@
       }
     ],
     "total_build_and_launch_cost": {
-      "value": 7047.859639805533,
+      "value": 8396.644819805533,
       "unit": "MUSD",
       "formula": "sum(orbital cohort component costs)",
       "formula_name": "orbital_total_cost_from_space_node_total",
@@ -1021,7 +1021,7 @@
       "notes": null
     },
     "five_year_cost_view": {
-      "value": 7047.859639805533,
+      "value": 8396.644819805533,
       "unit": "MUSD",
       "formula": "sum(orbital cohort component costs)",
       "formula_name": "orbital_total_cost_from_space_node_total",
@@ -1040,7 +1040,7 @@
       "notes": null
     },
     "cost_per_gpu_package_five_year": {
-      "value": 2.116474366307968,
+      "value": 1.4135765689908304,
       "unit": "MUSD/package",
       "formula": "total_cost / denominator",
       "formula_name": "cost_per_unit_from_total",
@@ -1056,7 +1056,7 @@
       "notes": null
     },
     "cost_per_mw_five_year": {
-      "value": 185.57750826914707,
+      "value": 123.94575696117694,
       "unit": "MUSD/MW",
       "formula": "total_cost / denominator",
       "formula_name": "cost_per_unit_from_total",
@@ -1072,7 +1072,7 @@
       "notes": null
     },
     "kw": {
-      "value": 37977.98399999999,
+      "value": 67744.51199999999,
       "unit": "kW",
       "formula": "nodes_deployed_this_year x kw_per_node",
       "formula_name": "kw_deployed_this_year_from_nodes",
@@ -1088,7 +1088,7 @@
       "notes": null
     },
     "gpu_packages": {
-      "value": 3330,
+      "value": 5940,
       "unit": "count",
       "formula": "nodes_deployed_this_year x gpus_per_node",
       "formula_name": "ground_anchor_gpu_packages_from_nodes_and_packages",
@@ -1126,7 +1126,7 @@
   },
   "comparison": {
     "ground_total_five_year_cost": {
-      "value": 3676.910824584,
+      "value": 6558.813903312,
       "unit": "MUSD",
       "formula": "sum(component_costs)",
       "formula_name": "total_cost_from_components",
@@ -1146,7 +1146,7 @@
       "notes": null
     },
     "orbital_total_five_year_cost": {
-      "value": 7047.859639805533,
+      "value": 8396.644819805533,
       "unit": "MUSD",
       "formula": "sum(orbital cohort component costs)",
       "formula_name": "orbital_total_cost_from_space_node_total",
@@ -1165,7 +1165,7 @@
       "notes": null
     },
     "absolute_delta": {
-      "value": -3370.9488152215336,
+      "value": -1837.8309164935336,
       "unit": "MUSD",
       "formula": "ground_cost - orbital_cost",
       "formula_name": "absolute_delta_from_totals",
@@ -1181,7 +1181,7 @@
       "notes": null
     },
     "ground_to_orbit_ratio": {
-      "value": 0.5217060231757757,
+      "value": 0.7811231800398939,
       "unit": "ratio",
       "formula": "numerator / denominator",
       "formula_name": "ratio_from_totals",
@@ -1197,7 +1197,7 @@
       "notes": null
     },
     "orbit_to_ground_ratio": {
-      "value": 1.9167882975793729,
+      "value": 1.2802078155572436,
       "unit": "ratio",
       "formula": "numerator / denominator",
       "formula_name": "ratio_from_totals",
@@ -1213,7 +1213,7 @@
       "notes": null
     },
     "cost_per_gpu_package_delta": {
-      "value": -1.0122969415079681,
+      "value": -0.30939914419083037,
       "unit": "MUSD",
       "formula": "ground_cost - orbital_cost",
       "formula_name": "absolute_delta_from_totals",
@@ -1229,7 +1229,7 @@
       "notes": null
     },
     "cost_per_mw_delta": {
-      "value": -88.76060443918072,
+      "value": -27.12885313121059,
       "unit": "MUSD",
       "formula": "ground_cost - orbital_cost",
       "formula_name": "absolute_delta_from_totals",
@@ -1248,7 +1248,7 @@
       {
         "name": "compute",
         "ground_cost": {
-          "value": 2139.9312600000003,
+          "value": 3817.17468,
           "unit": "MUSD",
           "formula": "anchor_gpu_packages x space_package_cost x ground_cost_multiplier",
           "formula_name": "ground_gpu_acquisition_from_space_package_cost",
@@ -1266,7 +1266,7 @@
           "notes": null
         },
         "orbital_reference_cost": {
-          "value": 2139.9312600000003,
+          "value": 3817.17468,
           "unit": "MUSD",
           "formula": "space_per_node_component_cost x anchor_nodes",
           "formula_name": "orbital_component_cost_from_space_node_component",
@@ -1318,7 +1318,7 @@
       {
         "name": "platform_vs_facility",
         "ground_cost": {
-          "value": 950.0037119999998,
+          "value": 1694.6012159999998,
           "unit": "MUSD",
           "formula": "sum(component_costs)",
           "formula_name": "total_cost_from_components",
@@ -1351,7 +1351,7 @@
           "notes": null
         },
         "absolute_delta": {
-          "value": 331.71521349599993,
+          "value": 1076.312717496,
           "unit": "MUSD",
           "formula": "ground_cost - orbital_cost",
           "formula_name": "absolute_delta_from_totals",
@@ -1367,7 +1367,7 @@
           "notes": null
         },
         "ground_to_orbit_ratio": {
-          "value": 1.5365055541201433,
+          "value": 2.740793691133229,
           "unit": "ratio",
           "formula": "numerator / denominator",
           "formula_name": "ratio_from_totals",
@@ -1387,7 +1387,7 @@
       {
         "name": "power_thermal_operations",
         "ground_cost": {
-          "value": 586.9758525839999,
+          "value": 1047.0380073119998,
           "unit": "MUSD",
           "formula": "sum(component_costs)",
           "formula_name": "total_cost_from_components",
@@ -1404,7 +1404,7 @@
           "notes": null
         },
         "orbital_reference_cost": {
-          "value": 3038.238719999999,
+          "value": 2709.7804799999994,
           "unit": "MUSD",
           "formula": "sum(component_costs)",
           "formula_name": "total_cost_from_components",
@@ -1420,7 +1420,7 @@
           "notes": null
         },
         "absolute_delta": {
-          "value": -2451.262867415999,
+          "value": -1662.7424726879997,
           "unit": "MUSD",
           "formula": "ground_cost - orbital_cost",
           "formula_name": "absolute_delta_from_totals",
@@ -1436,7 +1436,7 @@
           "notes": null
         },
         "ground_to_orbit_ratio": {
-          "value": 0.19319609375000002,
+          "value": 0.3863921875,
           "unit": "ratio",
           "formula": "numerator / denominator",
           "formula_name": "ratio_from_totals",

@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import pytest
 
-from data_center.config import ValuationConfig, config_from_dict
+from data_center.config import RadiatorArchitecture, ValuationConfig, config_from_dict
 from data_center.engine import run_valuation
 from data_center.input_manifest import InputCell, InputPath
 from data_center.output import (
@@ -681,27 +681,36 @@ def test_v16_trips_when_living_fleet_inconsistent(
 # ---------------------------------------------------------------------------
 
 
+def _force_co_mounted(output: ValuationOutput) -> ValuationOutput:
+    """Return a copy with the co-mounted architecture (to exercise V17's floor)."""
+    new_md = output.metadata.model_copy(
+        update={"radiator_architecture": RadiatorArchitecture.SINGLE_FACE_CO_MOUNTED}
+    )
+    return output.model_copy(update={"metadata": new_md})
+
+
 def test_v17_default_scenario_passes(default_output: ValuationOutput) -> None:
-    """Default radiator dial (0.012) clears the co-mounted 0.010 floor."""
+    """The deployed double-sided default takes V17's not-applicable pass path."""
     check = check_radiator_dial_arch_consistency(default_output)
     assert check.pass_check
     assert check.severity == Severity.MAJOR
+    assert "not applicable" in check.computed
 
 
 def test_v17_trips_when_radiator_dial_below_floor(
     default_output: ValuationOutput,
 ) -> None:
     """A co-mounted run with radiator_t_per_kw_post below 0.010 trips V17."""
-    mutated = _mutate_gospel(default_output, "radiator_t_per_kw_post", 0.005)
+    mutated = _force_co_mounted(_mutate_gospel(default_output, "radiator_t_per_kw_post", 0.005))
     check = check_radiator_dial_arch_consistency(mutated)
     assert not check.pass_check
     assert "0.005" in check.computed
 
 
 def test_v17_passes_at_exact_floor(default_output: ValuationOutput) -> None:
-    """A radiator dial exactly at the 0.010 floor passes V17."""
-    mutated = _mutate_gospel(
-        default_output, "radiator_t_per_kw_post", RADIATOR_T_PER_KW_CO_MOUNTED_MIN
+    """A co-mounted radiator dial exactly at the 0.010 floor passes V17."""
+    mutated = _force_co_mounted(
+        _mutate_gospel(default_output, "radiator_t_per_kw_post", RADIATOR_T_PER_KW_CO_MOUNTED_MIN)
     )
     assert check_radiator_dial_arch_consistency(mutated).pass_check
 

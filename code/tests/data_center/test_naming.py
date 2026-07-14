@@ -1,7 +1,7 @@
 """Regression tests for the v8 output naming convention (plan §5 T62).
 
 Cycle-1 shipped a field ``annual_rev_per_node_musd`` that was *named*
-revenue but *held* gross profit (revenue − cost). The founder caught it
+revenue but *held* gross profit (revenue − cost). The investor caught it
 when "2036 revenue" would not reconcile against the cost block. D25 fixed
 it: v8 splits the per-node and fleet money lines into explicit
 ``revenue_*`` / ``cost_*`` / ``gross_profit_*`` fields.

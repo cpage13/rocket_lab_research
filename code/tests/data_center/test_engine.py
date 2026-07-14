@@ -81,12 +81,14 @@ def test_default_config_matches_plan_section_zero_anchors() -> None:
     assert g.bus_base_musd == pytest.approx(8.0)
     assert g.bus_flatten_after_yr == 5
     assert g.bus_growth_pre == pytest.approx(-0.03)
-    assert g.solar_cost_musd_per_kw == pytest.approx(0.04)
-    assert g.radiator_cost_musd_per_kw == pytest.approx(0.04)
+    # 2026-07-14 investor rebase: 0.02/0.02 cost dials, AI-1-class radiator
+    # mass held flat (the old 0.04/0.04 and 0.013/0.012 co-mounted posture is
+    # the labeled conservative exception).
+    assert g.solar_cost_musd_per_kw == pytest.approx(0.02)
+    assert g.radiator_cost_musd_per_kw == pytest.approx(0.02)
     assert g.solar_mass_t_per_kw == pytest.approx(0.011)
-    assert g.radiator_t_per_kw_pre == pytest.approx(0.013)
-    # D17 radiator correction — the post-Tjmax dial is 0.012 in v8.
-    assert g.radiator_t_per_kw_post == pytest.approx(0.012)
+    assert g.radiator_t_per_kw_pre == pytest.approx(0.00165)
+    assert g.radiator_t_per_kw_post == pytest.approx(0.00165)
     assert g.release_cadence_yr == pytest.approx(1.5)
     # base_year / horizon_years moved to metadata; service_life to fleet.
     assert cfg.metadata.base_year == 2026
@@ -129,13 +131,20 @@ def test_config_rejects_negative_envelope() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_radiator_t_per_kw_steps_at_tjmax_lift_year() -> None:
-    """Years 0..4 -> pre (0.013); years 5+ -> post (0.012, D17)."""
+def test_radiator_t_per_kw_flat_on_default_and_steps_when_dials_differ() -> None:
+    """The default is flat (pre == post, the Tjmax step inert); the step
+    mechanism still works when a scenario sets distinct pre/post dials (the
+    co-mounted conservative exception)."""
     cfg = ValuationConfig()
+    for y in range(11):
+        assert radiator_t_per_kw_for_year(y, cfg.gospel) == pytest.approx(0.00165)
+    stepped = cfg.gospel.model_copy(
+        update={"radiator_t_per_kw_pre": 0.013, "radiator_t_per_kw_post": 0.012}
+    )
     for y in range(5):
-        assert radiator_t_per_kw_for_year(y, cfg.gospel) == pytest.approx(0.013)
+        assert radiator_t_per_kw_for_year(y, stepped) == pytest.approx(0.013)
     for y in range(5, 11):
-        assert radiator_t_per_kw_for_year(y, cfg.gospel) == pytest.approx(0.012)
+        assert radiator_t_per_kw_for_year(y, stepped) == pytest.approx(0.012)
 
 
 def test_bus_cost_compounds_then_flattens() -> None:
@@ -272,20 +281,20 @@ def test_compute_node_total_cost_sums_the_breakdown() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_compute_year_zero_picks_b300_and_yields_146_packages() -> None:
-    """FY2026 picks B300/GB300 and packs 146 packages."""
+def test_compute_year_zero_picks_b300_and_yields_223_packages() -> None:
+    """FY2026 picks B300/GB300 and packs 223 packages (light-radiator rebase)."""
     yc = compute_year(0, ValuationConfig(), _default_gens())
     assert isinstance(yc, YearComputation)
     assert yc.fy == 2026
     assert yc.frontier.name == "B300/GB300"
-    assert yc.n_packages == 146
+    assert yc.n_packages == 223
 
 
-def test_compute_year_ten_yields_37_packages() -> None:
-    """FY2036 packs 37 packages (D17 radiator + V-A kw_growth 0.20 corrections)."""
+def test_compute_year_ten_yields_66_packages() -> None:
+    """FY2036 packs 66 packages (2026-07-14 AI-1-class radiator rebase; was 37)."""
     yc = compute_year(10, ValuationConfig(), _default_gens())
     assert yc.fy == 2036
-    assert yc.n_packages == 37
+    assert yc.n_packages == 66
 
 
 def test_compute_year_produces_a_full_physical_year() -> None:
@@ -522,16 +531,16 @@ def test_run_valuation_data_dictionary_is_introspected() -> None:
         assert path in dd, f"data_dictionary missing {path}"
 
 
-def test_run_valuation_year_zero_n_is_146() -> None:
-    """Year 0 (FY2026) packs 146 packages."""
+def test_run_valuation_year_zero_n_is_223() -> None:
+    """Year 0 (FY2026) packs 223 packages (light-radiator rebase)."""
     out = run_valuation(ValuationConfig())
-    assert int(_num(out.physical.years["2026"].gpus_per_node.value)) == 146
+    assert int(_num(out.physical.years["2026"].gpus_per_node.value)) == 223
 
 
-def test_run_valuation_year_ten_n_is_37() -> None:
-    """Year 10 (FY2036) packs 37 packages (D17 radiator + V-A kw_growth 0.20)."""
+def test_run_valuation_year_ten_n_is_66() -> None:
+    """Year 10 (FY2036) packs 66 packages (2026-07-14 AI-1-class radiator rebase)."""
     out = run_valuation(ValuationConfig())
-    assert int(_num(out.physical.years["2036"].gpus_per_node.value)) == 37
+    assert int(_num(out.physical.years["2036"].gpus_per_node.value)) == 66
 
 
 def test_run_valuation_uses_integer_launch_counts_for_business_math() -> None:

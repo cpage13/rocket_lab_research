@@ -104,7 +104,7 @@ COST_ANNUAL_MAX_MUSD: Final[float] = 60.0
 # dictionary is populated; this is the minimum entry count expected.
 DATA_DICT_MIN_ENTRIES: Final[int] = 30
 
-# V11 — the cycle-1 scalar R field name. The founder dropped the scalar
+# V11 — the cycle-1 scalar R field name. The investor dropped the scalar
 # `r_revenue_cost` gospel field in favour of the R-band (D18); V11 fails if a
 # scenario YAML re-adds it. The check also rejects any other bare-`r` scalar
 # leaking into the gospel block — the R-band is the only sanctioned R input.
@@ -538,7 +538,7 @@ def check_data_dictionary_populated(output: ValuationOutput) -> ValidationCheck:
 def check_no_legacy_r_scalar(output: ValuationOutput) -> ValidationCheck:
     """The ``inputs.gospel`` block must carry no legacy scalar R field.
 
-    The founder dropped the cycle-1 scalar ``r_revenue_cost`` gospel field
+    The investor dropped the cycle-1 scalar ``r_revenue_cost`` gospel field
     in favour of the three-trajectory R-band (D18); R is now modelled only
     as :class:`data_center.config.RBand`. V11 fails fast if a scenario YAML
     accidentally re-adds ``r_revenue_cost`` (or any other bare-``r`` scalar)

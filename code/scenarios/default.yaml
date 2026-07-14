@@ -25,9 +25,9 @@
 scenario_name: "Default block-upgrade scenario (v8 central case)"
 
 metadata:
-  workload_type: inference                       # D14 (founder-locked)
-  operator_model: b2b_dedicated_optical_rf       # D15 (founder-locked)
-  radiator_architecture: single_face_co_mounted  # D16 (founder-locked)
+  workload_type: inference                       # D14 (investor-locked)
+  operator_model: b2b_dedicated_optical_rf       # D15 (investor-locked)
+  radiator_architecture: deployed_double_sided   # investor decision 2026-07-14: semi-copy the AI-1 architecture (supersedes the D16 co-mounted lock)
   deployment_philosophy: ground_validated_before_launch
   base_year: 2026
   horizon_years: 10
@@ -87,26 +87,34 @@ launch_cost:
   high_cadence_launches: 100.0
 
 gospel:
-  # v8 gospel = cycle-1 gospel verbatim except: radiator dial 0.007 -> 0.012
-  # (D17); node_volume_fixed_m3 added (volume model). r_revenue_cost,
-  # launch_y0/y10_musd, service_life_years, base_year, horizon_years are no
-  # longer set here in v8 — R is the r_band block, launch cost is the
-  # launch_cost block, service life is the fleet block, base year/horizon
-  # are the metadata block. node_mass_fixed_t stays 2.5 (cycle-1 value).
+  # v8 gospel, rebased 2026-07-14 (investor decision): the radiator moves to
+  # the AI-1-class deployed double-sided run-hot architecture at 0.00165 t/kW
+  # (within 10 percent of AI-1's implied 0.0015; supersedes the D16/D17
+  # co-mounted posture, which stays available as the labeled conservative
+  # exception), and the two cost dials move to 0.02 $M/kW each (THR-013 /
+  # THR-016 territory; investor-set, considered conservative at assembly-line
+  # manufacturing scale with in-house production and a five-year life). The
+  # two moves are booked through two distinct channels, never double-counted:
+  # the MASS dial carries the temperature/architecture win, the COST dials
+  # carry the manufacturing-scale win (vertical integration, internalized
+  # supplier margin, productized repetition). A refreshed cost analysis is
+  # tracked in research/node_design/. Other notes: r_revenue_cost,
+  # launch_y0/y10_musd, service_life_years, base_year, horizon_years live in
+  # their own blocks in v8; node_mass_fixed_t stays 2.5 (cycle-1 value).
   # Block-upgraded reusable SSO scenario (SOURCE_INDEX NTR-007), not an
   # official Rocket Lab SSO payload figure.
   mass_envelope_t: 12.5            # block-upgrade SSO baseline (ALWAYS the baseline; 12.5 t to SSO, RLDC-PAYLOAD-SSO-UPGRADE / NTR-007)
   node_mass_fixed_t: 2.5
   node_volume_fixed_m3: 5.0
-  tjmax_lift_year: 5
-  radiator_t_per_kw_pre: 0.013
-  radiator_t_per_kw_post: 0.012   # <-- changed from cycle-1 0.007 (D17)
+  tjmax_lift_year: 5               # inert: pre == post below (the hot radiator is asserted now, AI-1 style)
+  radiator_t_per_kw_pre: 0.00165   # AI-1-class light radiator, investor-set 2026-07-14 (was 0.013)
+  radiator_t_per_kw_post: 0.00165  # held flat; the old 0.012 co-mounted dial is the labeled conservative exception
   solar_mass_t_per_kw: 0.011
   bus_base_musd: 8.0
   bus_flatten_after_yr: 5
   bus_growth_pre: -0.03
-  solar_cost_musd_per_kw: 0.04
-  radiator_cost_musd_per_kw: 0.04
+  solar_cost_musd_per_kw: 0.02     # investor-set 2026-07-14 (was 0.04); THR-013, RKLB silicon-array direction
+  radiator_cost_musd_per_kw: 0.02  # investor-set 2026-07-14 (was 0.04); THR-016, productized-repetition rationale
   release_cadence_yr: 1.5         # GENERATION cadence (18 months, D6)
 
 slopes:

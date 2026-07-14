@@ -46,10 +46,19 @@ def test_operator_model_b2b_dedicated() -> None:
     assert OperatorModel.B2B_DEDICATED_OPTICAL_RF.value == "b2b_dedicated_optical_rf"
 
 
-def test_radiator_architecture_single_face_only() -> None:
-    """RadiatorArchitecture has exactly one member (D16, no proliferation)."""
+def test_radiator_architecture_two_members() -> None:
+    """RadiatorArchitecture has exactly the two real architecture classes.
+
+    The co-mounted member is the D16 conservative posture; the deployed
+    double-sided member is the AI-1-class default (investor decision
+    2026-07-14). No MIXED member: one architecture per run.
+    """
     assert RadiatorArchitecture.SINGLE_FACE_CO_MOUNTED.value == "single_face_co_mounted"
-    assert [m.value for m in RadiatorArchitecture] == ["single_face_co_mounted"]
+    assert RadiatorArchitecture.DEPLOYED_DOUBLE_SIDED.value == "deployed_double_sided"
+    assert [m.value for m in RadiatorArchitecture] == [
+        "single_face_co_mounted",
+        "deployed_double_sided",
+    ]
 
 
 def test_binding_constraint_members() -> None:
@@ -180,11 +189,12 @@ def test_year_r_value_rejects_out_of_range_fy() -> None:
 # -- MetadataConfig ---------------------------------------------------
 
 
-def test_metadata_config_enum_defaults_match_d14_d16() -> None:
+def test_metadata_config_enum_defaults_match_decisions() -> None:
+    """Enum defaults: D14, D15, and the 2026-07-14 radiator-architecture rebase."""
     m = MetadataConfig(base_year=2026, horizon_years=10)
     assert m.workload_type is WorkloadType.INFERENCE
     assert m.operator_model is OperatorModel.B2B_DEDICATED_OPTICAL_RF
-    assert m.radiator_architecture is RadiatorArchitecture.SINGLE_FACE_CO_MOUNTED
+    assert m.radiator_architecture is RadiatorArchitecture.DEPLOYED_DOUBLE_SIDED
     assert m.deployment_philosophy == "ground_validated_before_launch"
 
 
