@@ -100,7 +100,7 @@ RICH_ACTIVE_RATE_MBPS = 2.5
 EXPECTED_SUBS_PER_SAT_RICH = 12_480  # 0.78 x 1000 / (2.5 x 0.025).
 EXPECTED_FLEET_TARGET_RICH = 802  # ceil(10,000,000 / 12,480).
 
-# The device-class spectral-efficiency centrals (the founder's three categories).
+# The device-class spectral-efficiency centrals (the investor's three categories).
 EXPECTED_SE_PHONE = 0.65
 EXPECTED_SE_SMALL_TERMINAL = 2.0
 EXPECTED_SE_TERMINAL = 2.5
@@ -110,7 +110,7 @@ SE_OVERRIDE_BPS_PER_HZ = 0.8  # an in-band override that beats the class central
 EXPECTED_SMALL_TERMINAL_CAPACITY_GBPS = 2.4  # 8 x 2.0 x 0.15.
 EXPECTED_TERMINAL_CAPACITY_GBPS = 3.0  # 8 x 2.5 x 0.15.
 
-# The founder's fewer-bigger vs more-smaller what-if: a 60 m^2 aperture (factor 2.4).
+# The investor's fewer-bigger vs more-smaller what-if: a 60 m^2 aperture (factor 2.4).
 WHAT_IF_APERTURE_M2 = 60.0
 EXPECTED_PER_SAT_CAPACITY_60M2_GBPS = 1.872  # 0.78 x 2.4 (float reprs 1.8719999999999999).
 EXPECTED_SUBS_PER_SAT_60M2 = 74_880  # 1.872 x 1000 / (1.0 x 0.025).
@@ -122,7 +122,7 @@ VERY_LARGE_APERTURE_M2 = 400.0
 EXPECTED_EFFECTIVE_SPL_LARGE = 1  # max(1, floor(12 x 25 / 400)) = max(1, 0).
 
 # ---------------------------------------------------------------------------
-# The four-bucket ARPU revenue case, Sheet A (founder-set 2026-07-09). The frozen
+# The four-bucket ARPU revenue case, Sheet A (investor-set 2026-07-09). The frozen
 # baseline at 340 satellites: people capacity 10,608,000 = 340 x 31,200. Mixes
 # 15.0 / 2.0 / 82.805 / 0.195 (sum 100); prices 15 / 100 / 8 / 74 dollars per month.
 # Every value below is exact (the float pool 62,400,000 lands on integers).
@@ -177,7 +177,7 @@ _SCENARIO_YAML = Path(__file__).resolve().parents[2] / "scenarios" / "iridium.ya
 
 
 def test_device_class_resolves_all_three_central_se_values() -> None:
-    """The device-class resolver returns the three founder-category SE centrals."""
+    """The device-class resolver returns the three investor-category SE centrals."""
     phone = resolve_device_spectral_efficiency(IridiumDials(device_class=DeviceClass.PHONE_CLASS))
     small = resolve_device_spectral_efficiency(
         IridiumDials(device_class=DeviceClass.SMALL_TERMINAL_CLASS)
@@ -469,7 +469,7 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
     build-and-hold, 250.0 M final-year replacement, 25.0 USD/sub final-year
     cash, 145.0 M annual cost); the two
     cost-plus revenue fields are ABSENT from the trajectory summary (schema
-    iridium-v3, founder direction 2026-07-10; the engine still computes them for the
+    iridium-v3, investor direction 2026-07-10; the engine still computes them for the
     cellular family and the equality tripwire); the two inherited placeholder ARPU
     fields are gone; and the published four-bucket revenue_arpu_buckets block carries
     the frozen Sheet A values plus the published margin (98.2 percent) against the
@@ -501,7 +501,7 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
     )
     assert ts["steady_state_annual_cost_musd"] == pytest.approx(FLAT_STEADY_STATE_ANNUAL_COST_MUSD)
     # The two cost-plus revenue fields are ABSENT from the artifact (schema iridium-v3,
-    # founder direction 2026-07-10); the engine still computes them on the shared
+    # investor direction 2026-07-10); the engine still computes them on the shared
     # trajectory for the cellular family and the equality tripwire (see
     # test_iridium_baseline_shares_hb_cellular_trajectory).
     assert "steady_state_revenue_cost_plus_musd" not in ts
@@ -550,7 +550,7 @@ def test_arpu_buckets_frozen_sheet_a() -> None:
 
     Objective: the pure pool algebra at the blessed default (people capacity
     10,608,000). Success: the four counts, the four revenues, the pool total, and
-    the summed revenue equal the founder-frozen Sheet A values.
+    the summed revenue equal the investor-frozen Sheet A values.
     """
     result = derive_arpu_buckets(ARPU_PEOPLE_CAPACITY_BASELINE, IridiumArpuDials())
     assert result.total_connections == ARPU_POOL_BASELINE
@@ -591,7 +591,7 @@ def test_arpu_people_identity_exact_including_awkward_mix() -> None:
 
 
 def test_arpu_buckets_scale_linearly_with_capacity() -> None:
-    """derive_arpu_buckets scales with the fleet capacity (the founder's requirement).
+    """derive_arpu_buckets scales with the fleet capacity (the investor's requirement).
 
     Objective: called directly at X and 2X capacity (no dial-perturbation ambiguity),
     the case scales. Success: the float pool doubles exactly (it is linear in

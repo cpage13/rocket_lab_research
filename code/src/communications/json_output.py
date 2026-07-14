@@ -171,7 +171,7 @@ class TrajectorySummaryBlock(BaseModel):
     These are the fields every comms run reports (the fleet machinery the
     Iridium model shares with the High-Bandwidth Cellular Pure Play model):
     the build-and-hold cost, the fleet sizing and its binding regime, and the
-    steady-state cost basis. After schema iridium-v3 (founder direction
+    steady-state cost basis. After schema iridium-v3 (investor direction
     2026-07-10) this block carries the cost and fleet story ONLY, no revenue
     case: the two cost-plus revenue fields were removed from the Iridium
     artifact (the cellular family still earns cost-plus on the shared engine),
@@ -215,7 +215,7 @@ class TrajectorySummaryBlock(BaseModel):
     # trajectory), so they must NOT be removed from the engine path:
     #   - the cost-plus revenue case (steady_state_revenue_cost_plus_musd,
     #     steady_state_gross_margin_cost_plus_pct), REMOVED here in schema iridium-v3
-    #     (founder direction 2026-07-10): the Iridium model now has a real published
+    #     (investor direction 2026-07-10): the Iridium model now has a real published
     #     revenue case, so the synthetic cost-plus line is off every Iridium-facing
     #     surface, while it stays the cellular family's cost-recovery convention;
     #   - the two inherited placeholder ARPU fields (steady_state_revenue_arpu_musd,

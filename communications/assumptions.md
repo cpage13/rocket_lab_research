@@ -8,7 +8,7 @@ ledger is `research/SOURCE_INDEX.md`.
 The project is not a DCF. It asks whether a Neutron-launched next-generation
 fleet on Iridium's owned L-band could plausibly serve a large subscriber base
 at visible cost under stated assumptions. The default scenario is
-creator-selected, reviewable, and expected to improve.
+investor-selected, reviewable, and expected to improve.
 
 The canonical default output is dynamic JSON. The conclusion is static
 editorial prose tied to the promoted default. If defaults change, update this
@@ -35,7 +35,7 @@ evidence.
 
 The dials below carry the physics. Every one is a named constant in
 `code/src/communications/constants.py` with its derivation in the docstring,
-except the two founder-flat cost dials (satellite build cost, launch cost),
+except the two investor-flat cost dials (satellite build cost, launch cost),
 which are explicit scenario overrides in `code/scenarios/iridium.yaml`: the
 shared-spine config defaults they diverge from stay untouched, so the cellular
 family and the equality tripwire still see the defaults.
@@ -45,30 +45,30 @@ family and the equality tripwire still see the defaults.
 | Exclusive spectrum | 8.0 MHz | `scenario` on a sourced basis | `COMM-611`: 1616 to 1626.5 MHz is a 10.5 MHz span, 7.775 MHz exclusive plus 0.95 MHz shared with Globalstar; 7.775 rounded up to 8.0, stated in code. The Big LEO split is confirmed at `COMM-656`. |
 | Coordinated spectrum variant | 10.5 MHz | `sourced_estimate`, contingent | Same `COMM-611` span. Authorized today is 7.775 plus 0.95 shared; the full 10.5 depends on the live FCC petition over the Globalstar sliver. Upside variant, never the baseline. |
 | Phone-class spectral efficiency | 0.65 bps/Hz (band 0.5 to 0.8) | `sourced_estimate`, measured | `COMM-428/429`: Starlink direct-to-cell measured mean 0.79 and median 0.64 bps/Hz at about 0 dB median SINR (arXiv 2506.00283, fetched and verified verbatim). Central is the band midpoint. |
-| Small-terminal spectral efficiency | 2.0 bps/Hz (band 1.5 to 2.5) | `derived_estimate` | Shannon chain on the phone-class anchor plus the founder's device spec (about 10 dBi patch on a self-orienting mount: a fixed tilt or switched elements, no user pointing; founder decision 2026-07-10, physics loop C-122/C-213: a bare flat face-up patch gets the full gain only at high elevations, so the mount is part of the spec): plus 10 dB gives 1.6 to 2.2 bps/Hz at 60 to 80 percent of Shannon. |
+| Small-terminal spectral efficiency | 2.0 bps/Hz (band 1.5 to 2.5) | `derived_estimate` | Shannon chain on the phone-class anchor plus the investor's device spec (about 10 dBi patch on a self-orienting mount: a fixed tilt or switched elements, no user pointing; investor decision 2026-07-10, physics loop C-122/C-213: a bare flat face-up patch gets the full gain only at high elevations, so the mount is part of the spec): plus 10 dB gives 1.6 to 2.2 bps/Hz at 60 to 80 percent of Shannon. |
 | Terminal-class spectral efficiency | 2.5 bps/Hz (band 2.0 to 3.0) | `sourced_estimate` | `COMM-650` and the capacity doc's modern-ACM band (about 2 to 3 bps/Hz to a gain terminal); `COMM-428` carries the AST claim to about 3. |
 | Reuse calibration | 0.15 Gbps per MHz per unit SE | `derived_estimate` (calibration) | `COMM-410`: a flat 25 square meter class array on about 25 MHz produces about 5 to 15 Gbps (central 8 to 10). 25 x 2.5 x 0.15 = 9.375 sits inside the central band; the implied 150x effective reuse sits inside `COMM-411`'s 130 to 200x. |
 | Aperture reference | 25.0 square meters | `sourced_estimate` | The corpus flat-array class (`COMM-408/410`, about 20 to 24 square meters, called 25-square-meter class). Flatellite's own dimensions are unpublished; the 25 is a render-read working number, flagged as such. |
 | No-fold aperture limit | 25.0 square meters | `derived_estimate` (geometry) | A 60 square meter flat square is about 7.7 meters across, past Neutron's 5.5 meter fairing; a 25 square meter square is 5.0 meters and fits stowed edge-wise, the 5.0 meter side across the 5.5 meter bore (equivalently, a bore-shaped 5.5 meter circular flat panel is 23.76 square meters, 95 percent of the dial, no fold). The no-deployable design philosophy is `COMM-262/263`. |
-| Satellites per launch | 12 | `derived_estimate`, estimate-bound | `COMM-258/260` on the mission LEO basis (founder steering 2026-07-10; this constellation does not target SSO): 12 times the roughly 800 kg single-source mass estimate (`COMM-253/256`) is 9,600 kg, 73.8 percent of the certified about 13,000 kg LEO envelope, a comfortable manifest with no block upgrade assumed (one is likely within about five years; no 3x-class multiples). The about 9,500 kg SSO figure is the data-center mission's basis, kept as a note only. |
-| Satellite build cost | 1.0 million dollars | `scenario`, founder-flat | Founder simplification 2026-07-09, a deliberately flat cost model. Scenario override in `iridium.yaml`, deliberately diverging from the shared config default of 1.05 (untouched); in-band, just below that prior dial and the Starlink V3 hardware anchor of about 1.2 million dollars (`COMM-080`, the consolidated unit-cost trajectory row; a projection, hardware-cost analogy only). |
-| Launch cost (flat) | 13.0 million dollars per launch | `scenario`, founder-flat | Founder simplification 2026-07-09: both cadence anchors of the shared log-linear curve set equal in `iridium.yaml`, so the launch cost is flat at every cadence (no stepped pricing as launches scale). In-band, just below the shared curve's grounded 13.5 high-cadence floor; the shared-spine default curve (25.0 to 13.5) is untouched. |
+| Satellites per launch | 12 | `derived_estimate`, estimate-bound | `COMM-258/260` on the mission LEO basis (investor steering 2026-07-10; this constellation does not target SSO): 12 times the roughly 800 kg single-source mass estimate (`COMM-253/256`) is 9,600 kg, 73.8 percent of the certified about 13,000 kg LEO envelope, a comfortable manifest with no block upgrade assumed (one is likely within about five years; no 3x-class multiples). The about 9,500 kg SSO figure is the data-center mission's basis, kept as a note only. |
+| Satellite build cost | 1.0 million dollars | `scenario`, investor-flat | Investor simplification 2026-07-09, a deliberately flat cost model. Scenario override in `iridium.yaml`, deliberately diverging from the shared config default of 1.05 (untouched); in-band, just below that prior dial and the Starlink V3 hardware anchor of about 1.2 million dollars (`COMM-080`, the consolidated unit-cost trajectory row; a projection, hardware-cost analogy only). |
+| Launch cost (flat) | 13.0 million dollars per launch | `scenario`, investor-flat | Investor simplification 2026-07-09: both cadence anchors of the shared log-linear curve set equal in `iridium.yaml`, so the launch cost is flat at every cadence (no stepped pricing as launches scale). In-band, just below the shared curve's grounded 13.5 high-cadence floor; the shared-spine default curve (25.0 to 13.5) is untouched. |
 | Satellite lifetime | 5 years | `scenario` | The corpus Starlink operating-life lineage (`COMM-088`, the ~5-year depreciation and replacement treadmill). |
-| Coverage floor | 340 satellites | `scenario` on a computed basis | The project coverage simulation's 95 percent column reads 341 at 450 km and a 25 degree mask, founder-rounded to 340; inside `COMM-216`'s 290 to 960 floor band. |
+| Coverage floor | 340 satellites | `scenario` on a computed basis | The project coverage simulation's 95 percent column reads 341 at 450 km and a 25 degree mask, investor-rounded to 340; inside `COMM-216`'s 290 to 960 floor band. |
 | Orbit (altitude, inclination) | about 450 km, 53 degrees | `derived_estimate` (Part 7 physics loop) | The coverage-of-people optimum: 53 degrees reaches about 99.6 percent of population and needs about 10 percent fewer satellites than polar (341 vs 375); the four couplings (path loss, coverage economy, the saturation ceiling, the sun-angle power floor) favor about 450 km, robustly on the link budget and latency. Validates the existing 340-satellite floor as the model's own orbit. |
-| Saturation cap | 2,000 satellites | `scenario` | Founder-set dial encoding the tiling/interference ceiling (`COMM-413` to `COMM-416` own the mechanism; `COMM-550/553` the fleet scale). |
+| Saturation cap | 2,000 satellites | `scenario` | Investor-set dial encoding the tiling/interference ceiling (`COMM-413` to `COMM-416` own the mechanism; `COMM-550/553` the fleet scale). |
 | Busy-hour concurrency | 2.5 percent | `scenario`, corpus-central | `COMM-543`: working direct-to-cell concurrency about 1 to 5 percent, central 2 to 3. |
-| Subscriber base at coverage | 10,000,000 people | `scenario` | Founder-set conservative slice of the coverage-gap pool (`COMM-021`: about 300 million people without mobile coverage; context `COMM-390`, `COMM-065`). |
+| Subscriber base at coverage | 10,000,000 people | `scenario` | Investor-set conservative slice of the coverage-gap pool (`COMM-021`: about 300 million people without mobile coverage; context `COMM-390`, `COMM-065`). |
 | IoT devices | 10,000,000 devices | `scenario`, cosmetic | Contention-limited, not population-capped (`COMM-654/659`); zero sizing effect on the subscriber service. Superseded on the promoted artifact when the ARPU case is on (the IoT count then derives from the revenue mix, about 51.7M). |
-| Cost-plus revenue multiple | 1.5x | `scenario` | Shared-engine machinery, not an Iridium revenue case: the cost-recovery convention (revenue equals annualized cost times the multiple) the cellular family uses, mirroring the data-center central band (`RLDC-REVENUE-MULTIPLE-1_5X`). Computed on the shared trajectory but NOT published on the Iridium artifact as of iridium-v3 (founder direction 2026-07-10); the published Iridium revenue is the four-bucket ARPU case. |
-| ARPU standard mix | 15.0 percent | `scenario`, founder-set | Sheet A (2026-07-09). Standard personal (phone-class) people share; loosely anchored with premium on the FY2025 book's like-for-like people share (`COMM-617/618`). |
-| ARPU premium mix | 2.0 percent | `scenario`, founder-set | Sheet A. Premium terminal (gain-antenna) people share (`COMM-618`). |
-| ARPU IoT mix | 82.805 percent | `scenario`, founder-set | Sheet A. The residual that closes the mix to 100; DEVICES (`COMM-654/659`), about 51.7M at the baseline. |
-| ARPU government mix | 0.195 percent | `scenario`, founder-set | Sheet A. Deliberately de-anchored from the book's 4.8 percent to reproduce today's fixed EMSS contract (`COMM-619`). |
-| ARPU standard price | 15 dollars per month | `scenario`, founder-set | Sheet A. Midpoint of the founder's 10-to-20 mass-market range (`COMM-618` context). |
-| ARPU premium price | 100 dollars per month | `scenario`, founder-set | Sheet A. Between Iridium voice/data 47 and Certus 259 for a 0.7 Mbps-class service (`COMM-618`). |
-| ARPU IoT price | 8 dollars per month | `scenario`, founder-set | Sheet A. About the 7.78 Iridium IoT ARPU today (`COMM-618`). |
-| ARPU government price | 74 dollars per month | `scenario`, founder-set | Sheet A. Today's per-connection EMSS equivalent (`COMM-619`). |
+| Cost-plus revenue multiple | 1.5x | `scenario` | Shared-engine machinery, not an Iridium revenue case: the cost-recovery convention (revenue equals annualized cost times the multiple) the cellular family uses, mirroring the data-center central band (`RLDC-REVENUE-MULTIPLE-1_5X`). Computed on the shared trajectory but NOT published on the Iridium artifact as of iridium-v3 (investor direction 2026-07-10); the published Iridium revenue is the four-bucket ARPU case. |
+| ARPU standard mix | 15.0 percent | `scenario`, investor-set | Sheet A (2026-07-09). Standard personal (phone-class) people share; loosely anchored with premium on the FY2025 book's like-for-like people share (`COMM-617/618`). |
+| ARPU premium mix | 2.0 percent | `scenario`, investor-set | Sheet A. Premium terminal (gain-antenna) people share (`COMM-618`). |
+| ARPU IoT mix | 82.805 percent | `scenario`, investor-set | Sheet A. The residual that closes the mix to 100; DEVICES (`COMM-654/659`), about 51.7M at the baseline. |
+| ARPU government mix | 0.195 percent | `scenario`, investor-set | Sheet A. Deliberately de-anchored from the book's 4.8 percent to reproduce today's fixed EMSS contract (`COMM-619`). |
+| ARPU standard price | 15 dollars per month | `scenario`, investor-set | Sheet A. Midpoint of the investor's 10-to-20 mass-market range (`COMM-618` context). |
+| ARPU premium price | 100 dollars per month | `scenario`, investor-set | Sheet A. Between Iridium voice/data 47 and Certus 259 for a 0.7 Mbps-class service (`COMM-618`). |
+| ARPU IoT price | 8 dollars per month | `scenario`, investor-set | Sheet A. About the 7.78 Iridium IoT ARPU today (`COMM-618`). |
+| ARPU government price | 74 dollars per month | `scenario`, investor-set | Sheet A. Today's per-connection EMSS equivalent (`COMM-619`). |
 
 Citation-precision note: a two-round traceability audit (converged 2026-07-08)
 verified 91 numbers across the constants, dials, scenario, and frozen anchors
@@ -94,7 +94,7 @@ Values were untouched throughout.
 Machine-name note: the shared engine field
 `steady_state_gross_margin_cost_plus_pct` (the cellular family's cost-plus
 margin) is no longer emitted on the promoted Iridium artifact as of iridium-v3
-(founder direction 2026-07-10); it stays on the shared trajectory for the
+(investor direction 2026-07-10); it stays on the shared trajectory for the
 cellular family and the equality tripwire. The published Iridium margin is
 `arpu_margin_vs_steady_state_cost_pct`, an operating-style margin (not a gross
 margin) as defined in the conclusion, measured against steady-state cost.
@@ -102,12 +102,12 @@ margin) as defined in the conclusion, measured against steady-state cost.
 ## The Assumptions Register
 
 Distilled from the converged audit and maintained as defaults change: the
-assumption-class values in the model, with provenance. Founder-set means the
-founder chose or confirmed the value; convention means a stated modeling or
+assumption-class values in the model, with provenance. Investor-set means the
+investor chose or confirmed the value; convention means a stated modeling or
 engineering convention. Rows 33 to 38 are modeling posture the audit surfaced
 and stated explicitly; rows 39 onward were added as the model grew.
 
-### Founder-Set Values
+### Investor-Set Values
 
 | # | Assumption | Value |
 |---|---|---|
@@ -115,7 +115,7 @@ and stated explicitly; rows 39 onward were added as the model grew.
 | 2 | Active rate baseline, standard smartphone activity | 1.0 Mbps |
 | 3 | Rich active-rate variant | 2.5 Mbps |
 | 4 | Busy-hour peak concurrency (corpus-central) | 2.5 percent |
-| 5 | Off-peak concurrency (no corpus row exists; founder pair) | 0.5 percent |
+| 5 | Off-peak concurrency (no corpus row exists; investor pair) | 0.5 percent |
 | 6 | Device-class baseline | phone class |
 | 7 | Aperture dial default (flat-body class) | 25.0 square meters |
 | 8 | Operations cost, a line to research later, stated in output | 0.0 dollars per year |
@@ -123,10 +123,10 @@ and stated explicitly; rows 39 onward were added as the model grew.
 | 10 | Coverage floor (simulation 341, rounded) | 340 satellites |
 | 11 | Saturation cap (the tiling/interference dial) | 2,000 satellites |
 | 12 | Communications share of Neutron cadence (all-in, pedal to the metal; investor-set 2026-07-14) | 1.0 |
-| 13 | Satellite build cost (founder-flat 2026-07-09, below the prior 1.05 dial and the V3 anchor; the shared config default 1.05 untouched) | 1.0 million dollars |
-| 14 | Cost-plus revenue multiple (data-center mirror): shared-engine machinery, computed but not published on the Iridium artifact as of iridium-v3 (founder direction 2026-07-10) | 1.5x |
+| 13 | Satellite build cost (investor-flat 2026-07-09, below the prior 1.05 dial and the V3 anchor; the shared config default 1.05 untouched) | 1.0 million dollars |
+| 14 | Cost-plus revenue multiple (data-center mirror): shared-engine machinery, computed but not published on the Iridium artifact as of iridium-v3 (investor direction 2026-07-10) | 1.5x |
 | 15 | IoT device passthrough (devices, not people); superseded on the promoted artifact when the ARPU case is on (the published IoT count then derives from the revenue mix, the IoT bucket, about 51.7M at the baseline) | 10,000,000 |
-| 16 | ARPU revenue case: the PUBLISHED four-bucket case (standard personal, premium terminal, IoT devices, government), founder-set Sheet A 2026-07-09, mixes 15.0 / 2.0 / 82.805 / 0.195 percent at prices 15 / 100 / 8 / 74 dollars per month (about 8,250.8 million dollars per year at the baseline under full sell-through). The cellular-family 50-dollar ARPU is a separate case value, no longer carried on the promoted Iridium artifact | published |
+| 16 | ARPU revenue case: the PUBLISHED four-bucket case (standard personal, premium terminal, IoT devices, government), investor-set Sheet A 2026-07-09, mixes 15.0 / 2.0 / 82.805 / 0.195 percent at prices 15 / 100 / 8 / 74 dollars per month (about 8,250.8 million dollars per year at the baseline under full sell-through). The cellular-family 50-dollar ARPU is a separate case value, no longer carried on the promoted Iridium artifact | published |
 
 ### The Published ARPU Sheet (Sheet A Default, Sheet B Alternative)
 
@@ -141,7 +141,7 @@ platform claim: example applications (ships, aircraft, premium IoT, government
 uses, remote enterprise) are illustrative of who buys the higher-price service
 tier, never a statement of where the 1.25 million premium units sit.
 
-The default is Sheet A (founder-set 2026-07-09): mixes 15.0 / 2.0 / 82.805 /
+The default is Sheet A (investor-set 2026-07-09): mixes 15.0 / 2.0 / 82.805 /
 0.195 percent at prices 15 / 100 / 8 / 74 dollars per month. At the
 340-satellite baseline (people capacity 10,608,000, pool 62,400,000
 connections) it lands 9,360,000 standard people, 1,248,000 premium people,
@@ -190,7 +190,7 @@ the output, not papered over.
 |---|---|---|
 | 17 | Spectral-efficiency centrals are band midpoints | 0.65; 2.5 bps/Hz |
 | 18 | Small-terminal band edges (ladder convention) | 1.5 / 2.5 bps/Hz |
-| 19 | Small-terminal device spec (about 10 dBi on a self-orienting mount, founder decision 2026-07-10) drives its computed SE | 2.0 bps/Hz |
+| 19 | Small-terminal device spec (about 10 dBi on a self-orienting mount, investor decision 2026-07-10) drives its computed SE | 2.0 bps/Hz |
 | 20 | Density rounds half-up; launch coupling floors (two deliberate opposite roundings) | rounding pair |
 | 21 | Off-peak per-user rate capped by the single-beam pool (the beam is the per-person ceiling) | min(pool, ratio) |
 | 22 | Capacity linear in aperture area (conservative; ignores the SNR lift) | factor = area / 25 |
@@ -199,21 +199,21 @@ the output, not papered over.
 | 25 | Scenario label lives in one place on the Iridium block | single home |
 | 26 | Base year 2026, horizon 10 years (data-center mirror timeline) | FY2036 end |
 | 27 | Cadence ramp anchors: 14 at year 5, 90 at year 10, ceiling 150, first launch index 1 (scenario, not Rocket Lab guidance) | shared spine |
-| 28 | Launch-cost curve: 25.0 to 13.5 million dollars, log-linear over 5 to 100 launches per year; the iridium scenario overrides it FLAT at 13.0 (both cost anchors set equal, founder simplification 2026-07-09; the shared-spine default curve untouched) | shared spine, scenario-flattened |
+| 28 | Launch-cost curve: 25.0 to 13.5 million dollars, log-linear over 5 to 100 launches per year; the iridium scenario overrides it FLAT at 13.0 (both cost anchors set equal, investor simplification 2026-07-09; the shared-spine default curve untouched) | shared spine, scenario-flattened |
 | 29 | Satellite lifetime, the five-year cohort cliff | 5 years |
 | 30 | Satellites per launch at the reference aperture (estimate-bound on the single-source mass; mission LEO basis, 73.8 percent of the certified envelope) | 12 |
 | 31 | IoT load treated as exactly zero in sizing (contention-limited) | 0 load |
 | 32 | One device class per run (mixed fleets are a future extension) | single class |
 | 33 | Uniform-demand geography: every satellite counts as serving demand; ocean and empty-land time not modeled | fleet = target / density |
-| 34 | The purpose-built L-band payload is assumed cost-equivalent to the cellular-family satellite at 25 square meters (12 per launch); the iridium scenario prices the hardware founder-flat at 1.0 million dollars while the cellular default stays 1.05; the equivalence is asserted, not argued | carried |
+| 34 | The purpose-built L-band payload is assumed cost-equivalent to the cellular-family satellite at 25 square meters (12 per launch); the iridium scenario prices the hardware investor-flat at 1.0 million dollars while the cellular default stays 1.05; the equivalence is asserted, not argued | carried |
 | 35 | The 10.5 MHz variant assumes winning the live FCC coordination (authorized today: 7.775 plus 0.95 shared) | contingent |
 | 36 | Deployment is generic build-and-hold from 2026, not deal-timed (close mid-2027; replacement window about 2035) | a shape, not a dated plan |
 | 37 | No spares, no launch failures, no satellite failures inside the five-year life | perfect fleet |
 | 38 | The equality tripwire premise: the Iridium baseline and the cellular default both bind at the 340 floor with the aperture identity at 25.0; a dial change breaks the test loudly by design | tripwire |
-| 39 | ARPU full sell-through: every serveable billable-connection slot the built fleet can carry is sold (revenue rides capacity, not the served target); clearly optimistic, stated, founder-owned | sell-through |
+| 39 | ARPU full sell-through: every serveable billable-connection slot the built fleet can carry is sold (revenue rides capacity, not the served target); clearly optimistic, stated, investor-owned | sell-through |
 | 40 | ARPU mix posture: the people-and-government share is loosely anchored on the FY2025 book's like-for-like share (about 21.2 percent); government is de-anchored to reproduce the one fixed EMSS contract; IoT is the residual; the mix is held constant as the fleet grows (v1) | market shape |
 | 41 | ARPU built-fleet convention: the revenue case is computed once at the built fleet (fleet_target), so a below-target build describes the completed fleet, not the final horizon year's smaller actual fleet | built fleet |
-| 42 | The flat cost model (founder-set simplification, 2026-07-09): launch cost 13.0 million dollars at every cadence and satellite build cost 1.0 million dollars, no stepped pricing as launches scale; both in-band of the research anchors; scenario overrides only, the shared-spine defaults untouched (the cellular family and the equality tripwire still see the defaults) | flat 13.0 / 1.0 |
+| 42 | The flat cost model (investor-set simplification, 2026-07-09): launch cost 13.0 million dollars at every cadence and satellite build cost 1.0 million dollars, no stepped pricing as launches scale; both in-band of the research anchors; scenario overrides only, the shared-spine defaults untouched (the cellular family and the equality tripwire still see the defaults) | flat 13.0 / 1.0 |
 
 ## Model Output Anchors
 

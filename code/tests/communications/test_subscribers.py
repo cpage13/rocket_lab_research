@@ -44,7 +44,7 @@ SAMPLE_SUBSCRIBER_TARGET = 40_000_000
 # base, so the override-vs-target precedence is unambiguous.
 SAMPLE_OVERRIDE_SUBSCRIBERS = 12_000_000
 
-# The three founder scenarios: the 10M baseline plus the 50M / 100M targets.
+# The three investor scenarios: the 10M baseline plus the 50M / 100M targets.
 BASELINE_TARGET = 10_000_000
 SCENARIO_50M_TARGET = 50_000_000
 SCENARIO_100M_TARGET = 100_000_000
@@ -268,7 +268,7 @@ def test_default_run_serves_full_target_after_completed_build_out() -> None:
 
 
 def test_default_run_serves_ten_million_people() -> None:
-    """The default reported served count is the founder baseline 10,000,000 people."""
+    """The default reported served count is the investor baseline 10,000,000 people."""
     traj = run_comms_model(CommsConfig())
     assert traj.subscribers_served == BASELINE_TARGET
 

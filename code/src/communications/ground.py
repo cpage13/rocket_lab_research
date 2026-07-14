@@ -21,7 +21,7 @@ Starlink-floor honesty block, and NO ARPU / operator-share / retail-reference
 reads. Those belong to the cut price layer; this module is the cost-to-cost ratio
 over two ground denominators and nothing more.
 
-The ground baselines stay MARKED INTERFACE INPUTS the caller supplies (the founder
+The ground baselines stay MARKED INTERFACE INPUTS the caller supplies (the investor
 owns the final ground call): with ``ground=None`` the comparison is absent entirely
 and the caller reports the space cost alone; with either regime's baseline ``None``
 that one regime's face is absent while the other still computes. The HEADLINE

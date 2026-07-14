@@ -40,7 +40,7 @@ the supporting hardware it needs, but it is not the spacecraft bus. Avoid using
 **bus** - The spacecraft platform supporting the node, including power,
 thermal, communications, and orbital service functions as modeled.
 
-**default scenario** - The creator-selected assumption set in
+**default scenario** - The investor-selected assumption set in
 `code/scenarios/default.yaml`. It is reviewable, replaceable, and not a claim
 that Rocket Lab has announced those values.
 
@@ -105,8 +105,8 @@ They are counted separately and never summed. With the ARPU case on, the
 published IoT count derives from the revenue mix.
 
 **ARPU buckets (Sheet A)** - The published four-bucket revenue case (standard
-personal, premium tier, IoT devices, government): founder-set mix percentages
-over one capacity-anchored pool plus founder-set prices, all scaling with the
+personal, premium tier, IoT devices, government): investor-set mix percentages
+over one capacity-anchored pool plus investor-set prices, all scaling with the
 satellite count. The premium tier is a price tier, never a platform adoption
 claim.
 
