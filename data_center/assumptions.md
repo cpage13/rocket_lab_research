@@ -9,7 +9,7 @@ is `research/SOURCE_INDEX.md`.
 The project is not a DCF. It asks whether Rocket Lab should attack the
 opportunity and whether Neutron-scale deployment could plausibly produce
 revenue and margin under visible assumptions. The default scenario is
-creator-selected, reviewable, and expected to improve.
+investor-selected, reviewable, and expected to improve.
 
 The canonical default outputs are dynamic JSON. The conclusion is static
 editorial prose tied to the promoted defaults. If defaults change, update this

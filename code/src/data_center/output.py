@@ -6,7 +6,7 @@ from the cycle-1 v7 shape (D24, no back-compat shim). The top-level
 structure has exactly five keys (D21):
 
 * ``metadata`` — the run's identity (schema version, base year, horizon,
-  the three founder-locked enums, generated-at timestamp).
+  the three investor-locked enums, generated-at timestamp).
 * ``inputs`` — the gospel anchors, the post-Feynman slopes, and the v8
   dial blocks (cadence / fleet / volume / R-band / launch-cost) plus the
   per-generation list.
@@ -81,7 +81,7 @@ class RunMetadata(BaseModel):
     """The ``metadata`` block — the run's identity.
 
     Carries the v8 schema version, the base year + horizon, the three
-    founder-locked enums (workload / operator / radiator architecture),
+    investor-locked enums (workload / operator / radiator architecture),
     the deployment philosophy, and an ISO-8601 generated-at timestamp.
     The enum locks + base year + horizon mirror
     :class:`data_center.config.MetadataConfig`; ``schema_version`` and
@@ -518,7 +518,7 @@ class SpaceModelOutput(BaseModel):
     meta, no cycle-1 ``summary``):
 
     1. ``metadata`` — the run's identity (schema version, base year,
-       horizon, the three founder-locked enums, generated-at timestamp).
+       horizon, the three investor-locked enums, generated-at timestamp).
     2. ``inputs`` — gospel anchors + slopes + the v8 dial blocks +
        the per-generation list.
     3. ``physical`` — the per-year per-node trajectory (ProvenanceCells).

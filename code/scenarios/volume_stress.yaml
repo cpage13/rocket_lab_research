@@ -44,9 +44,9 @@
 scenario_name: "Volume stress (V15-trigger test fixture)"
 
 metadata:
-  workload_type: inference                       # D14 (founder-locked)
-  operator_model: b2b_dedicated_optical_rf       # D15 (founder-locked)
-  radiator_architecture: single_face_co_mounted  # D16 (founder-locked)
+  workload_type: inference                       # D14 (investor-locked)
+  operator_model: b2b_dedicated_optical_rf       # D15 (investor-locked)
+  radiator_architecture: single_face_co_mounted  # D16 (investor-locked)
   deployment_philosophy: ground_validated_before_launch
   base_year: 2026
   horizon_years: 10

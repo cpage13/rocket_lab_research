@@ -6,9 +6,9 @@
     "horizon_years": 10,
     "workload_type": "inference",
     "operator_model": "b2b_dedicated_optical_rf",
-    "radiator_architecture": "single_face_co_mounted",
+    "radiator_architecture": "deployed_double_sided",
     "deployment_philosophy": "ground_validated_before_launch",
-    "generated_at": "2026-06-01T17:29:06.470752+00:00",
+    "generated_at": "2026-07-14T18:40:38.629496+00:00",
     "model_package": "rklb-value",
     "model_version": "0.1.0",
     "artifact_role": "promoted_default",
@@ -535,7 +535,7 @@
         "radiator_t_per_kw_pre": {
           "path": "inputs.config.physical.radiator_t_per_kw_pre",
           "label": "Radiator mass before hot loop",
-          "value": 0.013,
+          "value": 0.00165,
           "unit": "t/kW",
           "description": "Radiator t/kW before the Tjmax lift (pre 'tjmax_lift_year'), the conservative t/kW (D11).",
           "assumption_role": "default",
@@ -560,7 +560,7 @@
         "radiator_t_per_kw_post": {
           "path": "inputs.config.physical.radiator_t_per_kw_post",
           "label": "Radiator mass after hot loop",
-          "value": 0.012,
+          "value": 0.00165,
           "unit": "t/kW",
           "description": "Radiator t/kW after the Tjmax lift (post 'tjmax_lift_year'), the hot-loop coolant arrives and lowers t/kW (D11). Cycle-2 lifts this to 0.012 (central of the R1 0.010-0.014 band) for the single-face co-mounted architecture (D16/D17); cycle-1's value was 0.007.",
           "assumption_role": "default",
@@ -685,7 +685,7 @@
         "solar_cost_musd_per_kw": {
           "path": "inputs.config.physical.solar_cost_musd_per_kw",
           "label": "Solar cost per kW",
-          "value": 0.04,
+          "value": 0.02,
           "unit": "MUSD/kW",
           "description": "Solar-array cost per kilowatt of flown power, $M/kW.",
           "assumption_role": "default",
@@ -710,7 +710,7 @@
         "radiator_cost_musd_per_kw": {
           "path": "inputs.config.physical.radiator_cost_musd_per_kw",
           "label": "Radiator cost per kW",
-          "value": 0.04,
+          "value": 0.02,
           "unit": "MUSD/kW",
           "description": "Radiator cost per kilowatt of flown power, $M/kW.",
           "assumption_role": "default",
@@ -3616,7 +3616,7 @@
       "inputs.config.physical.radiator_t_per_kw_pre": {
         "path": "inputs.config.physical.radiator_t_per_kw_pre",
         "label": "Radiator mass before hot loop",
-        "value": 0.013,
+        "value": 0.00165,
         "unit": "t/kW",
         "description": "Radiator t/kW before the Tjmax lift (pre 'tjmax_lift_year'), the conservative t/kW (D11).",
         "assumption_role": "default",
@@ -3641,7 +3641,7 @@
       "inputs.config.physical.radiator_t_per_kw_post": {
         "path": "inputs.config.physical.radiator_t_per_kw_post",
         "label": "Radiator mass after hot loop",
-        "value": 0.012,
+        "value": 0.00165,
         "unit": "t/kW",
         "description": "Radiator t/kW after the Tjmax lift (post 'tjmax_lift_year'), the hot-loop coolant arrives and lowers t/kW (D11). Cycle-2 lifts this to 0.012 (central of the R1 0.010-0.014 band) for the single-face co-mounted architecture (D16/D17); cycle-1's value was 0.007.",
         "assumption_role": "default",
@@ -3766,7 +3766,7 @@
       "inputs.config.physical.solar_cost_musd_per_kw": {
         "path": "inputs.config.physical.solar_cost_musd_per_kw",
         "label": "Solar cost per kW",
-        "value": 0.04,
+        "value": 0.02,
         "unit": "MUSD/kW",
         "description": "Solar-array cost per kilowatt of flown power, $M/kW.",
         "assumption_role": "default",
@@ -3791,7 +3791,7 @@
       "inputs.config.physical.radiator_cost_musd_per_kw": {
         "path": "inputs.config.physical.radiator_cost_musd_per_kw",
         "label": "Radiator cost per kW",
-        "value": 0.04,
+        "value": 0.02,
         "unit": "MUSD/kW",
         "description": "Radiator cost per kilowatt of flown power, $M/kW.",
         "assumption_role": "default",
@@ -5730,7 +5730,7 @@
           "notes": null
         },
         "gpus_per_node": {
-          "value": 146,
+          "value": 223,
           "unit": "count",
           "formula": "floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg)",
           "formula_name": "n_packages_from_mass_envelope",
@@ -5747,7 +5747,7 @@
           "notes": null
         },
         "kw_per_node": {
-          "value": 299.29999999999995,
+          "value": 457.15,
           "unit": "kW",
           "formula": "N x kw_per_pkg",
           "formula_name": "kw_per_node_from_n_and_kw_per_pkg",
@@ -5764,7 +5764,7 @@
           "notes": null
         },
         "mass_per_node_t": {
-          "value": 12.442599999999999,
+          "value": 12.4976475,
           "unit": "t",
           "formula": "N x mass_per_pkg + node_mass_fixed_t",
           "formula_name": "mass_per_node_from_n_and_mass_per_pkg",
@@ -5816,7 +5816,7 @@
           "notes": null
         },
         "volume_per_node_m3": {
-          "value": 5.107207016899339,
+          "value": 5.163747703894195,
           "unit": "m3",
           "formula": "N x volume_per_pkg + node_volume_fixed_m3 + mounting_overhead x array_volume",
           "formula_name": "volume_per_node_from_n_and_vol_per_pkg",
@@ -5835,7 +5835,7 @@
           "notes": null
         },
         "mass_utilization_pct": {
-          "value": 99.54079999999999,
+          "value": 99.98118,
           "unit": "percent",
           "formula": "mass_per_node_t / mass_envelope_t",
           "formula_name": "mass_utilization",
@@ -5851,7 +5851,7 @@
           "notes": null
         },
         "volume_utilization_pct": {
-          "value": 6.384008771124174,
+          "value": 6.454684629867743,
           "unit": "percent",
           "formula": "volume_per_node_m3 / neutron_fairing_usable_volume_m3",
           "formula_name": "volume_utilization",
@@ -5885,7 +5885,7 @@
           "notes": null
         },
         "pf_per_node": {
-          "value": 2190.0,
+          "value": 3345.0,
           "unit": "PFLOPS",
           "formula": "N x pf_per_pkg",
           "formula_name": "pf_per_node_from_n_and_pf_per_pkg",
@@ -5901,7 +5901,7 @@
           "notes": null
         },
         "pf_per_kw": {
-          "value": 7.3170731707317085,
+          "value": 7.317073170731708,
           "unit": "PFLOPS/kW",
           "formula": "pf_per_node / kw_per_node",
           "formula_name": "pf_per_kw_from_node_pf_and_kw",
@@ -5918,7 +5918,7 @@
         },
         "cost_breakdown": {
           "compute": {
-            "value": 10.22,
+            "value": 15.61,
             "unit": "MUSD",
             "formula": "N x usd_per_pkg / 1_000_000",
             "formula_name": "compute_cost_from_n_and_usd_per_pkg",
@@ -5951,7 +5951,7 @@
             "notes": null
           },
           "solar": {
-            "value": 11.971999999999998,
+            "value": 9.142999999999999,
             "unit": "MUSD",
             "formula": "solar_cost_musd_per_kw x kw_per_node",
             "formula_name": "solar_cost_from_kw_and_dial",
@@ -5968,7 +5968,7 @@
             "notes": null
           },
           "radiator": {
-            "value": 11.971999999999998,
+            "value": 9.142999999999999,
             "unit": "MUSD",
             "formula": "radiator_cost_musd_per_kw x kw_per_node",
             "formula_name": "radiator_cost_from_kw_and_dial",
@@ -6000,7 +6000,7 @@
             "notes": null
           },
           "node_total": {
-            "value": 67.16399999999999,
+            "value": 66.896,
             "unit": "MUSD",
             "formula": "compute + bus + solar + radiator + launch",
             "formula_name": "node_total_cost_from_breakdown",
@@ -6020,7 +6020,7 @@
           }
         },
         "cost_annual_per_node_musd": {
-          "value": 13.432799999999997,
+          "value": 13.3792,
           "unit": "MUSD",
           "formula": "(compute + bus + solar + radiator + launch_cost(year)) / 5",
           "formula_name": "cost_annual_per_node_from_breakdown",
@@ -6037,7 +6037,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 20.149199999999993,
+          "value": 20.068800000000003,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -6054,7 +6054,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 16.119359999999997,
+          "value": 16.05504,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -6071,7 +6071,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 24.179039999999993,
+          "value": 24.08256,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -6088,7 +6088,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 6.716399999999997,
+          "value": 6.689600000000002,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -6105,7 +6105,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 2.68656,
+          "value": 2.675840000000001,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -6122,7 +6122,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 10.746239999999997,
+          "value": 10.70336,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -6158,7 +6158,7 @@
           "notes": null
         },
         "gpus_per_node": {
-          "value": 117,
+          "value": 178,
           "unit": "count",
           "formula": "floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg)",
           "formula_name": "n_packages_from_mass_envelope",
@@ -6175,7 +6175,7 @@
           "notes": null
         },
         "kw_per_node": {
-          "value": 304.2,
+          "value": 462.8,
           "unit": "kW",
           "formula": "N x kw_per_pkg",
           "formula_name": "kw_per_node_from_n_and_kw_per_pkg",
@@ -6192,7 +6192,7 @@
           "notes": null
         },
         "mass_per_node_t": {
-          "value": 12.4918,
+          "value": 12.44842,
           "unit": "t",
           "formula": "N x mass_per_pkg + node_mass_fixed_t",
           "formula_name": "mass_per_node_from_n_and_mass_per_pkg",
@@ -6244,7 +6244,7 @@
           "notes": null
         },
         "volume_per_node_m3": {
-          "value": 5.108962160176341,
+          "value": 5.1657714915503306,
           "unit": "m3",
           "formula": "N x volume_per_pkg + node_volume_fixed_m3 + mounting_overhead x array_volume",
           "formula_name": "volume_per_node_from_n_and_vol_per_pkg",
@@ -6263,7 +6263,7 @@
           "notes": null
         },
         "mass_utilization_pct": {
-          "value": 99.9344,
+          "value": 99.58736,
           "unit": "percent",
           "formula": "mass_per_node_t / mass_envelope_t",
           "formula_name": "mass_utilization",
@@ -6279,7 +6279,7 @@
           "notes": null
         },
         "volume_utilization_pct": {
-          "value": 6.386202700220426,
+          "value": 6.457214364437913,
           "unit": "percent",
           "formula": "volume_per_node_m3 / neutron_fairing_usable_volume_m3",
           "formula_name": "volume_utilization",
@@ -6313,7 +6313,7 @@
           "notes": null
         },
         "pf_per_node": {
-          "value": 3978.0,
+          "value": 6052.0,
           "unit": "PFLOPS",
           "formula": "N x pf_per_pkg",
           "formula_name": "pf_per_node_from_n_and_pf_per_pkg",
@@ -6346,7 +6346,7 @@
         },
         "cost_breakdown": {
           "compute": {
-            "value": 8.19,
+            "value": 12.46,
             "unit": "MUSD",
             "formula": "N x usd_per_pkg / 1_000_000",
             "formula_name": "compute_cost_from_n_and_usd_per_pkg",
@@ -6379,7 +6379,7 @@
             "notes": null
           },
           "solar": {
-            "value": 12.168,
+            "value": 9.256,
             "unit": "MUSD",
             "formula": "solar_cost_musd_per_kw x kw_per_node",
             "formula_name": "solar_cost_from_kw_and_dial",
@@ -6396,7 +6396,7 @@
             "notes": null
           },
           "radiator": {
-            "value": 12.168,
+            "value": 9.256,
             "unit": "MUSD",
             "formula": "radiator_cost_musd_per_kw x kw_per_node",
             "formula_name": "radiator_cost_from_kw_and_dial",
@@ -6428,7 +6428,7 @@
             "notes": null
           },
           "node_total": {
-            "value": 65.286,
+            "value": 63.732,
             "unit": "MUSD",
             "formula": "compute + bus + solar + radiator + launch",
             "formula_name": "node_total_cost_from_breakdown",
@@ -6448,7 +6448,7 @@
           }
         },
         "cost_annual_per_node_musd": {
-          "value": 13.0572,
+          "value": 12.7464,
           "unit": "MUSD",
           "formula": "(compute + bus + solar + radiator + launch_cost(year)) / 5",
           "formula_name": "cost_annual_per_node_from_breakdown",
@@ -6465,7 +6465,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 19.5858,
+          "value": 19.1196,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -6482,7 +6482,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 15.66864,
+          "value": 15.295679999999999,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -6499,7 +6499,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 23.50296,
+          "value": 22.94352,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -6516,7 +6516,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 6.528599999999999,
+          "value": 6.373199999999999,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -6533,7 +6533,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 2.61144,
+          "value": 2.5492799999999995,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -6550,7 +6550,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 10.445760000000002,
+          "value": 10.19712,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -6586,7 +6586,7 @@
           "notes": null
         },
         "gpus_per_node": {
-          "value": 81,
+          "value": 133,
           "unit": "count",
           "formula": "floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg)",
           "formula_name": "n_packages_from_mass_envelope",
@@ -6603,7 +6603,7 @@
           "notes": null
         },
         "kw_per_node": {
-          "value": 337.77,
+          "value": 554.61,
           "unit": "kW",
           "formula": "N x kw_per_pkg",
           "formula_name": "kw_per_node_from_n_and_kw_per_pkg",
@@ -6620,7 +6620,7 @@
           "notes": null
         },
         "mass_per_node_t": {
-          "value": 12.38848,
+          "value": 12.4418165,
           "unit": "t",
           "formula": "N x mass_per_pkg + node_mass_fixed_t",
           "formula_name": "mass_per_node_from_n_and_mass_per_pkg",
@@ -6672,7 +6672,7 @@
           "notes": null
         },
         "volume_per_node_m3": {
-          "value": 5.1209866825863335,
+          "value": 5.198657145481263,
           "unit": "m3",
           "formula": "N x volume_per_pkg + node_volume_fixed_m3 + mounting_overhead x array_volume",
           "formula_name": "volume_per_node_from_n_and_vol_per_pkg",
@@ -6691,7 +6691,7 @@
           "notes": null
         },
         "mass_utilization_pct": {
-          "value": 99.10784,
+          "value": 99.534532,
           "unit": "percent",
           "formula": "mass_per_node_t / mass_envelope_t",
           "formula_name": "mass_utilization",
@@ -6707,7 +6707,7 @@
           "notes": null
         },
         "volume_utilization_pct": {
-          "value": 6.401233353232917,
+          "value": 6.498321431851579,
           "unit": "percent",
           "formula": "volume_per_node_m3 / neutron_fairing_usable_volume_m3",
           "formula_name": "volume_utilization",
@@ -6741,7 +6741,7 @@
           "notes": null
         },
         "pf_per_node": {
-          "value": 4212.0,
+          "value": 6916.0,
           "unit": "PFLOPS",
           "formula": "N x pf_per_pkg",
           "formula_name": "pf_per_node_from_n_and_pf_per_pkg",
@@ -6757,7 +6757,7 @@
           "notes": null
         },
         "pf_per_kw": {
-          "value": 12.470023980815348,
+          "value": 12.470023980815347,
           "unit": "PFLOPS/kW",
           "formula": "pf_per_node / kw_per_node",
           "formula_name": "pf_per_kw_from_node_pf_and_kw",
@@ -6774,7 +6774,7 @@
         },
         "cost_breakdown": {
           "compute": {
-            "value": 14.58,
+            "value": 23.94,
             "unit": "MUSD",
             "formula": "N x usd_per_pkg / 1_000_000",
             "formula_name": "compute_cost_from_n_and_usd_per_pkg",
@@ -6807,7 +6807,7 @@
             "notes": null
           },
           "solar": {
-            "value": 13.5108,
+            "value": 11.0922,
             "unit": "MUSD",
             "formula": "solar_cost_musd_per_kw x kw_per_node",
             "formula_name": "solar_cost_from_kw_and_dial",
@@ -6824,7 +6824,7 @@
             "notes": null
           },
           "radiator": {
-            "value": 13.5108,
+            "value": 11.0922,
             "unit": "MUSD",
             "formula": "radiator_cost_musd_per_kw x kw_per_node",
             "formula_name": "radiator_cost_from_kw_and_dial",
@@ -6856,7 +6856,7 @@
             "notes": null
           },
           "node_total": {
-            "value": 74.1288,
+            "value": 78.6516,
             "unit": "MUSD",
             "formula": "compute + bus + solar + radiator + launch",
             "formula_name": "node_total_cost_from_breakdown",
@@ -6876,7 +6876,7 @@
           }
         },
         "cost_annual_per_node_musd": {
-          "value": 14.825759999999999,
+          "value": 15.73032,
           "unit": "MUSD",
           "formula": "(compute + bus + solar + radiator + launch_cost(year)) / 5",
           "formula_name": "cost_annual_per_node_from_breakdown",
@@ -6893,7 +6893,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 22.238639999999997,
+          "value": 23.595480000000002,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -6910,7 +6910,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 17.790912,
+          "value": 18.876384,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -6927,7 +6927,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 26.686367999999998,
+          "value": 28.314576000000002,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -6944,7 +6944,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 7.412879999999998,
+          "value": 7.865160000000001,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -6961,7 +6961,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 2.965152,
+          "value": 3.146064000000001,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -6978,7 +6978,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 11.860608,
+          "value": 12.584256000000002,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -7014,7 +7014,7 @@
           "notes": null
         },
         "gpus_per_node": {
-          "value": 70,
+          "value": 125,
           "unit": "count",
           "formula": "floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg)",
           "formula_name": "n_packages_from_mass_envelope",
@@ -7031,7 +7031,7 @@
           "notes": null
         },
         "kw_per_node": {
-          "value": 385.0,
+          "value": 687.5,
           "unit": "kW",
           "formula": "N x kw_per_pkg",
           "formula_name": "kw_per_node_from_n_and_kw_per_pkg",
@@ -7048,7 +7048,7 @@
           "notes": null
         },
         "mass_per_node_t": {
-          "value": 12.440000000000001,
+          "value": 12.446874999999999,
           "unit": "t",
           "formula": "N x mass_per_pkg + node_mass_fixed_t",
           "formula_name": "mass_per_node_from_n_and_mass_per_pkg",
@@ -7100,7 +7100,7 @@
           "notes": null
         },
         "volume_per_node_m3": {
-          "value": 5.137904114621602,
+          "value": 5.246257347538575,
           "unit": "m3",
           "formula": "N x volume_per_pkg + node_volume_fixed_m3 + mounting_overhead x array_volume",
           "formula_name": "volume_per_node_from_n_and_vol_per_pkg",
@@ -7119,7 +7119,7 @@
           "notes": null
         },
         "mass_utilization_pct": {
-          "value": 99.52000000000001,
+          "value": 99.57499999999999,
           "unit": "percent",
           "formula": "mass_per_node_t / mass_envelope_t",
           "formula_name": "mass_utilization",
@@ -7135,7 +7135,7 @@
           "notes": null
         },
         "volume_utilization_pct": {
-          "value": 6.422380143277002,
+          "value": 6.557821684423218,
           "unit": "percent",
           "formula": "volume_per_node_m3 / neutron_fairing_usable_volume_m3",
           "formula_name": "volume_utilization",
@@ -7169,7 +7169,7 @@
           "notes": null
         },
         "pf_per_node": {
-          "value": 7000.0,
+          "value": 12500.0,
           "unit": "PFLOPS",
           "formula": "N x pf_per_pkg",
           "formula_name": "pf_per_node_from_n_and_pf_per_pkg",
@@ -7202,7 +7202,7 @@
         },
         "cost_breakdown": {
           "compute": {
-            "value": 15.75,
+            "value": 28.125,
             "unit": "MUSD",
             "formula": "N x usd_per_pkg / 1_000_000",
             "formula_name": "compute_cost_from_n_and_usd_per_pkg",
@@ -7235,7 +7235,7 @@
             "notes": null
           },
           "solar": {
-            "value": 15.4,
+            "value": 13.75,
             "unit": "MUSD",
             "formula": "solar_cost_musd_per_kw x kw_per_node",
             "formula_name": "solar_cost_from_kw_and_dial",
@@ -7252,7 +7252,7 @@
             "notes": null
           },
           "radiator": {
-            "value": 15.4,
+            "value": 13.75,
             "unit": "MUSD",
             "formula": "radiator_cost_musd_per_kw x kw_per_node",
             "formula_name": "radiator_cost_from_kw_and_dial",
@@ -7284,7 +7284,7 @@
             "notes": null
           },
           "node_total": {
-            "value": 78.851384,
+            "value": 87.926384,
             "unit": "MUSD",
             "formula": "compute + bus + solar + radiator + launch",
             "formula_name": "node_total_cost_from_breakdown",
@@ -7304,7 +7304,7 @@
           }
         },
         "cost_annual_per_node_musd": {
-          "value": 15.7702768,
+          "value": 17.5852768,
           "unit": "MUSD",
           "formula": "(compute + bus + solar + radiator + launch_cost(year)) / 5",
           "formula_name": "cost_annual_per_node_from_breakdown",
@@ -7321,7 +7321,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 23.6554152,
+          "value": 26.377915199999997,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -7338,7 +7338,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 18.92433216,
+          "value": 21.10233216,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -7355,7 +7355,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 28.386498239999998,
+          "value": 31.653498239999998,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -7372,7 +7372,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 7.885138400000001,
+          "value": 8.792638399999998,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -7389,7 +7389,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 3.154055359999999,
+          "value": 3.5170553600000005,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -7406,7 +7406,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 12.616221439999999,
+          "value": 14.068221439999999,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -7442,7 +7442,7 @@
           "notes": null
         },
         "gpus_per_node": {
-          "value": 70,
+          "value": 125,
           "unit": "count",
           "formula": "floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg)",
           "formula_name": "n_packages_from_mass_envelope",
@@ -7459,7 +7459,7 @@
           "notes": null
         },
         "kw_per_node": {
-          "value": 385.0,
+          "value": 687.5,
           "unit": "kW",
           "formula": "N x kw_per_pkg",
           "formula_name": "kw_per_node_from_n_and_kw_per_pkg",
@@ -7476,7 +7476,7 @@
           "notes": null
         },
         "mass_per_node_t": {
-          "value": 12.440000000000001,
+          "value": 12.446874999999999,
           "unit": "t",
           "formula": "N x mass_per_pkg + node_mass_fixed_t",
           "formula_name": "mass_per_node_from_n_and_mass_per_pkg",
@@ -7528,7 +7528,7 @@
           "notes": null
         },
         "volume_per_node_m3": {
-          "value": 5.137904114621602,
+          "value": 5.246257347538575,
           "unit": "m3",
           "formula": "N x volume_per_pkg + node_volume_fixed_m3 + mounting_overhead x array_volume",
           "formula_name": "volume_per_node_from_n_and_vol_per_pkg",
@@ -7547,7 +7547,7 @@
           "notes": null
         },
         "mass_utilization_pct": {
-          "value": 99.52000000000001,
+          "value": 99.57499999999999,
           "unit": "percent",
           "formula": "mass_per_node_t / mass_envelope_t",
           "formula_name": "mass_utilization",
@@ -7563,7 +7563,7 @@
           "notes": null
         },
         "volume_utilization_pct": {
-          "value": 6.422380143277002,
+          "value": 6.557821684423218,
           "unit": "percent",
           "formula": "volume_per_node_m3 / neutron_fairing_usable_volume_m3",
           "formula_name": "volume_utilization",
@@ -7597,7 +7597,7 @@
           "notes": null
         },
         "pf_per_node": {
-          "value": 7000.0,
+          "value": 12500.0,
           "unit": "PFLOPS",
           "formula": "N x pf_per_pkg",
           "formula_name": "pf_per_node_from_n_and_pf_per_pkg",
@@ -7630,7 +7630,7 @@
         },
         "cost_breakdown": {
           "compute": {
-            "value": 15.75,
+            "value": 28.125,
             "unit": "MUSD",
             "formula": "N x usd_per_pkg / 1_000_000",
             "formula_name": "compute_cost_from_n_and_usd_per_pkg",
@@ -7663,7 +7663,7 @@
             "notes": null
           },
           "solar": {
-            "value": 15.4,
+            "value": 13.75,
             "unit": "MUSD",
             "formula": "solar_cost_musd_per_kw x kw_per_node",
             "formula_name": "solar_cost_from_kw_and_dial",
@@ -7680,7 +7680,7 @@
             "notes": null
           },
           "radiator": {
-            "value": 15.4,
+            "value": 13.75,
             "unit": "MUSD",
             "formula": "radiator_cost_musd_per_kw x kw_per_node",
             "formula_name": "radiator_cost_from_kw_and_dial",
@@ -7712,7 +7712,7 @@
             "notes": null
           },
           "node_total": {
-            "value": 76.37595037645758,
+            "value": 85.4509503764576,
             "unit": "MUSD",
             "formula": "compute + bus + solar + radiator + launch",
             "formula_name": "node_total_cost_from_breakdown",
@@ -7732,7 +7732,7 @@
           }
         },
         "cost_annual_per_node_musd": {
-          "value": 15.275190075291516,
+          "value": 17.09019007529152,
           "unit": "MUSD",
           "formula": "(compute + bus + solar + radiator + launch_cost(year)) / 5",
           "formula_name": "cost_annual_per_node_from_breakdown",
@@ -7749,7 +7749,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 22.91278511293727,
+          "value": 25.635285112937282,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -7766,7 +7766,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 18.330228090349816,
+          "value": 20.508228090349824,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -7783,7 +7783,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 27.49534213552473,
+          "value": 30.762342135524737,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -7800,7 +7800,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 7.637595037645756,
+          "value": 8.545095037645762,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -7817,7 +7817,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 3.055038015058301,
+          "value": 3.418038015058304,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -7834,7 +7834,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 12.220152060233215,
+          "value": 13.672152060233216,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -7870,7 +7870,7 @@
           "notes": null
         },
         "gpus_per_node": {
-          "value": 62,
+          "value": 108,
           "unit": "count",
           "formula": "floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg)",
           "formula_name": "n_packages_from_mass_envelope",
@@ -7887,7 +7887,7 @@
           "notes": null
         },
         "kw_per_node": {
-          "value": 409.2,
+          "value": 712.8,
           "unit": "kW",
           "formula": "N x kw_per_pkg",
           "formula_name": "kw_per_node_from_n_and_kw_per_pkg",
@@ -7904,7 +7904,7 @@
           "notes": null
         },
         "mass_per_node_t": {
-          "value": 12.4696,
+          "value": 12.488919999999998,
           "unit": "t",
           "formula": "N x mass_per_pkg + node_mass_fixed_t",
           "formula_name": "mass_per_node_from_n_and_mass_per_pkg",
@@ -7956,7 +7956,7 @@
           "notes": null
         },
         "volume_per_node_m3": {
-          "value": 5.146572373254959,
+          "value": 5.255319617927994,
           "unit": "m3",
           "formula": "N x volume_per_pkg + node_volume_fixed_m3 + mounting_overhead x array_volume",
           "formula_name": "volume_per_node_from_n_and_vol_per_pkg",
@@ -7975,7 +7975,7 @@
           "notes": null
         },
         "mass_utilization_pct": {
-          "value": 99.7568,
+          "value": 99.91135999999999,
           "unit": "percent",
           "formula": "mass_per_node_t / mass_envelope_t",
           "formula_name": "mass_utilization",
@@ -7991,7 +7991,7 @@
           "notes": null
         },
         "volume_utilization_pct": {
-          "value": 6.4332154665687,
+          "value": 6.569149522409992,
           "unit": "percent",
           "formula": "volume_per_node_m3 / neutron_fairing_usable_volume_m3",
           "formula_name": "volume_utilization",
@@ -8025,7 +8025,7 @@
           "notes": null
         },
         "pf_per_node": {
-          "value": 10075.0,
+          "value": 17550.0,
           "unit": "PFLOPS",
           "formula": "N x pf_per_pkg",
           "formula_name": "pf_per_node_from_n_and_pf_per_pkg",
@@ -8058,7 +8058,7 @@
         },
         "cost_breakdown": {
           "compute": {
-            "value": 18.135,
+            "value": 31.59,
             "unit": "MUSD",
             "formula": "N x usd_per_pkg / 1_000_000",
             "formula_name": "compute_cost_from_n_and_usd_per_pkg",
@@ -8091,7 +8091,7 @@
             "notes": null
           },
           "solar": {
-            "value": 16.368,
+            "value": 14.256,
             "unit": "MUSD",
             "formula": "solar_cost_musd_per_kw x kw_per_node",
             "formula_name": "solar_cost_from_kw_and_dial",
@@ -8108,7 +8108,7 @@
             "notes": null
           },
           "radiator": {
-            "value": 16.368,
+            "value": 14.256,
             "unit": "MUSD",
             "formula": "radiator_cost_musd_per_kw x kw_per_node",
             "formula_name": "radiator_cost_from_kw_and_dial",
@@ -8140,7 +8140,7 @@
             "notes": null
           },
           "node_total": {
-            "value": 78.78837504752246,
+            "value": 88.01937504752246,
             "unit": "MUSD",
             "formula": "compute + bus + solar + radiator + launch",
             "formula_name": "node_total_cost_from_breakdown",
@@ -8160,7 +8160,7 @@
           }
         },
         "cost_annual_per_node_musd": {
-          "value": 15.757675009504492,
+          "value": 17.603875009504492,
           "unit": "MUSD",
           "formula": "(compute + bus + solar + radiator + launch_cost(year)) / 5",
           "formula_name": "cost_annual_per_node_from_breakdown",
@@ -8177,7 +8177,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 23.636512514256736,
+          "value": 26.405812514256738,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -8194,7 +8194,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 18.90921001140539,
+          "value": 21.12465001140539,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -8211,7 +8211,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 28.363815017108088,
+          "value": 31.686975017108086,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -8228,7 +8228,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 7.878837504752244,
+          "value": 8.801937504752246,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -8245,7 +8245,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 3.1515350019008963,
+          "value": 3.5207750019008976,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -8262,7 +8262,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 12.606140007603596,
+          "value": 14.083100007603594,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -8298,7 +8298,7 @@
           "notes": null
         },
         "gpus_per_node": {
-          "value": 52,
+          "value": 92,
           "unit": "count",
           "formula": "floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg)",
           "formula_name": "n_packages_from_mass_envelope",
@@ -8315,7 +8315,7 @@
           "notes": null
         },
         "kw_per_node": {
-          "value": 411.84,
+          "value": 728.6399999999999,
           "unit": "kW",
           "formula": "N x kw_per_pkg",
           "formula_name": "kw_per_node_from_n_and_kw_per_pkg",
@@ -8332,7 +8332,7 @@
           "notes": null
         },
         "mass_per_node_t": {
-          "value": 12.393519999999999,
+          "value": 12.462495999999998,
           "unit": "t",
           "formula": "N x mass_per_pkg + node_mass_fixed_t",
           "formula_name": "mass_per_node_from_n_and_mass_per_pkg",
@@ -8384,7 +8384,7 @@
           "notes": null
         },
         "volume_per_node_m3": {
-          "value": 5.147518001469508,
+          "value": 5.260993387215283,
           "unit": "m3",
           "formula": "N x volume_per_pkg + node_volume_fixed_m3 + mounting_overhead x array_volume",
           "formula_name": "volume_per_node_from_n_and_vol_per_pkg",
@@ -8403,7 +8403,7 @@
           "notes": null
         },
         "mass_utilization_pct": {
-          "value": 99.14815999999999,
+          "value": 99.69996799999998,
           "unit": "percent",
           "formula": "mass_per_node_t / mass_envelope_t",
           "formula_name": "mass_utilization",
@@ -8419,7 +8419,7 @@
           "notes": null
         },
         "volume_utilization_pct": {
-          "value": 6.434397501836885,
+          "value": 6.576241734019103,
           "unit": "percent",
           "formula": "volume_per_node_m3 / neutron_fairing_usable_volume_m3",
           "formula_name": "volume_utilization",
@@ -8453,7 +8453,7 @@
           "notes": null
         },
         "pf_per_node": {
-          "value": 13731.25,
+          "value": 24293.75,
           "unit": "PFLOPS",
           "formula": "N x pf_per_pkg",
           "formula_name": "pf_per_node_from_n_and_pf_per_pkg",
@@ -8469,7 +8469,7 @@
           "notes": null
         },
         "pf_per_kw": {
-          "value": 33.34122474747475,
+          "value": 33.341224747474755,
           "unit": "PFLOPS/kW",
           "formula": "pf_per_node / kw_per_node",
           "formula_name": "pf_per_kw_from_node_pf_and_kw",
@@ -8486,7 +8486,7 @@
         },
         "cost_breakdown": {
           "compute": {
-            "value": 19.773,
+            "value": 34.983,
             "unit": "MUSD",
             "formula": "N x usd_per_pkg / 1_000_000",
             "formula_name": "compute_cost_from_n_and_usd_per_pkg",
@@ -8519,7 +8519,7 @@
             "notes": null
           },
           "solar": {
-            "value": 16.473599999999998,
+            "value": 14.572799999999997,
             "unit": "MUSD",
             "formula": "solar_cost_musd_per_kw x kw_per_node",
             "formula_name": "solar_cost_from_kw_and_dial",
@@ -8536,7 +8536,7 @@
             "notes": null
           },
           "radiator": {
-            "value": 16.473599999999998,
+            "value": 14.572799999999997,
             "unit": "MUSD",
             "formula": "radiator_cost_musd_per_kw x kw_per_node",
             "formula_name": "radiator_cost_from_kw_and_dial",
@@ -8568,7 +8568,7 @@
             "notes": null
           },
           "node_total": {
-            "value": 78.90249712719859,
+            "value": 90.31089712719859,
             "unit": "MUSD",
             "formula": "compute + bus + solar + radiator + launch",
             "formula_name": "node_total_cost_from_breakdown",
@@ -8588,7 +8588,7 @@
           }
         },
         "cost_annual_per_node_musd": {
-          "value": 15.780499425439718,
+          "value": 18.062179425439716,
           "unit": "MUSD",
           "formula": "(compute + bus + solar + radiator + launch_cost(year)) / 5",
           "formula_name": "cost_annual_per_node_from_breakdown",
@@ -8605,7 +8605,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 23.67074913815958,
+          "value": 27.093269138159574,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -8622,7 +8622,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 18.93659931052766,
+          "value": 21.67461531052766,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -8639,7 +8639,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 28.404898965791492,
+          "value": 32.51192296579149,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -8656,7 +8656,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 7.890249712719861,
+          "value": 9.031089712719858,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -8673,7 +8673,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 3.1560998850879436,
+          "value": 3.612435885087944,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -8690,7 +8690,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 12.624399540351774,
+          "value": 14.449743540351776,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -8726,7 +8726,7 @@
           "notes": null
         },
         "gpus_per_node": {
-          "value": 52,
+          "value": 92,
           "unit": "count",
           "formula": "floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg)",
           "formula_name": "n_packages_from_mass_envelope",
@@ -8743,7 +8743,7 @@
           "notes": null
         },
         "kw_per_node": {
-          "value": 411.84,
+          "value": 728.6399999999999,
           "unit": "kW",
           "formula": "N x kw_per_pkg",
           "formula_name": "kw_per_node_from_n_and_kw_per_pkg",
@@ -8760,7 +8760,7 @@
           "notes": null
         },
         "mass_per_node_t": {
-          "value": 12.393519999999999,
+          "value": 12.462495999999998,
           "unit": "t",
           "formula": "N x mass_per_pkg + node_mass_fixed_t",
           "formula_name": "mass_per_node_from_n_and_mass_per_pkg",
@@ -8812,7 +8812,7 @@
           "notes": null
         },
         "volume_per_node_m3": {
-          "value": 5.147518001469508,
+          "value": 5.260993387215283,
           "unit": "m3",
           "formula": "N x volume_per_pkg + node_volume_fixed_m3 + mounting_overhead x array_volume",
           "formula_name": "volume_per_node_from_n_and_vol_per_pkg",
@@ -8831,7 +8831,7 @@
           "notes": null
         },
         "mass_utilization_pct": {
-          "value": 99.14815999999999,
+          "value": 99.69996799999998,
           "unit": "percent",
           "formula": "mass_per_node_t / mass_envelope_t",
           "formula_name": "mass_utilization",
@@ -8847,7 +8847,7 @@
           "notes": null
         },
         "volume_utilization_pct": {
-          "value": 6.434397501836885,
+          "value": 6.576241734019103,
           "unit": "percent",
           "formula": "volume_per_node_m3 / neutron_fairing_usable_volume_m3",
           "formula_name": "volume_utilization",
@@ -8881,7 +8881,7 @@
           "notes": null
         },
         "pf_per_node": {
-          "value": 13731.25,
+          "value": 24293.75,
           "unit": "PFLOPS",
           "formula": "N x pf_per_pkg",
           "formula_name": "pf_per_node_from_n_and_pf_per_pkg",
@@ -8897,7 +8897,7 @@
           "notes": null
         },
         "pf_per_kw": {
-          "value": 33.34122474747475,
+          "value": 33.341224747474755,
           "unit": "PFLOPS/kW",
           "formula": "pf_per_node / kw_per_node",
           "formula_name": "pf_per_kw_from_node_pf_and_kw",
@@ -8914,7 +8914,7 @@
         },
         "cost_breakdown": {
           "compute": {
-            "value": 19.773,
+            "value": 34.983,
             "unit": "MUSD",
             "formula": "N x usd_per_pkg / 1_000_000",
             "formula_name": "compute_cost_from_n_and_usd_per_pkg",
@@ -8947,7 +8947,7 @@
             "notes": null
           },
           "solar": {
-            "value": 16.473599999999998,
+            "value": 14.572799999999997,
             "unit": "MUSD",
             "formula": "solar_cost_musd_per_kw x kw_per_node",
             "formula_name": "solar_cost_from_kw_and_dial",
@@ -8964,7 +8964,7 @@
             "notes": null
           },
           "radiator": {
-            "value": 16.473599999999998,
+            "value": 14.572799999999997,
             "unit": "MUSD",
             "formula": "radiator_cost_musd_per_kw x kw_per_node",
             "formula_name": "radiator_cost_from_kw_and_dial",
@@ -8996,7 +8996,7 @@
             "notes": null
           },
           "node_total": {
-            "value": 77.12012340153414,
+            "value": 88.52852340153414,
             "unit": "MUSD",
             "formula": "compute + bus + solar + radiator + launch",
             "formula_name": "node_total_cost_from_breakdown",
@@ -9016,7 +9016,7 @@
           }
         },
         "cost_annual_per_node_musd": {
-          "value": 15.424024680306829,
+          "value": 17.70570468030683,
           "unit": "MUSD",
           "formula": "(compute + bus + solar + radiator + launch_cost(year)) / 5",
           "formula_name": "cost_annual_per_node_from_breakdown",
@@ -9033,7 +9033,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 23.136037020460243,
+          "value": 26.558557020460245,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9050,7 +9050,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 18.508829616368192,
+          "value": 21.246845616368194,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9067,7 +9067,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 27.763244424552294,
+          "value": 31.870268424552297,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9084,7 +9084,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 7.712012340153414,
+          "value": 8.852852340153415,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9101,7 +9101,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 3.0848049360613636,
+          "value": 3.541140936061364,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9118,7 +9118,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 12.339219744245465,
+          "value": 14.164563744245466,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9154,7 +9154,7 @@
           "notes": null
         },
         "gpus_per_node": {
-          "value": 44,
+          "value": 78,
           "unit": "count",
           "formula": "floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg)",
           "formula_name": "n_packages_from_mass_envelope",
@@ -9171,7 +9171,7 @@
           "notes": null
         },
         "kw_per_node": {
-          "value": 418.17599999999993,
+          "value": 741.3119999999998,
           "unit": "kW",
           "formula": "N x kw_per_pkg",
           "formula_name": "kw_per_node_from_n_and_kw_per_pkg",
@@ -9188,7 +9188,7 @@
           "notes": null
         },
         "mass_per_node_t": {
-          "value": 12.438807999999998,
+          "value": 12.446216799999998,
           "unit": "t",
           "formula": "N x mass_per_pkg + node_mass_fixed_t",
           "formula_name": "mass_per_node_from_n_and_mass_per_pkg",
@@ -9240,7 +9240,7 @@
           "notes": null
         },
         "volume_per_node_m3": {
-          "value": 5.149787509184423,
+          "value": 5.265532402645114,
           "unit": "m3",
           "formula": "N x volume_per_pkg + node_volume_fixed_m3 + mounting_overhead x array_volume",
           "formula_name": "volume_per_node_from_n_and_vol_per_pkg",
@@ -9259,7 +9259,7 @@
           "notes": null
         },
         "mass_utilization_pct": {
-          "value": 99.51046399999998,
+          "value": 99.56973439999999,
           "unit": "percent",
           "formula": "mass_per_node_t / mass_envelope_t",
           "formula_name": "mass_utilization",
@@ -9275,7 +9275,7 @@
           "notes": null
         },
         "volume_utilization_pct": {
-          "value": 6.4372343864805295,
+          "value": 6.581915503306393,
           "unit": "percent",
           "formula": "volume_per_node_m3 / neutron_fairing_usable_volume_m3",
           "formula_name": "volume_utilization",
@@ -9309,7 +9309,7 @@
           "notes": null
         },
         "pf_per_node": {
-          "value": 18880.46875,
+          "value": 33469.921875,
           "unit": "PFLOPS",
           "formula": "N x pf_per_pkg",
           "formula_name": "pf_per_node_from_n_and_pf_per_pkg",
@@ -9325,7 +9325,7 @@
           "notes": null
         },
         "pf_per_kw": {
-          "value": 45.14957517887206,
+          "value": 45.14957517887207,
           "unit": "PFLOPS/kW",
           "formula": "pf_per_node / kw_per_node",
           "formula_name": "pf_per_kw_from_node_pf_and_kw",
@@ -9342,7 +9342,7 @@
         },
         "cost_breakdown": {
           "compute": {
-            "value": 21.7503,
+            "value": 38.55735,
             "unit": "MUSD",
             "formula": "N x usd_per_pkg / 1_000_000",
             "formula_name": "compute_cost_from_n_and_usd_per_pkg",
@@ -9375,7 +9375,7 @@
             "notes": null
           },
           "solar": {
-            "value": 16.72704,
+            "value": 14.826239999999997,
             "unit": "MUSD",
             "formula": "solar_cost_musd_per_kw x kw_per_node",
             "formula_name": "solar_cost_from_kw_and_dial",
@@ -9392,7 +9392,7 @@
             "notes": null
           },
           "radiator": {
-            "value": 16.72704,
+            "value": 14.826239999999997,
             "unit": "MUSD",
             "formula": "radiator_cost_musd_per_kw x kw_per_node",
             "formula_name": "radiator_cost_from_kw_and_dial",
@@ -9424,7 +9424,7 @@
             "notes": null
           },
           "node_total": {
-            "value": 78.15908344398929,
+            "value": 91.16453344398927,
             "unit": "MUSD",
             "formula": "compute + bus + solar + radiator + launch",
             "formula_name": "node_total_cost_from_breakdown",
@@ -9444,7 +9444,7 @@
           }
         },
         "cost_annual_per_node_musd": {
-          "value": 15.631816688797858,
+          "value": 18.232906688797854,
           "unit": "MUSD",
           "formula": "(compute + bus + solar + radiator + launch_cost(year)) / 5",
           "formula_name": "cost_annual_per_node_from_breakdown",
@@ -9461,7 +9461,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 23.44772503319679,
+          "value": 27.34936003319678,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9478,7 +9478,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 18.75818002655743,
+          "value": 21.879488026557425,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9495,7 +9495,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 28.137270039836146,
+          "value": 32.81923203983614,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9512,7 +9512,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 7.815908344398931,
+          "value": 9.116453344398927,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9529,7 +9529,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 3.126363337759571,
+          "value": 3.646581337759571,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9546,7 +9546,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 12.505453351038287,
+          "value": 14.586325351038283,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9582,7 +9582,7 @@
           "notes": null
         },
         "gpus_per_node": {
-          "value": 37,
+          "value": 66,
           "unit": "count",
           "formula": "floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg)",
           "formula_name": "n_packages_from_mass_envelope",
@@ -9599,7 +9599,7 @@
           "notes": null
         },
         "kw_per_node": {
-          "value": 421.9775999999999,
+          "value": 752.7167999999998,
           "unit": "kW",
           "formula": "N x kw_per_pkg",
           "formula_name": "kw_per_node_from_n_and_kw_per_pkg",
@@ -9616,7 +9616,7 @@
           "notes": null
         },
         "mass_per_node_t": {
-          "value": 12.448241799999995,
+          "value": 12.454893519999999,
           "unit": "t",
           "formula": "N x mass_per_pkg + node_mass_fixed_t",
           "formula_name": "mass_per_node_from_n_and_mass_per_pkg",
@@ -9668,7 +9668,7 @@
           "notes": null
         },
         "volume_per_node_m3": {
-          "value": 5.1511492138133725,
+          "value": 5.269617516531961,
           "unit": "m3",
           "formula": "N x volume_per_pkg + node_volume_fixed_m3 + mounting_overhead x array_volume",
           "formula_name": "volume_per_node_from_n_and_vol_per_pkg",
@@ -9687,7 +9687,7 @@
           "notes": null
         },
         "mass_utilization_pct": {
-          "value": 99.58593439999996,
+          "value": 99.63914815999999,
           "unit": "percent",
           "formula": "mass_per_node_t / mass_envelope_t",
           "formula_name": "mass_utilization",
@@ -9703,7 +9703,7 @@
           "notes": null
         },
         "volume_utilization_pct": {
-          "value": 6.438936517266717,
+          "value": 6.587021895664952,
           "unit": "percent",
           "formula": "volume_per_node_m3 / neutron_fairing_usable_volume_m3",
           "formula_name": "volume_utilization",
@@ -9737,7 +9737,7 @@
           "notes": null
         },
         "pf_per_node": {
-          "value": 25799.7314453125,
+          "value": 46021.142578125,
           "unit": "PFLOPS",
           "formula": "N x pf_per_pkg",
           "formula_name": "pf_per_node_from_n_and_pf_per_pkg",
@@ -9770,7 +9770,7 @@
         },
         "cost_breakdown": {
           "compute": {
-            "value": 23.777014,
+            "value": 42.413052,
             "unit": "MUSD",
             "formula": "N x usd_per_pkg / 1_000_000",
             "formula_name": "compute_cost_from_n_and_usd_per_pkg",
@@ -9803,7 +9803,7 @@
             "notes": null
           },
           "solar": {
-            "value": 16.879103999999995,
+            "value": 15.054335999999996,
             "unit": "MUSD",
             "formula": "solar_cost_musd_per_kw x kw_per_node",
             "formula_name": "solar_cost_from_kw_and_dial",
@@ -9820,7 +9820,7 @@
             "notes": null
           },
           "radiator": {
-            "value": 16.879103999999995,
+            "value": 15.054335999999996,
             "unit": "MUSD",
             "formula": "radiator_cost_musd_per_kw x kw_per_node",
             "formula_name": "radiator_cost_from_kw_and_dial",
@@ -9852,7 +9852,7 @@
             "notes": null
           },
           "node_total": {
-            "value": 79.27429595019692,
+            "value": 94.2607979501969,
             "unit": "MUSD",
             "formula": "compute + bus + solar + radiator + launch",
             "formula_name": "node_total_cost_from_breakdown",
@@ -9872,7 +9872,7 @@
           }
         },
         "cost_annual_per_node_musd": {
-          "value": 15.854859190039383,
+          "value": 18.85215959003938,
           "unit": "MUSD",
           "formula": "(compute + bus + solar + radiator + launch_cost(year)) / 5",
           "formula_name": "cost_annual_per_node_from_breakdown",
@@ -9889,7 +9889,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 23.782288785059073,
+          "value": 28.278239385059074,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9906,7 +9906,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 19.025831028047257,
+          "value": 22.622591508047257,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9923,7 +9923,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 28.53874654207089,
+          "value": 33.93388726207089,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -9940,7 +9940,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 7.9274295950196905,
+          "value": 9.426079795019692,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9957,7 +9957,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 3.1709718380078744,
+          "value": 3.7704319180078762,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -9974,7 +9974,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 12.683887352031507,
+          "value": 15.081727672031509,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -10010,7 +10010,7 @@
           "notes": null
         },
         "gpus_per_node": {
-          "value": 37,
+          "value": 66,
           "unit": "count",
           "formula": "floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg)",
           "formula_name": "n_packages_from_mass_envelope",
@@ -10027,7 +10027,7 @@
           "notes": null
         },
         "kw_per_node": {
-          "value": 421.9775999999999,
+          "value": 752.7167999999998,
           "unit": "kW",
           "formula": "N x kw_per_pkg",
           "formula_name": "kw_per_node_from_n_and_kw_per_pkg",
@@ -10044,7 +10044,7 @@
           "notes": null
         },
         "mass_per_node_t": {
-          "value": 12.448241799999995,
+          "value": 12.454893519999999,
           "unit": "t",
           "formula": "N x mass_per_pkg + node_mass_fixed_t",
           "formula_name": "mass_per_node_from_n_and_mass_per_pkg",
@@ -10096,7 +10096,7 @@
           "notes": null
         },
         "volume_per_node_m3": {
-          "value": 5.1511492138133725,
+          "value": 5.269617516531961,
           "unit": "m3",
           "formula": "N x volume_per_pkg + node_volume_fixed_m3 + mounting_overhead x array_volume",
           "formula_name": "volume_per_node_from_n_and_vol_per_pkg",
@@ -10115,7 +10115,7 @@
           "notes": null
         },
         "mass_utilization_pct": {
-          "value": 99.58593439999996,
+          "value": 99.63914815999999,
           "unit": "percent",
           "formula": "mass_per_node_t / mass_envelope_t",
           "formula_name": "mass_utilization",
@@ -10131,7 +10131,7 @@
           "notes": null
         },
         "volume_utilization_pct": {
-          "value": 6.438936517266717,
+          "value": 6.587021895664952,
           "unit": "percent",
           "formula": "volume_per_node_m3 / neutron_fairing_usable_volume_m3",
           "formula_name": "volume_utilization",
@@ -10165,7 +10165,7 @@
           "notes": null
         },
         "pf_per_node": {
-          "value": 25799.7314453125,
+          "value": 46021.142578125,
           "unit": "PFLOPS",
           "formula": "N x pf_per_pkg",
           "formula_name": "pf_per_node_from_n_and_pf_per_pkg",
@@ -10198,7 +10198,7 @@
         },
         "cost_breakdown": {
           "compute": {
-            "value": 23.777014,
+            "value": 42.413052,
             "unit": "MUSD",
             "formula": "N x usd_per_pkg / 1_000_000",
             "formula_name": "compute_cost_from_n_and_usd_per_pkg",
@@ -10231,7 +10231,7 @@
             "notes": null
           },
           "solar": {
-            "value": 16.879103999999995,
+            "value": 15.054335999999996,
             "unit": "MUSD",
             "formula": "solar_cost_musd_per_kw x kw_per_node",
             "formula_name": "solar_cost_from_kw_and_dial",
@@ -10248,7 +10248,7 @@
             "notes": null
           },
           "radiator": {
-            "value": 16.879103999999995,
+            "value": 15.054335999999996,
             "unit": "MUSD",
             "formula": "radiator_cost_musd_per_kw x kw_per_node",
             "formula_name": "radiator_cost_from_kw_and_dial",
@@ -10280,7 +10280,7 @@
             "notes": null
           },
           "node_total": {
-            "value": 78.30955155339481,
+            "value": 93.29605355339481,
             "unit": "MUSD",
             "formula": "compute + bus + solar + radiator + launch",
             "formula_name": "node_total_cost_from_breakdown",
@@ -10300,7 +10300,7 @@
           }
         },
         "cost_annual_per_node_musd": {
-          "value": 15.661910310678962,
+          "value": 18.659210710678963,
           "unit": "MUSD",
           "formula": "(compute + bus + solar + radiator + launch_cost(year)) / 5",
           "formula_name": "cost_annual_per_node_from_breakdown",
@@ -10317,7 +10317,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_central": {
-          "value": 23.492865466018443,
+          "value": 27.988816066018444,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -10334,7 +10334,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_low": {
-          "value": 18.794292372814756,
+          "value": 22.391052852814756,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -10351,7 +10351,7 @@
           "notes": null
         },
         "revenue_annual_per_node_musd_high": {
-          "value": 28.19143855922213,
+          "value": 33.586579279222136,
           "unit": "MUSD",
           "formula": "cost_annual_per_node x R(year, band)",
           "formula_name": "revenue_annual_per_node_from_cost_and_r",
@@ -10368,7 +10368,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_central": {
-          "value": 7.830955155339481,
+          "value": 9.329605355339481,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -10385,7 +10385,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_low": {
-          "value": 3.132382062135793,
+          "value": 3.7318421421357932,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -10402,7 +10402,7 @@
           "notes": null
         },
         "gross_profit_annual_per_node_musd_high": {
-          "value": 12.52952824854317,
+          "value": 14.927368568543173,
           "unit": "MUSD",
           "formula": "revenue_annual - cost_annual",
           "formula_name": "gross_profit_annual_per_node_from_rev_and_cost",
@@ -10856,7 +10856,7 @@
           "notes": null
         },
         "kw_deployed_this_year": {
-          "value": 608.4,
+          "value": 925.6,
           "unit": "kW",
           "formula": "nodes_deployed_this_year x kw_per_node",
           "formula_name": "kw_deployed_this_year_from_nodes",
@@ -10872,7 +10872,7 @@
           "notes": null
         },
         "kw_living_fleet": {
-          "value": 608.4,
+          "value": 925.6,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -10888,7 +10888,7 @@
           "notes": null
         },
         "kw_on_orbit": {
-          "value": 608.4,
+          "value": 925.6,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -10904,7 +10904,7 @@
           "notes": null
         },
         "pf_deployed_this_year": {
-          "value": 7956.0,
+          "value": 12104.0,
           "unit": "PFLOPS",
           "formula": "nodes_deployed_this_year x pf_per_node",
           "formula_name": "pf_deployed_this_year_from_nodes",
@@ -10920,7 +10920,7 @@
           "notes": null
         },
         "pf_living_fleet": {
-          "value": 7956.0,
+          "value": 12104.0,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -10936,7 +10936,7 @@
           "notes": null
         },
         "pf_on_orbit": {
-          "value": 7956.0,
+          "value": 12104.0,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -10970,7 +10970,7 @@
           "notes": null
         },
         "cost_annual_fleet_musd": {
-          "value": 26.1144,
+          "value": 25.4928,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.cost_per_node) for living",
           "formula_name": "cost_annual_fleet_from_cohorts",
@@ -10986,7 +10986,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 39.1716,
+          "value": 38.2392,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11004,7 +11004,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 31.33728,
+          "value": 30.591359999999998,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11022,7 +11022,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 47.00592,
+          "value": 45.88704,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11040,7 +11040,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 39.1716,
+          "value": 38.2392,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11055,7 +11055,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 31.33728,
+          "value": 30.591359999999998,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11070,7 +11070,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 47.00592,
+          "value": 45.88704,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11085,7 +11085,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 13.057199999999998,
+          "value": 12.746399999999998,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11101,7 +11101,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 5.22288,
+          "value": 5.098559999999999,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11117,7 +11117,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 20.891520000000003,
+          "value": 20.39424,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11235,7 +11235,7 @@
           "notes": null
         },
         "kw_deployed_this_year": {
-          "value": 1013.31,
+          "value": 1663.83,
           "unit": "kW",
           "formula": "nodes_deployed_this_year x kw_per_node",
           "formula_name": "kw_deployed_this_year_from_nodes",
@@ -11251,7 +11251,7 @@
           "notes": null
         },
         "kw_living_fleet": {
-          "value": 1621.71,
+          "value": 2589.43,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -11267,7 +11267,7 @@
           "notes": null
         },
         "kw_on_orbit": {
-          "value": 1621.71,
+          "value": 2589.43,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -11283,7 +11283,7 @@
           "notes": null
         },
         "pf_deployed_this_year": {
-          "value": 12636.0,
+          "value": 20748.0,
           "unit": "PFLOPS",
           "formula": "nodes_deployed_this_year x pf_per_node",
           "formula_name": "pf_deployed_this_year_from_nodes",
@@ -11299,7 +11299,7 @@
           "notes": null
         },
         "pf_living_fleet": {
-          "value": 20592.0,
+          "value": 32852.0,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -11315,7 +11315,7 @@
           "notes": null
         },
         "pf_on_orbit": {
-          "value": 20592.0,
+          "value": 32852.0,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -11349,7 +11349,7 @@
           "notes": null
         },
         "cost_annual_fleet_musd": {
-          "value": 70.59168,
+          "value": 72.68376,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.cost_per_node) for living",
           "formula_name": "cost_annual_fleet_from_cohorts",
@@ -11365,7 +11365,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 105.88751999999998,
+          "value": 109.02564,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11383,7 +11383,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 84.710016,
+          "value": 87.220512,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11401,7 +11401,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 127.065024,
+          "value": 130.830768,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11419,7 +11419,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 145.05911999999998,
+          "value": 147.26484,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11434,7 +11434,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 116.04729599999999,
+          "value": 117.811872,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11449,7 +11449,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 174.070944,
+          "value": 176.717808,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11464,7 +11464,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 35.295839999999984,
+          "value": 36.34187999999999,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11480,7 +11480,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 14.118336,
+          "value": 14.536751999999993,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11496,7 +11496,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 56.473344,
+          "value": 58.147008,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11528,7 +11528,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 16.666666666666664,
+          "value": 16.666666666666657,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -11614,7 +11614,7 @@
           "notes": null
         },
         "kw_deployed_this_year": {
-          "value": 1925.0,
+          "value": 3437.5,
           "unit": "kW",
           "formula": "nodes_deployed_this_year x kw_per_node",
           "formula_name": "kw_deployed_this_year_from_nodes",
@@ -11630,7 +11630,7 @@
           "notes": null
         },
         "kw_living_fleet": {
-          "value": 3546.71,
+          "value": 6026.93,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -11646,7 +11646,7 @@
           "notes": null
         },
         "kw_on_orbit": {
-          "value": 3546.71,
+          "value": 6026.93,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -11662,7 +11662,7 @@
           "notes": null
         },
         "pf_deployed_this_year": {
-          "value": 35000.0,
+          "value": 62500.0,
           "unit": "PFLOPS",
           "formula": "nodes_deployed_this_year x pf_per_node",
           "formula_name": "pf_deployed_this_year_from_nodes",
@@ -11678,7 +11678,7 @@
           "notes": null
         },
         "pf_living_fleet": {
-          "value": 55592.0,
+          "value": 95352.0,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -11694,7 +11694,7 @@
           "notes": null
         },
         "pf_on_orbit": {
-          "value": 55592.0,
+          "value": 95352.0,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -11728,7 +11728,7 @@
           "notes": null
         },
         "cost_annual_fleet_musd": {
-          "value": 149.443064,
+          "value": 160.610144,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.cost_per_node) for living",
           "formula_name": "cost_annual_fleet_from_cohorts",
@@ -11744,7 +11744,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 224.16459599999996,
+          "value": 240.915216,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11762,7 +11762,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 179.3316768,
+          "value": 192.7321728,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11780,7 +11780,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 268.99751519999995,
+          "value": 289.09825920000003,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -11798,7 +11798,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 369.22371599999997,
+          "value": 388.180056,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11813,7 +11813,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 295.3789728,
+          "value": 310.5440448,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11828,7 +11828,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 443.06845919999995,
+          "value": 465.8160672,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -11843,7 +11843,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 74.72153199999997,
+          "value": 80.305072,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11859,7 +11859,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 29.888612800000004,
+          "value": 32.12202880000001,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11875,7 +11875,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 119.55445119999996,
+          "value": 128.48811520000004,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -11907,7 +11907,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 16.666666666666668,
+          "value": 16.66666666666667,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -11923,7 +11923,7 @@
           "notes": null
         },
         "margin_high_pct": {
-          "value": 44.444444444444436,
+          "value": 44.44444444444445,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -11993,7 +11993,7 @@
           "notes": null
         },
         "kw_deployed_this_year": {
-          "value": 3465.0,
+          "value": 6187.5,
           "unit": "kW",
           "formula": "nodes_deployed_this_year x kw_per_node",
           "formula_name": "kw_deployed_this_year_from_nodes",
@@ -12009,7 +12009,7 @@
           "notes": null
         },
         "kw_living_fleet": {
-          "value": 7011.71,
+          "value": 12214.43,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -12025,7 +12025,7 @@
           "notes": null
         },
         "kw_on_orbit": {
-          "value": 7011.71,
+          "value": 12214.43,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -12041,7 +12041,7 @@
           "notes": null
         },
         "pf_deployed_this_year": {
-          "value": 63000.0,
+          "value": 112500.0,
           "unit": "PFLOPS",
           "formula": "nodes_deployed_this_year x pf_per_node",
           "formula_name": "pf_deployed_this_year_from_nodes",
@@ -12057,7 +12057,7 @@
           "notes": null
         },
         "pf_living_fleet": {
-          "value": 118592.0,
+          "value": 207852.0,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -12073,7 +12073,7 @@
           "notes": null
         },
         "pf_on_orbit": {
-          "value": 118592.0,
+          "value": 207852.0,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -12107,7 +12107,7 @@
           "notes": null
         },
         "cost_annual_fleet_musd": {
-          "value": 286.9197746776236,
+          "value": 314.4218546776237,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.cost_per_node) for living",
           "formula_name": "cost_annual_fleet_from_cohorts",
@@ -12123,7 +12123,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 430.3796620164354,
+          "value": 471.6327820164355,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12141,7 +12141,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 344.30372961314833,
+          "value": 377.30622561314846,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12159,7 +12159,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 516.4555944197225,
+          "value": 565.9593384197226,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12177,7 +12177,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 799.6033780164354,
+          "value": 859.8128380164355,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12192,7 +12192,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 639.6827024131483,
+          "value": 687.8502704131485,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12207,7 +12207,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 959.5240536197225,
+          "value": 1031.7754056197227,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12222,7 +12222,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 143.45988733881182,
+          "value": 157.2109273388118,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12238,7 +12238,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 57.38395493552474,
+          "value": 62.88437093552477,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12254,7 +12254,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 229.5358197420989,
+          "value": 251.5374837420989,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12270,7 +12270,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 33.333333333333336,
+          "value": 33.33333333333333,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -12286,7 +12286,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 16.66666666666667,
+          "value": 16.666666666666675,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -12302,7 +12302,7 @@
           "notes": null
         },
         "margin_high_pct": {
-          "value": 44.44444444444445,
+          "value": 44.44444444444444,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -12372,7 +12372,7 @@
           "notes": null
         },
         "kw_deployed_this_year": {
-          "value": 5728.8,
+          "value": 9979.199999999999,
           "unit": "kW",
           "formula": "nodes_deployed_this_year x kw_per_node",
           "formula_name": "kw_deployed_this_year_from_nodes",
@@ -12388,7 +12388,7 @@
           "notes": null
         },
         "kw_living_fleet": {
-          "value": 12740.51,
+          "value": 22193.629999999997,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -12404,7 +12404,7 @@
           "notes": null
         },
         "kw_on_orbit": {
-          "value": 12740.51,
+          "value": 22193.629999999997,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -12420,7 +12420,7 @@
           "notes": null
         },
         "pf_deployed_this_year": {
-          "value": 141050.0,
+          "value": 245700.0,
           "unit": "PFLOPS",
           "formula": "nodes_deployed_this_year x pf_per_node",
           "formula_name": "pf_deployed_this_year_from_nodes",
@@ -12436,7 +12436,7 @@
           "notes": null
         },
         "pf_living_fleet": {
-          "value": 259642.0,
+          "value": 453552.0,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -12452,7 +12452,7 @@
           "notes": null
         },
         "pf_on_orbit": {
-          "value": 259642.0,
+          "value": 453552.0,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -12486,7 +12486,7 @@
           "notes": null
         },
         "cost_annual_fleet_musd": {
-          "value": 507.5272248106865,
+          "value": 560.8761048106866,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.cost_per_node) for living",
           "formula_name": "cost_annual_fleet_from_cohorts",
@@ -12502,7 +12502,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 761.2908372160298,
+          "value": 841.3141572160298,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12520,7 +12520,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 609.0326697728237,
+          "value": 673.0513257728239,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12538,7 +12538,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 913.5490046592358,
+          "value": 1009.5769886592358,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12556,7 +12556,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 1560.8942152324653,
+          "value": 1701.1269952324653,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12571,7 +12571,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 1248.715372185972,
+          "value": 1360.9015961859723,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12586,7 +12586,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 1873.0730582789583,
+          "value": 2041.3523942789584,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12601,7 +12601,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 253.76361240534328,
+          "value": 280.4380524053432,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12617,7 +12617,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 101.50544496213723,
+          "value": 112.17522096213736,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12633,7 +12633,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 406.02177984854933,
+          "value": 448.7008838485492,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12649,7 +12649,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 33.333333333333336,
+          "value": 33.33333333333333,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -12665,7 +12665,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 16.666666666666657,
+          "value": 16.66666666666667,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -12681,7 +12681,7 @@
           "notes": null
         },
         "margin_high_pct": {
-          "value": 44.44444444444445,
+          "value": 44.44444444444444,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -12751,7 +12751,7 @@
           "notes": null
         },
         "kw_deployed_this_year": {
-          "value": 9060.48,
+          "value": 16030.079999999998,
           "unit": "kW",
           "formula": "nodes_deployed_this_year x kw_per_node",
           "formula_name": "kw_deployed_this_year_from_nodes",
@@ -12767,7 +12767,7 @@
           "notes": null
         },
         "kw_living_fleet": {
-          "value": 21192.59,
+          "value": 37298.11,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -12783,7 +12783,7 @@
           "notes": null
         },
         "kw_on_orbit": {
-          "value": 21192.59,
+          "value": 37298.11,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -12799,7 +12799,7 @@
           "notes": null
         },
         "pf_deployed_this_year": {
-          "value": 302087.5,
+          "value": 534462.5,
           "unit": "PFLOPS",
           "formula": "nodes_deployed_this_year x pf_per_node",
           "formula_name": "pf_deployed_this_year_from_nodes",
@@ -12815,7 +12815,7 @@
           "notes": null
         },
         "pf_living_fleet": {
-          "value": 553773.5,
+          "value": 975910.5,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -12831,7 +12831,7 @@
           "notes": null
         },
         "pf_on_orbit": {
-          "value": 553773.5,
+          "value": 975910.5,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -12865,7 +12865,7 @@
           "notes": null
         },
         "cost_annual_fleet_musd": {
-          "value": 828.5838121703603,
+          "value": 932.7512521703603,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.cost_per_node) for living",
           "formula_name": "cost_annual_fleet_from_cohorts",
@@ -12881,7 +12881,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 1242.8757182555405,
+          "value": 1399.1268782555403,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12899,7 +12899,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 994.3005746044323,
+          "value": 1119.3015026044325,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12917,7 +12917,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 1491.4508619066487,
+          "value": 1678.9522539066486,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -12935,7 +12935,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 2803.769933488006,
+          "value": 3100.2538734880054,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12950,7 +12950,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 2243.015946790404,
+          "value": 2480.2030987904045,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12965,7 +12965,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 3364.523920185607,
+          "value": 3720.304648185607,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -12980,7 +12980,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 414.29190608518024,
+          "value": 466.37562608518,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -12996,7 +12996,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 165.71676243407205,
+          "value": 186.55025043407215,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13012,7 +13012,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 662.8670497362884,
+          "value": 746.2010017362883,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13028,7 +13028,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 33.333333333333336,
+          "value": 33.33333333333333,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -13044,7 +13044,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 16.666666666666664,
+          "value": 16.666666666666675,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -13130,7 +13130,7 @@
           "notes": null
         },
         "kw_deployed_this_year": {
-          "value": 14414.4,
+          "value": 25502.399999999994,
           "unit": "kW",
           "formula": "nodes_deployed_this_year x kw_per_node",
           "formula_name": "kw_deployed_this_year_from_nodes",
@@ -13146,7 +13146,7 @@
           "notes": null
         },
         "kw_living_fleet": {
-          "value": 34593.68,
+          "value": 61136.67999999999,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -13162,7 +13162,7 @@
           "notes": null
         },
         "kw_on_orbit": {
-          "value": 34593.68,
+          "value": 61136.67999999999,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -13178,7 +13178,7 @@
           "notes": null
         },
         "pf_deployed_this_year": {
-          "value": 480593.75,
+          "value": 850281.25,
           "unit": "PFLOPS",
           "formula": "nodes_deployed_this_year x pf_per_node",
           "formula_name": "pf_deployed_this_year_from_nodes",
@@ -13194,7 +13194,7 @@
           "notes": null
         },
         "pf_living_fleet": {
-          "value": 1021731.25,
+          "value": 1805443.75,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -13210,7 +13210,7 @@
           "notes": null
         },
         "pf_on_orbit": {
-          "value": 1021731.25,
+          "value": 1805443.75,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -13244,7 +13244,7 @@
           "notes": null
         },
         "cost_annual_fleet_musd": {
-          "value": 1323.9473959810994,
+          "value": 1505.2599559810994,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.cost_per_node) for living",
           "formula_name": "cost_annual_fleet_from_cohorts",
@@ -13260,7 +13260,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 1985.921093971649,
+          "value": 2257.889933971649,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -13278,7 +13278,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 1588.736875177319,
+          "value": 1806.3119471773193,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -13296,7 +13296,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 2383.105312765979,
+          "value": 2709.4679207659788,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -13314,7 +13314,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 4789.691027459655,
+          "value": 5358.143807459654,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -13329,7 +13329,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 3831.7528219677233,
+          "value": 4286.515045967724,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -13344,7 +13344,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 5747.629232951585,
+          "value": 6429.772568951586,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -13359,7 +13359,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 661.9736979905497,
+          "value": 752.6299779905496,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13375,7 +13375,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 264.78947919621965,
+          "value": 301.0519911962199,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13391,7 +13391,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 1059.1579167848795,
+          "value": 1204.2079647848793,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13423,7 +13423,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 16.666666666666654,
+          "value": 16.666666666666664,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -13509,7 +13509,7 @@
           "notes": null
         },
         "kw_deployed_this_year": {
-          "value": 21326.975999999995,
+          "value": 37806.91199999999,
           "unit": "kW",
           "formula": "nodes_deployed_this_year x kw_per_node",
           "formula_name": "kw_deployed_this_year_from_nodes",
@@ -13525,7 +13525,7 @@
           "notes": null
         },
         "kw_living_fleet": {
-          "value": 53995.655999999995,
+          "value": 95506.09199999998,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -13541,7 +13541,7 @@
           "notes": null
         },
         "kw_on_orbit": {
-          "value": 53995.655999999995,
+          "value": 95506.09199999998,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -13557,7 +13557,7 @@
           "notes": null
         },
         "pf_deployed_this_year": {
-          "value": 962903.90625,
+          "value": 1706966.015625,
           "unit": "PFLOPS",
           "formula": "nodes_deployed_this_year x pf_per_node",
           "formula_name": "pf_deployed_this_year_from_nodes",
@@ -13573,7 +13573,7 @@
           "notes": null
         },
         "pf_living_fleet": {
-          "value": 1949635.15625,
+          "value": 3449909.765625,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -13589,7 +13589,7 @@
           "notes": null
         },
         "pf_on_orbit": {
-          "value": 1949635.15625,
+          "value": 3449909.765625,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -13623,7 +13623,7 @@
           "notes": null
         },
         "cost_annual_fleet_musd": {
-          "value": 2042.3186631097901,
+          "value": 2347.21181310979,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.cost_per_node) for living",
           "formula_name": "cost_annual_fleet_from_cohorts",
@@ -13639,7 +13639,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 3063.4779946646854,
+          "value": 3520.817719664685,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -13657,7 +13657,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 2450.782395731748,
+          "value": 2816.6541757317477,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -13675,7 +13675,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 3676.1735935976226,
+          "value": 4224.981263597622,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -13693,7 +13693,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 7853.169022124341,
+          "value": 8878.961527124338,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -13708,7 +13708,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 6282.535217699471,
+          "value": 7103.1692216994725,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -13723,7 +13723,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 9423.802826549208,
+          "value": 10654.75383254921,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -13738,7 +13738,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 1021.1593315548953,
+          "value": 1173.6059065548948,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13754,7 +13754,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 408.46373262195766,
+          "value": 469.4423626219577,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13770,7 +13770,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 1633.8549304878325,
+          "value": 1877.7694504878323,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -13786,7 +13786,7 @@
           "notes": null
         },
         "margin_central_pct": {
-          "value": 33.333333333333336,
+          "value": 33.33333333333333,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -13802,7 +13802,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 16.666666666666654,
+          "value": 16.666666666666657,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -13888,7 +13888,7 @@
           "notes": null
         },
         "kw_deployed_this_year": {
-          "value": 29538.431999999993,
+          "value": 52690.175999999985,
           "unit": "kW",
           "formula": "nodes_deployed_this_year x kw_per_node",
           "formula_name": "kw_deployed_this_year_from_nodes",
@@ -13904,7 +13904,7 @@
           "notes": null
         },
         "kw_living_fleet": {
-          "value": 80069.08799999999,
+          "value": 142008.76799999995,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -13920,7 +13920,7 @@
           "notes": null
         },
         "kw_on_orbit": {
-          "value": 80069.08799999999,
+          "value": 142008.76799999995,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -13936,7 +13936,7 @@
           "notes": null
         },
         "pf_deployed_this_year": {
-          "value": 1805981.201171875,
+          "value": 3221479.98046875,
           "unit": "PFLOPS",
           "formula": "nodes_deployed_this_year x pf_per_node",
           "formula_name": "pf_deployed_this_year_from_nodes",
@@ -13952,7 +13952,7 @@
           "notes": null
         },
         "pf_living_fleet": {
-          "value": 3692616.357421875,
+          "value": 6558889.74609375,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -13968,7 +13968,7 @@
           "notes": null
         },
         "pf_on_orbit": {
-          "value": 3692616.357421875,
+          "value": 6558889.74609375,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -14002,7 +14002,7 @@
           "notes": null
         },
         "cost_annual_fleet_musd": {
-          "value": 3014.682095734923,
+          "value": 3513.0512737349227,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.cost_per_node) for living",
           "formula_name": "cost_annual_fleet_from_cohorts",
@@ -14018,7 +14018,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 4522.023143602385,
+          "value": 5269.5769106023845,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -14036,7 +14036,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 3617.6185148819077,
+          "value": 4215.661528481907,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -14054,7 +14054,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 5426.427772322862,
+          "value": 6323.492292722862,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -14072,7 +14072,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 12375.192165726727,
+          "value": 14148.538437726722,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -14087,7 +14087,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 9900.153732581379,
+          "value": 11318.83075018138,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -14102,7 +14102,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 14850.230598872071,
+          "value": 16978.24612527207,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -14117,7 +14117,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 1507.3410478674618,
+          "value": 1756.5256368674618,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -14133,7 +14133,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 602.9364191469845,
+          "value": 702.6102547469845,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -14149,7 +14149,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 2411.745676587939,
+          "value": 2810.441018987939,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -14267,7 +14267,7 @@
           "notes": null
         },
         "kw_deployed_this_year": {
-          "value": 37977.98399999999,
+          "value": 67744.51199999999,
           "unit": "kW",
           "formula": "nodes_deployed_this_year x kw_per_node",
           "formula_name": "kw_deployed_this_year_from_nodes",
@@ -14283,7 +14283,7 @@
           "notes": null
         },
         "kw_living_fleet": {
-          "value": 112318.27199999998,
+          "value": 199774.07999999996,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -14299,7 +14299,7 @@
           "notes": null
         },
         "kw_on_orbit": {
-          "value": 112318.27199999998,
+          "value": 199774.07999999996,
           "unit": "kW",
           "formula": "sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
           "formula_name": "kw_on_orbit_from_living_fleet",
@@ -14315,7 +14315,7 @@
           "notes": null
         },
         "pf_deployed_this_year": {
-          "value": 2321975.830078125,
+          "value": 4141902.83203125,
           "unit": "PFLOPS",
           "formula": "nodes_deployed_this_year x pf_per_node",
           "formula_name": "pf_deployed_this_year_from_nodes",
@@ -14331,7 +14331,7 @@
           "notes": null
         },
         "pf_living_fleet": {
-          "value": 5873542.1875,
+          "value": 10455092.578125,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -14347,7 +14347,7 @@
           "notes": null
         },
         "pf_on_orbit": {
-          "value": 5873542.1875,
+          "value": 10455092.578125,
           "unit": "PFLOPS",
           "formula": "sum(cohort.nodes x cohort.pf_per_node) for living cohorts",
           "formula_name": "pf_on_orbit_from_living_fleet",
@@ -14381,7 +14381,7 @@
           "notes": null
         },
         "cost_annual_fleet_musd": {
-          "value": 4203.646573562967,
+          "value": 4945.925987562967,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.cost_per_node) for living",
           "formula_name": "cost_annual_fleet_from_cohorts",
@@ -14397,7 +14397,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_central": {
-          "value": 6305.46986034445,
+          "value": 7418.88898134445,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -14415,7 +14415,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_low": {
-          "value": 5044.37588827556,
+          "value": 5935.11118507556,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -14433,7 +14433,7 @@
           "notes": null
         },
         "revenue_annual_fleet_musd_high": {
-          "value": 7566.563832413341,
+          "value": 8902.66677761334,
           "unit": "MUSD",
           "formula": "sum(cohort.nodes x cohort.revenue_per_node_at_band) for living",
           "formula_name": "revenue_annual_fleet_from_cohorts",
@@ -14451,7 +14451,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_central": {
-          "value": 18680.66202607118,
+          "value": 21567.427419071173,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -14466,7 +14466,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_low": {
-          "value": 14944.529620856938,
+          "value": 17253.94193525694,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -14481,7 +14481,7 @@
           "notes": null
         },
         "revenue_cumulative_musd_high": {
-          "value": 22416.794431285412,
+          "value": 25880.91290288541,
           "unit": "MUSD",
           "formula": "sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
           "formula_name": "revenue_cumulative_fleet_from_annuals",
@@ -14496,7 +14496,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_central": {
-          "value": 2101.823286781483,
+          "value": 2472.9629937814834,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -14512,7 +14512,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_low": {
-          "value": 840.7293147125929,
+          "value": 989.1851975125928,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -14528,7 +14528,7 @@
           "notes": null
         },
         "gross_profit_annual_fleet_musd_high": {
-          "value": 3362.9172588503734,
+          "value": 3956.740790050373,
           "unit": "MUSD",
           "formula": "revenue - cost at fleet level",
           "formula_name": "gross_profit_annual_fleet_from_rev_and_cost",
@@ -14560,7 +14560,7 @@
           "notes": null
         },
         "margin_low_pct": {
-          "value": 16.666666666666657,
+          "value": 16.66666666666666,
           "unit": "percent",
           "formula": "(revenue - cost) / revenue x 100",
           "formula_name": "margin_pct_from_rev_and_cost",
@@ -14601,7 +14601,7 @@
           "name": "mass_utilization_in_band",
           "what_it_tests": "every year's physical.mass_utilization_pct in [85.0, 100.0] (D2: mass is the only hard constraint, so node packs the envelope tight)",
           "expected": "all years in [85.0, 100.0]",
-          "computed": "all 11 years in [99.11%, 99.93%]",
+          "computed": "all 11 years in [99.53%, 99.98%]",
           "pass_check": true,
           "severity": "critical"
         },
@@ -14625,7 +14625,7 @@
           "name": "gpu_count_positive",
           "what_it_tests": "every year's physical.gpus_per_node >= 1 (at least one package fits on the mass envelope)",
           "expected": "all years >= 1",
-          "computed": "all 11 years N in [37, 146]",
+          "computed": "all 11 years N in [66, 223]",
           "pass_check": true,
           "severity": "critical"
         },
@@ -14665,7 +14665,7 @@
           "name": "cost_annual_per_node_in_band",
           "what_it_tests": "every year's cost_annual_per_node_musd in [$5M, $60M] (sanity range for one annualized Neutron SSO scenario node)",
           "expected": "all years in [$5M, $60M]",
-          "computed": "all 11 years cost_annual in [$13.1M, $15.9M]",
+          "computed": "all 11 years cost_annual in [$12.7M, $18.9M]",
           "pass_check": true,
           "severity": "major"
         },
@@ -14729,7 +14729,7 @@
           "name": "radiator_dial_matches_architecture",
           "what_it_tests": "radiator_architecture == SINGLE_FACE_CO_MOUNTED implies inputs.gospel.radiator_t_per_kw_post >= 0.01 (R1 0.010-0.014 band, D16/D17)",
           "expected": "radiator_t_per_kw_post >= 0.01 when co-mounted",
-          "computed": "radiator_architecture=single_face_co_mounted, radiator_t_per_kw_post=0.012 (>= 0.01 floor)",
+          "computed": "radiator_architecture=deployed_double_sided: co-mounted floor not applicable",
           "pass_check": true,
           "severity": "major"
         }
@@ -16338,7 +16338,7 @@
         "severity": "pass",
         "what_tested": "every year's physical.mass_utilization_pct in [85.0, 100.0] (D2: mass is the only hard constraint, so node packs the envelope tight)",
         "expected_condition": "all years in [85.0, 100.0]",
-        "observed_result": "all 11 years in [99.11%, 99.93%]",
+        "observed_result": "all 11 years in [99.53%, 99.98%]",
         "related_json_paths": [],
         "remediation_hint": null
       },
@@ -16365,7 +16365,7 @@
         "severity": "pass",
         "what_tested": "every year's physical.gpus_per_node >= 1 (at least one package fits on the mass envelope)",
         "expected_condition": "all years >= 1",
-        "observed_result": "all 11 years N in [37, 146]",
+        "observed_result": "all 11 years N in [66, 223]",
         "related_json_paths": [],
         "remediation_hint": null
       },
@@ -16410,7 +16410,7 @@
         "severity": "pass",
         "what_tested": "every year's cost_annual_per_node_musd in [$5M, $60M] (sanity range for one annualized Neutron SSO scenario node)",
         "expected_condition": "all years in [$5M, $60M]",
-        "observed_result": "all 11 years cost_annual in [$13.1M, $15.9M]",
+        "observed_result": "all 11 years cost_annual in [$12.7M, $18.9M]",
         "related_json_paths": [],
         "remediation_hint": null
       },
@@ -16482,27 +16482,27 @@
         "severity": "pass",
         "what_tested": "radiator_architecture == SINGLE_FACE_CO_MOUNTED implies inputs.gospel.radiator_t_per_kw_post >= 0.01 (R1 0.010-0.014 band, D16/D17)",
         "expected_condition": "radiator_t_per_kw_post >= 0.01 when co-mounted",
-        "observed_result": "radiator_architecture=single_face_co_mounted, radiator_t_per_kw_post=0.012 (>= 0.01 floor)",
+        "observed_result": "radiator_architecture=deployed_double_sided: co-mounted floor not applicable",
         "related_json_paths": [],
         "remediation_hint": null
       },
       {
         "validation_id": "default_2036_deployed_capacity_around_40mw",
-        "severity": "pass",
+        "severity": "fail",
         "what_tested": "Default 2036 newly deployed capacity is around 40 MW/year.",
         "expected_condition": "35000 <= kw_deployed_this_year <= 45000",
-        "observed_result": "pass: expected around 40 MW/year; observed 37978 kW/year; rule=default_2036_deployed_capacity_around_40mw",
+        "observed_result": "fail: expected around 40 MW/year; observed 67744.5 kW/year; rule=default_2036_deployed_capacity_around_40mw",
         "related_json_paths": [
           "business.years.\"2036\".kw_deployed_this_year"
         ],
-        "remediation_hint": null
+        "remediation_hint": "Check cadence and per-node power assumptions."
       },
       {
         "validation_id": "living_fleet_distinct_from_deployed_year_cohort",
         "severity": "pass",
         "what_tested": "Living fleet capacity is distinct from same-year deployment.",
         "expected_condition": "kw_living_fleet > kw_deployed_this_year",
-        "observed_result": "pass: expected living fleet above deployed-year cohort; observed 112318 kW living vs 37978 kW deployed; rule=living_fleet_distinct_from_deployed_year_cohort",
+        "observed_result": "pass: expected living fleet above deployed-year cohort; observed 199774 kW living vs 67744.5 kW deployed; rule=living_fleet_distinct_from_deployed_year_cohort",
         "related_json_paths": [
           "business.years.\"2036\".kw_living_fleet",
           "business.years.\"2036\".kw_deployed_this_year"

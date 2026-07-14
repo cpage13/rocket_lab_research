@@ -12,7 +12,7 @@ fleet / volume / cadence / R-band blocks:
     * ``generations: list[GenerationSpec] | None`` — optional per-generation
       override. ``None`` (the default) means use the bundled ``KNOWN_GENS``.
     * ``scenario_name: str`` — human-readable label shown in the report.
-    * ``metadata: MetadataConfig`` — the three founder-locked enums plus
+    * ``metadata: MetadataConfig`` — the three investor-locked enums plus
       base year + horizon.
     * ``cadence: CadenceDials`` — launch-cadence logistic-ramp dials.
     * ``fleet: FleetDials`` — fleet-rollup service-life cliff dial.
@@ -91,7 +91,7 @@ from data_center.generations import (
 class WorkloadType(StrEnum):
     """The compute workload the data centre serves.
 
-    Locked to ``INFERENCE`` by D14 (founder decision). No ``TRAINING``
+    Locked to ``INFERENCE`` by D14 (investor decision). No ``TRAINING``
     member — the venture does not model a training-workload framing.
     """
 
@@ -112,13 +112,25 @@ class OperatorModel(StrEnum):
 class RadiatorArchitecture(StrEnum):
     """The radiator mounting architecture.
 
-    Locked to ``SINGLE_FACE_CO_MOUNTED`` by D16 (founder: "solar is on
-    one side and the radiator is on the other"). No ``TWO_FACE_DEDICATED``
-    or ``MIXED`` members — the founder rejected enum proliferation; one
-    architecture only.
+    Two members, each a real flown-or-revealed architecture class:
+
+    * ``SINGLE_FACE_CO_MOUNTED`` — solar on one side, radiator on the other
+      side of the same panel (the D16 lock, 2026-06; one radiating face,
+      cold operation, the conservative 0.010-0.014 t/kW band, V17's floor).
+    * ``DEPLOYED_DOUBLE_SIDED`` — a dedicated deployed radiator wing, edge-on
+      to the sun, radiating from both faces and run hot (the AI-1 class;
+      investor decision 2026-07-14 superseding the D16 lock for the default:
+      the model semi-copies the AI-1 architecture because a radiator backed
+      by the solar array loses a radiating face and absorbs array heat).
+      V17's co-mounted floor does not apply; the light dial (about 0.00165
+      t/kW, within 10 percent of AI-1's implied 0.0015) is the matching
+      mass posture.
+
+    No ``MIXED`` member: one architecture per run.
     """
 
     SINGLE_FACE_CO_MOUNTED = "single_face_co_mounted"
+    DEPLOYED_DOUBLE_SIDED = "deployed_double_sided"
 
 
 class BindingConstraint(StrEnum):
@@ -456,7 +468,7 @@ class MetadataConfig(BaseModel):
     """The run metadata block: the three enum locks + base year + horizon.
 
     The three enums (workload, operator, radiator architecture) are
-    founder-locked (D14-D16); their defaults are the only valid members.
+    investor-locked (D14-D16); their defaults are the only valid members.
     ``base_year`` and ``horizon_years`` move here from the cycle-1 gospel
     block in the v8 schema.
     """
@@ -465,7 +477,7 @@ class MetadataConfig(BaseModel):
 
     workload_type: WorkloadType = WorkloadType.INFERENCE
     operator_model: OperatorModel = OperatorModel.B2B_DEDICATED_OPTICAL_RF
-    radiator_architecture: RadiatorArchitecture = RadiatorArchitecture.SINGLE_FACE_CO_MOUNTED
+    radiator_architecture: RadiatorArchitecture = RadiatorArchitecture.DEPLOYED_DOUBLE_SIDED
     deployment_philosophy: str = "ground_validated_before_launch"
     base_year: int = Field(
         ge=MIN_FY,
@@ -541,7 +553,7 @@ class ValuationConfig(BaseModel):
     metadata: MetadataConfig = Field(
         default_factory=lambda: _default_metadata(),
         description=(
-            "Run metadata: the three founder-locked enums (workload, "
+            "Run metadata: the three investor-locked enums (workload, "
             "operator model, radiator architecture) plus base year and "
             "horizon (which move here from the cycle-1 gospel block)."
         ),

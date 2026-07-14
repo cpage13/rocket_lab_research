@@ -629,7 +629,7 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
     "comms_retail_reference_annualized": FormulaSpec(
         formula="retail_reference_usd_per_month x 12",
         description=(
-            "The founder-set retail reference annualized, USD/yr (the sparse-regime "
+            "The investor-set retail reference annualized, USD/yr (the sparse-regime "
             "price-to-beat and the fleet-wide revenue-ceiling retail ceiling)."
         ),
     ),

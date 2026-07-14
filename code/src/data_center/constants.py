@@ -116,13 +116,33 @@ BUS_GROWTH_PRE: Final[float] = -0.03
 BUS_FLATTEN_AFTER_YR: Final[int] = 5
 """ESTIMATE (cycle-1). Year after which bus cost flattens."""
 
-SOLAR_COST_MUSD_PER_KW: Final[float] = 0.04
-"""ESTIMATE (cycle-1). Solar cost per kW. Engine `solar_musd` =
-solar_cost_musd_per_kw x node_kw."""
+SOLAR_COST_MUSD_PER_KW: Final[float] = 0.02
+"""INVESTOR_SET (2026-07-14; was the uncited cycle-1 0.04). Solar cost per
+kW of flown power. Engine `solar_musd` = solar_cost_musd_per_kw x node_kw.
+Rationale is manufacturing scale, deliberately NOT the thermal/area win
+(that is booked in the mass dials): Rocket Lab's own silicon-array program
+("low cost per watt at industrial scale", the SolAero vertical integration
+internalizing supplier margin), a five-year LEO life against legacy
+10-to-20-year space-grade references, and market signals near $11-15/W
+(THR-013, research/node_design/space_solar_costdown_2030_2036.md: the
+$20k/kW aggressive-but-plausible 2036 case, adopted as the investor-set
+default; the old 0.04 stays the labeled conservative exception). A
+refreshed 2026-07 cost analysis is tracked in research/node_design/."""
 
-RADIATOR_COST_MUSD_PER_KW: Final[float] = 0.04
-"""ESTIMATE (cycle-1). Radiator cost per kW. Engine `radiator_musd`
-= radiator_cost_musd_per_kw x node_kw."""
+RADIATOR_COST_MUSD_PER_KW: Final[float] = 0.02
+"""INVESTOR_SET (2026-07-14; was the uncited cycle-1 0.04, itself set equal
+to solar by convenience and the ledger's least-sourced dial). Radiator cost
+per kW of rejected power. Engine `radiator_musd` = radiator_cost_musd_per_kw
+x node_kw. The weaker leg of the 20/20 pair and labeled so: no public $/kW
+radiator data exists (THR-016; the stated evidence gate is a vendor quote or
+bottom-up BOM, open research). Rationale is productized repetition at
+assembly-line scale with in-house integration, NOT the temperature/area win
+(booked in the mass dials). Sanity check, not justification: at the
+1.65 kg/kW light radiator this dial pays about $12k per kg of hardware,
+roughly 3.6x the per-kg rate the old 0.04 dial implied on the 12 kg/kW
+co-mounted radiator, so it does not underprice the smaller hardware
+(research/node_design/radiator_costdown_2030_2036.md carries the bands:
+$20k upside / $30-40k central / $60-100k stress)."""
 
 # ============================================================
 # Solar + radiator MASS dials (R1 sourced + corrected)
@@ -133,19 +153,29 @@ SOLAR_MASS_T_PER_KW: Final[float] = 0.011
 dial. Range 0.010-0.012 t/kW; central 0.011. Cycle-1 field name
 `solar_mass_t_per_kw`."""
 
-RADIATOR_T_PER_KW_PRE: Final[float] = 0.013
-"""ESTIMATE (cycle-1). Radiator specific mass before Tjmax lift.
-Active for years 0..TJMAX_LIFT_YEAR-1."""
+RADIATOR_T_PER_KW_PRE: Final[float] = 0.00165
+"""INVESTOR_SET (2026-07-14). Radiator specific mass, held flat with the
+post dial: the AI-1-class deployed double-sided run-hot radiator is
+asserted from day one, so the Tjmax step is inert. Within 10 percent of
+AI-1's implied 0.0015 t/kW (110 m2 double-sided at 120 kW, and the
+whole-satellite 70 kW/t budget independently forcing the ~1.5 kg/kW
+class). Pairs with RadiatorArchitecture.DEPLOYED_DOUBLE_SIDED; the old
+co-mounted 0.013/0.012 posture (R1 band 0.010-0.014, D16/D17) stays the
+labeled conservative exception, and V17 still enforces its floor whenever
+the co-mounted architecture is selected."""
 
-RADIATOR_T_PER_KW_POST: Final[float] = 0.012
-"""SOURCED_ESTIMATE (R1). Radiator specific mass for single-face
-co-mounted architecture (D16) post-Tjmax. Central of 0.010-0.014
-R1 band. Replaces cycle-1's 0.007 (which was the optimistic
-two-face value). Active for years TJMAX_LIFT_YEAR and beyond."""
+RADIATOR_T_PER_KW_POST: Final[float] = 0.00165
+"""INVESTOR_SET (2026-07-14). Radiator specific mass post-Tjmax, equal to
+the pre dial (see RADIATOR_T_PER_KW_PRE: the hot radiator is asserted now,
+AI-1 style, not deferred to a year-5 step). The temperature/architecture
+win is booked HERE in mass, never in the cost dials (the decomposition
+discipline in research/node_design/gpu_temperature_cooling_limits.md)."""
 
 TJMAX_LIFT_YEAR: Final[int] = 5
-"""SOURCED_DECISION (D11). Year at which radiator dial transitions
-from pre-Tjmax to post-Tjmax value."""
+"""SOURCED_DECISION (D11). Year at which the radiator dial transitions
+from pre-Tjmax to post-Tjmax value. Inert under the 2026-07-14 posture
+(pre == post); kept for the conservative-exception scenario where the
+step is real."""
 
 # ============================================================
 # Slopes (D12)

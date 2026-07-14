@@ -61,21 +61,23 @@ REFERENCE_YEARS: tuple[str, ...] = tuple(str(fy) for fy in range(2026, 2037))
 
 # ---------------------------------------------------------------------------
 # Reference trajectory — the v8 default-scenario golden numbers, recorded
-# from the v8 engine at the corrected radiator dial 0.012 (D17).
+# from the v8 engine at the 2026-07-14 investor rebase: AI-1-class deployed
+# double-sided radiator at 0.00165 t/kW flat (Tjmax step inert) and the
+# 0.02 $M/kW solar and radiator cost dials.
 # ---------------------------------------------------------------------------
 
 REFERENCE_N_BY_YEAR: tuple[int, ...] = (
-    146,  # FY2026 (B300/GB300)
-    117,  # FY2027 (Rubin VR200)
-    81,  # FY2028 (Rubin Ultra)
-    70,  # FY2029 (Feynman)
-    70,  # FY2030 (Feynman)
-    62,  # FY2031 (Gen+1 extrap) — radiator 0.012 + kw_growth 0.20 from year 5
-    52,  # FY2032 (Gen+2 extrap)
-    52,  # FY2033 (Gen+2 extrap)
-    44,  # FY2034 (Gen+3 extrap)
-    37,  # FY2035 (Gen+4 extrap)
-    37,  # FY2036 (Gen+4 extrap)
+    223,  # FY2026 (B300/GB300)
+    178,  # FY2027 (Rubin VR200)
+    133,  # FY2028 (Rubin Ultra)
+    125,  # FY2029 (Feynman)
+    125,  # FY2030 (Feynman)
+    108,  # FY2031 (Gen+1 extrap)
+    92,  # FY2032 (Gen+2 extrap)
+    92,  # FY2033 (Gen+2 extrap)
+    78,  # FY2034 (Gen+3 extrap)
+    66,  # FY2035 (Gen+4 extrap)
+    66,  # FY2036 (Gen+4 extrap)
 )
 
 REFERENCE_FRONTIER_NAMES: tuple[str, ...] = (
@@ -94,47 +96,47 @@ REFERENCE_FRONTIER_NAMES: tuple[str, ...] = (
 
 # Per-year per-node physical reference — (year_idx → field → value).
 REFERENCE_PHYSICAL: tuple[dict[str, float], ...] = (
-    {"kw_per_node": 299.300, "mass_per_node_t": 12.4426, "pf_per_node": 2190.0},
-    {"kw_per_node": 304.200, "mass_per_node_t": 12.4918, "pf_per_node": 3978.0},
-    {"kw_per_node": 337.770, "mass_per_node_t": 12.3885, "pf_per_node": 4212.0},
-    {"kw_per_node": 385.000, "mass_per_node_t": 12.4400, "pf_per_node": 7000.0},
-    {"kw_per_node": 385.000, "mass_per_node_t": 12.4400, "pf_per_node": 7000.0},
-    {"kw_per_node": 409.200, "mass_per_node_t": 12.4696, "pf_per_node": 10075.0},
-    {"kw_per_node": 411.840, "mass_per_node_t": 12.3935, "pf_per_node": 13731.25},
-    {"kw_per_node": 411.840, "mass_per_node_t": 12.3935, "pf_per_node": 13731.25},
-    {"kw_per_node": 418.176, "mass_per_node_t": 12.4388, "pf_per_node": 18880.4688},
-    {"kw_per_node": 421.978, "mass_per_node_t": 12.4482, "pf_per_node": 25799.7314},
-    {"kw_per_node": 421.978, "mass_per_node_t": 12.4482, "pf_per_node": 25799.7314},
+    {"kw_per_node": 457.150, "mass_per_node_t": 12.4976, "pf_per_node": 3345.0},
+    {"kw_per_node": 462.800, "mass_per_node_t": 12.4484, "pf_per_node": 6052.0},
+    {"kw_per_node": 554.610, "mass_per_node_t": 12.4418, "pf_per_node": 6916.0},
+    {"kw_per_node": 687.500, "mass_per_node_t": 12.4469, "pf_per_node": 12500.0},
+    {"kw_per_node": 687.500, "mass_per_node_t": 12.4469, "pf_per_node": 12500.0},
+    {"kw_per_node": 712.800, "mass_per_node_t": 12.4889, "pf_per_node": 17550.0},
+    {"kw_per_node": 728.640, "mass_per_node_t": 12.4625, "pf_per_node": 24293.75},
+    {"kw_per_node": 728.640, "mass_per_node_t": 12.4625, "pf_per_node": 24293.75},
+    {"kw_per_node": 741.312, "mass_per_node_t": 12.4462, "pf_per_node": 33469.9219},
+    {"kw_per_node": 752.7168, "mass_per_node_t": 12.4549, "pf_per_node": 46021.1426},
+    {"kw_per_node": 752.7168, "mass_per_node_t": 12.4549, "pf_per_node": 46021.1426},
 )
 
 # Per-year per-node annualized economics, central R band (flat 1.50x cost).
 REFERENCE_NODE_ECONOMICS: tuple[dict[str, float], ...] = (
-    {"cost_annual_per_node_musd": 13.43280, "revenue_annual_per_node_musd_central": 20.14920},
-    {"cost_annual_per_node_musd": 13.05720, "revenue_annual_per_node_musd_central": 19.58580},
-    {"cost_annual_per_node_musd": 14.82576, "revenue_annual_per_node_musd_central": 22.23864},
-    {"cost_annual_per_node_musd": 15.77028, "revenue_annual_per_node_musd_central": 23.65542},
-    {"cost_annual_per_node_musd": 15.27519, "revenue_annual_per_node_musd_central": 22.91279},
-    {"cost_annual_per_node_musd": 15.75768, "revenue_annual_per_node_musd_central": 23.63651},
-    {"cost_annual_per_node_musd": 15.78050, "revenue_annual_per_node_musd_central": 23.67075},
-    {"cost_annual_per_node_musd": 15.42402, "revenue_annual_per_node_musd_central": 23.13604},
-    {"cost_annual_per_node_musd": 15.63182, "revenue_annual_per_node_musd_central": 23.44773},
-    {"cost_annual_per_node_musd": 15.85486, "revenue_annual_per_node_musd_central": 23.78229},
-    {"cost_annual_per_node_musd": 15.66191, "revenue_annual_per_node_musd_central": 23.49287},
+    {"cost_annual_per_node_musd": 13.37920, "revenue_annual_per_node_musd_central": 20.06880},
+    {"cost_annual_per_node_musd": 12.74640, "revenue_annual_per_node_musd_central": 19.11960},
+    {"cost_annual_per_node_musd": 15.73032, "revenue_annual_per_node_musd_central": 23.59548},
+    {"cost_annual_per_node_musd": 17.58528, "revenue_annual_per_node_musd_central": 26.37792},
+    {"cost_annual_per_node_musd": 17.09019, "revenue_annual_per_node_musd_central": 25.63529},
+    {"cost_annual_per_node_musd": 17.60388, "revenue_annual_per_node_musd_central": 26.40581},
+    {"cost_annual_per_node_musd": 18.06218, "revenue_annual_per_node_musd_central": 27.09327},
+    {"cost_annual_per_node_musd": 17.70570, "revenue_annual_per_node_musd_central": 26.55856},
+    {"cost_annual_per_node_musd": 18.23291, "revenue_annual_per_node_musd_central": 27.34936},
+    {"cost_annual_per_node_musd": 18.85216, "revenue_annual_per_node_musd_central": 28.27824},
+    {"cost_annual_per_node_musd": 18.65921, "revenue_annual_per_node_musd_central": 27.98882},
 )
 
 # Per-year fleet rollup reference, living fleet + central-R fleet revenue (flat).
 REFERENCE_FLEET: tuple[dict[str, float], ...] = (
     {"living_fleet": 0, "revenue_annual_fleet_musd_central": 0.0000},
-    {"living_fleet": 2, "revenue_annual_fleet_musd_central": 39.1716},
-    {"living_fleet": 5, "revenue_annual_fleet_musd_central": 105.8875},
-    {"living_fleet": 10, "revenue_annual_fleet_musd_central": 224.1646},
-    {"living_fleet": 19, "revenue_annual_fleet_musd_central": 430.3797},
-    {"living_fleet": 33, "revenue_annual_fleet_musd_central": 761.2908},
-    {"living_fleet": 53, "revenue_annual_fleet_musd_central": 1242.8757},
-    {"living_fleet": 85, "revenue_annual_fleet_musd_central": 1985.9211},
-    {"living_fleet": 131, "revenue_annual_fleet_musd_central": 3063.4780},
-    {"living_fleet": 192, "revenue_annual_fleet_musd_central": 4522.0231},
-    {"living_fleet": 268, "revenue_annual_fleet_musd_central": 6305.4699},
+    {"living_fleet": 2, "revenue_annual_fleet_musd_central": 38.2392},
+    {"living_fleet": 5, "revenue_annual_fleet_musd_central": 109.0256},
+    {"living_fleet": 10, "revenue_annual_fleet_musd_central": 240.9152},
+    {"living_fleet": 19, "revenue_annual_fleet_musd_central": 471.6328},
+    {"living_fleet": 33, "revenue_annual_fleet_musd_central": 841.3142},
+    {"living_fleet": 53, "revenue_annual_fleet_musd_central": 1399.1269},
+    {"living_fleet": 85, "revenue_annual_fleet_musd_central": 2257.8899},
+    {"living_fleet": 131, "revenue_annual_fleet_musd_central": 3520.8177},
+    {"living_fleet": 192, "revenue_annual_fleet_musd_central": 5269.5769},
+    {"living_fleet": 268, "revenue_annual_fleet_musd_central": 7418.8890},
 )
 
 
@@ -226,17 +228,17 @@ def test_fleet_rollup_matches_reference(engine_output: ValuationOutput) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_year_zero_n_is_146(engine_output: ValuationOutput) -> None:
-    """Year 0 (FY2026) -> N = 146 (radiator dial not yet active)."""
-    assert int(_num(engine_output.physical.years["2026"].gpus_per_node.value)) == 146
+def test_year_zero_n_is_223(engine_output: ValuationOutput) -> None:
+    """Year 0 (FY2026) -> N = 223 (AI-1-class radiator dial, flat from day one)."""
+    assert int(_num(engine_output.physical.years["2026"].gpus_per_node.value)) == 223
 
 
-def test_year_ten_n_is_37(engine_output: ValuationOutput) -> None:
-    """Year 10 (FY2036) -> N = 37 (kw_growth 0.20 correction, up from the 0.30-era 27)."""
-    assert int(_num(engine_output.physical.years["2036"].gpus_per_node.value)) == 37
+def test_year_ten_n_is_66(engine_output: ValuationOutput) -> None:
+    """Year 10 (FY2036) -> N = 66 (2026-07-14 radiator rebase; was 37 at 0.012)."""
+    assert int(_num(engine_output.physical.years["2036"].gpus_per_node.value)) == 66
 
 
-def test_year_ten_node_kw_in_corrected_band(engine_output: ValuationOutput) -> None:
-    """Year 10 node_kw ~422 kW — D17 radiator + V-A kw_growth 0.20 corrections."""
+def test_year_ten_node_kw_in_rebased_band(engine_output: ValuationOutput) -> None:
+    """Year 10 node_kw ~753 kW under the 2026-07-14 light-radiator rebase."""
     kw = _num(engine_output.physical.years["2036"].kw_per_node.value)
-    assert 418.0 <= kw <= 426.0, f"FY2036 node_kw {kw} outside the corrected band"
+    assert 748.0 <= kw <= 757.0, f"FY2036 node_kw {kw} outside the rebased band"
