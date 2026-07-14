@@ -140,16 +140,23 @@ ARPU_GOVERNMENT_REVENUE_MUSD = 108.051_84  # 121,680 x 74 x 12 / 1e6.
 ARPU_TOTAL_REVENUE_MUSD = 8_250.802_56  # the four summed.
 
 # ---------------------------------------------------------------------------
-# The FLAT cost model (founder simplification 2026-07-09). The iridium scenario
-# overrides the shared cost spine with a flat 13.0 $M launch (both cadence anchors
-# equal) and a 1.0 $M satellite build cost. Frozen exact at the 340-satellite
-# baseline (432 satellites across 36 launches over the horizon). These are SCENARIO
-# values, not the config defaults (25 to 13.5 $M and 1.05 $M), which are untouched.
+# The FLAT cost model (investor simplification 2026-07-09) under the all-in
+# manifest share (pedal to the metal, investor-set 2026-07-14). The iridium
+# scenario overrides the shared cost spine with a flat 13.0 $M launch (both
+# cadence anchors equal), a 1.0 $M satellite build cost, and an all-in
+# comms_cadence share of 1.0. Frozen exact at the 340-satellite baseline: the
+# build completes in 2031 (29 launches, 348 satellites), and by FY2036 the
+# five-year treadmill has replaced the whole fleet exactly once (58 cumulative
+# launches, 696 satellite units). These are SCENARIO values, not the config
+# defaults (25 to 13.5 $M, 1.05 $M, 0.18 share), which are untouched.
 # ---------------------------------------------------------------------------
-FLAT_BUILD_AND_HOLD_COST_MUSD = 900.0  # 432 satellites x 1.0 + 36 launches x 13.0.
-FLAT_STEADY_STATE_REPLACEMENT_COST_MUSD = 75.0  # the final-year hold-phase replacement.
-FLAT_COST_PER_SUBSCRIBER_ANNUAL_USD = 7.5  # 75.0 M USD / 10,000,000 subscribers.
-FLAT_STEADY_STATE_ANNUAL_COST_MUSD = 145.0  # the annualized fleet cost basis.
+FLAT_BUILD_AND_HOLD_COST_MUSD = 1450.0  # 696 satellites x 1.0 + 58 launches x 13.0.
+# The FY2036 hold-phase replacement: 120 satellites x 1.0 + 10 launches x 13.0.
+FLAT_STEADY_STATE_REPLACEMENT_COST_MUSD = 250.0
+# 250.0 M USD / 10,000,000 subscribers: the final-year cash basis.
+FLAT_COST_PER_SUBSCRIBER_ANNUAL_USD = 25.0
+FLAT_STEADY_STATE_ANNUAL_COST_MUSD = 145.0  # the annualized basis (share-independent).
+FULL_COVERAGE_YEAR_ALL_IN = 2031  # the 340-satellite build: 29 launches at 12 per launch.
 # The published ARPU margin against that flat-cost steady-state annual cost:
 # (8,250.80256 - 145.0) / 8,250.80256 x 100.
 ARPU_MARGIN_VS_STEADY_STATE_COST_PCT = 98.242_595_202_762_91
@@ -456,9 +463,11 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
     file out). Success: the file exists, the provenance names the model
     'iridium', echoes the stamp, and carries schema iridium-v3; the frozen
     baseline keys/values are in the payload (subscribers_per_satellite 31,200 in
-    both blocks, fleet target 340, the stated-assumptions lines present); the
-    flat-cost model (founder simplification 2026-07-09) freezes exact (900.0 M
-    build-and-hold, 75.0 M replacement, 7.5 USD/sub, 145.0 M annual cost); the two
+    both blocks, fleet target 340, full coverage reached 2031 under the all-in
+    share, the stated-assumptions lines present); the flat-cost model (investor
+    simplification 2026-07-09) under the all-in share freezes exact (1,450.0 M
+    build-and-hold, 250.0 M final-year replacement, 25.0 USD/sub final-year
+    cash, 145.0 M annual cost); the two
     cost-plus revenue fields are ABSENT from the trajectory summary (schema
     iridium-v3, founder direction 2026-07-10; the engine still computes them for the
     cellular family and the equality tripwire); the two inherited placeholder ARPU
@@ -479,8 +488,9 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
         == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE
     )
     assert payload["trajectory_summary"]["fleet_target"] == EXPECTED_FLEET_TARGET_BASELINE
-    # The flat-cost model (founder simplification 2026-07-09), frozen exact from the
-    # scenario's flat 13.0 $M launch and 1.0 $M build overrides.
+    assert payload["trajectory_summary"]["full_coverage_reached_year"] == FULL_COVERAGE_YEAR_ALL_IN
+    # The flat-cost model (investor simplification 2026-07-09), frozen exact from the
+    # scenario's flat 13.0 $M launch, 1.0 $M build, and all-in share overrides.
     ts = payload["trajectory_summary"]
     assert ts["total_build_and_hold_cost_musd"] == pytest.approx(FLAT_BUILD_AND_HOLD_COST_MUSD)
     assert ts["steady_state_annual_replacement_cost_musd"] == pytest.approx(

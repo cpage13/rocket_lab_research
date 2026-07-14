@@ -122,7 +122,7 @@ and stated explicitly; rows 39 onward were added as the model grew.
 | 9 | Subscriber target (people) | 10,000,000 |
 | 10 | Coverage floor (simulation 341, rounded) | 340 satellites |
 | 11 | Saturation cap (the tiling/interference dial) | 2,000 satellites |
-| 12 | Communications share of Neutron cadence | 0.18 |
+| 12 | Communications share of Neutron cadence (all-in, pedal to the metal; investor-set 2026-07-14) | 1.0 |
 | 13 | Satellite build cost (founder-flat 2026-07-09, below the prior 1.05 dial and the V3 anchor; the shared config default 1.05 untouched) | 1.0 million dollars |
 | 14 | Cost-plus revenue multiple (data-center mirror): shared-engine machinery, computed but not published on the Iridium artifact as of iridium-v3 (founder direction 2026-07-10) | 1.5x |
 | 15 | IoT device passthrough (devices, not people); superseded on the promoted artifact when the ARPU case is on (the published IoT count then derives from the revenue mix, the IoT bucket, about 51.7M at the baseline) | 10,000,000 |
@@ -158,26 +158,31 @@ about 39.3 million devices, about 3.77 billion dollars per year from IoT,
 people counts nearly unchanged, and a total of about 7.07 billion dollars per
 year. To use it, replace the four mixes in `code/scenarios/iridium.yaml`.
 
-### Why The Cadence Share Is 0.18
+### Why The Cadence Share Is 1.0 (Pedal To The Metal)
 
-The communications share of Neutron cadence (row 12) is a founder-set scenario
-dial, not a derived number, and the reasoning behind the value is worth
-recording. Communications shares Neutron with the data-center application and
-with external launch customers, so it takes a minority of the manifest. At the
-modeled cadence ramp (90 launches a year by 2036), an 18 percent share is about
-16 launches a year at maturity. That is enough to do the job the baseline asks
-of it: the 340-satellite coverage floor deploys by 2035 (about 29 cumulative
-launches of 12 satellites, spread over the ramp years), and the five-year
-replacement treadmill at steady state needs about 68 satellites a year, roughly
-6 launches, well inside the share. It also deliberately leaves the large
-majority of Neutron capacity for the rest of the business. The dial is the
-deployment-speed lever: at a higher share the same 29-launch build lands
-years earlier instead of about 10 (model runs: a 0.5 share completes coverage
-in 2033, 0.8 in 2032, 0.9 in 2031, and 2031 is the ramp-bound floor even at a
-1.0 share; the conclusion states the sweep), and the rich-tier and saturation
-scenarios need a higher share to complete inside the model horizon. The model reports below-target deployment truthfully rather than
-hiding it, so an under-provisioned share is visible in the output, not papered
-over.
+The communications share of Neutron cadence (row 12) is an investor-set
+scenario dial, not a derived number. As of 2026-07-14 the baseline goes
+all-in: share 1.0, the whole modeled Neutron manifest flying communications
+satellites. The reasoning is framework consistency: every application in this
+repository answers the same all-in question the data-center model answers,
+what happens if you go pedal to the metal? One share, one completion year per
+fleet size, no mixed-manifest confusion. Under it the 340-satellite coverage
+floor completes in 2031 (29 cumulative launches of 12 satellites on the
+cadence ramp: 2, 3, 5, 9, and 10 in 2031), and the saturation companion
+(`code/scenarios/iridium_saturation.yaml`) reaches the 2,000-satellite cap in
+2035. The early ramp years bind, not the share: model runs show a 0.5 share
+completes coverage in 2033, 0.8 in 2032, and 0.9 and 1.0 both in 2031, the
+ramp-bound floor. The share applies from year one with no phase-in, an
+aggressive stated assumption chosen deliberately: the goal is a realistic,
+clearly-stated trajectory, not manifest precision, and early-year utilization
+below 100 percent would shift completion by a year or two without changing
+the story. The five-year replacement treadmill at steady state needs about 68
+satellites a year, roughly 6 launches, so the mature fleet frees most of the
+manifest again after the build years. Lower shares stay available as
+sensitivities (the retired 18 percent baseline read: completion 2035, about
+16 launches a year at maturity). The model reports below-target deployment
+truthfully rather than hiding it, so an under-provisioned share is visible in
+the output, not papered over.
 
 ### Conventions And Modeling Posture
 
@@ -224,10 +229,10 @@ All are `derived_estimate`.
 | Per-user peak / off-peak | 1.0 / 5.0 Mbps |
 | Fleet aggregate capacity | 265.2 Gbps |
 | Build launches (12 per launch) | 29 |
-| Coverage complete | 2035 |
-| Build-and-hold cost through FY2036 (flat cost model: 432 satellites x 1.0 + 36 launches x 13.0) | 900.0 million dollars |
+| Coverage complete (all-in share) | 2031 |
+| Build-and-hold cost through FY2036 (flat cost model: 696 satellite units x 1.0 + 58 launches x 13.0, the 2031 build plus one full five-year fleet replacement) | 1,450.0 million dollars |
 | Steady-state annual fleet cost (annualized basis) | 145.0 million dollars per year |
-| Cash cost per subscriber (final-year replacement-cost artifact, see conclusion caveat) | 7.50 dollars per year |
+| Cash cost per subscriber (final-year FY2036 replacement-cost artifact, 250.0 million dollars over the 10-million configured base; see conclusion caveat) | 25.00 dollars per year |
 | ARPU margin vs steady-state cost (operating-style; the conclusion carries the definition) | about 98.2 percent |
 | ARPU standard bucket (people) | 9,360,000 at 15 dollars, 1,684.8 million dollars per year |
 | ARPU premium bucket (people) | 1,248,000 at 100 dollars, 1,497.6 million dollars per year |
@@ -235,6 +240,15 @@ All are `derived_estimate`.
 | ARPU government bucket | 121,680 at 74 dollars, about 108.1 million dollars per year |
 | ARPU billable-connection pool | 62,400,000 connections |
 | ARPU total revenue (full sell-through on capacity) | about 8,250.8 million dollars per year |
+
+The saturation companion (`code/scenarios/iridium_saturation.yaml`, one dial
+moved: the subscriber target rises to the cap-binding 62,400,000) is a model
+run, not a promoted artifact. At the same all-in share it completes the
+2,000-satellite build in 2035 (2,004 living satellites on whole launches),
+with 200 cumulative launches and a 5,000.0 million dollar build-and-hold
+through FY2036, an 835.0 million dollar steady-state annual fleet cost, and a
+Sheet A total of about 48,534 million dollars per year at about a 98.3 percent
+pre-operations margin.
 
 ## Catalog Status
 

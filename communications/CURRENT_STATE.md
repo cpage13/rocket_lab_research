@@ -9,7 +9,10 @@ conclusion.
 
 - The static conclusion is `communications/conclusion.md`.
 - The promoted Iridium model is `communications/models/iridium/default.json`.
-- The default assumptions live in `code/scenarios/iridium.yaml`.
+- The default assumptions live in `code/scenarios/iridium.yaml`; the
+  saturation companion (the 2,000-satellite build-out at the same all-in
+  share) is `code/scenarios/iridium_saturation.yaml`, a model run rather
+  than a promoted artifact.
 - The active model code lives in `code/src/communications/`: five modules
   (constants, config, engine, ground, json_output) carrying both model
   families.
@@ -24,13 +27,15 @@ conclusion.
 ## Current Read
 
 The Iridium baseline is coverage-bound, not capacity-bound: 340 satellites by
-2035 at an 18 percent cadence share serve about 10 million subscribers at
-31,200 per satellite on the owned 8 MHz, at 1.0 Mbps peak and 5.0 off peak to
-a phone. The cost model is founder-flat (simplification
-2026-07-09): satellites 1.0 million dollars each and launches 13.0 million at
-any cadence, scenario overrides only (the shared-spine defaults untouched),
-giving a 900.0 million dollar build-and-hold and a 145.0 million dollar
-steady-state annual cost. The model publishes the four-bucket ARPU case (Sheet
+2031 at the all-in cadence share (pedal to the metal, investor-set
+2026-07-14; the saturation companion reaches 2,000 satellites in 2035) serve
+about 10 million subscribers at 31,200 per satellite on the owned 8 MHz, at
+1.0 Mbps peak and 5.0 off peak to a phone. The cost model is investor-flat
+(simplification 2026-07-09): satellites 1.0 million dollars each and launches
+13.0 million at any cadence, scenario overrides only (the shared-spine
+defaults untouched), giving a 1,450.0 million dollar build-and-hold through
+FY2036 (the 29-launch 2031 build plus one full five-year fleet replacement)
+and a 145.0 million dollar steady-state annual cost. The model publishes the four-bucket ARPU case (Sheet
 A, founder-set 2026-07-09): about 8,250.8 million
 dollars per year at the baseline under full sell-through on capacity, about a
 98.2 percent margin against the steady-state fleet cost (operating-style:
@@ -52,10 +57,12 @@ consolidated unit-cost trajectory row).
   at a constant mix under full sell-through on capacity.
 - Operations cost is explicitly zero, a stated assumption and a fixed line to
   research and add later.
-- The cash cost per subscriber (7.50 dollars per year) is the final-year
-  replacement-cost artifact (one lumpy hold-phase year); aligning to the
-  annualized basis (14.50 dollars per subscriber per year at 10 million)
-  is a tracked open item.
+- The cash cost per subscriber (25.00 dollars per year under the all-in
+  share) is the final-year replacement-cost artifact (FY2036 replaces the
+  large 2031 cohort, 250.0 million dollars); aligning to the annualized basis
+  (14.50 dollars per subscriber per year at 10 million) is a tracked open
+  item, and the promoted field names for the final-year pair remain on the
+  rename queue.
 - The old pre-rewrite communications tree (the former CLI, output, comparison,
   and validation layers and their tests) was retired 2026-07-07. The live tree
   is the five-module engine plus its per-family tests.

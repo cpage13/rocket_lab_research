@@ -44,32 +44,54 @@
 # `GroundInterfaceDials` precedent: an optional block carries its own label).
 #
 # The fleet dials (cadence, lifetime 5 years, coverage floor 340, saturation cap
-# 2,000, comms share 0.18, subscriber target 10M, revenue multiple 1.5) are the
-# shared config defaults, inherited unchanged. The TWO EXCEPTIONS are the cost
-# dials: this scenario sets a deliberately FLAT cost model (founder simplification
-# 2026-07-09), a flat launch cost of 13.0 $M at every cadence and a satellite build
-# cost of 1.0 $M, both founder-set overrides of the shared-spine defaults (the
-# config defaults themselves, the 25 to 13.5 $M launch curve and the 1.05 $M build
-# cost, are UNTOUCHED, so the cellular family and the equality tripwire are
-# unaffected). Operations cost is assumed zero: an explicit stated assumption
-# (IRIDIUM_OPERATIONS_COST_MUSD), a fixed line to research and add later. The
-# prices-today ARPU revenue case is PUBLISHED as the four-bucket case (the `arpu:`
-# block at the end of this file, founder-set Sheet A 2026-07-09); cost-plus stays
-# beside it as the cost-recovery floor. `spectrum_mhz` is a WIDTH held (8 MHz
-# exclusive), not a frequency. This file computes no conclusion: it is the input
-# contract, and the engine writes the trajectory.
+# 2,000, subscriber target 10M, revenue multiple 1.5) are the shared config
+# defaults, inherited unchanged. The THREE EXCEPTIONS are the manifest share and
+# the two cost dials. The share goes all-in: `comms_cadence.share_of_fleet` 1.0
+# (pedal to the metal, investor-set 2026-07-14), answering the same all-in
+# question the data-center model answers. The cost dials set a deliberately FLAT
+# cost model (investor simplification 2026-07-09), a flat launch cost of 13.0 $M
+# at every cadence and a satellite build cost of 1.0 $M. All three override ONLY
+# this scenario (the config defaults themselves, the 0.18 share, the 25 to
+# 13.5 $M launch curve, and the 1.05 $M build cost, are UNTOUCHED, so the
+# cellular family and the equality tripwire are unaffected). Operations cost is
+# assumed zero: an explicit stated assumption (IRIDIUM_OPERATIONS_COST_MUSD), a
+# fixed line to research and add later. The prices-today ARPU revenue case is
+# PUBLISHED as the four-bucket case (the `arpu:` block at the end of this file,
+# investor-set Sheet A 2026-07-09); cost-plus stays beside it as the
+# cost-recovery floor. `spectrum_mhz` is a WIDTH held (8 MHz exclusive), not a
+# frequency. This file computes no conclusion: it is the input contract, and the
+# engine writes the trajectory.
+
+# =============================================================================
+# Pedal to the metal: the all-in manifest share (investor-set 2026-07-14)
+# =============================================================================
+#
+# The deployment posture is the same all-in question the data-center model
+# answers: what happens if the Neutron manifest goes to this application?
+# share_of_fleet 1.0 overrides the shared-spine 0.18 default for THIS scenario
+# only (the config default is untouched, so the cellular family and the
+# equality tripwire still see the defaults). The old 18 percent shared-manifest
+# posture is retired as the baseline; lower shares are sensitivities, not the
+# story. Early-year utilization is deliberately simple: the share applies to
+# the whole cadence ramp from year one, with no phase-in. That is an aggressive
+# stated assumption, chosen for a simple, consistent framework over phase-in
+# precision.
+comms_cadence:
+  share_of_fleet: 1.0  # investor-set all-in share (pedal to the metal, 2026-07-14)
 
 # =============================================================================
 # The FLAT cost model (founder simplification 2026-07-09)
 # =============================================================================
 #
 # A deliberate simplification: no stepped pricing as launches scale. Both cost
-# dials are founder-set and in-band of the research anchors, and both OVERRIDE the
+# dials are investor-set and in-band of the research anchors, and both OVERRIDE the
 # shared-spine config defaults (left untouched, so the cellular family and the
-# equality tripwire still see the defaults). At the baseline this freezes the
-# whole build-and-hold at 900.0 $M (432 satellites x 1.0 + 36 launches x 13.0), a
-# 145.0 $M/yr steady-state annual cost, and a 7.50 $/subscriber/yr final-year
-# replacement figure.
+# equality tripwire still see the defaults). Under the all-in share this freezes
+# the whole FY2036 build-and-hold at 1,450.0 $M (696 satellite units x 1.0 + 58
+# launches x 13.0: the 29-launch build completed in 2031 plus one full five-year
+# replacement of the fleet by 2036), a 145.0 $M/yr steady-state annual cost, and
+# a 250.0 $M final-year (FY2036) cash replacement, 25.0 $/subscriber against the
+# 10M configured base.
 #
 # The shared launch-cost spine is a log-linear curve from 25.0 $M at 5 launches
 # per year down to a 13.5 $M high-cadence floor at 100. Setting BOTH cadence
