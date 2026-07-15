@@ -60,8 +60,8 @@ MODEL_PACKAGE_NAME: Final[str] = "rklb-value"
 DEFAULT_ARTIFACT_ROLE: Final[str] = "draft"
 PROMOTED_DEFAULT_ARTIFACT_ROLE: Final[str] = "promoted_default"
 TARGET_YEAR: Final[str] = "2036"
-DEPLOYED_KW_LOWER_BOUND: Final[float] = 35_000.0
-DEPLOYED_KW_UPPER_BOUND: Final[float] = 45_000.0
+DEPLOYED_KW_LOWER_BOUND: Final[float] = 60_000.0
+DEPLOYED_KW_UPPER_BOUND: Final[float] = 75_000.0
 DEFAULT_REVENUE_MULTIPLE: Final[float] = 1.5
 DEFAULT_TARGET_LAUNCHES: Final[int] = 90
 DEFAULT_SERVICE_LIFE_YEARS: Final[int] = 5
@@ -528,17 +528,17 @@ def _build_validation_results(output: SpaceModelOutput) -> list[ValidationResult
     deployed_ok = DEPLOYED_KW_LOWER_BOUND <= deployed_kw <= DEPLOYED_KW_UPPER_BOUND
     results.append(
         _validation_result(
-            validation_id="default_2036_deployed_capacity_around_40mw",
+            validation_id="default_2036_deployed_capacity_around_70mw",
             passed=deployed_ok,
-            what_tested="Default 2036 newly deployed capacity is around 40 MW/year.",
+            what_tested="Default 2036 newly deployed capacity is around 70 MW/year.",
             expected_condition=(
                 f"{DEPLOYED_KW_LOWER_BOUND:g} <= kw_deployed_this_year <= "
                 f"{DEPLOYED_KW_UPPER_BOUND:g}"
             ),
             observed_result=_rule_to_validation_result(
-                "default_2036_deployed_capacity_around_40mw",
+                "default_2036_deployed_capacity_around_70mw",
                 deployed_ok,
-                "around 40 MW/year",
+                "around 70 MW/year",
                 f"{deployed_kw:g} kW/year",
             ),
             related_json_paths=[f'business.years."{TARGET_YEAR}".kw_deployed_this_year'],

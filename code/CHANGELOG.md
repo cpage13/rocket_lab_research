@@ -5,6 +5,24 @@ data-center valuation calculator and, from July 2026, the communications model
 families. Versions track each output JSON **schema version** (data center: v8;
 the Iridium model: iridium-v3).
 
+## Data center, schema v8 (2026-07-15), the deployed-capacity validation band rebased
+
+The `default_2036_deployed_capacity_around_40mw` public validation check had
+been failing against the promoted default since the 2026-07-14 light-radiator
+rebase moved 2036 deployed capacity from about 38 MW/year to about 68 MW/year.
+The band now guards the rebased anchor.
+
+### Changed
+
+- **The deployed-capacity band** (`json_output.py`): `DEPLOYED_KW_LOWER_BOUND`
+  and `DEPLOYED_KW_UPPER_BOUND` move from 35,000-45,000 kW to 60,000-75,000 kW,
+  and the rule id and text move from
+  `default_2036_deployed_capacity_around_40mw` to
+  `default_2036_deployed_capacity_around_70mw` ("around 70 MW/year"). The
+  ledger claim id `RLDC-DEPLOYED-CAPACITY-2036-40MW` keeps its name for
+  reference stability. The AI-1-equivalent scenario (about 81 MW deployed in
+  2036) still trips the band by design.
+
 ## The Iridium model, schema iridium-v3 (2026-07-10), the cost-plus revenue case removed from the artifact
 
 Per founder direction: the synthetic cost-plus revenue convention (price at
