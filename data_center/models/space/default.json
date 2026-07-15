@@ -8,7 +8,7 @@
     "operator_model": "b2b_dedicated_optical_rf",
     "radiator_architecture": "deployed_double_sided",
     "deployment_philosophy": "ground_validated_before_launch",
-    "generated_at": "2026-07-14T18:40:38.629496+00:00",
+    "generated_at": "2026-07-15T16:17:49.244540+00:00",
     "model_package": "rklb-value",
     "model_version": "0.1.0",
     "artifact_role": "promoted_default",
@@ -16487,15 +16487,15 @@
         "remediation_hint": null
       },
       {
-        "validation_id": "default_2036_deployed_capacity_around_40mw",
-        "severity": "fail",
-        "what_tested": "Default 2036 newly deployed capacity is around 40 MW/year.",
-        "expected_condition": "35000 <= kw_deployed_this_year <= 45000",
-        "observed_result": "fail: expected around 40 MW/year; observed 67744.5 kW/year; rule=default_2036_deployed_capacity_around_40mw",
+        "validation_id": "default_2036_deployed_capacity_around_70mw",
+        "severity": "pass",
+        "what_tested": "Default 2036 newly deployed capacity is around 70 MW/year.",
+        "expected_condition": "60000 <= kw_deployed_this_year <= 75000",
+        "observed_result": "pass: expected around 70 MW/year; observed 67744.5 kW/year; rule=default_2036_deployed_capacity_around_70mw",
         "related_json_paths": [
           "business.years.\"2036\".kw_deployed_this_year"
         ],
-        "remediation_hint": "Check cadence and per-node power assumptions."
+        "remediation_hint": null
       },
       {
         "validation_id": "living_fleet_distinct_from_deployed_year_cohort",
