@@ -8,6 +8,8 @@ reviewed conclusion.
 ## What Is Current
 
 - The static conclusion is `data_center/conclusion.md`.
+- The companion public documents are `data_center/structural_case.md` (the
+  pitch) and `data_center/ai1_comparison.md` (the AI-1 brackets).
 - The promoted space model is `data_center/models/space/default.json`.
 - The promoted ground reference is `data_center/models/ground/default.json`.
 - The default assumptions live in `code/scenarios/default.yaml`.
@@ -72,6 +74,6 @@ static conclusion are the current data-center output.
   compute" in these docs refers to: nodes talking to each other. The
   ground-to-orbit link (constellation to Earth) is still TBD, either narrowband
   RF or a ground-to-orbit laser via optical ground stations. Treat it as an open
-  research item for the future communications workstream, to settle once the
+  research item for the communications workstream, to settle once the
   link architecture is chosen. Do not let "laser-linked" be read as the ground
   link.

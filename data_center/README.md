@@ -2,7 +2,7 @@
 
 This folder holds the data-center application of Rocket Lab Research: a
 Neutron-launched orbital AI-inference data center, modeled end to end. For the
-verdict and the numbers, read the [conclusion](conclusion.md); for why those numbers are a floor and why Rocket Lab is uniquely positioned to build this, read [the structural case](structural_case.md). This page is the
+verdict and the numbers, read the [conclusion](conclusion.md); for the pitch (the engine, what the numbers refuse to count, and the runway), read [the structural case](structural_case.md). This page is the
 guide to what is here and how to use it.
 
 ## Operating Picture
