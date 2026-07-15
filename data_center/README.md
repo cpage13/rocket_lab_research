@@ -18,28 +18,31 @@ per-node economics, and rolls the fleet up year by year.
 
 Neutron is the enabler: it is the Rocket Lab vehicle that can carry this node to
 orbit at the modeled cadence. It is also not the bottleneck. Launch is only
-about 18% of total system cost, behind compute (about 30%) and solar plus
-radiator (about 22% each). Any operator, on any rocket, still has to lift the
-same mass, so a launch-price war is not where this is won or lost: even halving
-Neutron's launch price moves the orbital-to-ground cost ratio only from about
-1.92x to about 1.75x. The real leverage is in solar, radiator, and how much
-compute each launch carries.
+about 15% of total system cost, behind compute (about 45%) and solar plus
+radiator (about 16% each; the bus is about 7%). Any operator, on any rocket,
+still has to lift the same mass, so a launch-price war is not where this is won
+or lost: even halving Neutron's launch price moves the orbital-to-ground cost
+ratio only from about 1.28x to about 1.18x. Compute dominating the cost is what
+you want, and the real leverage is in how much compute each launch carries and
+in the unpriced levers the structural case inventories.
 
 ## Worth Knowing
 
 None of this stack has been designed or iterated for space yet. The model
-translates conservative ground assumptions into orbit, so read it as a floor
-that should improve as real space hardware gets built. The
-[conclusion](conclusion.md) covers the other angles: the vertical-integration
-upside (Rocket Lab supplies most of the stack to itself), the cost-down
-sensitivities, and why a premium customer might care.
+translates ground hardware assumptions into orbit with two stated investor-set
+bets (the run-hot radiator and the manufacturing-scale prices) and keeps the
+pessimistic posture one dial away. The [conclusion](conclusion.md) carries the
+numbers and the single hedge section; [the structural case](structural_case.md)
+carries the counted-versus-uncounted inventory (the margin Rocket Lab pays
+itself on the buy-priced lines, the learning curve, the premium lanes) and the
+runway.
 
 ## Reading Path
 
 | Path | What it is |
 |---|---|
 | [conclusion.md](conclusion.md) | The verdict and the headline numbers. Start here. |
-| [structural_case.md](structural_case.md) | The structural case: why Rocket Lab is uniquely positioned to build this, and why the numbers are a floor. |
+| [structural_case.md](structural_case.md) | The structural case, the pitch: the engine, what the numbers refuse to count, and the runway. |
 | [ai1_comparison.md](ai1_comparison.md) | The AI-1 comparison: SpaceX's June 2026 design run through this model. The gap to ground closes, leaning to par or better. |
 | [assumptions.md](assumptions.md) | The default-assumption ledger and source-status taxonomy. |
 | [models/space/default.json](models/space/default.json) | The promoted space model: every number with formula, units, and source. |
@@ -70,6 +73,6 @@ leaf under `physical.years` and `business.years` is a provenance cell with
 `inputs.assumption_index` traces each model dial back to its source. Agents
 should also read [../docs/agent-guide.md](../docs/agent-guide.md).
 
-Communications is a separate, future workstream; see
-[../communications/README.md](../communications/README.md). It makes no
-data-center claims in this release.
+Communications is a separate workstream with its own modeled application (the
+Iridium model); see [../communications/README.md](../communications/README.md).
+It makes no data-center claims.
