@@ -1,5 +1,5 @@
 # =============================================================================
-# rklb-value — DEFAULT scenario (v8 cycle-2 central case)
+# rklb-value: DEFAULT scenario (v8 cycle-2 central case)
 # =============================================================================
 #
 # The cycle-2 v8 central scenario. Reproduces the cycle-2 strategy's locked
@@ -33,7 +33,13 @@ metadata:
   horizon_years: 10
 
 cadence:
-  # Logistic launch ramp — scenario dials from SOURCE_INDEX NTR-010.
+  # Logistic launch ramp: scenario dials from SOURCE_INDEX NTR-010.
+  # The ceiling is the curve's carrying capacity, scoped to THIS ten-year
+  # window: it stands for the pads and rocket production plausibly built
+  # within the window, not a cap on the system (pads and rockets can both be
+  # built, so longer-horizon projections must re-set it; investor
+  # clarification 2026-07-15, ledger row RLDC-CADENCE-CEILING-150). Within
+  # the window it is nearly inert: the curve is pinned by the two anchors.
   cadence_ceiling: 150
   launches_at_year_5: 14
   launches_at_year_10: 90     # FY2036 anchor when base_year=2026
@@ -43,7 +49,7 @@ fleet:
   service_life_years: 5            # node operating life, hard cliff (D1)
 
 volume:
-  # Stowed solar+radiator volume-envelope dials — R1-sourced.
+  # Stowed solar+radiator volume-envelope dials: R1-sourced.
   si_areal_density_kg_m2: 2.0
   si_bol_efficiency: 0.20
   fold_ratio: 80.0
@@ -80,7 +86,7 @@ r_band:
     - { fy: 2036, r: 1.80 }
 
 launch_cost:
-  # Cadence-indexed launch cost (log-linear curve) — SOURCE_INDEX NTR-009.
+  # Cadence-indexed launch cost (log-linear curve): SOURCE_INDEX NTR-009.
   low_cadence_cost_musd: 25.0
   high_cadence_cost_musd: 13.5
   low_cadence_launches: 5.0
@@ -120,7 +126,7 @@ gospel:
 slopes:
   # Post-Feynman per-generation growth slopes (every ~18 months).
   usd_growth_per_gen: 0.30
-  # 0.20 — per-package power growth/gen; corrected from 0.30
+  # 0.20: per-package power growth/gen; corrected from 0.30
   # (assembly-rate misapplied) per validation V-A, sourcing_audit_05_21.md.
   kw_growth_per_gen: 0.20
   kg_growth_per_gen: -0.10        # mass falls per gen (denser packaging)
