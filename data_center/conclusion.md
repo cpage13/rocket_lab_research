@@ -16,22 +16,16 @@ margin, a customer would pay about 28% more per unit of orbital AI work than
 for the ground equivalent. The rest of this document builds those numbers from
 their parts.
 
-Why space can compete at all is worth stating plainly, because it is not
-sunlight. Ground data-center construction is construction: land, permits,
-grid interconnects, water, local politics, and skilled labor, coordinated
-site by site. Space converts that work into manufacturing: standardized
-nodes off an assembly line, launched on a repeating cadence, the way ground
-data centers and large communications networks standardize their racks and
-cells but applied to the whole facility. Economies of scale and repeatability
-are the product; orbit is where they happen to run.
-
 The interesting part is not "a data center in space" as a slogan. It is the
 machine Rocket Lab could build around it: integrate GPUs and networking on the
 ground, package them into rack-like orbital nodes, attach them to a Rocket Lab
 bus with solar, radiator, thermal, and communications, launch on Neutron, and
-improve the whole stack through repeated cadence.
-
-That machine is the subject of a companion document, [the structural case](structural_case.md): the argument for why Rocket Lab, almost alone, already owns the parts, the rocket, and the production lines to build this, and why the numbers here read as a floor rather than a ceiling. This document is the numbers; the structural case is the why. Read them in either order.
+improve the whole stack through repeated cadence. Why that machine beats
+ground construction, and everything these numbers deliberately refuse to
+count in its favor (the learning curve, the captured supplier margin, the
+premium revenue lanes, the runway past this table), is the subject of
+[the structural case](structural_case.md). This document is the numbers; the
+structural case is the pitch. Read them in either order.
 
 The baseline's thermal architecture follows the industry's direction rather
 than fighting it: SpaceX's June 2026 AI-1 reveal validated the deployed,
@@ -95,6 +89,17 @@ nodes to 268), and it keeps compounding past 2036 until cadence tops out and
 the 90-node-class cohorts begin to retire. 2036 is the steep middle of the S,
 not the end.
 
+The window closes before the curve does. The promoted model ends at 2036 by
+choice of horizon, not because anything flattens: extend the same default
+dials to 2040 (one dial, the model window, nothing else changes) and the
+fleet reads **591 living nodes**, about 448 MW, about **$17.7B a year of
+revenue and $5.9B of profit** at the same margin, with cadence at 139
+launches a year and still rising. Those four years lean on extrapolated
+silicon generations, so they illustrate the curve's direction rather than
+extend the promoted output (`RLDC-FORWARD-WINDOW-2040`). For scale, the 2036
+fleet's $7.4B a year is about 12 times Rocket Lab's entire FY2025 revenue of
+$602M, and the 2040 illustration is about 29 times.
+
 If you add up every cohort still alive, you get the installed fleet, which the
 Fleet Snapshot at the end tracks. That aggregate is a side effect of the cohort
 build-out, not the headline.
@@ -132,11 +137,15 @@ and iteration historically surface gains no one anticipated, so it would not
 be surprising if the costs here came down further. That upside is noted, not
 modeled.
 
-Read it with a vertical-integration lens the baseline only partly pays for.
-Many cost lines behave like external buy prices, but in a Rocket Lab-operated
-program Rocket Lab would supply most of them to itself: bus, solar, radiator
-and thermal hardware, integration, launch, operations, and laser
-communications. GPUs and some networking are the clearest outside purchases.
+Read it with the vertical-integration bookkeeping stated exactly. The bus
+and the networking and integration inside the compute line are priced at
+outsider buy-rates even though Rocket Lab builds them, so the margin there is
+uncounted headroom. The solar and radiator dials already assume Rocket Lab's
+own scale pricing, so the model claims no second margin on them. Launch
+already prices its own cadence learning, operations are unmodeled at zero (a
+stated risk, not an upside), and the GPUs are the clearest outside purchase.
+The full counted-versus-uncounted inventory is in
+[the structural case](structural_case.md).
 
 ## Core Default Assumptions
 
