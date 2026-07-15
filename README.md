@@ -60,12 +60,19 @@ ground**. The old heavy-radiator posture at $40k/kW reads **1.92x** and is
 kept as the labeled conservative exception. See
 [the AI-1 comparison](data_center/ai1_comparison.md).
 
+And the window understates the curve. The model stops at 2036 with cadence
+still climbing: extended on the same dials, 2040 reads about **$17.7B a year**
+(labeled extrapolation). The 2036 fleet is two tenths of a percent of the
+AI-capacity market reference, and the cost dials sit flat across a decade in
+which a real production line learns. The upside case, stated and labeled, is
+[the structural case](data_center/structural_case.md).
+
 ## Where To Read It
 
 The full data-center case, with every number traced to a source:
 
 - [conclusion.md](data_center/conclusion.md): the verdict and the headline numbers.
-- [data_center/structural_case.md](data_center/structural_case.md): the structural case, why Rocket Lab is uniquely positioned to build this and why the numbers are a floor.
+- [data_center/structural_case.md](data_center/structural_case.md): the structural case, the pitch: the engine, what the numbers refuse to count, and the runway.
 - [data_center/ai1_comparison.md](data_center/ai1_comparison.md): the AI-1 comparison, SpaceX's June 2026 satellite design run through this same model.
 - [data_center/README.md](data_center/README.md): how the application works and how to run the model.
 - [`models/space/default.json`](data_center/models/space/default.json): every number with its formula, units, and source.
