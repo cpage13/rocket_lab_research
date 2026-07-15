@@ -77,7 +77,7 @@ Read down the cohort columns, not across into a fleet total. Each cohort holds
 that revenue and profit every year for five years. The 2036 cohort alone (90
 nodes) earns about **$2.52B a year** and about **$840M of profit a year**. The
 shape is the point: launches run 2, 3, 5, 9, 14, 22, 35, 51, 70, 90, and the
-next year pushes past 100 toward the cadence ceiling.
+next year pushes past 100.
 
 The curve is an S. The single-digit years (2027 to 2030) are the flat start:
 small cohorts, a small fleet, the proving phase. The steep middle begins once
@@ -85,9 +85,12 @@ cadence climbs into the 20s and 30s (2032 and 2033), because each year's new
 cohort dwarfs the cohort retiring five years behind it: 2033 launches 35 nodes
 and retires 3, and 2036 launches 90 and retires 14. That gap between additions
 and retirements compounds the living fleet five-fold from 2032 to 2036 (53
-nodes to 268), and it keeps compounding past 2036 until cadence tops out and
-the 90-node-class cohorts begin to retire. 2036 is the steep middle of the S,
-not the end.
+nodes to 268), and it keeps compounding past 2036 for as long as the launch
+rate keeps climbing. Nothing in the system caps that rate: launch pads and
+rockets can both be built. The model's own brake is a launch-rate parameter
+scoped to this ten-year window's infrastructure (`RLDC-CADENCE-CEILING-150`),
+a horizon assumption, not a ceiling. 2036 is the steep middle of the S, not
+the end.
 
 The window closes before the curve does. The promoted model ends at 2036 by
 choice of horizon, not because anything flattens: extend the same default
