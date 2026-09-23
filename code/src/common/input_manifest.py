@@ -1,7 +1,15 @@
-"""Shared input-cell vocabulary used by both ventures.
+"""Shared input-cell vocabulary and cell builders.
 
 The source-linked ``InputCell``, its enums, and the generic cell builders,
-used by both the data-center and communications models.
+used by the data-center space model and the ground reference.
+
+:func:`_spec_cell` is the one entry point for a scenario-valued input: it
+attaches the input's source metadata (claim ID, status, rationale) only when
+the run's value equals the default value that metadata describes. A value the
+scenario changed is published as a scenario override
+(:attr:`AssumptionRole.SCENARIO_OVERRIDE`, status ``scenario``) whose only
+source is the scenario YAML, so an overridden value never inherits a claim
+written for the default.
 """
 
 from __future__ import annotations
@@ -23,12 +31,17 @@ type InputValue = InputScalar | list[InputScalar]
 
 
 class AssumptionRole(StrEnum):
-    """Public role of one modeled input assumption."""
+    """Public role of one modeled input assumption.
+
+    ``SCENARIO_OVERRIDE`` marks a value the scenario changed from the default:
+    the default's claim, rationale, and role do not apply to it.
+    """
 
     DEFAULT = "default"
     SENSITIVITY = "sensitivity"
     VALIDATION_ONLY = "validation_only"
     DERIVED_INPUT = "derived_input"
+    SCENARIO_OVERRIDE = "scenario_override"
 
 
 class SourceStatus(StrEnum):
@@ -83,7 +96,21 @@ class InputCell(BaseModel):
 
 @dataclass(frozen=True)
 class CellSpec:
-    """Metadata used to construct one input cell."""
+    """Source metadata describing one input's default value.
+
+    Attributes:
+        label: Short human-readable input label.
+        unit: Unit string, or ``None`` for a unitless value.
+        role: How the model uses the input.
+        source_status: Evidence classification of the default value.
+        claim_id: SOURCE_INDEX claim supporting the default value.
+        source_note: What the claim supports.
+        rationale: Why the default is used.
+        notes: Caveats that hold for any value of the input.
+        research_path: Optional research note backing the claim, cited
+            beside the SOURCE_INDEX entry.
+        research_note: What the research note supports.
+    """
 
     label: str
     unit: str | None
@@ -93,6 +120,8 @@ class CellSpec:
     source_note: str
     rationale: str
     notes: str | None = None
+    research_path: str | None = None
+    research_note: str | None = None
 
 
 def _source_index_ref(claim_id: str, note: str) -> SourceRef:
@@ -105,7 +134,7 @@ def _source_index_ref(claim_id: str, note: str) -> SourceRef:
     )
 
 
-def _research_ref(path: str, note: str, claim_id: str | None = None) -> SourceRef:
+def _research_ref(path: str, note: str | None, claim_id: str | None = None) -> SourceRef:
     """Build a research-document reference for an input cell."""
     return SourceRef(ref_type=SourceRefType.RESEARCH_DOC, ref=path, claim_id=claim_id, note=note)
 
@@ -119,7 +148,14 @@ def _field_description(model_cls: type[BaseModel], field_name: str) -> str:
 
 
 def _cell(path: str, value: InputValue, description: str, spec: CellSpec) -> InputCell:
-    """Construct one source-linked input cell."""
+    """Construct one source-linked input cell from its default-value metadata.
+
+    The cell cites ``spec``'s SOURCE_INDEX claim and, when ``spec`` names
+    one, the research note behind it.
+    """
+    refs = [_source_index_ref(spec.claim_id, spec.source_note)]
+    if spec.research_path is not None:
+        refs.append(_research_ref(spec.research_path, spec.research_note, spec.claim_id))
     return InputCell(
         path=path,
         label=spec.label,
@@ -128,7 +164,7 @@ def _cell(path: str, value: InputValue, description: str, spec: CellSpec) -> Inp
         description=description,
         assumption_role=spec.role,
         source_status=spec.source_status,
-        source_refs=[_source_index_ref(spec.claim_id, spec.source_note)],
+        source_refs=refs,
         rationale=spec.rationale,
         notes=spec.notes,
     )
@@ -149,6 +185,89 @@ def _with_scenario_ref(cell: InputCell, scenario_path: str) -> InputCell:
     return cell.model_copy(
         update={"source_refs": [*cell.source_refs, _scenario_ref(scenario_path)]}
     )
+
+
+def _override_cell(
+    path: str,
+    value: InputValue,
+    default_value: InputValue | None,
+    description: str,
+    spec: CellSpec,
+    scenario_path: str,
+) -> InputCell:
+    """Construct the input cell for a value the scenario changed from the default.
+
+    The cell keeps the input's label, unit, description, and caveat notes but
+    none of the default's source metadata: its role is
+    :attr:`AssumptionRole.SCENARIO_OVERRIDE`, its status is
+    :attr:`SourceStatus.SCENARIO`, and its only source is the scenario YAML.
+
+    Args:
+        path: Stable public JSON path of the input.
+        value: The scenario's value.
+        default_value: The default value at this path, or ``None`` when the
+            default has no value there (for example an R anchor year the
+            default band does not carry).
+        description: Plain-language meaning of the input.
+        spec: The default's cell metadata (only its label, unit, and notes
+            carry over).
+        scenario_path: Repository-relative scenario YAML path.
+
+    Returns:
+        A frozen scenario-override :class:`InputCell`.
+    """
+    default_text = (
+        "the default has no value at this path"
+        if default_value is None
+        else f"the default is {default_value!r}"
+    )
+    return InputCell(
+        path=path,
+        label=spec.label,
+        value=value,
+        unit=spec.unit,
+        description=description,
+        assumption_role=AssumptionRole.SCENARIO_OVERRIDE,
+        source_status=SourceStatus.SCENARIO,
+        source_refs=[_scenario_ref(scenario_path)],
+        rationale=(
+            f"Scenario override: this run sets {value!r} ({default_text}). The "
+            "default's source claim and rationale do not cover the overridden "
+            "value; the scenario YAML is its only source."
+        ),
+        notes=spec.notes,
+    )
+
+
+def _spec_cell(
+    path: str,
+    value: InputValue,
+    default_value: InputValue | None,
+    description: str,
+    spec: CellSpec,
+    scenario_path: str,
+) -> InputCell:
+    """Construct a scenario-valued input cell, marking a changed value as an override.
+
+    When ``value`` equals ``default_value`` the cell carries ``spec``'s claim,
+    status, role, and rationale plus the scenario YAML reference. Otherwise it
+    is a scenario override (:func:`_override_cell`).
+
+    Args:
+        path: Stable public JSON path of the input.
+        value: The scenario's value.
+        default_value: The default value at this path, or ``None`` when the
+            default has none.
+        description: Plain-language meaning of the input.
+        spec: Source metadata describing the default value.
+        scenario_path: Repository-relative scenario YAML path.
+
+    Returns:
+        A frozen :class:`InputCell`.
+    """
+    if default_value is not None and value == default_value:
+        return _with_scenario_ref(_cell(path, value, description, spec), scenario_path)
+    return _override_cell(path, value, default_value, description, spec, scenario_path)
 
 
 def _int_value(cell: InputCell) -> int:

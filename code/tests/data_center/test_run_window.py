@@ -25,8 +25,8 @@ from data_center import cli
 from data_center.config import anchor_year, config_from_dict
 from data_center.engine import run_valuation
 from data_center.ground import (
+    DEFAULT_GROUND_SCENARIO_PATH,
     build_ground_reference_output,
-    default_ground_source_catalog,
     load_ground_config,
 )
 
@@ -74,7 +74,9 @@ def test_shifted_windows_run_through_every_cli_mode(
 
     Expected: the text report, ``--brief``, and ``--json`` all exit 0; the
     JSON's anchor-year checks and query examples address the run's anchor
-    year and never 2036.
+    year and never 2036; these non-default scenarios carry no default guard;
+    the year-10 cadence invariant appears only when the window reaches model
+    year 10 (the 2040 base year), where it reads the anchor year.
     """
     scenario = str(_write_scenario(tmp_path, base_year, horizon_years))
     assert cli.main([scenario]) == 0
@@ -84,11 +86,18 @@ def test_shifted_windows_run_through_every_cli_mode(
     artifact = json.loads(capsys.readouterr().out)
 
     results = {r["validation_id"]: r for r in artifact["meta"]["validation_results"]}
-    deployed_id = f"default_{anchor_fy}_deployed_capacity_around_70mw"
-    assert deployed_id in results
-    assert results[deployed_id]["related_json_paths"] == [
-        f'business.years."{anchor_fy}".kw_deployed_this_year'
-    ]
+    assert not [vid for vid in results if vid.startswith("default_")]
+    cadence_id = "anchor_year_launches_match_year_10_dial"
+    if horizon_years >= 10:
+        assert results[cadence_id]["related_json_paths"][-1] == (
+            f'business.years."{anchor_fy}".launches'
+        )
+    else:
+        assert cadence_id not in results
+    assert (
+        f'business.years."{anchor_fy}".kw_living_fleet'
+        in (results["living_fleet_distinct_from_deployed_year_cohort"]["related_json_paths"])
+    )
     assert f"FY{anchor_fy} " in results["pf_per_kw_in_band"]["observed_result"]
     names = {q["name"] for q in artifact["meta"]["query_examples"]}
     assert f"headline_{anchor_fy}_revenue_central" in names
@@ -113,23 +122,32 @@ def test_ground_reference_anchors_to_the_runs_anchor_year(
         config_from_dict({"metadata": {"base_year": base_year, "horizon_years": horizon_years}})
     )
     ground = build_ground_reference_output(
-        space, load_ground_config(_GROUND_SCENARIO), default_ground_source_catalog()
+        space,
+        load_ground_config(_GROUND_SCENARIO),
+        space_model_path="scratch/space.json",
+        ground_scenario_path=DEFAULT_GROUND_SCENARIO_PATH,
     )
     key = str(anchor_fy)
     assert ground.anchor.year == anchor_fy
     assert ground.anchor.nodes == space.business.years[key].nodes_deployed_this_year.value
-    assert ground.anchor.source_paths[0] == f'business.years."{key}".nodes_deployed_this_year'
+    assert ground.anchor.source_paths[0] == (
+        f'space:business.years."{key}".nodes_deployed_this_year'
+    )
     assert ground.meta.validation_results[0].validation_id == f"ground_anchor_{key}_deployed_year"
+    assert ground.meta.validation_results[0].severity == "pass"
 
 
 def test_base_year_2027_checks_the_cadence_target_at_its_own_year_10() -> None:
     """Objective: a shifted base year reads the cadence target at its anchor.
 
     With base year 2027 the year-10 anchor (90 launches) is FY2037; FY2036
-    is model year 9. Expected: ``target_cadence_is_90_launches`` passes
-    (it used to read FY2036 and fail).
+    is model year 9. Expected: the config-derived invariant
+    ``anchor_year_launches_match_year_10_dial`` passes against FY2037 (the
+    old pinned "90 launches in 2036" check read FY2036 and failed).
     """
     out = run_valuation(config_from_dict({"metadata": {"base_year": 2027, "horizon_years": 10}}))
     results = {r.validation_id: r for r in out.meta.validation_results}
     assert out.business.years["2037"].launches.value == 90
-    assert results["target_cadence_is_90_launches"].severity == "pass"
+    check = results["anchor_year_launches_match_year_10_dial"]
+    assert check.severity == "pass"
+    assert check.observed_result == "90 launches in FY2037"

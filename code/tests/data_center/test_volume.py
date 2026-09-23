@@ -48,7 +48,7 @@ def _num(value: float | int | str | bool | None) -> float:
 
 def test_solar_area_per_pkg_for_1kw_si_20pct() -> None:
     """1 kW at 20% Si efficiency -> ~3.67 m2."""
-    c = compute_solar_area_per_pkg(1.0, 0.20, kw_per_pkg_path="x", efficiency_path="y")
+    c = compute_solar_area_per_pkg(1.0, 0.20, kw_per_pkg_uses=["x"], efficiency_path="y")
     assert c.value == pytest.approx(1000 / (SOLAR_CONSTANT_W_M2 * 0.20), rel=1e-3)
     assert c.unit == "m2"
 
@@ -152,7 +152,7 @@ def test_volume_sanity_600kw_node_stows_about_22_m3() -> None:
     Expected: about 22.2 m3, 27.7% of the 80 m3 Neutron fairing: well inside
     it, so mass binds first (D6).
     """
-    solar_area = compute_solar_area_per_pkg(6.0, 0.20, kw_per_pkg_path="x", efficiency_path="y")
+    solar_area = compute_solar_area_per_pkg(6.0, 0.20, kw_per_pkg_uses=["x"], efficiency_path="y")
     vol_pkg = compute_volume_per_pkg(
         _num(solar_area.value),
         6.0,

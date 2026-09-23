@@ -301,7 +301,9 @@ def test_v1_passes_every_fit_the_packer_accepts(
     """
     budget_t = n_expected * pkg_mass_t - short_fraction * PACKAGE_FIT_TOLERANCE * pkg_mass_t
     envelope_t = node_mass_fixed_t + budget_t
-    n_cell = compute_n_packages(budget_t, pkg_mass_t, mass_budget_path="a", mass_per_pkg_path="b")
+    n_cell = compute_n_packages(
+        budget_t, pkg_mass_t, mass_budget_uses=["a"], mass_per_pkg_uses=["b"]
+    )
     assert n_cell.value == n_expected
     node_t = node_mass_fixed_t + n_expected * pkg_mass_t
     util_cell = compute_mass_util(node_t, envelope_t, node_mass_path="a", mass_envelope_path="b")

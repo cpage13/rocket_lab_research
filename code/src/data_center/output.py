@@ -38,6 +38,7 @@ References:
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -61,12 +62,19 @@ from data_center.config import (
     WorkloadType,
 )
 from data_center.constants import MAX_FY, MAX_HORIZON_YEARS, MIN_FY, MIN_HORIZON_YEARS
-from data_center.input_manifest import InputManifest
+from data_center.input_manifest import InputManifest, SourceStatus
 from data_center.provenance import ProvenanceCell, YearString
 
 # The v8 output JSON schema version. The single place the schema-version
 # string is defined; mirrors ``GROUND_SCHEMA_VERSION`` in ``ground.py``.
 SCHEMA_VERSION: Final[str] = "v8"
+
+YEAR_UNIT: Final[str] = "year"
+"""Declared data-dictionary unit for a calendar-year field (a non-cell leaf
+declares its unit once in ``json_schema_extra``; cells carry their own)."""
+
+YEARS_UNIT: Final[str] = "years"
+"""Declared data-dictionary unit for a duration in years."""
 
 # The cold-reader contract enums and summary type (FieldKind, Severity,
 # ValidationSeverity, QueryAppliesTo, SourceStatusSummary) are venture-agnostic
@@ -76,6 +84,26 @@ SCHEMA_VERSION: Final[str] = "v8"
 # ---------------------------------------------------------------------------
 # Run metadata block
 # ---------------------------------------------------------------------------
+
+
+class ArtifactRole(StrEnum):
+    """The role stamped in an artifact's ``metadata.artifact_role``.
+
+    One vocabulary for the space artifact, the ground reference, and the CLI:
+
+    * ``DRAFT``: a scratch run (the CLI's report and ``--json`` modes, the
+      API default); a ground reference built from a draft is a draft too.
+    * ``PROMOTED_DEFAULT`` / ``PROMOTED_NAMED``: a space artifact promoted as
+      the public default or under a named stem.
+    * ``PROMOTED_GROUND_DEFAULT`` / ``PROMOTED_GROUND_NAMED``: the ground
+      reference built from such a promoted space artifact.
+    """
+
+    DRAFT = "draft"
+    PROMOTED_DEFAULT = "promoted_default"
+    PROMOTED_NAMED = "promoted_named"
+    PROMOTED_GROUND_DEFAULT = "promoted_ground_default"
+    PROMOTED_GROUND_NAMED = "promoted_ground_named"
 
 
 class RunMetadata(BaseModel):
@@ -104,6 +132,7 @@ class RunMetadata(BaseModel):
         description="Calendar year corresponding to model year 0.",
         ge=MIN_FY,
         le=MAX_FY,
+        json_schema_extra={"unit": YEAR_UNIT},
     )
     horizon_years: int = Field(
         ...,
@@ -113,6 +142,7 @@ class RunMetadata(BaseModel):
         ),
         ge=MIN_HORIZON_YEARS,
         le=MAX_HORIZON_YEARS,
+        json_schema_extra={"unit": YEARS_UNIT},
     )
     workload_type: WorkloadType = Field(
         ...,
@@ -142,9 +172,12 @@ class RunMetadata(BaseModel):
         ...,
         description="Installed model package version, when available.",
     )
-    artifact_role: str = Field(
+    artifact_role: ArtifactRole = Field(
         ...,
-        description="Artifact role such as draft, promoted_default, or promoted_named.",
+        description=(
+            "Artifact role: draft, promoted_default, promoted_named, or (on a "
+            "ground reference) promoted_ground_default / promoted_ground_named."
+        ),
     )
     source_scenario_path: str = Field(
         ...,
@@ -211,6 +244,7 @@ class PhysicalYear(BaseModel):
     year: int = Field(
         ...,
         description="Calendar year for this physical record.",
+        json_schema_extra={"unit": YEAR_UNIT},
     )
     frontier_generation: ProvenanceCell = Field(
         ...,
@@ -309,6 +343,7 @@ class BusinessYear(BaseModel):
     year: int = Field(
         ...,
         description="Calendar year for this business record.",
+        json_schema_extra={"unit": YEAR_UNIT},
     )
     launches: ProvenanceCell = Field(
         ...,
@@ -450,13 +485,43 @@ class GenerationSummary(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     name: str = Field(..., description="The generation's human label (e.g. 'Feynman').")
-    year_available: float = Field(..., description="Approximate calendar year of availability.")
-    die_count: int = Field(..., description="Number of dies on the package (D8 GPU = package).")
-    kw_per_pkg: float = Field(..., description="All-in per-package electrical power, kW.")
-    pkg_mass_kg: float = Field(..., description="All-in per-package mass, kg.")
-    pkg_cost_musd: float = Field(..., description="Per-package price, $M.")
-    pf_per_pkg: float = Field(..., description="Dense-FP4 PFLOPS per package.")
-    source_class: str = Field(..., description="Source confidence class for this generation.")
+    year_available: float = Field(
+        ...,
+        description="Approximate calendar year of availability.",
+        json_schema_extra={"unit": YEAR_UNIT},
+    )
+    die_count: int = Field(
+        ...,
+        description="Number of dies on the package (D8 GPU = package).",
+        json_schema_extra={"unit": "dies/package"},
+    )
+    kw_per_pkg: float = Field(
+        ...,
+        description="All-in per-package electrical power, kW.",
+        json_schema_extra={"unit": "kW/package"},
+    )
+    pkg_mass_kg: float = Field(
+        ...,
+        description="All-in per-package mass, kg.",
+        json_schema_extra={"unit": "kg/package"},
+    )
+    pkg_cost_musd: float = Field(
+        ...,
+        description="Per-package price, $M.",
+        json_schema_extra={"unit": "MUSD/package"},
+    )
+    pf_per_pkg: float = Field(
+        ...,
+        description="Dense-FP4 PFLOPS per package.",
+        json_schema_extra={"unit": "PFLOPS/package"},
+    )
+    source_class: SourceStatus = Field(
+        ...,
+        description=(
+            "Public source status of this generation (the SourceStatus vocabulary "
+            "the generation input cells use)."
+        ),
+    )
     source_doc_path: str = Field(..., description="Durable research source path for this entry.")
 
 
@@ -486,7 +551,11 @@ class MetaBlock(BaseModel):
     )
     validation_results: list[ValidationResult] = Field(
         ...,
-        description="Public pass/warn/fail validation entries.",
+        description=(
+            "The one public pass/warn/fail verdict list: every V-rule, the model "
+            "invariants, and (for the canonical default scenario only) the "
+            "default guards."
+        ),
     )
     generations_dictionary: list[GenerationSummary] = Field(
         ...,
@@ -563,6 +632,9 @@ ValuationOutput = SpaceModelOutput
 
 __all__ = [
     "SCHEMA_VERSION",
+    "YEARS_UNIT",
+    "YEAR_UNIT",
+    "ArtifactRole",
     "BusinessBlock",
     "BusinessYear",
     "CostBreakdownBlock",

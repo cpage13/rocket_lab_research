@@ -36,7 +36,6 @@ first-flight year).
 
 from __future__ import annotations
 
-from .conclusion import render_conclusion_markdown
 from .config import ValuationConfig, load_config
 from .engine import run_valuation
 from .output import SpaceModelOutput, ValuationOutput
@@ -46,6 +45,5 @@ __all__ = [
     "ValuationConfig",
     "ValuationOutput",
     "load_config",
-    "render_conclusion_markdown",
     "run_valuation",
 ]

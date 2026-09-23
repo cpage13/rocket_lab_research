@@ -32,7 +32,7 @@ def test_input_cell_full_field_list() -> None:
         assumption_role=AssumptionRole.DEFAULT,
         source_status=SourceStatus.SCENARIO,
         source_refs=[ref],
-        rationale="Founder-set scenario cap.",
+        rationale="Investor-set scenario cap.",
         notes="Sensitivity dial.",
     )
     dumped = cell_obj.model_dump()
@@ -71,12 +71,18 @@ def test_source_status_eight_values() -> None:
     }
 
 
-def test_assumption_role_four_values() -> None:
+def test_assumption_role_values() -> None:
+    """Objective: the public assumption-role vocabulary is exactly these five.
+
+    Expected: the four modeling roles plus ``scenario_override``, the marker
+    for a value a scenario changed from the default.
+    """
     assert {r.value for r in AssumptionRole} == {
         "default",
         "sensitivity",
         "validation_only",
         "derived_input",
+        "scenario_override",
     }
 
 
@@ -97,7 +103,7 @@ def test_cell_builder_round_trip() -> None:
         source_status=SourceStatus.SCENARIO,
         claim_id="COMM-001",
         source_note="supports the value",
-        rationale="Founder-set scenario cap.",
+        rationale="Investor-set scenario cap.",
     )
     cell_obj = _cell("inputs.config.cadence.ceiling", 150, "Hard cap.", spec)
     assert isinstance(cell_obj, InputCell)

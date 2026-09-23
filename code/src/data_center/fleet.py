@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Final
 
 from pydantic import BaseModel, ConfigDict
 
@@ -163,6 +164,47 @@ class FleetYear:
     margin_high_pct: ProvenanceCell
 
 
+def business_year_path(year: int) -> FieldPath:
+    """Return the public JSON path of one ``business.years`` record."""
+    return f'business.years."{year}"'
+
+
+def physical_year_path(year: int) -> FieldPath:
+    """Return the public JSON path of one ``physical.years`` record."""
+    return f'physical.years."{year}"'
+
+
+SERVICE_LIFE_PATH: Final[FieldPath] = "inputs.config.fleet.service_life_years"
+"""Public path of the service-life dial, which selects the living vintages."""
+
+
+def _vintage_uses(living: list[Cohort], per_node_field: str | None) -> list[FieldPath]:
+    """Cite every living cohort's node count and per-node cell a rollup sums.
+
+    A living-fleet rollup sums ``nodes x per-node value`` over the living
+    cohorts, each at its own launch-year (vintage) value, so its ``uses``
+    name each vintage's ``nodes_deployed_this_year`` and the per-node
+    ``physical.years`` cell of that vintage, then the service-life dial,
+    which decides which vintages are alive and so summed.
+
+    Args:
+        living: The cohorts alive in the rollup year.
+        per_node_field: The per-node ``physical.years`` field summed (for
+            example ``kw_per_node``), or ``None`` for a pure node count.
+
+    Returns:
+        One or two paths per living cohort, oldest vintage first, then the
+        service-life dial.
+    """
+    uses: list[FieldPath] = []
+    for cohort in sorted(living, key=lambda c: c.launch_year):
+        uses.append(f"{business_year_path(cohort.launch_year)}.nodes_deployed_this_year")
+        if per_node_field is not None:
+            uses.append(f"{physical_year_path(cohort.launch_year)}.{per_node_field}")
+    uses.append(SERVICE_LIFE_PATH)
+    return uses
+
+
 def compute_fleet_year(
     year: int,
     cohorts: list[Cohort],
@@ -173,7 +215,7 @@ def compute_fleet_year(
     prev_cumulative_revenue_high_musd: float = 0.0,
     *,
     service_life_years: int,
-    year_path: FieldPath,
+    prior_year: int | None,
 ) -> FleetYear:
     """Compose fleet rollup for one calendar year.
 
@@ -182,6 +224,12 @@ def compute_fleet_year(
     cliff (D1). Per-cohort kW / PFLOPS / cost /
     revenue are summed over the living set; gross profit and margin
     follow; cumulative revenue extends the prior-year running total.
+
+    Provenance: every living-fleet cell cites the vintage cells it sums
+    (each living cohort's ``nodes_deployed_this_year`` and its launch-year
+    per-node cell) and the service-life dial that selects those vintages,
+    the launch-cost cell cites all four launch-cost dials,
+    and each cumulative-revenue cell cites the prior year's cumulative.
 
     Args:
         year: The calendar year of this rollup.
@@ -200,7 +248,8 @@ def compute_fleet_year(
             threaded from ``config.fleet.service_life_years``. Passed
             explicitly (no default) so the living set tracks the configured
             life.
-        year_path: JSON path of this fleet-year block.
+        prior_year: The calendar year whose cumulative revenue this year
+            extends, or ``None`` for the first model year (no prior total).
 
     Returns:
         A :class:`FleetYear` of provenance cells.
@@ -230,11 +279,18 @@ def compute_fleet_year(
     cumul_l = prev_cumulative_revenue_low_musd + rev_l
     cumul_h = prev_cumulative_revenue_high_musd + rev_h
 
-    # Cell-to-cell back-pointers. Every fleet cell is a cohort rollup of
-    # the per-node physical trajectory, so its `uses` cite the specific
-    # upstream cells it sums — the matching per-node `physical.years` cell
-    # plus the `living_fleet` count — never the bare year container.
-    phys_path = f'physical.years."{year}"'
+    # Cell-to-cell back-pointers. A deployed-year cell cites this year's
+    # per-node cell; a living-fleet cell cites every vintage it sums; a
+    # cumulative cell cites this year's annual and the prior cumulative.
+    year_path = business_year_path(year)
+    phys_path = physical_year_path(year)
+
+    def cumulative_uses(band: str) -> list[FieldPath]:
+        """Cite this year's annual revenue and the prior year's cumulative."""
+        uses = [f"{year_path}.revenue_annual_fleet_musd_{band}"]
+        if prior_year is not None:
+            uses.append(f"{business_year_path(prior_year)}.revenue_cumulative_musd_{band}")
+        return uses
 
     return FleetYear(
         year=year,
@@ -266,10 +322,7 @@ def compute_fleet_year(
             value=living_count,
             unit="count",
             formula_name="living_fleet_from_cohort_cliff",
-            uses=[
-                f"{year_path}.nodes_deployed_this_year",
-                "inputs.config.fleet.service_life_years",
-            ],
+            uses=_vintage_uses(living, None),
             sources=[
                 "research/SOURCE_INDEX.md#THR-008",
                 "cohort sum over living vintages",
@@ -288,7 +341,7 @@ def compute_fleet_year(
             value=kw,
             unit="kW",
             formula_name="kw_on_orbit_from_living_fleet",
-            uses=[f"{year_path}.living_fleet", f"{phys_path}.kw_per_node"],
+            uses=_vintage_uses(living, "kw_per_node"),
             sources=["cohort rollup of physical.years per-node kw_per_node"],
             description=f"Living-fleet kW at {year}.",
         ),
@@ -296,7 +349,7 @@ def compute_fleet_year(
             value=kw,
             unit="kW",
             formula_name="kw_on_orbit_from_living_fleet",
-            uses=[f"{year_path}.living_fleet", f"{phys_path}.kw_per_node"],
+            uses=_vintage_uses(living, "kw_per_node"),
             sources=["cohort rollup of physical.years per-node kw_per_node"],
             description=f"Total kW on orbit at {year}.",
         ),
@@ -312,7 +365,7 @@ def compute_fleet_year(
             value=pf,
             unit="PFLOPS",
             formula_name="pf_on_orbit_from_living_fleet",
-            uses=[f"{year_path}.living_fleet", f"{phys_path}.pf_per_node"],
+            uses=_vintage_uses(living, "pf_per_node"),
             sources=["cohort rollup of physical.years per-node pf_per_node"],
             description=f"Living-fleet PFLOPS at {year}.",
         ),
@@ -320,7 +373,7 @@ def compute_fleet_year(
             value=pf,
             unit="PFLOPS",
             formula_name="pf_on_orbit_from_living_fleet",
-            uses=[f"{year_path}.living_fleet", f"{phys_path}.pf_per_node"],
+            uses=_vintage_uses(living, "pf_per_node"),
             sources=["cohort rollup of physical.years per-node pf_per_node"],
             description=f"Total PFLOPS on orbit at {year}.",
         ),
@@ -332,6 +385,8 @@ def compute_fleet_year(
                 f"{year_path}.launches",
                 "inputs.config.launch.low_cadence_cost_musd",
                 "inputs.config.launch.high_cadence_cost_musd",
+                "inputs.config.launch.low_cadence_launches",
+                "inputs.config.launch.high_cadence_launches",
             ],
             sources=[
                 "research/SOURCE_INDEX.md#NTR-009",
@@ -343,7 +398,7 @@ def compute_fleet_year(
             value=cost,
             unit="MUSD",
             formula_name="cost_annual_fleet_from_cohorts",
-            uses=[f"{year_path}.living_fleet", f"{phys_path}.cost_annual_per_node_musd"],
+            uses=_vintage_uses(living, "cost_annual_per_node_musd"),
             sources=["cohort rollup of physical.years per-node cost_annual_per_node_musd"],
             description=f"Fleet annual cost at {year}.",
         ),
@@ -351,11 +406,7 @@ def compute_fleet_year(
             value=rev_c,
             unit="MUSD",
             formula_name="revenue_annual_fleet_from_cohorts",
-            uses=[
-                f"{year_path}.living_fleet",
-                f"{phys_path}.revenue_annual_per_node_musd_central",
-                "inputs.config.revenue.central[]",
-            ],
+            uses=_vintage_uses(living, "revenue_annual_per_node_musd_central"),
             sources=[
                 "research/SOURCE_INDEX.md#REV-008",
                 "cohort rollup of per-node central revenue",
@@ -366,11 +417,7 @@ def compute_fleet_year(
             value=rev_l,
             unit="MUSD",
             formula_name="revenue_annual_fleet_from_cohorts",
-            uses=[
-                f"{year_path}.living_fleet",
-                f"{phys_path}.revenue_annual_per_node_musd_low",
-                "inputs.config.revenue.low[]",
-            ],
+            uses=_vintage_uses(living, "revenue_annual_per_node_musd_low"),
             sources=[
                 "research/SOURCE_INDEX.md#REV-008",
                 "cohort rollup of per-node low revenue",
@@ -381,11 +428,7 @@ def compute_fleet_year(
             value=rev_h,
             unit="MUSD",
             formula_name="revenue_annual_fleet_from_cohorts",
-            uses=[
-                f"{year_path}.living_fleet",
-                f"{phys_path}.revenue_annual_per_node_musd_high",
-                "inputs.config.revenue.high[]",
-            ],
+            uses=_vintage_uses(living, "revenue_annual_per_node_musd_high"),
             sources=[
                 "research/SOURCE_INDEX.md#REV-008",
                 "cohort rollup of per-node high revenue",
@@ -396,7 +439,7 @@ def compute_fleet_year(
             value=cumul_c,
             unit="MUSD",
             formula_name="revenue_cumulative_fleet_from_annuals",
-            uses=[f"{year_path}.revenue_annual_fleet_musd_central"],
+            uses=cumulative_uses("central"),
             sources=["running sum of revenue_annual_fleet_musd_central"],
             description=f"Cumulative revenue {year} (central).",
         ),
@@ -404,7 +447,7 @@ def compute_fleet_year(
             value=cumul_l,
             unit="MUSD",
             formula_name="revenue_cumulative_fleet_from_annuals",
-            uses=[f"{year_path}.revenue_annual_fleet_musd_low"],
+            uses=cumulative_uses("low"),
             sources=["running sum of revenue_annual_fleet_musd_low"],
             description=f"Cumulative revenue {year} (low).",
         ),
@@ -412,7 +455,7 @@ def compute_fleet_year(
             value=cumul_h,
             unit="MUSD",
             formula_name="revenue_cumulative_fleet_from_annuals",
-            uses=[f"{year_path}.revenue_annual_fleet_musd_high"],
+            uses=cumulative_uses("high"),
             sources=["running sum of revenue_annual_fleet_musd_high"],
             description=f"Cumulative revenue {year} (high).",
         ),
@@ -488,6 +531,8 @@ def compute_fleet_year(
 __all__ = [
     "Cohort",
     "FleetYear",
+    "business_year_path",
     "compute_fleet_year",
+    "physical_year_path",
     "r_at_year",
 ]

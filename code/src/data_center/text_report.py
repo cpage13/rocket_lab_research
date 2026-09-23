@@ -13,12 +13,17 @@ monospaced report covering, in order:
   6. Per-year fleet rollup (launches, nodes, living fleet, kW,
      fleet revenue + profit + margin band).
   7. R-band block (the low / central / high revenue trajectory).
-  8. Validation checks (the 16 wired rules, V1-V10 and V12-V17; pass/fail).
+  8. Validation checks: every ``meta.validation_results`` entry (the V-rules,
+     the model invariants, and the default guards when the run is the
+     canonical default), the same list the embedded ``validation_warnings``
+     jq query reads, so the report and the JSON cannot disagree on a verdict.
 
 Every leaf value in the v8 output is a
 :class:`data_center.provenance.ProvenanceCell`; this renderer reads each
-cell's ``.value``. Every section is total: no ``KeyError``, no
-exceptions, no empty section.
+cell's ``.value``. The provenance banner counts cells with
+:func:`data_center.validation.collect_provenance_cells`, the walker V13
+uses, so the two report the same totals. Every section is total: no
+``KeyError``, no exceptions, no empty section.
 
 Cycle-2 Phase 6 (T80–T84) rewrote this module for the v8 fleet +
 R-band layout — adding the provenance-summary banner and the dedicated
@@ -32,9 +37,10 @@ from typing import Final
 from data_center.output import (
     BusinessYear,
     PhysicalYear,
+    ValidationSeverity,
     ValuationOutput,
 )
-from data_center.provenance import ProvenanceCell
+from data_center.validation import collect_provenance_cells
 
 # Fixed monospaced report width, in characters.
 _WIDTH: Final[int] = 78
@@ -118,26 +124,6 @@ def _render_header(output: ValuationOutput) -> list[str]:
     ]
 
 
-def _collect_cells(output: ValuationOutput) -> list[ProvenanceCell]:
-    """Collect every per-year :class:`ProvenanceCell` in the output.
-
-    Walks ``physical.years`` and ``business.years``; every field of a
-    :class:`PhysicalYear` / :class:`BusinessYear` is a ProvenanceCell.
-
-    Args:
-        output: The v8 valuation output.
-
-    Returns:
-        A flat list of every per-year provenance cell, in iteration order.
-    """
-    cells: list[ProvenanceCell] = []
-    for py in output.physical.years.values():
-        cells.extend(v for v in py.__dict__.values() if isinstance(v, ProvenanceCell))
-    for by in output.business.years.values():
-        cells.extend(v for v in by.__dict__.values() if isinstance(v, ProvenanceCell))
-    return cells
-
-
 def _render_provenance_summary(output: ValuationOutput) -> list[str]:
     """Top-of-report provenance banner — cell coverage + key formula citations.
 
@@ -157,7 +143,7 @@ def _render_provenance_summary(output: ValuationOutput) -> list[str]:
     lines: list[str] = []
     lines += _section_header("PROVENANCE SUMMARY")
     lines.append("")
-    cells = _collect_cells(output)
+    cells = collect_provenance_cells(output)
     formula_names = {c.formula_name for c in cells}
     lines.append("  Every leaf value below is a typed ProvenanceCell: value + unit +")
     lines.append(f"  formula + upstream paths + sources. This run produced {len(cells)} cells")
@@ -166,7 +152,7 @@ def _render_provenance_summary(output: ValuationOutput) -> list[str]:
         f"meta.data_dictionary has {len(output.meta.data_dictionary)} entries."
     )
     lines.append("")
-    lines.append("  Key formulas (full catalog: inputs trace -> meta.data_dictionary):")
+    lines.append("  Key formulas (full catalog: meta.formula_definitions):")
     for name in _KEY_FORMULA_NAMES:
         match = next((c for c in cells if c.formula_name == name), None)
         if match is None:
@@ -371,18 +357,25 @@ def _render_fleet(output: ValuationOutput) -> list[str]:
 
 
 def _render_validation(output: ValuationOutput) -> list[str]:
-    """Render the engine-computed validation-check block."""
+    """Render every ``meta.validation_results`` entry with its verdict.
+
+    Reads the public verdict list (not ``meta.validation.rules`` alone), so
+    the report shows exactly the pass / warn / fail set the JSON publishes.
+    """
     lines: list[str] = []
     lines += _section_header("VALIDATION CHECKS")
     lines.append("")
-    rules = output.meta.validation.rules
-    if not rules:
-        lines.append("  (No engine-computed checks for this run.)")
+    results = output.meta.validation_results
+    if not results:
+        lines.append("  (No validation results for this run.)")
         return lines
-    for v in rules:
-        mark = "PASS" if v.pass_check else f"FAIL ({v.severity.value})"
-        lines.append(f"  [{mark:>14}] {v.name}: {v.what_it_tests}")
-        lines.append(f"                  expected {v.expected}, got {v.computed}")
+    for result in results:
+        mark = result.severity.value.upper()
+        lines.append(f"  [{mark:>4}] {result.validation_id}: {result.what_tested}")
+        lines.append(f"         expected {result.expected_condition}, got {result.observed_result}")
+    not_passing = [r for r in results if r.severity is not ValidationSeverity.OK]
+    lines.append("")
+    lines.append(f"  {len(results) - len(not_passing)} of {len(results)} checks pass.")
     return lines
 
 

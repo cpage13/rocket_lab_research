@@ -38,11 +38,11 @@ from .config import ValuationConfig, load_config
 from .engine import run_valuation
 from .ground import (
     build_ground_reference_output,
-    default_ground_source_catalog,
     load_ground_config,
     render_ground_json,
 )
-from .json_output import PROMOTED_DEFAULT_ARTIFACT_ROLE, render_json
+from .json_output import render_json
+from .output import ArtifactRole
 from .text_report import render_headline, render_text
 
 # The calculator directory, resolved relative to this file so paths are found
@@ -190,7 +190,9 @@ def _promote_model(config_path: Path, output_name: str) -> int:
         return 1
 
     artifact_role = (
-        PROMOTED_DEFAULT_ARTIFACT_ROLE if output_name == _DEFAULT_OUTPUT_NAME else "promoted_named"
+        ArtifactRole.PROMOTED_DEFAULT
+        if output_name == _DEFAULT_OUTPUT_NAME
+        else ArtifactRole.PROMOTED_NAMED
     )
     output = run_valuation(
         config,
@@ -204,7 +206,8 @@ def _promote_model(config_path: Path, output_name: str) -> int:
         ground_output = build_ground_reference_output(
             output,
             ground_config,
-            default_ground_source_catalog(),
+            space_model_path=_repo_relative(model_path),
+            ground_scenario_path=_repo_relative(_GROUND_DEFAULT_YAML),
         )
         ground_model_path = _promoted_ground_path(output_name)
         ground_model_path.parent.mkdir(parents=True, exist_ok=True)

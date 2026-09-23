@@ -168,10 +168,11 @@ def test_compute_mass_per_pkg_returns_provenance_cell() -> None:
         2.05,
         0.011,
         0.012,
-        gen_mass_path="a",
-        kw_per_pkg_path="b",
+        gen_mass_uses=["a"],
+        kw_per_pkg_uses=["b"],
         solar_dial_path="c",
         radiator_dial_path="d",
+        radiator_selector_path="e",
     )
     assert isinstance(c, ProvenanceCell)
     assert c.unit == "t"
@@ -180,14 +181,14 @@ def test_compute_mass_per_pkg_returns_provenance_cell() -> None:
 
 def test_compute_n_packages_is_mass_bound_floor() -> None:
     """N = floor(mass_budget / mass_per_pkg)."""
-    c = compute_n_packages(10.0, 0.0685, mass_budget_path="a", mass_per_pkg_path="b")
+    c = compute_n_packages(10.0, 0.0685, mass_budget_uses=["a"], mass_per_pkg_uses=["b"])
     assert c.value == 145
     assert c.unit == "count"
 
 
 def test_compute_n_packages_zero_when_mass_per_pkg_nonpositive() -> None:
     """A non-positive per-package mass yields N = 0 (degenerate config)."""
-    c = compute_n_packages(10.0, 0.0, mass_budget_path="a", mass_per_pkg_path="b")
+    c = compute_n_packages(10.0, 0.0, mass_budget_uses=["a"], mass_per_pkg_uses=["b"])
     assert c.value == 0
 
 
@@ -201,10 +202,12 @@ def test_compute_n_packages_keeps_the_last_package_at_an_exact_fit() -> None:
     """
     mass_per_pkg_t = 0.023 + 2.6 * (0.010 + 0.010)
     assert 10.5 / mass_per_pkg_t < 140
-    exact = compute_n_packages(10.5, mass_per_pkg_t, mass_budget_path="a", mass_per_pkg_path="b")
+    exact = compute_n_packages(
+        10.5, mass_per_pkg_t, mass_budget_uses=["a"], mass_per_pkg_uses=["b"]
+    )
     assert exact.value == 140
     short = compute_n_packages(
-        10.5 - 1e-6, mass_per_pkg_t, mass_budget_path="a", mass_per_pkg_path="b"
+        10.5 - 1e-6, mass_per_pkg_t, mass_budget_uses=["a"], mass_per_pkg_uses=["b"]
     )
     assert short.value == 139
 
@@ -249,7 +252,7 @@ def test_default_package_counts_are_unchanged_by_the_fit_tolerance() -> None:
 
 def test_compute_kw_per_node_is_n_times_kw_per_pkg() -> None:
     """node_kW = N x kW/pkg."""
-    c = compute_kw_per_node(100, 2.05, n_packages_path="a", kw_per_pkg_path="b")
+    c = compute_kw_per_node(100, 2.05, n_packages_path="a", kw_per_pkg_uses=["b"])
     assert c.value == pytest.approx(205.0)
     assert c.unit == "kW"
 
@@ -261,7 +264,7 @@ def test_compute_mass_per_node_adds_fixed_bus_mass() -> None:
         0.05,
         2.5,
         n_packages_path="a",
-        mass_per_pkg_path="b",
+        mass_per_pkg_uses=["b"],
         node_mass_fixed_path="c",
     )
     assert c.value == pytest.approx(2.5 + 100 * 0.05)
@@ -276,7 +279,7 @@ def test_compute_mass_util_is_percent_of_envelope() -> None:
 
 def test_compute_pf_per_node_is_n_times_pf_per_pkg() -> None:
     """pf_node = N x PF/pkg."""
-    c = compute_pf_per_node(100, 15.0, n_packages_path="a", pf_per_pkg_path="b")
+    c = compute_pf_per_node(100, 15.0, n_packages_path="a", pf_per_pkg_uses=["b"])
     assert c.value == pytest.approx(1500.0)
 
 
@@ -296,7 +299,7 @@ def test_compute_cost_per_node_breakdown_returns_five_cells() -> None:
         12.0,
         20.0,
         n_packages_path="a",
-        usd_per_pkg_path="b",
+        usd_per_pkg_uses=["b"],
         kw_per_node_path="c",
         solar_cost_dial_path="d",
         radiator_cost_dial_path="e",
@@ -319,7 +322,7 @@ def test_compute_node_total_cost_sums_the_breakdown() -> None:
         12.0,
         20.0,
         n_packages_path="a",
-        usd_per_pkg_path="b",
+        usd_per_pkg_uses=["b"],
         kw_per_node_path="c",
         solar_cost_dial_path="d",
         radiator_cost_dial_path="e",
@@ -471,7 +474,9 @@ def test_compute_cadence_year_launch_cost_falls_with_cadence() -> None:
 
 def test_compute_volume_year_returns_breakdown() -> None:
     """compute_volume_year returns a VolumeBreakdown of cells."""
-    vb = compute_volume_year(100, True, 2.05, ValuationConfig(), fy_path='physical.years."2026"')
+    vb = compute_volume_year(
+        100, True, 2.05, ValuationConfig(), fy_path='physical.years."2026"', kw_per_pkg_uses=["k"]
+    )
     assert isinstance(vb, VolumeBreakdown)
     assert isinstance(vb.volume_per_node_m3, ProvenanceCell)
     assert isinstance(vb.binding_constraint, ProvenanceCell)
@@ -483,7 +488,9 @@ def test_compute_volume_year_returns_breakdown() -> None:
 
 def test_compute_volume_year_binding_is_mass_at_full_envelope() -> None:
     """A mass-bound year with slack fairing volume reports the mass constraint."""
-    vb = compute_volume_year(100, True, 2.05, ValuationConfig(), fy_path='physical.years."2026"')
+    vb = compute_volume_year(
+        100, True, 2.05, ValuationConfig(), fy_path='physical.years."2026"', kw_per_pkg_uses=["k"]
+    )
     assert vb.binding_constraint.value == "mass"
 
 

@@ -16,9 +16,11 @@ The GPU-first per-node formulas (the heart of the model):
   cost_annual    = node_total / service_life
    revenue_R     = cost_annual × R(launch_year, band)
 
-The radiator t/kW steps at the Tjmax-lift year (D11): the hot-loop coolant
-arrives at year 5 and radiator-mass-per-kW drops (0.013 -> 0.012, cycle-2).
-Launch cost is cadence-indexed (SOURCE_INDEX NTR-009): a log-linear curve over
+The radiator t/kW switches from the pre-lift to the post-lift dial at the
+Tjmax-lift year (D11). The investor-set default (2026-07-14) holds the two dials
+equal, the deployed double-sided radiator asserted from day one, so the step is
+inert by default; it moves the result only in a scenario with a heavier
+pre-lift dial. Launch cost is cadence-indexed (SOURCE_INDEX NTR-009): a log-linear curve over
 the launches-per-year the logistic cadence ramp produces. Bus cost compounds
 at `bus_growth_pre` through `bus_flatten_after_yr`, then holds flat (D12).
 
@@ -54,6 +56,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Final
 
 from .cadence import compute_launch_cost_musd, compute_launches_per_year
 from .config import GospelInputs, RBand, ValuationConfig
@@ -63,14 +66,27 @@ from .constants import (
     PACKAGE_FIT_TOLERANCE,
     USD_PER_MUSD,
 )
-from .fleet import Cohort, FleetYear, compute_fleet_year, r_at_year
+from .fleet import (
+    Cohort,
+    FleetYear,
+    business_year_path,
+    compute_fleet_year,
+    physical_year_path,
+    r_at_year,
+)
 from .generations import (
-    KNOWN_GENS,
     GenerationSpec,
     extend_generations,
     frontier_at,
 )
-from .output import BusinessYear, CostBreakdownBlock, PhysicalYear, ValuationOutput
+from .input_manifest import RELEASE_CADENCE_PATH, GenerationField, generation_field_uses
+from .output import (
+    ArtifactRole,
+    BusinessYear,
+    CostBreakdownBlock,
+    PhysicalYear,
+    ValuationOutput,
+)
 from .provenance import FieldPath, ProvenanceCell, cell
 from .volume import (
     VolumeBreakdown,
@@ -86,12 +102,35 @@ from .volume import (
 # ---------------------------------------------------------------------------
 
 
+RADIATOR_PRE_DIAL_PATH: Final[FieldPath] = "inputs.config.physical.radiator_t_per_kw_pre"
+"""Public path of the radiator mass dial in force before the Tjmax lift."""
+
+RADIATOR_POST_DIAL_PATH: Final[FieldPath] = "inputs.config.physical.radiator_t_per_kw_post"
+"""Public path of the radiator mass dial in force from the Tjmax lift on."""
+
+TJMAX_LIFT_YEAR_PATH: Final[FieldPath] = "inputs.config.physical.tjmax_lift_year"
+"""Public path of the dial that decides which radiator mass dial is in force."""
+
+GEN_YEAR_AVAILABLE_PATHS: Final[FieldPath] = "inputs.config.generations[].year_available"
+"""Public path of every generation's availability year (the frontier rule reads them all)."""
+
+
+def _unique(paths: list[FieldPath]) -> list[FieldPath]:
+    """Drop repeated paths from a ``uses`` list, keeping first-seen order."""
+    return list(dict.fromkeys(paths))
+
+
+def _post_lift(year_idx: int, gospel: GospelInputs) -> bool:
+    """True from the Tjmax-lift year on, when the post-lift radiator dial is in force."""
+    return year_idx >= gospel.tjmax_lift_year
+
+
 def radiator_t_per_kw_for_year(year_idx: int, gospel: GospelInputs) -> float:
     """Return the radiator t/kW prevailing in a given model year (D11).
 
-    Steps from `radiator_t_per_kw_pre` to `radiator_t_per_kw_post` at
-    `tjmax_lift_year` — the hot-loop coolant arrives and radiator mass per
-    kW drops.
+    Switches from `radiator_t_per_kw_pre` to `radiator_t_per_kw_post` at
+    `tjmax_lift_year`. The investor-set default holds the two equal, so the
+    switch is inert unless a scenario sets a heavier pre-lift dial.
 
     Args:
         year_idx: Zero-based model year index.
@@ -100,9 +139,26 @@ def radiator_t_per_kw_for_year(year_idx: int, gospel: GospelInputs) -> float:
     Returns:
         The radiator t/kW in effect for the year.
     """
-    if year_idx >= gospel.tjmax_lift_year:
+    if _post_lift(year_idx, gospel):
         return gospel.radiator_t_per_kw_post
     return gospel.radiator_t_per_kw_pre
+
+
+def radiator_dial_path_for_year(year_idx: int, gospel: GospelInputs) -> FieldPath:
+    """Return the public path of the radiator mass dial in force in a model year.
+
+    The provenance counterpart of :func:`radiator_t_per_kw_for_year`: cells
+    that depend on the year's radiator mass cite this dial (plus
+    ``tjmax_lift_year``, which selects it).
+
+    Args:
+        year_idx: Zero-based model year index.
+        gospel: The locked gospel anchors (provides ``tjmax_lift_year``).
+
+    Returns:
+        The pre-lift or post-lift radiator dial path.
+    """
+    return RADIATOR_POST_DIAL_PATH if _post_lift(year_idx, gospel) else RADIATOR_PRE_DIAL_PATH
 
 
 def bus_cost_for_year(year_idx: int, gospel: GospelInputs) -> float:
@@ -175,23 +231,33 @@ def compute_mass_per_pkg(
     solar_t_per_kw: float,
     radiator_t_per_kw_active: float,
     *,
-    gen_mass_path: FieldPath,
-    kw_per_pkg_path: FieldPath,
+    gen_mass_uses: list[FieldPath],
+    kw_per_pkg_uses: list[FieldPath],
     solar_dial_path: FieldPath,
     radiator_dial_path: FieldPath,
+    radiator_selector_path: FieldPath,
 ) -> ProvenanceCell:
     """Per-package effective mass including apportioned solar + radiator.
+
+    The cell is not emitted as its own output field: its ``uses`` (the
+    per-package mass inputs) are carried by the cells that consume the
+    per-package mass (``gpus_per_node`` and ``mass_per_node_t``).
 
     Args:
         gen_pkg_mass_t: The generation's per-package mass, tonnes.
         kw_per_pkg: The generation's per-package electrical power, kW.
         solar_t_per_kw: Solar-array mass per kW, t/kW.
         radiator_t_per_kw_active: Radiator mass per kW prevailing this year
-            (post-Tjmax-lift value from year 5 — D11), t/kW.
-        gen_mass_path: JSON path of the upstream generation mass figure.
-        kw_per_pkg_path: JSON path of the upstream per-package kW figure.
+            (the pre-lift or post-lift dial, D11), t/kW.
+        gen_mass_uses: JSON paths behind the generation's package mass
+            (:func:`data_center.input_manifest.generation_field_uses`, plus
+            the year's frontier-generation cell).
+        kw_per_pkg_uses: JSON paths behind the generation's package power.
         solar_dial_path: JSON path of the solar-mass dial.
-        radiator_dial_path: JSON path of the radiator-mass dial.
+        radiator_dial_path: JSON path of the radiator-mass dial in force
+            this year (:func:`radiator_dial_path_for_year`).
+        radiator_selector_path: JSON path of the dial that selects the
+            radiator dial in force (``tjmax_lift_year``).
 
     Returns:
         A :class:`ProvenanceCell` carrying the per-package mass in tonnes.
@@ -201,7 +267,15 @@ def compute_mass_per_pkg(
         value=value_t,
         unit="t",
         formula_name="mass_per_pkg_from_gen_and_dials",
-        uses=[gen_mass_path, kw_per_pkg_path, solar_dial_path, radiator_dial_path],
+        uses=_unique(
+            [
+                *gen_mass_uses,
+                *kw_per_pkg_uses,
+                solar_dial_path,
+                radiator_dial_path,
+                radiator_selector_path,
+            ]
+        ),
         sources=["cycle-1 engine formula"],
         description=(
             "Per-package effective mass (generation mass + apportioned solar + radiator), tonnes."
@@ -213,10 +287,10 @@ def compute_n_packages(
     mass_budget_t: float,
     mass_per_pkg_t: float,
     *,
-    mass_budget_path: FieldPath,
-    mass_per_pkg_path: FieldPath,
+    mass_budget_uses: list[FieldPath],
+    mass_per_pkg_uses: list[FieldPath],
 ) -> ProvenanceCell:
-    """Packages per node — the mass-bound floor (D6).
+    """Packages per node: the mass-bound floor (D6).
 
     Floors ``mass_budget_t / mass_per_pkg_t`` after adding
     :data:`~data_center.constants.PACKAGE_FIT_TOLERANCE`, so an exact fit is
@@ -226,8 +300,10 @@ def compute_n_packages(
     Args:
         mass_budget_t: Mass available for packages (envelope - fixed), tonnes.
         mass_per_pkg_t: Per-package effective mass, tonnes.
-        mass_budget_path: JSON path of the upstream mass-budget cell.
-        mass_per_pkg_path: JSON path of the upstream per-package-mass cell.
+        mass_budget_uses: JSON paths of the dials the mass budget is built
+            from (the envelope and the fixed node mass).
+        mass_per_pkg_uses: JSON paths of the inputs the per-package mass is
+            built from (:func:`compute_mass_per_pkg`'s ``uses``).
 
     Returns:
         A :class:`ProvenanceCell` carrying the integer package count.
@@ -241,7 +317,7 @@ def compute_n_packages(
         value=value,
         unit="count",
         formula_name="n_packages_from_mass_envelope",
-        uses=[mass_budget_path, mass_per_pkg_path],
+        uses=[*mass_budget_uses, *mass_per_pkg_uses],
         sources=["cycle-1 engine formula", "research/SOURCE_INDEX.md#NTR-007"],
         description="Packages per node, mass-bound floor of the mass budget.",
     )
@@ -252,15 +328,15 @@ def compute_kw_per_node(
     kw_per_pkg: float,
     *,
     n_packages_path: FieldPath,
-    kw_per_pkg_path: FieldPath,
+    kw_per_pkg_uses: list[FieldPath],
 ) -> ProvenanceCell:
-    """Total node electrical power — N x kW/pkg (derived, not capped — D3).
+    """Total node electrical power: N x kW/pkg (derived, not capped, D3).
 
     Args:
         n_packages: Packages per node.
         kw_per_pkg: The generation's per-package electrical power, kW.
         n_packages_path: JSON path of the upstream package-count cell.
-        kw_per_pkg_path: JSON path of the upstream per-package kW figure.
+        kw_per_pkg_uses: JSON paths behind the generation's package power.
 
     Returns:
         A :class:`ProvenanceCell` carrying the node power in kW.
@@ -269,7 +345,7 @@ def compute_kw_per_node(
         value=n_packages * kw_per_pkg,
         unit="kW",
         formula_name="kw_per_node_from_n_and_kw_per_pkg",
-        uses=[n_packages_path, kw_per_pkg_path],
+        uses=[n_packages_path, *kw_per_pkg_uses],
         sources=["cycle-1 engine formula", "research/SOURCE_INDEX.md#THR-011"],
         description="Total node electrical power, N packages x kW per package.",
     )
@@ -281,17 +357,18 @@ def compute_mass_per_node(
     node_mass_fixed_t: float,
     *,
     n_packages_path: FieldPath,
-    mass_per_pkg_path: FieldPath,
+    mass_per_pkg_uses: list[FieldPath],
     node_mass_fixed_path: FieldPath,
 ) -> ProvenanceCell:
-    """Total node mass — N x mass_per_pkg + the fixed bus mass.
+    """Total node mass: N x mass_per_pkg + the fixed bus mass.
 
     Args:
         n_packages: Packages per node.
         mass_per_pkg_t: Per-package effective mass, tonnes.
         node_mass_fixed_t: Fixed per-node (bus) mass, tonnes.
         n_packages_path: JSON path of the upstream package-count cell.
-        mass_per_pkg_path: JSON path of the upstream per-package-mass cell.
+        mass_per_pkg_uses: JSON paths of the inputs the per-package mass is
+            built from (:func:`compute_mass_per_pkg`'s ``uses``).
         node_mass_fixed_path: JSON path of the node-fixed-mass dial.
 
     Returns:
@@ -301,7 +378,7 @@ def compute_mass_per_node(
         value=node_mass_fixed_t + n_packages * mass_per_pkg_t,
         unit="t",
         formula_name="mass_per_node_from_n_and_mass_per_pkg",
-        uses=[n_packages_path, mass_per_pkg_path, node_mass_fixed_path],
+        uses=[n_packages_path, *mass_per_pkg_uses, node_mass_fixed_path],
         sources=["cycle-1 engine formula"],
         description="Total node mass, N x per-package mass plus the fixed bus mass.",
     )
@@ -346,7 +423,7 @@ def compute_pf_per_node(
     pf_per_pkg: float,
     *,
     n_packages_path: FieldPath,
-    pf_per_pkg_path: FieldPath,
+    pf_per_pkg_uses: list[FieldPath],
 ) -> ProvenanceCell:
     """Total node compute — N x PFLOPS/pkg.
 
@@ -354,7 +431,7 @@ def compute_pf_per_node(
         n_packages: Packages per node.
         pf_per_pkg: The generation's dense-FP4 PFLOPS per package.
         n_packages_path: JSON path of the upstream package-count cell.
-        pf_per_pkg_path: JSON path of the upstream per-package PFLOPS figure.
+        pf_per_pkg_uses: JSON paths behind the generation's package PFLOPS.
 
     Returns:
         A :class:`ProvenanceCell` carrying the node compute in PFLOPS.
@@ -363,7 +440,7 @@ def compute_pf_per_node(
         value=n_packages * pf_per_pkg,
         unit="PFLOPS",
         formula_name="pf_per_node_from_n_and_pf_per_pkg",
-        uses=[n_packages_path, pf_per_pkg_path],
+        uses=[n_packages_path, *pf_per_pkg_uses],
         sources=["cycle-1 engine formula"],
         description="Total node compute, N packages x PFLOPS per package.",
     )
@@ -427,7 +504,7 @@ def compute_cost_per_node_breakdown(
     launch_musd: float,
     *,
     n_packages_path: FieldPath,
-    usd_per_pkg_path: FieldPath,
+    usd_per_pkg_uses: list[FieldPath],
     kw_per_node_path: FieldPath,
     solar_cost_dial_path: FieldPath,
     radiator_cost_dial_path: FieldPath,
@@ -448,7 +525,7 @@ def compute_cost_per_node_breakdown(
         radiator_musd: Radiator build cost, $M.
         launch_musd: Launch cost this year, $M (cadence-indexed).
         n_packages_path: JSON path of the upstream package-count cell.
-        usd_per_pkg_path: JSON path of the upstream per-package price.
+        usd_per_pkg_uses: JSON paths behind the generation's package price.
         kw_per_node_path: JSON path of the upstream node-kW cell (solar +
             radiator costs scale off it).
         solar_cost_dial_path: JSON path of the solar-cost dial.
@@ -464,7 +541,7 @@ def compute_cost_per_node_breakdown(
             value=compute_musd,
             unit="MUSD",
             formula_name="compute_cost_from_n_and_usd_per_pkg",
-            uses=[n_packages_path, usd_per_pkg_path],
+            uses=[n_packages_path, *usd_per_pkg_uses],
             sources=["cycle-1 engine formula"],
             description="Per-node compute build cost (all packages).",
         ),
@@ -475,6 +552,7 @@ def compute_cost_per_node_breakdown(
             uses=[
                 "inputs.config.physical.bus_base_musd",
                 "inputs.config.physical.bus_growth_pre",
+                "inputs.config.physical.bus_flatten_after_yr",
             ],
             sources=["cycle-1 cost dial", "research/SOURCE_INDEX.md#THR-011"],
             description="Per-node bus build cost (declines then flattens).",
@@ -701,6 +779,7 @@ def compute_volume_year(
     config: ValuationConfig,
     *,
     fy_path: FieldPath,
+    kw_per_pkg_uses: list[FieldPath],
 ) -> VolumeBreakdown:
     """Compute one year's stowed-volume breakdown and binding constraint.
 
@@ -718,8 +797,11 @@ def compute_volume_year(
         config: The valuation config (provides the ``volume`` dial block and
             the fixed node volume).
         fy_path: JSON path of this fiscal year's physical block, e.g.
-            ``physical.years."2036"`` — used to build the cell-to-cell
+            ``physical.years."2036"``, used to build the cell-to-cell
             ``uses`` back-pointers so they resolve to real cells.
+        kw_per_pkg_uses: JSON paths behind the frontier generation's
+            package power (its input cell, its derivation when extrapolated,
+            and the year's frontier-generation cell).
 
     Returns:
         A :class:`VolumeBreakdown` of provenance cells.
@@ -728,7 +810,7 @@ def compute_volume_year(
     solar_area_cell = compute_solar_area_per_pkg(
         kw_per_pkg,
         vol.si_bol_efficiency,
-        kw_per_pkg_path="inputs.config.generations[].kw_per_pkg",
+        kw_per_pkg_uses=kw_per_pkg_uses,
         efficiency_path="inputs.config.volume.si_bol_efficiency",
     )
     volume_per_pkg_cell = compute_volume_per_pkg(
@@ -834,28 +916,44 @@ def compute_year(
     gospel = config.gospel
     fy_calendar = config.metadata.base_year + year_idx
     front: GenerationSpec = frontier_at(float(fy_calendar), extended_gens)
-    fy_path = f'physical.years."{fy_calendar}"'
+    fy_path = physical_year_path(fy_calendar)
 
-    # The radiator and mass terms (D11 Tjmax step).
+    # Provenance of the frontier generation's specs: the frontier choice (the
+    # year's frontier_generation cell), the chosen generation's own input
+    # cell, and, when it is extrapolated, the slope or cadence and the latest
+    # listed value it is derived from.
+    listed_count = len(config.listed_generations())
+    front_index = extended_gens.index(front)
+    frontier_path = f"{fy_path}.frontier_generation"
+
+    def spec_uses(field: GenerationField) -> list[FieldPath]:
+        """Cite the frontier choice and the chosen generation's field."""
+        return [frontier_path, *generation_field_uses(front_index, field, listed_count)]
+
+    # The radiator and mass terms (D11 Tjmax step). The per-package mass cell
+    # is not an output field; its inputs ride on the cells that consume it.
     radiator_t_per_kw = radiator_t_per_kw_for_year(year_idx, gospel)
     mass_per_pkg_cell = compute_mass_per_pkg(
         front.kg_per_pkg / KG_PER_T,
         front.kw_per_pkg,
         gospel.solar_mass_t_per_kw,
         radiator_t_per_kw,
-        gen_mass_path="inputs.config.generations[].kg_per_pkg",
-        kw_per_pkg_path="inputs.config.generations[].kw_per_pkg",
+        gen_mass_uses=spec_uses(GenerationField.KG_PER_PKG),
+        kw_per_pkg_uses=spec_uses(GenerationField.KW_PER_PKG),
         solar_dial_path="inputs.config.physical.solar_mass_t_per_kw",
-        radiator_dial_path="inputs.config.physical.radiator_t_per_kw_post",
+        radiator_dial_path=radiator_dial_path_for_year(year_idx, gospel),
+        radiator_selector_path=TJMAX_LIFT_YEAR_PATH,
     )
     mass_per_pkg_t = _cell_float(mass_per_pkg_cell)
-    # mass_per_pkg_t = effective per-pkg mass (gen+solar+radiator); paths below tag raw kg_per_pkg
     mass_budget_t = gospel.mass_envelope_t - gospel.node_mass_fixed_t
     n_cell = compute_n_packages(
         mass_budget_t,
         mass_per_pkg_t,
-        mass_budget_path="inputs.config.physical.mass_envelope_t",
-        mass_per_pkg_path="inputs.config.generations[].kg_per_pkg",
+        mass_budget_uses=[
+            "inputs.config.physical.mass_envelope_t",
+            "inputs.config.physical.node_mass_fixed_t",
+        ],
+        mass_per_pkg_uses=mass_per_pkg_cell.uses,
     )
     n = _cell_int(n_cell)
     # Mass binds when the budget left after N packages cannot take one more.
@@ -866,7 +964,7 @@ def compute_year(
         n,
         front.kw_per_pkg,
         n_packages_path=f"{fy_path}.gpus_per_node",
-        kw_per_pkg_path="inputs.config.generations[].kw_per_pkg",
+        kw_per_pkg_uses=spec_uses(GenerationField.KW_PER_PKG),
     )
     node_kw = _cell_float(kw_cell)
     node_mass_cell = compute_mass_per_node(
@@ -874,7 +972,7 @@ def compute_year(
         mass_per_pkg_t,
         gospel.node_mass_fixed_t,
         n_packages_path=f"{fy_path}.gpus_per_node",
-        mass_per_pkg_path="inputs.config.generations[].kg_per_pkg",
+        mass_per_pkg_uses=mass_per_pkg_cell.uses,
         node_mass_fixed_path="inputs.config.physical.node_mass_fixed_t",
     )
     node_mass_t = _cell_float(node_mass_cell)
@@ -888,7 +986,7 @@ def compute_year(
         n,
         front.pf_per_pkg,
         n_packages_path=f"{fy_path}.gpus_per_node",
-        pf_per_pkg_path="inputs.config.generations[].pf_per_pkg",
+        pf_per_pkg_uses=spec_uses(GenerationField.PF_PER_PKG),
     )
     node_pf = _cell_float(pf_node_cell)
     pf_per_kw_cell = compute_pf_per_kw(
@@ -899,7 +997,14 @@ def compute_year(
     )
 
     # The volume model (transparency — does not gate N, D6).
-    volume = compute_volume_year(n, mass_bound, front.kw_per_pkg, config, fy_path=fy_path)
+    volume = compute_volume_year(
+        n,
+        mass_bound,
+        front.kw_per_pkg,
+        config,
+        fy_path=fy_path,
+        kw_per_pkg_uses=spec_uses(GenerationField.KW_PER_PKG),
+    )
 
     # The cost decomposition — five build lines + total + annualized.
     cadence_year = compute_cadence_year(year_idx, config)
@@ -912,11 +1017,11 @@ def compute_year(
         gospel.radiator_cost_musd_per_kw * node_kw,
         launch_musd,
         n_packages_path=f"{fy_path}.gpus_per_node",
-        usd_per_pkg_path="inputs.config.generations[].usd_per_pkg",
+        usd_per_pkg_uses=spec_uses(GenerationField.USD_PER_PKG),
         kw_per_node_path=f"{fy_path}.kw_per_node",
         solar_cost_dial_path="inputs.config.physical.solar_cost_musd_per_kw",
         radiator_cost_dial_path="inputs.config.physical.radiator_cost_musd_per_kw",
-        launch_cost_path=f'business.years."{fy_calendar}".launch_cost_this_year_musd',
+        launch_cost_path=f"{business_year_path(fy_calendar)}.launch_cost_this_year_musd",
     )
     node_total_cell = compute_node_total_cost(
         breakdown, cost_breakdown_path=f"{fy_path}.cost_breakdown"
@@ -978,11 +1083,14 @@ def compute_year(
         cost_annual_path=cost_annual_path,
     )
 
+    # The frontier rule reads every generation's availability year; the
+    # extrapolated ones are dated on the release cadence, so the cadence
+    # decides which generations exist past the latest listed one.
     frontier_cell = cell(
         value=front.name,
         unit="-",
         formula_name="frontier_generation_from_cadence",
-        uses=["inputs.config.generations[].year_available"],
+        uses=[GEN_YEAR_AVAILABLE_PATHS, RELEASE_CADENCE_PATH],
         sources=["research/SOURCE_INDEX.md#GPU-001", "research/SOURCE_INDEX.md#GPU-012"],
         description=(
             f"Frontier generation for FY{fy_calendar} "
@@ -1105,6 +1213,7 @@ def compute_fleet_trajectory(
     cumul_central = 0.0
     cumul_low = 0.0
     cumul_high = 0.0
+    prior_year: int | None = None
     for year in years:
         launches = _cell_int(year.cadence.launches)
         launch_cost = _cell_float(year.cadence.launch_cost_musd)
@@ -1119,8 +1228,9 @@ def compute_fleet_trajectory(
             cumul_low,
             cumul_high,
             service_life_years=config.fleet.service_life_years,
-            year_path=f'business.years."{year.fy}"',
+            prior_year=prior_year,
         )
+        prior_year = year.fy
         fleet_years.append(fleet_year)
         cumul_central = _cell_float(fleet_year.revenue_cumulative_musd_central)
         cumul_low = _cell_float(fleet_year.revenue_cumulative_musd_low)
@@ -1178,7 +1288,7 @@ def run_valuation(
     config: ValuationConfig,
     *,
     source_scenario_path: str = "unrecorded",
-    artifact_role: str = "draft",
+    artifact_role: ArtifactRole = ArtifactRole.DRAFT,
 ) -> ValuationOutput:
     """Run the GPU-first valuation model end-to-end and return the v8 artifact.
 
@@ -1203,12 +1313,10 @@ def run_valuation(
 
     horizon_years = config.metadata.horizon_years
 
-    # Generation list — scenario override or KNOWN_GENS extended to cover
-    # the horizon's fiscal year plus the lookahead.
-    if config.generations is not None:
-        base_gens: list[GenerationSpec] = list(config.generations)
-    else:
-        base_gens = list(KNOWN_GENS)
+    # Generation list: the listed roadmap (the scenario's list or the bundled
+    # KNOWN_GENS) extended to cover the horizon's fiscal year plus the
+    # lookahead.
+    base_gens = config.listed_generations()
     target_yr = float(
         config.metadata.base_year + horizon_years + GENERATION_EXTENSION_LOOKAHEAD_YEARS
     )
@@ -1257,6 +1365,7 @@ __all__ = [
     "compute_revenue_annual_per_node",
     "compute_volume_year",
     "compute_year",
+    "radiator_dial_path_for_year",
     "radiator_t_per_kw_for_year",
     "run_valuation",
 ]

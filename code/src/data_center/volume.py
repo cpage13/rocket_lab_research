@@ -60,7 +60,7 @@ def compute_solar_area_per_pkg(
     kw_per_pkg: float,
     si_bol_efficiency: float,
     *,
-    kw_per_pkg_path: FieldPath,
+    kw_per_pkg_uses: list[FieldPath],
     efficiency_path: FieldPath,
 ) -> ProvenanceCell:
     """Solar collector area per package required to power it.
@@ -68,7 +68,9 @@ def compute_solar_area_per_pkg(
     Args:
         kw_per_pkg: The generation's per-package electrical power, kW.
         si_bol_efficiency: Si beginning-of-life AM0 conversion efficiency.
-        kw_per_pkg_path: JSON path of the upstream per-package kW figure.
+        kw_per_pkg_uses: JSON paths behind the per-package kW figure (the
+            generation's input cell, its derivation when extrapolated, and
+            the frontier choice).
         efficiency_path: JSON path of the Si BOL efficiency dial.
 
     Returns:
@@ -79,7 +81,7 @@ def compute_solar_area_per_pkg(
         value=value,
         unit="m2",
         formula_name="solar_area_per_pkg_from_kw_and_eff",
-        uses=[kw_per_pkg_path, efficiency_path],
+        uses=[*kw_per_pkg_uses, efficiency_path],
         sources=[
             "research/SOURCE_INDEX.md#THR-002",
             "research/SOURCE_INDEX.md#THR-007",

@@ -119,8 +119,10 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
     ),
     "n_packages_from_mass_envelope": FormulaSpec(
         formula=(
-            "floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg "
-            "+ PACKAGE_FIT_TOLERANCE)"
+            "floor((mass_envelope_t - node_mass_fixed_t) / mass_per_pkg_t "
+            "+ PACKAGE_FIT_TOLERANCE); mass_per_pkg_t = kg_per_pkg / 1000 + kw_per_pkg "
+            "x (solar_mass_t_per_kw + radiator_t_per_kw(year)); radiator_t_per_kw(year) "
+            "= radiator_t_per_kw_pre before tjmax_lift_year, else radiator_t_per_kw_post"
         ),
         description=(
             "Packages per node, mass-bound under D6; the fit tolerance keeps an "
@@ -132,12 +134,15 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Total node electrical power.",
     ),
     "mass_per_node_from_n_and_mass_per_pkg": FormulaSpec(
-        formula="N x mass_per_pkg + node_mass_fixed_t",
+        formula=(
+            "N x mass_per_pkg_t + node_mass_fixed_t (mass_per_pkg_t as in "
+            "n_packages_from_mass_envelope)"
+        ),
         description="Total node mass including bus.",
     ),
     "mass_utilization": FormulaSpec(
-        formula="mass_per_node_t / mass_envelope_t",
-        description="Fraction of mass envelope used.",
+        formula="mass_per_node_t / mass_envelope_t x 100",
+        description="Percent of the mass envelope used.",
     ),
     "solar_area_per_pkg_from_kw_and_eff": FormulaSpec(
         formula="kw_per_pkg x 1000 / (SOLAR_CONSTANT_W_M2 x si_bol_efficiency)",
@@ -155,8 +160,8 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Total node stowed volume.",
     ),
     "volume_utilization": FormulaSpec(
-        formula="volume_per_node_m3 / neutron_fairing_usable_volume_m3",
-        description="Fraction of Neutron fairing volume used.",
+        formula="volume_per_node_m3 / neutron_fairing_usable_volume_m3 x 100",
+        description="Percent of the Neutron fairing volume used.",
     ),
     "binding_constraint_from_utilizations": FormulaSpec(
         formula=(
@@ -232,7 +237,9 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Fleet annual revenue (cohort-vintaged).",
     ),
     "revenue_cumulative_fleet_from_annuals": FormulaSpec(
-        formula="sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
+        formula=(
+            "revenue_cumulative(Y - 1) + revenue_annual(Y); revenue_cumulative(base_year - 1) = 0"
+        ),
         description="Cumulative fleet revenue base_year through Y.",
     ),
     "cost_annual_fleet_from_cohorts": FormulaSpec(
@@ -303,7 +310,7 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
     ),
     "ground_energy_cost_from_kw_pue_utilization": FormulaSpec(
         formula=(
-            "anchor_kw x PUE x utilization x hours_per_year x years / 1000 "
+            "anchor_kw x PUE x utilization x hours_per_year x service_life_years / 1000 "
             "x usd_per_mwh / 1_000_000"
         ),
         description="Ground electricity cost over the comparison period.",
@@ -313,8 +320,8 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Ground cooling infrastructure allocation.",
     ),
     "ground_operations_cost_from_mw_year": FormulaSpec(
-        formula="anchor_mw x operations_maintenance_musd_per_mw_year x years",
-        description="Ground operations, maintenance, and labor allocation.",
+        formula="anchor_mw x operations_maintenance_musd_per_mw_year x service_life_years",
+        description="Ground operations, maintenance, and labor over the comparison period.",
     ),
     "orbital_component_cost_from_space_node_component": FormulaSpec(
         formula="space_per_node_component_cost x anchor_nodes",
@@ -329,7 +336,7 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Total cost from included component costs.",
     ),
     "annualized_cost_from_total_and_period": FormulaSpec(
-        formula="total_cost / comparison_period_years",
+        formula="total_cost / anchor.service_life_years (the comparison period)",
         description="Annualized cost over the comparison period.",
     ),
     "cost_per_unit_from_total": FormulaSpec(

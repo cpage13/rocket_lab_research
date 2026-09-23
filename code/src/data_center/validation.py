@@ -38,6 +38,18 @@ life (V16) read the configured ``fleet.service_life_years``; V9 bands the
 life-independent per-node total cost, so no rule's verdict flips on the
 service life or the horizon alone.
 
+:func:`build_validation_results` builds ``meta.validation_results``, the
+one public verdict list every reader uses (the text report, the embedded
+``validation_warnings`` jq query): every V-rule mirrored as pass / warn /
+fail, then the model invariants that hold for any scenario (the anchor-year
+launches reproduce the year-10 cadence dial, the living fleet differs from
+the deployed-year cohort when an earlier cohort is still alive at the anchor
+year, no placeholder or stale input), then, only for the canonical default scenario,
+the default guards that compare the promoted default with the code defaults
+in :mod:`data_center.constants` (the anchor-year capacity band, the central R,
+the service life). A non-default scenario is therefore never failed for
+differing from the default by design.
+
 Severity tiers (see :class:`output.Severity`):
 
 * ``CRITICAL`` — model is invalid; do not quote.
@@ -59,9 +71,21 @@ from pydantic import BaseModel
 from common.cohort import cohort_is_alive_at
 
 from .config import OperatorModel, RadiatorArchitecture, anchor_year
-from .constants import PACKAGE_FIT_TOLERANCE, PERCENT_PER_FRACTION
+from .constants import (
+    ANCHOR_MODEL_YEAR,
+    PACKAGE_FIT_TOLERANCE,
+    PERCENT_PER_FRACTION,
+    R_BAND_CENTRAL_ANCHORS_DEFAULT,
+    SERVICE_LIFE_YEARS,
+)
 from .input_manifest import InputCell
-from .output import Severity, ValidationCheck, ValuationOutput
+from .output import (
+    Severity,
+    ValidationCheck,
+    ValidationResult,
+    ValidationSeverity,
+    ValuationOutput,
+)
 from .provenance import FORMULAS, ProvenanceCell
 from .volume import FAIRING_FULL_UTILIZATION_PCT
 
@@ -155,6 +179,20 @@ CADENCE_CEILING_EPSILON: Final[float] = 1e-6
 # was used with a co-mounted architecture lock: the cycle-1 mistake. (The
 # deployed double-sided architecture has no floor yet: an investor decision.)
 RADIATOR_T_PER_KW_CO_MOUNTED_MIN: Final[float] = 0.010
+
+# Default guard: the promoted default's anchor-year deployed-year cohort sits
+# in this band, kW (the published claim is about 68 MW a year; the band
+# brackets it so a units slip or a stray default change fails loudly). Read
+# only for the canonical default scenario.
+DEFAULT_DEPLOYED_KW_LOWER_BOUND: Final[float] = 60_000.0
+DEFAULT_DEPLOYED_KW_UPPER_BOUND: Final[float] = 75_000.0
+
+# Default guard: the central R the default band starts at, taken from the
+# code default so the guard and the default cannot drift apart.
+DEFAULT_CENTRAL_R_AT_BASE_YEAR: Final[float] = R_BAND_CENTRAL_ANCHORS_DEFAULT[0][1]
+
+# Remediation text for a mirrored V-rule failure.
+RULE_REMEDIATION_HINT: Final[str] = "Review model inputs and formulas."
 
 
 # ---------------------------------------------------------------------------
@@ -670,15 +708,17 @@ def _cells_of(record: BaseModel) -> list[ProvenanceCell]:
     return cells
 
 
-def _all_provenance_cells(output: ValuationOutput) -> list[ProvenanceCell]:
+def collect_provenance_cells(output: ValuationOutput) -> list[ProvenanceCell]:
     """Collect every :class:`ProvenanceCell` leaf in the v8 output.
 
+    The one recursive cell walker: V13 counts with it and the text report's
+    provenance banner reuses it, so the two always report the same totals.
     ProvenanceCell leaves live only in the per-year ``physical.years`` and
-    ``business.years`` maps — every field of :class:`output.PhysicalYear`
+    ``business.years`` maps: every field of :class:`output.PhysicalYear`
     and :class:`output.BusinessYear` is a ProvenanceCell or a nested
     sub-object of cells (``cost_breakdown``). The ``inputs`` block carries
-    config models and flat dicts (no cells), so walking the two per-year
-    maps reaches every cell in the artifact.
+    input cells, not provenance cells, so walking the two per-year maps
+    reaches every provenance cell in the artifact.
 
     Args:
         output: A fully-built v8 :class:`ValuationOutput`.
@@ -714,7 +754,7 @@ def check_provenance_formula_keys(output: ValuationOutput) -> ValidationCheck:
         A :class:`ValidationCheck`; fails (MAJOR) if any cell references a
         ``formula_name`` not present in :data:`FORMULAS`.
     """
-    cells = _all_provenance_cells(output)
+    cells = collect_provenance_cells(output)
     used = {c.formula_name for c in cells}
     missing = sorted(name for name in used if name not in FORMULAS)
     if missing:
@@ -1079,6 +1119,230 @@ def _input_float(cell: InputCell) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Public verdict list: meta.validation_results
+# ---------------------------------------------------------------------------
+
+
+def _result(
+    *,
+    validation_id: str,
+    passed: bool,
+    what_tested: str,
+    expected_condition: str,
+    observed_result: str,
+    related_json_paths: list[str],
+    remediation_hint: str,
+) -> ValidationResult:
+    """Construct one pass/fail public validation result.
+
+    Args:
+        validation_id: Stable validation identifier.
+        passed: Whether the check passed.
+        what_tested: Plain-language statement of the check.
+        expected_condition: The condition a passing run satisfies.
+        observed_result: The observed value, as text.
+        related_json_paths: JSON paths the check reads.
+        remediation_hint: Hint published only when the check fails.
+
+    Returns:
+        A :class:`ValidationResult`, severity ``pass`` or ``fail``.
+    """
+    return ValidationResult(
+        validation_id=validation_id,
+        severity=ValidationSeverity.OK if passed else ValidationSeverity.FAIL,
+        what_tested=what_tested,
+        expected_condition=expected_condition,
+        observed_result=observed_result,
+        related_json_paths=related_json_paths,
+        remediation_hint=None if passed else remediation_hint,
+    )
+
+
+def _rule_result(rule: ValidationCheck) -> ValidationResult:
+    """Mirror one V-rule as a public result: a failed MINOR rule warns, others fail."""
+    if rule.pass_check:
+        severity = ValidationSeverity.OK
+    elif rule.severity is Severity.MINOR:
+        severity = ValidationSeverity.WARN
+    else:
+        severity = ValidationSeverity.FAIL
+    return ValidationResult(
+        validation_id=rule.name,
+        severity=severity,
+        what_tested=rule.what_it_tests,
+        expected_condition=rule.expected,
+        observed_result=rule.computed,
+        related_json_paths=[],
+        remediation_hint=None if rule.pass_check else RULE_REMEDIATION_HINT,
+    )
+
+
+def _model_invariant_results(output: ValuationOutput) -> list[ValidationResult]:
+    """Checks that hold for every scenario, read against the run's own config.
+
+    * The anchor-year launches reproduce the ``launches_at_year_10`` dial
+      (emitted when the window reaches model year 10, where the anchor year
+      is that dial's year).
+    * The living fleet is larger than the deployed-year cohort (emitted when
+      an earlier cohort that deployed nodes is still alive at the anchor
+      year; otherwise the two coincide by construction, as with a one-year
+      service life or a first launch in the anchor year itself).
+    * No input carries a placeholder or stale source status.
+
+    Args:
+        output: The assembled output with its source-status summary.
+
+    Returns:
+        The applicable invariant results.
+    """
+    md = output.metadata
+    anchor = anchor_year(md.base_year, md.horizon_years)
+    anchor_path = f'business.years."{anchor}"'
+    business_year = output.business.years[str(anchor)]
+    results: list[ValidationResult] = []
+
+    if anchor - md.base_year == ANCHOR_MODEL_YEAR:
+        dial = _input_int(output.inputs.config.cadence.launches_at_year_10)
+        launches = int(_num(business_year.launches.value))
+        results.append(
+            _result(
+                validation_id="anchor_year_launches_match_year_10_dial",
+                passed=launches == dial,
+                what_tested=(f"The FY{anchor} launch count reproduces the year-10 cadence dial."),
+                expected_condition=f"launches == cadence.launches_at_year_10 ({dial})",
+                observed_result=f"{launches} launches in FY{anchor}",
+                related_json_paths=[
+                    "inputs.config.cadence.launches_at_year_10",
+                    f"{anchor_path}.launches",
+                ],
+                remediation_hint="Check the cadence anchors and the first launch year.",
+            )
+        )
+
+    service_life = _input_int(output.inputs.config.fleet.service_life_years)
+    earlier_living_nodes = sum(
+        int(_num(year.nodes_deployed_this_year.value))
+        for fy, year in output.business.years.items()
+        if int(fy) < anchor and cohort_is_alive_at(int(fy), anchor, service_life)
+    )
+    if earlier_living_nodes > 0:
+        deployed_kw = _num(business_year.kw_deployed_this_year.value)
+        living_kw = _num(business_year.kw_living_fleet.value)
+        results.append(
+            _result(
+                validation_id="living_fleet_distinct_from_deployed_year_cohort",
+                passed=living_kw > deployed_kw,
+                what_tested="Living fleet capacity is distinct from same-year deployment.",
+                expected_condition="kw_living_fleet > kw_deployed_this_year",
+                observed_result=(
+                    f"{living_kw:g} kW living vs {deployed_kw:g} kW deployed in FY{anchor}"
+                ),
+                related_json_paths=[
+                    f"{anchor_path}.kw_living_fleet",
+                    f"{anchor_path}.kw_deployed_this_year",
+                ],
+                remediation_hint="Check cohort cliff and living-fleet rollup.",
+            )
+        )
+
+    summary = output.meta.source_status_summary
+    results.append(
+        _result(
+            validation_id="release_critical_inputs_have_no_placeholder_or_stale_status",
+            passed=summary.placeholder == 0 and summary.stale == 0,
+            what_tested="Source-status summary has no placeholder or stale inputs.",
+            expected_condition="placeholder == 0 and stale == 0",
+            observed_result=f"placeholder={summary.placeholder}, stale={summary.stale}",
+            related_json_paths=["inputs.assumption_index", "meta.source_status_summary"],
+            remediation_hint="Update source metadata before promotion.",
+        )
+    )
+    return results
+
+
+def _default_guard_results(output: ValuationOutput) -> list[ValidationResult]:
+    """Guards for the canonical default scenario only.
+
+    Each compares the promoted default with the code defaults in
+    :mod:`data_center.constants` (which ``code/scenarios/default.yaml``
+    mirrors): the anchor-year deployed capacity band, the central R at the
+    base year, and the service life. They are never emitted for another
+    scenario, which differs from the default by design.
+
+    Args:
+        output: The assembled output of the canonical default scenario.
+
+    Returns:
+        The three default-guard results.
+    """
+    md = output.metadata
+    anchor = anchor_year(md.base_year, md.horizon_years)
+    business_year = output.business.years[str(anchor)]
+    deployed_kw = _num(business_year.kw_deployed_this_year.value)
+    first_central_r = _input_float(output.inputs.config.revenue.central[0])
+    service_life = _input_int(output.inputs.config.fleet.service_life_years)
+    return [
+        _result(
+            validation_id=f"default_{anchor}_deployed_capacity_around_70mw",
+            passed=(
+                DEFAULT_DEPLOYED_KW_LOWER_BOUND <= deployed_kw <= DEFAULT_DEPLOYED_KW_UPPER_BOUND
+            ),
+            what_tested=f"Default {anchor} newly deployed capacity is around 70 MW/year.",
+            expected_condition=(
+                f"{DEFAULT_DEPLOYED_KW_LOWER_BOUND:g} <= kw_deployed_this_year <= "
+                f"{DEFAULT_DEPLOYED_KW_UPPER_BOUND:g}"
+            ),
+            observed_result=f"{deployed_kw:g} kW/year",
+            related_json_paths=[f'business.years."{anchor}".kw_deployed_this_year'],
+            remediation_hint="Check cadence and per-node power assumptions.",
+        ),
+        _result(
+            validation_id="default_revenue_multiple_is_1_5x",
+            passed=first_central_r == DEFAULT_CENTRAL_R_AT_BASE_YEAR,
+            what_tested=(
+                "Default central R-band starts at the code default "
+                f"({DEFAULT_CENTRAL_R_AT_BASE_YEAR:g}x)."
+            ),
+            expected_condition=f"first central R anchor == {DEFAULT_CENTRAL_R_AT_BASE_YEAR:g}",
+            observed_result=f"{first_central_r:g}",
+            related_json_paths=["inputs.config.revenue.central"],
+            remediation_hint="Check default scenario R-band anchors.",
+        ),
+        _result(
+            validation_id="default_service_life_is_five_years",
+            passed=service_life == SERVICE_LIFE_YEARS,
+            what_tested=f"Default service life is the code default ({SERVICE_LIFE_YEARS} years).",
+            expected_condition=f"service_life_years == {SERVICE_LIFE_YEARS}",
+            observed_result=str(service_life),
+            related_json_paths=["inputs.config.fleet.service_life_years"],
+            remediation_hint="Check default scenario fleet block.",
+        ),
+    ]
+
+
+def build_validation_results(output: ValuationOutput) -> list[ValidationResult]:
+    """Build ``meta.validation_results``, the one public verdict list.
+
+    Mirrors every ``meta.validation.rules`` entry, then appends the model
+    invariants (every scenario) and, for the canonical default scenario only
+    (``inputs.scenario.is_default``), the default guards. The text report
+    and the embedded ``validation_warnings`` query both read this list.
+
+    Args:
+        output: The assembled output with its validation rules and
+            source-status summary in place.
+
+    Returns:
+        The public validation results, rules first.
+    """
+    results = [_rule_result(rule) for rule in output.meta.validation.rules]
+    results.extend(_model_invariant_results(output))
+    if output.inputs.scenario.is_default:
+        results.extend(_default_guard_results(output))
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Top-level: run the 16 wired rules (V1-V10, V12-V17; V11 retired) in order
 # ---------------------------------------------------------------------------
 
@@ -1124,6 +1388,9 @@ __all__ = [
     "B2B_R_CENTRAL_FLOOR",
     "CADENCE_CEILING_EPSILON",
     "DATA_DICT_MIN_ENTRIES",
+    "DEFAULT_CENTRAL_R_AT_BASE_YEAR",
+    "DEFAULT_DEPLOYED_KW_LOWER_BOUND",
+    "DEFAULT_DEPLOYED_KW_UPPER_BOUND",
     "MARGIN_PCT_MIN",
     "MASS_UTIL_FIT_SLACK_FACTOR",
     "MASS_UTIL_FIT_SLACK_PCT",
@@ -1153,5 +1420,7 @@ __all__ = [
     "check_radiator_dial_arch_consistency",
     "check_revenue_above_cost_per_node",
     "check_volume_fits_horizon",
+    "build_validation_results",
+    "collect_provenance_cells",
     "compute_validation",
 ]

@@ -1,17 +1,32 @@
 """Typed ground reference model for the public data-center comparison.
 
-The ground reference model compares one terrestrial five-year data-center
-cohort against the space model's deployed-year cohort at the run's anchor
-year (ADR-003): :func:`data_center.config.anchor_year` of the space run's
-window, FY2036 for the default. It is a small deep module: callers provide a
-typed :class:`SpaceModelOutput`, a typed ground-assumption config, and a
-source catalog; this module owns the anchor selection, input manifest, cost
-arithmetic, warnings, and output contract.
+The ground reference model compares one terrestrial data-center cohort
+against the space model's deployed-year cohort at the run's anchor year
+(ADR-003): :func:`data_center.config.anchor_year` of the space run's window,
+FY2036 for the default. The comparison period is the anchor cohort's service
+life (``anchor.service_life_years``, five years for the default), derived
+from the space run rather than set by a separate dial, so the ground energy
+and operations lines always cover the life the orbital cohort is built for.
+
+It is a small deep module: callers provide a typed :class:`SpaceModelOutput`,
+a typed ground-assumption config, and the repository paths of the space
+artifact and the ground scenario actually used; this module owns the anchor
+selection, input manifest, cost arithmetic, validation, and output contract.
+
+Provenance: every ``uses`` entry resolves. A path without a prefix resolves
+inside the ground artifact (``anchor.*``, ``inputs.config.*``,
+``ground.component_costs[i].cost``); a path prefixed ``space:``
+(:data:`SPACE_PATH_PREFIX`) resolves inside the space artifact named by
+``anchor.space_model_path``. The anchor's numeric fields are plain values, so
+a cell that reads one cites both ``anchor.<quantity>`` and the space cells the
+quantity is taken from (:func:`_anchor_uses`): a space dial that moves the
+anchor cohort reaches every ground cost built on it.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -20,18 +35,22 @@ from typing import Any, Final  # typing-acceptable: Any types the YAML boundary
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
+from common.input_manifest import CellSpec, _field_description, _spec_cell
+from common.meta import COUNT_UNIT, summarize_source_statuses
 from data_center.config import anchor_year
 from data_center.input_manifest import (
     AssumptionRole,
     InputCell,
     InputPath,
-    InputScalar,
     ScenarioIdentity,
-    SourceRef,
-    SourceRefType,
     SourceStatus,
+    collect_input_cells,
 )
+from data_center.json_output import build_data_dictionary
 from data_center.output import (
+    YEAR_UNIT,
+    YEARS_UNIT,
+    ArtifactRole,
     DataDictEntry,
     QueryAppliesTo,
     QueryExample,
@@ -51,8 +70,17 @@ GROUND_SCHEMA_VERSION: Final[str] = "ground-v1"
 DEFAULT_GROUND_SCENARIO_PATH: Final[str] = "code/scenarios/ground_default.yaml"
 """Repository-relative location of the default ground assumptions."""
 
-SPACE_MODEL_DEFAULT_PATH: Final[str] = "data_center/models/space/default.json"
-"""Public promoted space model used by the default ground reference."""
+SPACE_PATH_PREFIX: Final[str] = "space:"
+"""Prefix marking a ``uses`` path that resolves in the space artifact.
+
+The ground reference cites space-model cells (the anchor cohort's per-node
+cost lines, node counts, and power); those paths live in the space artifact
+named by ``anchor.space_model_path``, not in the ground artifact, so they
+carry this explicit cross-artifact prefix. Unprefixed paths resolve in the
+ground artifact itself."""
+
+SPACE_SERVICE_LIFE_PATH: Final[FieldPath] = "inputs.config.fleet.service_life_years"
+"""Space-artifact path of the service life that sets the comparison period."""
 
 ANCHOR_BASIS: Final[str] = "deployed_this_year"
 """Ground comparison basis; deliberately not the living fleet."""
@@ -67,9 +95,6 @@ GROUND_COST_RESEARCH_PATH: Final[str] = (
     "research/economics/ground_infrastructure_electricity_costs_2036.md"
 )
 """Research note containing the current ground infrastructure cost basis."""
-
-SOURCE_INDEX_PATH: Final[str] = "research/SOURCE_INDEX.md"
-"""Public source ledger used by all promoted input cells."""
 
 GROUND_GPU_PACKAGE_COST_BOUNDARY_CLAIM_ID: Final[str] = "RLDC-GROUND-GPU-PACKAGE-COST-BOUNDARY"
 """SOURCE_INDEX claim for the ground GPU package comparison boundary."""
@@ -94,9 +119,6 @@ GROUND_OPERATIONS_MAINTENANCE_CLAIM_ID: Final[str] = "RLDC-GROUND-O_AND_M-1_5M-M
 
 GROUND_COOLING_CLAIM_ID: Final[str] = "RLDC-GROUND-COOLING-4M-MW"
 """SOURCE_INDEX claim for cooling infrastructure."""
-
-GROUND_COMPARISON_PERIOD_CLAIM_ID: Final[str] = "RLDC-GROUND-COMPARISON-PERIOD-5Y"
-"""SOURCE_INDEX claim for the five-year comparison period."""
 
 DEFAULT_GPU_PACKAGE_COST_MULTIPLIER: Final[float] = 1.0
 """Ground GPU package cost multiplier; `1.0` means same package cost as space."""
@@ -134,14 +156,17 @@ DEFAULT_OPERATIONS_MAINTENANCE_MUSD_PER_MW_YEAR: Final[float] = 1.5
 DEFAULT_COOLING_COST_MUSD_PER_MW: Final[float] = 4.0
 """Scenario liquid-cooling infrastructure allocation per MW."""
 
-DEFAULT_COMPARISON_PERIOD_YEARS: Final[int] = 5
-"""Default comparison window, aligned to the space model service life."""
+GROUND_RESEARCH_NOTE: Final[str] = "Research basis for ground infrastructure and electricity costs."
+"""What the ground research note supports, cited on every default ground input."""
 
-ZERO_COUNT: Final[int] = 0
-"""Initial counter value for source-status summaries."""
+GROUND_SOURCE_NOTE: Final[str] = "Per-input source ledger entry for the ground reference."
+"""What each ground input's SOURCE_INDEX claim supports."""
 
-ONE_COUNT: Final[int] = 1
-"""Counter increment for one input cell."""
+ANCHOR_KW_RELATIVE_TOLERANCE: Final[float] = 1e-9
+"""Relative tolerance for the anchor check's kW comparison. The anchor kW
+(nodes x kW per node) and the space model's deployed-year kW cell are the
+same product computed in two places, so they may differ only by float
+rounding, far below a billionth of the value."""
 
 ZERO_COST: Final[float] = 0.0
 """Zero-cost component value used for explicit exclusions and safe ratios."""
@@ -179,6 +204,15 @@ class GroundConclusionLabel(StrEnum):
     ORBITAL_CHEAPER = "orbital_materially_cheaper"
 
 
+class AnchorQuantity(StrEnum):
+    """A numeric quantity of the ground anchor, taken from the space output."""
+
+    NODES = "nodes"
+    GPU_PACKAGES = "gpu_packages"
+    KW = "kw"
+    SERVICE_LIFE_YEARS = "service_life_years"
+
+
 class GroundReferenceConfig(BaseModel):
     """Validated ground-reference assumptions loaded from YAML."""
 
@@ -196,7 +230,7 @@ class GroundReferenceConfig(BaseModel):
     facility_shell_fitout_musd_per_mw: float = Field(
         default=DEFAULT_FACILITY_SHELL_FITOUT_MUSD_PER_MW,
         ge=ZERO_COST,
-        description="Five-year facility shell and fit-out allocation per MW.",
+        description="Facility shell and fit-out allocation per MW, charged to the anchor cohort.",
     )
     racked_power_network_musd_per_gpu_package: float = Field(
         default=DEFAULT_RACKED_POWER_NETWORK_MUSD_PER_GPU_PACKAGE,
@@ -217,7 +251,10 @@ class GroundReferenceConfig(BaseModel):
         default=DEFAULT_UTILIZATION,
         ge=MIN_UTILIZATION,
         le=MAX_UTILIZATION,
-        description="Average IT-load utilization during the comparison period.",
+        description=(
+            "Average IT-load utilization during the comparison period (the "
+            "anchor cohort's service life)."
+        ),
     )
     operations_maintenance_musd_per_mw_year: float = Field(
         default=DEFAULT_OPERATIONS_MAINTENANCE_MUSD_PER_MW_YEAR,
@@ -228,25 +265,6 @@ class GroundReferenceConfig(BaseModel):
         default=DEFAULT_COOLING_COST_MUSD_PER_MW,
         ge=ZERO_COST,
         description="Cooling infrastructure allocation per MW.",
-    )
-    comparison_period_years: int = Field(
-        default=DEFAULT_COMPARISON_PERIOD_YEARS,
-        gt=ZERO_COUNT,
-        description="Five-year comparison period aligned to service life.",
-    )
-
-
-class SourceCatalog(BaseModel):
-    """Public source references used by the ground reference input cells."""
-
-    model_config = ConfigDict(frozen=True)
-
-    source_index_path: str = Field(..., description="Repository-relative SOURCE_INDEX path.")
-    ground_cost_basis_claim_id: str = Field(
-        ..., description="SOURCE_INDEX claim ID for ground-cost basis."
-    )
-    ground_cost_research_path: str = Field(
-        ..., description="Research note supporting the ground-cost framing."
     )
 
 
@@ -271,7 +289,6 @@ class GroundAssumptionInputTree(BaseModel):
         ..., description="Operations, maintenance, and labor input."
     )
     cooling_cost_musd_per_mw: InputCell = Field(..., description="Cooling cost input.")
-    comparison_period_years: InputCell = Field(..., description="Comparison-window input.")
 
 
 class GroundInputManifest(BaseModel):
@@ -287,19 +304,47 @@ class GroundInputManifest(BaseModel):
 
 
 class GroundComparisonAnchor(BaseModel):
-    """The deployed-year cohort selected from the promoted space model."""
+    """The deployed-year cohort selected from the space model."""
 
     model_config = ConfigDict(frozen=True)
 
-    space_model_path: str = Field(..., description="Promoted space model path.")
-    year: int = Field(..., description="Anchor year.")
+    space_model_path: str = Field(
+        ...,
+        description=(
+            "Repository path of the space artifact this reference was built from; "
+            "'uses' entries prefixed 'space:' resolve in it."
+        ),
+    )
+    year: int = Field(..., description="Anchor year.", json_schema_extra={"unit": YEAR_UNIT})
     basis: str = Field(..., description="Anchor basis.")
-    nodes: int | float = Field(..., description="Nodes deployed in the anchor year.")
-    gpu_packages: int | float = Field(..., description="GPU packages in the anchor cohort.")
-    kw: int | float = Field(..., description="Anchor cohort IT load, kW.")
-    service_life_years: int | float = Field(..., description="Space model service life.")
+    nodes: int = Field(
+        ...,
+        description="Nodes deployed in the anchor year.",
+        json_schema_extra={"unit": COUNT_UNIT},
+    )
+    gpu_packages: int = Field(
+        ...,
+        description="GPU packages in the anchor cohort.",
+        json_schema_extra={"unit": COUNT_UNIT},
+    )
+    kw: float = Field(
+        ..., description="Anchor cohort IT load, kW.", json_schema_extra={"unit": "kW"}
+    )
+    service_life_years: int = Field(
+        ...,
+        description=(
+            "Space model service life of the anchor cohort; the ground comparison period."
+        ),
+        json_schema_extra={"unit": YEARS_UNIT},
+    )
     note: str = Field(..., description="Plain-language anchor note.")
-    source_paths: list[str] = Field(..., description="Space-model paths used for the anchor.")
+    source_paths: list[str] = Field(
+        ...,
+        description=(
+            "Space-model cells the anchor quantities are taken from, prefixed "
+            "'space:' (they resolve in the space artifact at space_model_path)."
+        ),
+    )
 
 
 class CostComponent(BaseModel):
@@ -309,7 +354,9 @@ class CostComponent(BaseModel):
 
     name: str = Field(..., description="Stable component key.")
     label: str = Field(..., description="Human-readable component label.")
-    cost: ProvenanceCell = Field(..., description="Five-year cost for this component.")
+    cost: ProvenanceCell = Field(
+        ..., description="Cost of this component over the comparison period."
+    )
     included: bool = Field(..., description="Whether this component is included in totals.")
     source_paths: list[str] = Field(..., description="Source JSON paths or input cells.")
     notes: str | None = Field(default=None, description="Component caveat or treatment note.")
@@ -321,17 +368,22 @@ class GroundCostResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     component_costs: list[CostComponent] = Field(..., description="Ground cost components.")
-    total_five_year_cost: ProvenanceCell = Field(..., description="Total five-year ground cost.")
+    total_five_year_cost: ProvenanceCell = Field(
+        ...,
+        description=(
+            "Total ground cost over the comparison period (the anchor cohort's "
+            "service life; five years for the default)."
+        ),
+    )
     annualized_cost: ProvenanceCell = Field(..., description="Annualized ground cost.")
     cost_per_gpu_package_five_year: ProvenanceCell = Field(
-        ..., description="Five-year ground cost per GPU package."
+        ..., description="Ground cost per GPU package over the comparison period."
     )
-    cost_per_mw_five_year: ProvenanceCell = Field(..., description="Five-year ground cost per MW.")
+    cost_per_mw_five_year: ProvenanceCell = Field(
+        ..., description="Ground cost per MW over the comparison period."
+    )
     included_components: list[str] = Field(..., description="Explicitly included components.")
     excluded_components: list[str] = Field(..., description="Explicitly excluded components.")
-    source_status_summary: dict[str, int] = Field(
-        ..., description="Counts of ground input assumptions by source-status."
-    )
     warnings: list[ValidationResult] = Field(..., description="Ground-side warnings.")
 
 
@@ -345,12 +397,18 @@ class OrbitalReferenceResult(BaseModel):
         ..., description="Total build and launch cost for the anchor cohort."
     )
     five_year_cost_view: ProvenanceCell = Field(
-        ..., description="Five-year comparable orbital cost view."
+        ...,
+        description=(
+            "Orbital cost over the comparison period: the cohort's build and "
+            "launch cost, which covers its whole service life."
+        ),
     )
     cost_per_gpu_package_five_year: ProvenanceCell = Field(
-        ..., description="Five-year orbital cost per GPU package."
+        ..., description="Orbital cost per GPU package over the comparison period."
     )
-    cost_per_mw_five_year: ProvenanceCell = Field(..., description="Five-year orbital cost per MW.")
+    cost_per_mw_five_year: ProvenanceCell = Field(
+        ..., description="Orbital cost per MW over the comparison period."
+    )
     kw: ProvenanceCell = Field(..., description="Anchor cohort kW.")
     gpu_packages: ProvenanceCell = Field(..., description="Anchor cohort GPU packages.")
     explicit_exclusions: list[str] = Field(..., description="Orbital exclusions.")
@@ -377,15 +435,15 @@ class ComponentDelta(BaseModel):
 
 
 class GroundSpaceComparison(BaseModel):
-    """Direct comparison between ground and orbital five-year cost views."""
+    """Direct comparison between ground and orbital costs over the comparison period."""
 
     model_config = ConfigDict(frozen=True)
 
     ground_total_five_year_cost: ProvenanceCell = Field(
-        ..., description="Ground total five-year cost."
+        ..., description="Ground total cost over the comparison period."
     )
     orbital_total_five_year_cost: ProvenanceCell = Field(
-        ..., description="Orbital total five-year reference cost."
+        ..., description="Orbital total reference cost over the comparison period."
     )
     absolute_delta: ProvenanceCell = Field(..., description="Ground minus orbital total.")
     ground_to_orbit_ratio: ProvenanceCell = Field(..., description="Ground/orbit total ratio.")
@@ -397,7 +455,9 @@ class GroundSpaceComparison(BaseModel):
     component_deltas: list[ComponentDelta] = Field(
         ..., description="Grouped component-level deltas."
     )
-    conclusion_label: str = Field(..., description="Plain-language conclusion label.")
+    conclusion_label: GroundConclusionLabel = Field(
+        ..., description="Plain-language conclusion label."
+    )
     warnings: list[ValidationResult] = Field(..., description="Comparison warnings.")
 
 
@@ -407,7 +467,11 @@ class GroundOutputMetadata(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     data_dictionary: list[DataDictEntry] = Field(
-        ..., description="Compact descriptions of important ground output paths."
+        ...,
+        description=(
+            "One entry per emitted leaf field, generated from this artifact by "
+            "the shared data-dictionary builder."
+        ),
     )
     validation_results: list[ValidationResult] = Field(
         ..., description="Public pass/warn/fail validation entries."
@@ -437,104 +501,97 @@ class GroundReferenceOutput(BaseModel):
     meta: GroundOutputMetadata = Field(..., description="Cold-reader metadata.")
 
 
-@dataclass(frozen=True)
-class GroundInputSpec:
-    """Metadata needed to construct one ground input cell."""
+def _ground_spec(
+    *,
+    label: str,
+    unit: str,
+    rationale: str,
+    claim_id: str,
+    source_status: SourceStatus,
+    notes: str | None = None,
+) -> CellSpec:
+    """Build one ground input's default-value source metadata.
 
-    label: str
-    unit: str | None
-    description: str
-    rationale: str
-    claim_id: str
-    source_status: SourceStatus
-    notes: str | None = None
+    Every ground input cites its SOURCE_INDEX claim and the ground research
+    note (:data:`GROUND_COST_RESEARCH_PATH`).
+    """
+    return CellSpec(
+        label=label,
+        unit=unit,
+        role=AssumptionRole.DEFAULT,
+        source_status=source_status,
+        claim_id=claim_id,
+        source_note=GROUND_SOURCE_NOTE,
+        rationale=rationale,
+        notes=notes,
+        research_path=GROUND_COST_RESEARCH_PATH,
+        research_note=GROUND_RESEARCH_NOTE,
+    )
 
 
-GROUND_INPUT_SPECS: Final[dict[str, GroundInputSpec]] = {
-    "gpu_package_cost_multiplier": GroundInputSpec(
+GROUND_INPUT_SPECS: Final[dict[str, CellSpec]] = {
+    "gpu_package_cost_multiplier": _ground_spec(
         label="GPU package cost multiplier",
         unit="ratio",
-        description="Multiplier applied to the space model's anchor-year package acquisition cost.",
         rationale="Uses the same GPU package cost basis as the orbital cohort.",
         claim_id=GROUND_GPU_PACKAGE_COST_BOUNDARY_CLAIM_ID,
         source_status=SourceStatus.SCENARIO,
         notes="A value of 1.0 means ground and orbital compute hardware share the same price.",
     ),
-    "facility_shell_fitout_musd_per_mw": GroundInputSpec(
+    "facility_shell_fitout_musd_per_mw": _ground_spec(
         label="Facility shell and fit-out",
         unit="MUSD/MW",
-        description="Five-year facility shell and fit-out allocation per MW.",
         rationale="Captures terrestrial building and AI-hall fit-out costs.",
         claim_id=GROUND_FACILITY_FITOUT_CLAIM_ID,
         source_status=SourceStatus.SOURCED_ESTIMATE,
     ),
-    "racked_power_network_musd_per_gpu_package": GroundInputSpec(
+    "racked_power_network_musd_per_gpu_package": _ground_spec(
         label="Racked power and networking",
         unit="MUSD/package",
-        description="Power distribution and networking allocation per GPU package.",
         rationale="Captures non-GPU rack-side electrical and network integration.",
         claim_id=GROUND_RACKED_POWER_NETWORK_CLAIM_ID,
         source_status=SourceStatus.SCENARIO,
     ),
-    "energy_price_usd_per_mwh": GroundInputSpec(
+    "energy_price_usd_per_mwh": _ground_spec(
         label="Energy price",
         unit="USD/MWh",
-        description="Delivered electricity price for the ground cohort.",
-        rationale="Turns IT load, PUE, and utilization into a five-year energy cost.",
+        rationale=(
+            "Turns IT load, PUE, and utilization into an energy cost over the comparison period."
+        ),
         claim_id=GROUND_ENERGY_PRICE_CLAIM_ID,
         source_status=SourceStatus.SOURCED_ESTIMATE,
     ),
-    "pue": GroundInputSpec(
+    "pue": _ground_spec(
         label="PUE",
         unit="ratio",
-        description="Power usage effectiveness for total facility draw.",
         rationale="Converts IT load into total facility electricity consumption.",
         claim_id=GROUND_PUE_CLAIM_ID,
         source_status=SourceStatus.SCENARIO,
     ),
-    "utilization": GroundInputSpec(
+    "utilization": _ground_spec(
         label="Utilization",
         unit="fraction",
-        description="Average IT-load utilization during the comparison window.",
         rationale="Energy cost scales with the average utilized IT load.",
         claim_id=GROUND_UTILIZATION_CLAIM_ID,
         source_status=SourceStatus.SCENARIO,
     ),
-    "operations_maintenance_musd_per_mw_year": GroundInputSpec(
+    "operations_maintenance_musd_per_mw_year": _ground_spec(
         label="Operations, maintenance, and labor",
         unit="MUSD/MW-year",
-        description="Annual operations, maintenance, and labor allocation per MW.",
         rationale="Keeps recurring terrestrial support cost explicit.",
         claim_id=GROUND_OPERATIONS_MAINTENANCE_CLAIM_ID,
         source_status=SourceStatus.SCENARIO,
         notes="Labor is represented in this line rather than as a separate cost component.",
     ),
-    "cooling_cost_musd_per_mw": GroundInputSpec(
+    "cooling_cost_musd_per_mw": _ground_spec(
         label="Cooling infrastructure",
         unit="MUSD/MW",
-        description="Cooling infrastructure allocation per MW.",
         rationale="Represents liquid-cooling and heat-rejection infrastructure.",
         claim_id=GROUND_COOLING_CLAIM_ID,
         source_status=SourceStatus.SCENARIO,
     ),
-    "comparison_period_years": GroundInputSpec(
-        label="Comparison period",
-        unit="years",
-        description="Cost comparison window.",
-        rationale="Aligns the terrestrial comparison to the orbital service-life view.",
-        claim_id=GROUND_COMPARISON_PERIOD_CLAIM_ID,
-        source_status=SourceStatus.SCENARIO,
-    ),
 }
-
-
-def default_ground_source_catalog() -> SourceCatalog:
-    """Return the default public source catalog for ground assumptions."""
-    return SourceCatalog(
-        source_index_path=SOURCE_INDEX_PATH,
-        ground_cost_basis_claim_id=GROUND_COST_BASIS_CLAIM_ID,
-        ground_cost_research_path=GROUND_COST_RESEARCH_PATH,
-    )
+"""Default-value source metadata for each ground input, keyed by config field."""
 
 
 def ground_config_from_dict(data: dict[str, Any]) -> GroundReferenceConfig:
@@ -587,26 +644,33 @@ def load_ground_config(path: str | Path) -> GroundReferenceConfig:
 def build_ground_reference_output(
     space_output: SpaceModelOutput,
     ground_config: GroundReferenceConfig,
-    source_catalog: SourceCatalog,
+    *,
+    space_model_path: str,
+    ground_scenario_path: str,
 ) -> GroundReferenceOutput:
     """Build the complete ground reference output for one space-model run.
 
     Args:
         space_output: Typed space model output that supplies the anchor-year
             deployed cohort (:func:`data_center.config.anchor_year` of its
-            window).
+            window) and, through its service life, the comparison period.
         ground_config: Validated ground-reference assumptions.
-        source_catalog: Public source references for ground input cells.
+        space_model_path: Repository path of the space artifact
+            ``space_output`` is (or will be) written to; recorded as
+            ``anchor.space_model_path`` so ``space:`` uses resolve.
+        ground_scenario_path: Repository path of the ground scenario YAML
+            ``ground_config`` was loaded from; recorded in the metadata and
+            the input manifest, and compared with the default ground
+            scenario path to decide ``inputs.scenario.is_default``.
 
     Returns:
         A frozen :class:`GroundReferenceOutput` ready for JSON serialization.
     """
     inputs = _build_ground_input_manifest(
         ground_config=ground_config,
-        source_catalog=source_catalog,
-        source_scenario_path=DEFAULT_GROUND_SCENARIO_PATH,
+        source_scenario_path=ground_scenario_path,
     )
-    anchor = _build_anchor(space_output)
+    anchor = _build_anchor(space_output, space_model_path)
     ground = _build_ground_cost_result(anchor, space_output, inputs)
     orbital_reference = _build_orbital_reference_result(anchor, space_output)
     comparison_warnings = [
@@ -619,23 +683,27 @@ def build_ground_reference_output(
         warnings=comparison_warnings,
     )
     validation_results = [
-        *_anchor_validation_results(anchor),
+        *_anchor_validation_results(anchor, space_output),
         *orbital_reference.warnings,
         *_comparison_scope_warnings(),
     ]
-    metadata = _build_ground_metadata(space_output.metadata, ground_config)
+    metadata = _build_ground_metadata(space_output.metadata, ground_config, ground_scenario_path)
     meta = GroundOutputMetadata(
-        data_dictionary=_ground_data_dictionary(anchor.year),
+        data_dictionary=[],
         validation_results=validation_results,
         query_examples=_ground_query_examples(),
-        source_status_summary=_source_status_summary_model(inputs),
+        source_status_summary=summarize_source_statuses(
+            input_cell.source_status for input_cell in inputs.assumption_index.values()
+        ),
         schema_version_notes=(
             f"ground-v1 reference output anchored to the {anchor.year} deployed-year "
-            "space-model cohort; ground assumptions are source-status tagged "
-            "through the research wiki source ledger."
+            "space-model cohort over its service life; ground assumptions are "
+            "source-status tagged through the research wiki source ledger. A 'uses' "
+            f"entry prefixed '{SPACE_PATH_PREFIX}' resolves in the space artifact at "
+            "anchor.space_model_path; every other entry resolves in this artifact."
         ),
     )
-    return GroundReferenceOutput(
+    output = GroundReferenceOutput(
         metadata=metadata,
         anchor=anchor,
         inputs=inputs,
@@ -643,6 +711,9 @@ def build_ground_reference_output(
         orbital_reference=orbital_reference,
         comparison=comparison,
         meta=meta,
+    )
+    return output.model_copy(
+        update={"meta": meta.model_copy(update={"data_dictionary": build_data_dictionary(output)})}
     )
 
 
@@ -665,24 +736,47 @@ def _default_ground_config() -> GroundReferenceConfig:
         utilization=DEFAULT_UTILIZATION,
         operations_maintenance_musd_per_mw_year=(DEFAULT_OPERATIONS_MAINTENANCE_MUSD_PER_MW_YEAR),
         cooling_cost_musd_per_mw=DEFAULT_COOLING_COST_MUSD_PER_MW,
-        comparison_period_years=DEFAULT_COMPARISON_PERIOD_YEARS,
     )
 
 
+GROUND_ROLE_FOR_SPACE_ROLE: Final[dict[ArtifactRole, ArtifactRole]] = {
+    ArtifactRole.DRAFT: ArtifactRole.DRAFT,
+    ArtifactRole.PROMOTED_DEFAULT: ArtifactRole.PROMOTED_GROUND_DEFAULT,
+    ArtifactRole.PROMOTED_NAMED: ArtifactRole.PROMOTED_GROUND_NAMED,
+}
+"""The ground artifact's role for each space artifact role it can be built from."""
+
+
 def _build_ground_metadata(
-    space_metadata: RunMetadata, ground_config: GroundReferenceConfig
+    space_metadata: RunMetadata,
+    ground_config: GroundReferenceConfig,
+    ground_scenario_path: str,
 ) -> RunMetadata:
-    """Build metadata for the ground artifact from the space run metadata."""
+    """Build metadata for the ground artifact from the space run metadata.
+
+    Args:
+        space_metadata: The space artifact's metadata.
+        ground_config: The ground assumptions (supplies the scenario name).
+        ground_scenario_path: The ground scenario YAML actually loaded.
+
+    Returns:
+        The ground artifact's metadata.
+
+    Raises:
+        ValueError: If the space artifact already carries a ground role.
+    """
+    ground_role = GROUND_ROLE_FOR_SPACE_ROLE.get(space_metadata.artifact_role)
+    if ground_role is None:
+        raise ValueError(
+            "a ground reference is built from a space artifact; got artifact_role="
+            f"{space_metadata.artifact_role.value}"
+        )
     return space_metadata.model_copy(
         update={
             "schema_version": GROUND_SCHEMA_VERSION,
             "scenario_name": ground_config.scenario_name,
-            "artifact_role": (
-                "promoted_ground_default"
-                if space_metadata.artifact_role == "promoted_default"
-                else "promoted_ground_named"
-            ),
-            "source_scenario_path": DEFAULT_GROUND_SCENARIO_PATH,
+            "artifact_role": ground_role,
+            "source_scenario_path": ground_scenario_path,
         }
     )
 
@@ -690,43 +784,44 @@ def _build_ground_metadata(
 def _build_ground_input_manifest(
     *,
     ground_config: GroundReferenceConfig,
-    source_catalog: SourceCatalog,
     source_scenario_path: str,
 ) -> GroundInputManifest:
-    """Build the ground-reference input manifest from a typed config."""
-    input_values: dict[str, InputScalar] = {
-        "gpu_package_cost_multiplier": ground_config.gpu_package_cost_multiplier,
-        "facility_shell_fitout_musd_per_mw": ground_config.facility_shell_fitout_musd_per_mw,
-        "racked_power_network_musd_per_gpu_package": (
-            ground_config.racked_power_network_musd_per_gpu_package
-        ),
-        "energy_price_usd_per_mwh": ground_config.energy_price_usd_per_mwh,
-        "pue": ground_config.pue,
-        "utilization": ground_config.utilization,
-        "operations_maintenance_musd_per_mw_year": (
-            ground_config.operations_maintenance_musd_per_mw_year
-        ),
-        "cooling_cost_musd_per_mw": ground_config.cooling_cost_musd_per_mw,
-        "comparison_period_years": ground_config.comparison_period_years,
-    }
+    """Build the ground-reference input manifest from a typed config.
+
+    Uses the shared input-cell builders, so a ground input carries the same
+    reference vocabulary as a space input, and a value that differs from the
+    default ground config is published as a scenario override without the
+    default's claim, research note, or rationale.
+    """
+    default = _default_ground_config()
     cells = {
-        key: _input_cell(
-            key=key,
-            value=value,
-            spec=GROUND_INPUT_SPECS[key],
-            source_catalog=source_catalog,
-            source_scenario_path=source_scenario_path,
+        key: _spec_cell(
+            f"inputs.config.{key}",
+            getattr(ground_config, key),
+            getattr(default, key),
+            _field_description(GroundReferenceConfig, key),
+            spec,
+            source_scenario_path,
         )
-        for key, value in input_values.items()
+        for key, spec in GROUND_INPUT_SPECS.items()
     }
     input_tree = GroundAssumptionInputTree(**cells)
-    assumption_index = {InputPath(cell.path): cell for cell in _collect_ground_cells(input_tree)}
+    assumption_index = {InputPath(c.path): c for c in collect_input_cells(input_tree)}
+    is_default = source_scenario_path == DEFAULT_GROUND_SCENARIO_PATH
     scenario = ScenarioIdentity(
         name=ground_config.scenario_name,
-        description=("Canonical default ground reference scenario for the promoted space model."),
+        description=(
+            "Canonical default ground reference scenario for the promoted space model."
+            if is_default
+            else "User-supplied ground reference scenario."
+        ),
         path=source_scenario_path,
-        is_default=source_scenario_path == DEFAULT_GROUND_SCENARIO_PATH,
-        owner_note="Creator-selected ground reference assumptions traced to the research wiki.",
+        is_default=is_default,
+        owner_note=(
+            "Investor-selected ground reference assumptions traced to the research wiki."
+            if is_default
+            else None
+        ),
     )
     return GroundInputManifest(
         scenario=scenario,
@@ -735,95 +830,69 @@ def _build_ground_input_manifest(
     )
 
 
-def _input_cell(
-    *,
-    key: str,
-    value: InputScalar,
-    spec: GroundInputSpec,
-    source_catalog: SourceCatalog,
-    source_scenario_path: str,
-) -> InputCell:
-    """Construct one ground-reference input cell."""
-    path = f"inputs.config.{key}"
-    return InputCell(
-        path=path,
-        label=spec.label,
-        value=value,
-        unit=spec.unit,
-        description=spec.description,
-        assumption_role=AssumptionRole.DEFAULT,
-        source_status=spec.source_status,
-        source_refs=[
-            SourceRef(
-                ref_type=SourceRefType.SOURCE_INDEX,
-                ref=f"{source_catalog.source_index_path}#{spec.claim_id}",
-                claim_id=spec.claim_id,
-                note="Per-input source ledger entry for the ground reference.",
-            ),
-            SourceRef(
-                ref_type=SourceRefType.RESEARCH_DOC,
-                ref=source_catalog.ground_cost_research_path,
-                claim_id=spec.claim_id,
-                note="Research basis for ground infrastructure and electricity costs.",
-            ),
-            SourceRef(
-                ref_type=SourceRefType.MODEL_DERIVATION,
-                ref=source_scenario_path,
-                claim_id=spec.claim_id,
-                note="Ground scenario YAML value used for this model run.",
-            ),
-        ],
-        rationale=spec.rationale,
-        notes=spec.notes,
-    )
+def _space_path(path: FieldPath) -> FieldPath:
+    """Prefix a space-artifact path so a ground ``uses`` entry names its artifact."""
+    return f"{SPACE_PATH_PREFIX}{path}"
 
 
-def _collect_ground_cells(input_tree: GroundAssumptionInputTree) -> list[InputCell]:
-    """Collect all ground input cells in stable field order."""
-    return [
-        input_tree.gpu_package_cost_multiplier,
-        input_tree.facility_shell_fitout_musd_per_mw,
-        input_tree.racked_power_network_musd_per_gpu_package,
-        input_tree.energy_price_usd_per_mwh,
-        input_tree.pue,
-        input_tree.utilization,
-        input_tree.operations_maintenance_musd_per_mw_year,
-        input_tree.cooling_cost_musd_per_mw,
-        input_tree.comparison_period_years,
-    ]
+def _anchor_space_sources(year: int) -> dict[AnchorQuantity, list[FieldPath]]:
+    """Return the space cells (``space:``-prefixed) each anchor quantity is taken from.
+
+    Nodes are the anchor year's deployed nodes; GPU packages and kW are those
+    nodes times the year's per-node packages and power; the service life is
+    the space run's dial.
+
+    Args:
+        year: The anchor year.
+
+    Returns:
+        The source paths per anchor quantity.
+    """
+    key = str(year)
+    nodes = _space_path(f'business.years."{key}".nodes_deployed_this_year')
+    return {
+        AnchorQuantity.NODES: [nodes],
+        AnchorQuantity.GPU_PACKAGES: [nodes, _space_path(f'physical.years."{key}".gpus_per_node')],
+        AnchorQuantity.KW: [nodes, _space_path(f'physical.years."{key}".kw_per_node')],
+        AnchorQuantity.SERVICE_LIFE_YEARS: [_space_path(SPACE_SERVICE_LIFE_PATH)],
+    }
 
 
-def _build_anchor(space_output: SpaceModelOutput) -> GroundComparisonAnchor:
+def _anchor_uses(anchor: GroundComparisonAnchor, quantity: AnchorQuantity) -> list[FieldPath]:
+    """Cite one anchor quantity and the space cells it is taken from.
+
+    The anchor's numeric fields are plain values, so a ground cell that reads
+    one also cites its space sources; a space dial that moves the anchor
+    cohort then reaches every ground cost built on it.
+    """
+    return [f"anchor.{quantity.value}", *_anchor_space_sources(anchor.year)[quantity]]
+
+
+def _build_anchor(space_output: SpaceModelOutput, space_model_path: str) -> GroundComparisonAnchor:
     """Select the anchor-year deployed cohort from the typed space output.
 
     The anchor year is :func:`data_center.config.anchor_year` of the space
     run's window (the year-10 cadence anchor, or the final window year for a
     shorter horizon; FY2036 for the default), so it always exists in the
     space output. Per ADR-003 the anchor is the deployed-year cohort, never
-    the living fleet.
+    the living fleet. Its service life is the comparison period.
     """
     year = anchor_year(space_output.metadata.base_year, space_output.metadata.horizon_years)
     key = str(year)
     business_year = space_output.business.years[key]
     physical_year = space_output.physical.years[key]
-    nodes = _numeric_cell_value(
+    nodes = _int_cell_value(
         business_year.nodes_deployed_this_year,
         f'business.years."{key}".nodes_deployed_this_year',
     )
-    gpus_per_node = _numeric_cell_value(
+    gpus_per_node = _int_cell_value(
         physical_year.gpus_per_node,
         f'physical.years."{key}".gpus_per_node',
     )
-    kw_per_node = _numeric_cell_value(
-        physical_year.kw_per_node,
-        f'physical.years."{key}".kw_per_node',
-    )
-    service_life_years = _numeric_input_value(
-        space_output.inputs.config.fleet.service_life_years,
-        "inputs.config.fleet.service_life_years",
-    )
+    kw_per_node = _float_cell_value(physical_year.kw_per_node)
+    service_life_years = _int_input_value(space_output.inputs.config.fleet.service_life_years)
     return GroundComparisonAnchor(
-        space_model_path=SPACE_MODEL_DEFAULT_PATH,
+        space_model_path=space_model_path,
         year=year,
         basis=ANCHOR_BASIS,
         nodes=nodes,
@@ -831,12 +900,9 @@ def _build_anchor(space_output: SpaceModelOutput) -> GroundComparisonAnchor:
         kw=nodes * kw_per_node,
         service_life_years=service_life_years,
         note=ANCHOR_NOTE,
-        source_paths=[
-            f'business.years."{key}".nodes_deployed_this_year',
-            f'physical.years."{key}".gpus_per_node',
-            f'physical.years."{key}".kw_per_node',
-            "inputs.config.fleet.service_life_years",
-        ],
+        source_paths=list(
+            dict.fromkeys(path for paths in _anchor_space_sources(year).values() for path in paths)
+        ),
     )
 
 
@@ -845,20 +911,25 @@ def _build_ground_cost_result(
     space_output: SpaceModelOutput,
     inputs: GroundInputManifest,
 ) -> GroundCostResult:
-    """Compute the five-year ground cost for the anchor cohort."""
+    """Compute the ground cost of the anchor cohort over its service life."""
     component_costs = _ground_components(anchor, space_output, inputs)
-    included_costs = [component.cost for component in component_costs if component.included]
+    included = [
+        (index, component) for index, component in enumerate(component_costs) if component.included
+    ]
     total = _total_cell(
-        value=sum(_float_cell_value(cost) for cost in included_costs),
-        uses=[component.cost.description for component in component_costs if component.included],
-        description="Total five-year ground cost for the anchor cohort.",
+        value=sum(_float_cell_value(component.cost) for _, component in included),
+        uses=[f"ground.component_costs[{index}].cost" for index, _ in included],
+        description="Total ground cost for the anchor cohort over the comparison period.",
     )
-    period = _float_input_value(inputs.config.comparison_period_years)
+    period = float(anchor.service_life_years)
     annualized = _provenance_cell(
         value=_safe_ratio(_float_cell_value(total), period),
         unit="MUSD/year",
         formula_name="annualized_cost_from_total_and_period",
-        uses=["ground.total_five_year_cost", "inputs.config.comparison_period_years"],
+        uses=[
+            "ground.total_five_year_cost",
+            *_anchor_uses(anchor, AnchorQuantity.SERVICE_LIFE_YEARS),
+        ],
         sources=[GROUND_COST_BASIS_CLAIM_ID],
         source_status=SourceStatus.DERIVED_ESTIMATE,
         description="Ground total annualized over the comparison period.",
@@ -872,20 +943,23 @@ def _build_ground_cost_result(
         cost_per_gpu_package_five_year=_cost_per_unit_cell(
             value=_safe_ratio(_float_cell_value(total), gpu_packages),
             unit="MUSD/package",
-            uses=["ground.total_five_year_cost", "anchor.gpu_packages"],
-            description="Five-year ground cost per GPU package.",
+            uses=[
+                "ground.total_five_year_cost",
+                *_anchor_uses(anchor, AnchorQuantity.GPU_PACKAGES),
+            ],
+            description="Ground cost per GPU package over the comparison period.",
         ),
         cost_per_mw_five_year=_cost_per_unit_cell(
             value=_safe_ratio(_float_cell_value(total), anchor_mw),
             unit="MUSD/MW",
-            uses=["ground.total_five_year_cost", "anchor.kw"],
-            description="Five-year ground cost per MW.",
+            uses=["ground.total_five_year_cost", *_anchor_uses(anchor, AnchorQuantity.KW)],
+            description="Ground cost per MW over the comparison period.",
         ),
         included_components=[
             "GPU/package acquisition",
             "facility shell or fit-out allocation",
             "racked power and networking",
-            "energy over five years with PUE and utilization",
+            "energy over the comparison period with PUE and utilization",
             "cooling infrastructure",
             "operations, maintenance, and labor",
         ],
@@ -896,7 +970,6 @@ def _build_ground_cost_result(
             "water costs",
             "depreciation accounting",
         ],
-        source_status_summary=_source_status_summary_dict(inputs),
         warnings=[],
     )
 
@@ -918,7 +991,7 @@ def _ground_components(
     )
     gpu_packages = float(anchor.gpu_packages)
     anchor_mw = float(anchor.kw) / KW_PER_MW
-    period = _float_input_value(inputs.config.comparison_period_years)
+    period = float(anchor.service_life_years)
     multiplier = _float_input_value(inputs.config.gpu_package_cost_multiplier)
     facility_rate = _float_input_value(inputs.config.facility_shell_fitout_musd_per_mw)
     rack_network_rate = _float_input_value(inputs.config.racked_power_network_musd_per_gpu_package)
@@ -946,9 +1019,9 @@ def _ground_components(
                 unit="MUSD",
                 formula_name="ground_gpu_acquisition_from_space_package_cost",
                 uses=[
-                    "anchor.gpu_packages",
-                    f'physical.years."{key}".cost_breakdown.compute',
-                    f'physical.years."{key}".gpus_per_node',
+                    *_anchor_uses(anchor, AnchorQuantity.GPU_PACKAGES),
+                    _space_path(f'physical.years."{key}".cost_breakdown.compute'),
+                    _space_path(f'physical.years."{key}".gpus_per_node'),
                     "inputs.config.gpu_package_cost_multiplier",
                 ],
                 sources=[GROUND_GPU_PACKAGE_COST_BOUNDARY_CLAIM_ID],
@@ -957,7 +1030,7 @@ def _ground_components(
             ),
             source_paths=[
                 "anchor.gpu_packages",
-                f'physical.years."{key}".cost_breakdown.compute',
+                _space_path(f'physical.years."{key}".cost_breakdown.compute'),
                 "inputs.config.gpu_package_cost_multiplier",
             ],
             notes="Uses the space model's same-generation package cost basis.",
@@ -969,7 +1042,10 @@ def _ground_components(
                 value=anchor_mw * facility_rate,
                 unit="MUSD",
                 formula_name="ground_facility_cost_from_mw",
-                uses=["anchor.kw", "inputs.config.facility_shell_fitout_musd_per_mw"],
+                uses=[
+                    *_anchor_uses(anchor, AnchorQuantity.KW),
+                    "inputs.config.facility_shell_fitout_musd_per_mw",
+                ],
                 sources=[GROUND_FACILITY_FITOUT_CLAIM_ID, GROUND_COST_RESEARCH_PATH],
                 source_status=SourceStatus.DERIVED_ESTIMATE,
                 description="Ground facility shell and AI-hall fit-out allocation.",
@@ -985,7 +1061,7 @@ def _ground_components(
                 unit="MUSD",
                 formula_name="ground_racked_power_network_from_package_count",
                 uses=[
-                    "anchor.gpu_packages",
+                    *_anchor_uses(anchor, AnchorQuantity.GPU_PACKAGES),
                     "inputs.config.racked_power_network_musd_per_gpu_package",
                 ],
                 sources=[GROUND_RACKED_POWER_NETWORK_CLAIM_ID],
@@ -1000,27 +1076,28 @@ def _ground_components(
         ),
         _component(
             name="energy",
-            label="Five-year energy",
+            label="Energy over the comparison period",
             cost=_provenance_cell(
                 value=energy_musd,
                 unit="MUSD",
                 formula_name="ground_energy_cost_from_kw_pue_utilization",
                 uses=[
-                    "anchor.kw",
+                    *_anchor_uses(anchor, AnchorQuantity.KW),
                     "inputs.config.energy_price_usd_per_mwh",
                     "inputs.config.pue",
                     "inputs.config.utilization",
-                    "inputs.config.comparison_period_years",
+                    *_anchor_uses(anchor, AnchorQuantity.SERVICE_LIFE_YEARS),
                 ],
                 sources=[
                     GROUND_ENERGY_PRICE_CLAIM_ID,
                     GROUND_PUE_CLAIM_ID,
                     GROUND_UTILIZATION_CLAIM_ID,
-                    GROUND_COMPARISON_PERIOD_CLAIM_ID,
                     GROUND_COST_RESEARCH_PATH,
                 ],
                 source_status=SourceStatus.DERIVED_ESTIMATE,
-                description="Five-year electricity cost using PUE and utilization.",
+                description=(
+                    "Electricity cost over the comparison period using PUE and utilization."
+                ),
             ),
             source_paths=[
                 "anchor.kw",
@@ -1037,7 +1114,10 @@ def _ground_components(
                 value=anchor_mw * cooling_rate,
                 unit="MUSD",
                 formula_name="ground_cooling_cost_from_mw",
-                uses=["anchor.kw", "inputs.config.cooling_cost_musd_per_mw"],
+                uses=[
+                    *_anchor_uses(anchor, AnchorQuantity.KW),
+                    "inputs.config.cooling_cost_musd_per_mw",
+                ],
                 sources=[GROUND_COOLING_CLAIM_ID, GROUND_COST_RESEARCH_PATH],
                 source_status=SourceStatus.DERIVED_ESTIMATE,
                 description="Cooling infrastructure allocation for the ground cohort.",
@@ -1053,13 +1133,15 @@ def _ground_components(
                 unit="MUSD",
                 formula_name="ground_operations_cost_from_mw_year",
                 uses=[
-                    "anchor.kw",
+                    *_anchor_uses(anchor, AnchorQuantity.KW),
                     "inputs.config.operations_maintenance_musd_per_mw_year",
-                    "inputs.config.comparison_period_years",
+                    *_anchor_uses(anchor, AnchorQuantity.SERVICE_LIFE_YEARS),
                 ],
                 sources=[GROUND_OPERATIONS_MAINTENANCE_CLAIM_ID],
                 source_status=SourceStatus.DERIVED_ESTIMATE,
-                description="Five-year operations, maintenance, and labor allocation.",
+                description=(
+                    "Operations, maintenance, and labor allocation over the comparison period."
+                ),
             ),
             source_paths=[
                 "anchor.kw",
@@ -1077,20 +1159,22 @@ def _build_orbital_reference_result(
     """Mirror the space model's anchor-year build and launch components."""
     key = str(anchor.year)
     physical_year = space_output.physical.years[key]
-    nodes = float(anchor.nodes)
     breakdown = physical_year.cost_breakdown
     component_costs = [
-        _orbital_component("compute", "Compute hardware", breakdown.compute, nodes, key),
-        _orbital_component("bus", "Bus/platform", breakdown.bus, nodes, key),
-        _orbital_component("solar", "Solar/power", breakdown.solar, nodes, key),
-        _orbital_component("radiator", "Radiator/thermal", breakdown.radiator, nodes, key),
-        _orbital_component("launch", "Launch allocation", breakdown.launch, nodes, key),
+        _orbital_component("compute", "Compute hardware", breakdown.compute, anchor),
+        _orbital_component("bus", "Bus/platform", breakdown.bus, anchor),
+        _orbital_component("solar", "Solar/power", breakdown.solar, anchor),
+        _orbital_component("radiator", "Radiator/thermal", breakdown.radiator, anchor),
+        _orbital_component("launch", "Launch allocation", breakdown.launch, anchor),
     ]
     total = _provenance_cell(
         value=sum(_float_cell_value(component.cost) for component in component_costs),
         unit="MUSD",
         formula_name="orbital_total_cost_from_space_node_total",
-        uses=[component.cost.description for component in component_costs],
+        uses=[
+            f"orbital_reference.component_costs[{index}].cost"
+            for index in range(len(component_costs))
+        ],
         sources=["space model cost_breakdown"],
         source_status=SourceStatus.DERIVED_ESTIMATE,
         description="Total orbital build and launch cost for the anchor cohort.",
@@ -1104,22 +1188,28 @@ def _build_orbital_reference_result(
         cost_per_gpu_package_five_year=_cost_per_unit_cell(
             value=_safe_ratio(_float_cell_value(total), float(anchor.gpu_packages)),
             unit="MUSD/package",
-            uses=["orbital_reference.five_year_cost_view", "anchor.gpu_packages"],
-            description="Five-year orbital reference cost per GPU package.",
+            uses=[
+                "orbital_reference.five_year_cost_view",
+                *_anchor_uses(anchor, AnchorQuantity.GPU_PACKAGES),
+            ],
+            description="Orbital reference cost per GPU package over the comparison period.",
         ),
         cost_per_mw_five_year=_cost_per_unit_cell(
             value=_safe_ratio(_float_cell_value(total), anchor_mw),
             unit="MUSD/MW",
-            uses=["orbital_reference.five_year_cost_view", "anchor.kw"],
-            description="Five-year orbital reference cost per MW.",
+            uses=[
+                "orbital_reference.five_year_cost_view",
+                *_anchor_uses(anchor, AnchorQuantity.KW),
+            ],
+            description="Orbital reference cost per MW over the comparison period.",
         ),
         kw=_provenance_cell(
             value=anchor.kw,
             unit="kW",
             formula_name="kw_deployed_this_year_from_nodes",
             uses=[
-                f'business.years."{key}".nodes_deployed_this_year',
-                f'physical.years."{key}".kw_per_node',
+                _space_path(f'business.years."{key}".nodes_deployed_this_year'),
+                _space_path(f'physical.years."{key}".kw_per_node'),
             ],
             sources=["space model deployed-year cohort"],
             source_status=SourceStatus.DERIVED_ESTIMATE,
@@ -1130,8 +1220,8 @@ def _build_orbital_reference_result(
             unit="count",
             formula_name="ground_anchor_gpu_packages_from_nodes_and_packages",
             uses=[
-                f'business.years."{key}".nodes_deployed_this_year',
-                f'physical.years."{key}".gpus_per_node',
+                _space_path(f'business.years."{key}".nodes_deployed_this_year'),
+                _space_path(f'physical.years."{key}".gpus_per_node'),
             ],
             sources=["space model deployed-year cohort"],
             source_status=SourceStatus.DERIVED_ESTIMATE,
@@ -1168,17 +1258,17 @@ def _build_comparison(
         absolute_delta=_delta_cell(
             value=ground_total - orbital_total,
             uses=["ground.total_five_year_cost", "orbital_reference.five_year_cost_view"],
-            description="Ground five-year total minus orbital five-year reference total.",
+            description="Ground total minus orbital reference total over the comparison period.",
         ),
         ground_to_orbit_ratio=_ratio_cell(
             value=ratio,
             uses=["ground.total_five_year_cost", "orbital_reference.five_year_cost_view"],
-            description="Ground five-year total divided by orbital five-year reference total.",
+            description="Ground total divided by orbital reference total.",
         ),
         orbit_to_ground_ratio=_ratio_cell(
             value=_safe_ratio(orbital_total, ground_total),
             uses=["orbital_reference.five_year_cost_view", "ground.total_five_year_cost"],
-            description="Orbital five-year reference total divided by ground five-year total.",
+            description="Orbital reference total divided by ground total.",
         ),
         cost_per_gpu_package_delta=_delta_cell(
             value=ground_per_package - orbital_per_package,
@@ -1219,77 +1309,99 @@ def _component(
 
 
 def _orbital_component(
-    name: str, label: str, per_node_cost: ProvenanceCell, nodes: float, anchor_key: str
+    name: str, label: str, per_node_cost: ProvenanceCell, anchor: GroundComparisonAnchor
 ) -> CostComponent:
     """Build one orbital reference component from a per-node space cell.
 
-    ``anchor_key`` is the anchor year as a JSON year key; the component
-    cites the per-node space cell of that year.
+    The component is the anchor year's per-node space cell times the anchor
+    cohort's nodes, and cites both.
     """
+    anchor_key = str(anchor.year)
     return CostComponent(
         name=name,
         label=label,
         cost=_provenance_cell(
-            value=_float_cell_value(per_node_cost) * nodes,
+            value=_float_cell_value(per_node_cost) * float(anchor.nodes),
             unit="MUSD",
             formula_name="orbital_component_cost_from_space_node_component",
-            uses=[f'physical.years."{anchor_key}".cost_breakdown.{name}', "anchor.nodes"],
+            uses=[
+                _space_path(f'physical.years."{anchor_key}".cost_breakdown.{name}'),
+                *_anchor_uses(anchor, AnchorQuantity.NODES),
+            ],
             sources=per_node_cost.sources,
             source_status=per_node_cost.source_status,
             description=f"Anchor-cohort orbital {label.lower()} cost.",
         ),
         included=True,
-        source_paths=[f'physical.years."{anchor_key}".cost_breakdown.{name}'],
+        source_paths=[_space_path(f'physical.years."{anchor_key}".cost_breakdown.{name}')],
         notes="Mirrors the promoted space model's per-node component.",
     )
+
+
+@dataclass(frozen=True)
+class _CitedCell:
+    """A cost cell together with its path in the ground artifact."""
+
+    path: FieldPath
+    cell: ProvenanceCell
 
 
 def _component_deltas(
     ground: GroundCostResult, orbital_reference: OrbitalReferenceResult
 ) -> list[ComponentDelta]:
-    """Build grouped component deltas that keep unlike line items legible."""
-    ground_by_name = {component.name: component.cost for component in ground.component_costs}
-    orbital_by_name = {
-        component.name: component.cost for component in orbital_reference.component_costs
+    """Build grouped component deltas that keep unlike line items legible.
+
+    A grouped subtotal cites the component cells it sums by their paths in
+    this artifact; a delta or ratio cites its own group's two cost cells.
+    """
+    ground_cells = {
+        component.name: _CitedCell(f"ground.component_costs[{index}].cost", component.cost)
+        for index, component in enumerate(ground.component_costs)
     }
-    return [
-        _component_delta(
-            name="compute",
-            ground_cost=ground_by_name["gpu_package_acquisition"],
-            orbital_cost=orbital_by_name["compute"],
-            notes="Compares like-for-like GPU/package acquisition.",
+    orbital_cells = {
+        component.name: _CitedCell(
+            f"orbital_reference.component_costs[{index}].cost", component.cost
+        )
+        for index, component in enumerate(orbital_reference.component_costs)
+    }
+    groups: list[tuple[str, ProvenanceCell, ProvenanceCell, str]] = [
+        (
+            "compute",
+            ground_cells["gpu_package_acquisition"].cell,
+            orbital_cells["compute"].cell,
+            "Compares like-for-like GPU/package acquisition.",
         ),
-        _component_delta(
-            name="platform_vs_facility",
-            ground_cost=_sum_group_cell(
+        (
+            "platform_vs_facility",
+            _sum_group_cell(
                 name="ground facility plus rack infrastructure",
                 costs=[
-                    ground_by_name["facility_shell_fitout"],
-                    ground_by_name["racked_power_networking"],
+                    ground_cells["facility_shell_fitout"],
+                    ground_cells["racked_power_networking"],
                 ],
             ),
-            orbital_cost=orbital_by_name["bus"],
-            notes="Compares terrestrial facility/rack integration against orbital bus.",
+            orbital_cells["bus"].cell,
+            "Compares terrestrial facility/rack integration against orbital bus.",
         ),
-        _component_delta(
-            name="power_thermal_operations",
-            ground_cost=_sum_group_cell(
+        (
+            "power_thermal_operations",
+            _sum_group_cell(
                 name="ground energy plus cooling plus operations",
                 costs=[
-                    ground_by_name["energy"],
-                    ground_by_name["cooling"],
-                    ground_by_name["operations_maintenance_labor"],
+                    ground_cells["energy"],
+                    ground_cells["cooling"],
+                    ground_cells["operations_maintenance_labor"],
                 ],
             ),
-            orbital_cost=_sum_group_cell(
+            _sum_group_cell(
                 name="orbital solar plus radiator",
-                costs=[orbital_by_name["solar"], orbital_by_name["radiator"]],
+                costs=[orbital_cells["solar"], orbital_cells["radiator"]],
             ),
-            notes="Compares terrestrial recurring support against orbital power/thermal capex.",
+            "Compares terrestrial recurring support against orbital power/thermal capex.",
         ),
-        _component_delta(
-            name="launch",
-            ground_cost=_provenance_cell(
+        (
+            "launch",
+            _provenance_cell(
                 value=ZERO_COST,
                 unit="MUSD",
                 formula_name="explicit_zero_cost_for_excluded_component",
@@ -1298,47 +1410,68 @@ def _component_deltas(
                 source_status=SourceStatus.SCENARIO,
                 description="Ground launch cost is not applicable.",
             ),
-            orbital_cost=orbital_by_name["launch"],
-            notes="Launch is an orbital-only cost line.",
+            orbital_cells["launch"].cell,
+            "Launch is an orbital-only cost line.",
         ),
+    ]
+    return [
+        _component_delta(
+            index=index,
+            name=name,
+            ground_cost=ground_cost,
+            orbital_cost=orbital_cost,
+            notes=notes,
+        )
+        for index, (name, ground_cost, orbital_cost, notes) in enumerate(groups)
     ]
 
 
 def _component_delta(
     *,
+    index: int,
     name: str,
     ground_cost: ProvenanceCell,
     orbital_cost: ProvenanceCell,
     notes: str,
 ) -> ComponentDelta:
-    """Build one component delta."""
+    """Build one component delta, published at ``comparison.component_deltas[index]``."""
     ground_value = _float_cell_value(ground_cost)
     orbital_value = _float_cell_value(orbital_cost)
+    delta_path = f"comparison.component_deltas[{index}]"
+    pair_uses = [f"{delta_path}.ground_cost", f"{delta_path}.orbital_reference_cost"]
     return ComponentDelta(
         name=name,
         ground_cost=ground_cost,
         orbital_reference_cost=orbital_cost,
         absolute_delta=_delta_cell(
             value=ground_value - orbital_value,
-            uses=[ground_cost.description, orbital_cost.description],
+            uses=pair_uses,
             description=f"Ground minus orbital cost for {name}.",
         ),
         ground_to_orbit_ratio=_ratio_cell(
             value=_safe_ratio(ground_value, orbital_value),
-            uses=[ground_cost.description, orbital_cost.description],
+            uses=pair_uses,
             description=f"Ground/orbital ratio for {name}.",
         ),
         notes=notes,
     )
 
 
-def _sum_group_cell(name: str, costs: list[ProvenanceCell]) -> ProvenanceCell:
-    """Build a provenance cell for a grouped component subtotal."""
+def _sum_group_cell(name: str, costs: list[_CitedCell]) -> ProvenanceCell:
+    """Build a provenance cell for a grouped component subtotal.
+
+    Args:
+        name: Plain-language name of the group.
+        costs: The component cells summed, each with its path.
+
+    Returns:
+        The subtotal cell, citing each summed component by path.
+    """
     return _provenance_cell(
-        value=sum(_float_cell_value(cost) for cost in costs),
+        value=sum(_float_cell_value(cost.cell) for cost in costs),
         unit="MUSD",
         formula_name="total_cost_from_components",
-        uses=[cost.description for cost in costs],
+        uses=[cost.path for cost in costs],
         sources=["ground reference grouped component subtotal"],
         source_status=SourceStatus.DERIVED_ESTIMATE,
         description=f"Grouped cost subtotal for {name}.",
@@ -1410,12 +1543,12 @@ def _provenance_cell(
     description: str,
     notes: str | None = None,
 ) -> ProvenanceCell:
-    """Build a provenance cell with source status and notes."""
+    """Build a provenance cell with source status and notes (repeated uses dropped)."""
     built = cell(
         value=value,
         unit=unit,
         formula_name=formula_name,
-        uses=uses,
+        uses=list(dict.fromkeys(uses)),
         sources=sources,
         description=description,
     )
@@ -1456,97 +1589,81 @@ def _comparison_scope_warnings() -> list[ValidationResult]:
     ]
 
 
-def _anchor_validation_results(anchor: GroundComparisonAnchor) -> list[ValidationResult]:
-    """Build public validation results for the canonical anchor."""
+def _anchor_validation_results(
+    anchor: GroundComparisonAnchor, space_output: SpaceModelOutput
+) -> list[ValidationResult]:
+    """Check the anchor against the space output it was taken from.
+
+    The expected year is the space run's own anchor year
+    (:func:`data_center.config.anchor_year` of its window); the expected
+    cohort is that year's deployed-year cells in the space output: the
+    node count, the deployed kW (an independent cell, so a disagreement in
+    the node-power product shows), the GPU packages (nodes x packages per
+    node), and the service life that sets the comparison period.
+
+    Args:
+        anchor: The ground artifact's anchor.
+        space_output: The space output the ground reference was built from.
+
+    Returns:
+        One result, ``pass`` when every anchor field matches the space
+        output, else ``fail`` naming the observed values.
+    """
+    md = space_output.metadata
+    expected_year = anchor_year(md.base_year, md.horizon_years)
+    key = str(expected_year)
+    business_year = space_output.business.years[key]
+    physical_year = space_output.physical.years[key]
+    space_nodes = _int_cell_value(
+        business_year.nodes_deployed_this_year,
+        f'business.years."{key}".nodes_deployed_this_year',
+    )
+    space_packages = space_nodes * _int_cell_value(
+        physical_year.gpus_per_node, f'physical.years."{key}".gpus_per_node'
+    )
+    space_kw = _float_cell_value(business_year.kw_deployed_this_year)
+    space_life = _int_input_value(space_output.inputs.config.fleet.service_life_years)
+    passed = (
+        anchor.year == expected_year
+        and anchor.basis == ANCHOR_BASIS
+        and anchor.nodes == space_nodes
+        and anchor.gpu_packages == space_packages
+        and math.isclose(anchor.kw, space_kw, rel_tol=ANCHOR_KW_RELATIVE_TOLERANCE)
+        and anchor.service_life_years == space_life
+    )
+    observed = (
+        f"year={anchor.year}; basis={anchor.basis}; nodes={anchor.nodes} "
+        f"(space {space_nodes}); gpu_packages={anchor.gpu_packages} "
+        f"(space {space_packages}); kw={anchor.kw:g} (space {space_kw:g}); "
+        f"service_life_years={anchor.service_life_years} (space {space_life})."
+    )
     return [
         ValidationResult(
-            validation_id=f"ground_anchor_{anchor.year}_deployed_year",
-            severity=ValidationSeverity.OK,
-            what_tested="Ground anchor uses the canonical deployed-year cohort.",
-            expected_condition=f"year={anchor.year} and basis=deployed_this_year.",
-            observed_result=f"year={anchor.year}; basis={anchor.basis}.",
+            validation_id=f"ground_anchor_{expected_year}_deployed_year",
+            severity=ValidationSeverity.OK if passed else ValidationSeverity.FAIL,
+            what_tested=("The ground anchor is the space run's anchor-year deployed-year cohort."),
+            expected_condition=(
+                f"year={expected_year}, basis={ANCHOR_BASIS}, and nodes, GPU packages, "
+                "kW, and service life equal the space output's anchor-year cohort."
+            ),
+            observed_result=observed,
             related_json_paths=["anchor.year", "anchor.basis", *anchor.source_paths],
-            remediation_hint=None,
+            remediation_hint=(
+                None if passed else "Rebuild the ground reference from the space output it cites."
+            ),
         )
     ]
 
 
-def _source_status_summary_dict(inputs: GroundInputManifest) -> dict[str, int]:
-    """Count ground assumptions by source-status string."""
-    counts = {status.value: ZERO_COUNT for status in SourceStatus}
-    for cell_value in inputs.assumption_index.values():
-        counts[cell_value.source_status.value] += ONE_COUNT
-    return counts
-
-
-def _source_status_summary_model(inputs: GroundInputManifest) -> SourceStatusSummary:
-    """Build the known-shape source-status summary model."""
-    counts = _source_status_summary_dict(inputs)
-    return SourceStatusSummary(
-        certified=counts[SourceStatus.CERTIFIED.value],
-        sourced_estimate=counts[SourceStatus.SOURCED_ESTIMATE.value],
-        derived_estimate=counts[SourceStatus.DERIVED_ESTIMATE.value],
-        projection=counts[SourceStatus.PROJECTION.value],
-        extrapolation=counts[SourceStatus.EXTRAPOLATION.value],
-        scenario=counts[SourceStatus.SCENARIO.value],
-        placeholder=counts[SourceStatus.PLACEHOLDER.value],
-        stale=counts[SourceStatus.STALE.value],
-    )
-
-
-def _conclusion_label(ratio: float | None) -> str:
+def _conclusion_label(ratio: float | None) -> GroundConclusionLabel:
     """Choose a plain conclusion label for the comparison result."""
     if ratio is None:
         raise ValueError("ground/orbital ratio must be computable to label the comparison")
     if ratio < GROUND_MATERIALLY_CHEAPER_RATIO:
-        return GroundConclusionLabel.GROUND_CHEAPER.value
+        return GroundConclusionLabel.GROUND_CHEAPER
     if ratio > ORBITAL_MATERIALLY_CHEAPER_RATIO:
-        return GroundConclusionLabel.ORBITAL_CHEAPER.value
-    return GroundConclusionLabel.SAME_ORDER.value
-
-
-def _ground_data_dictionary(anchor_fy: int) -> list[DataDictEntry]:
-    """Return compact data dictionary entries for high-value ground paths.
-
-    ``anchor_fy`` is the anchor year the ``anchor`` entry describes.
-    """
-    return [
-        DataDictEntry(
-            path="anchor",
-            description=f"The {anchor_fy} deployed-year cohort selected from the space model.",
-            unit="-",
-            type="object",
-            source_class="DERIVED",
-        ),
-        DataDictEntry(
-            path="ground.total_five_year_cost",
-            description="Total five-year terrestrial cost for the anchor cohort.",
-            unit="MUSD",
-            type="cell",
-            source_class="DERIVED",
-        ),
-        DataDictEntry(
-            path="orbital_reference.five_year_cost_view",
-            description="Comparable five-year build/launch cost view from the space model.",
-            unit="MUSD",
-            type="cell",
-            source_class="DERIVED",
-        ),
-        DataDictEntry(
-            path="comparison.ground_to_orbit_ratio",
-            description="Ground five-year total divided by orbital five-year reference total.",
-            unit="ratio",
-            type="cell",
-            source_class="DERIVED",
-        ),
-        DataDictEntry(
-            path="inputs.assumption_index",
-            description="Flat index of every ground assumption input cell.",
-            unit="-",
-            type="object",
-            source_class="INPUT",
-        ),
-    ]
+        return GroundConclusionLabel.ORBITAL_CHEAPER
+    return GroundConclusionLabel.SAME_ORDER
 
 
 def _ground_query_examples() -> list[QueryExample]:
@@ -1573,7 +1690,9 @@ def _ground_query_examples() -> list[QueryExample]:
         ),
         QueryExample(
             name="ground_cost_summary",
-            question_answered="What are the total ground and orbital five-year costs?",
+            question_answered=(
+                "What are the total ground and orbital costs over the comparison period?"
+            ),
             jq_expression="{ground: .ground.total_five_year_cost, orbital: "
             ".orbital_reference.five_year_cost_view}",
             expected_shape="object with two ProvenanceCell values",
@@ -1594,31 +1713,51 @@ def _ground_query_examples() -> list[QueryExample]:
     ]
 
 
-def _numeric_cell_value(cell_value: ProvenanceCell, path: str) -> int | float:
-    """Return a provenance cell's numeric value, preserving int when present."""
+def _int_cell_value(cell_value: ProvenanceCell, path: str) -> int:
+    """Return a provenance cell's integer value (a count such as nodes).
+
+    Raises:
+        ValueError: If the cell does not hold an integer.
+    """
     value = cell_value.value
-    if isinstance(value, bool) or value is None or isinstance(value, str):
-        raise ValueError(f"{path} is not numeric")
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{path} is not an integer count: {value!r}")
     return value
 
 
-def _numeric_input_value(cell_value: InputCell, path: str) -> int | float:
-    """Return an input cell's numeric value, preserving int when present."""
+def _int_input_value(cell_value: InputCell) -> int:
+    """Return an input cell's integer value (such as the service life).
+
+    Raises:
+        ValueError: If the cell does not hold an integer.
+    """
     value = cell_value.value
-    if isinstance(value, (bool, str, list)):
-        raise ValueError(f"{path} is not numeric")
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{cell_value.path} is not an integer: {value!r}")
     return value
 
 
 def _float_cell_value(cell_value: ProvenanceCell) -> float:
-    """Return a provenance cell's numeric value as ``float``."""
-    value = _numeric_cell_value(cell_value, cell_value.description)
+    """Return a provenance cell's numeric value as ``float``.
+
+    Raises:
+        ValueError: If the cell does not hold a number.
+    """
+    value = cell_value.value
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{cell_value.description} is not numeric: {value!r}")
     return float(value)
 
 
 def _float_input_value(cell_value: InputCell) -> float:
-    """Return an input cell's numeric value as ``float``."""
-    value = _numeric_input_value(cell_value, cell_value.path)
+    """Return an input cell's numeric value as ``float``.
+
+    Raises:
+        ValueError: If the cell does not hold a number.
+    """
+    value = cell_value.value
+    if isinstance(value, (bool, str, list)):
+        raise ValueError(f"{cell_value.path} is not numeric: {value!r}")
     return float(value)
 
 
@@ -1642,9 +1781,7 @@ __all__ = [
     "DEFAULT_GROUND_SCENARIO_PATH",
     "GroundReferenceConfig",
     "GroundReferenceOutput",
-    "SourceCatalog",
     "build_ground_reference_output",
-    "default_ground_source_catalog",
     "ground_config_from_dict",
     "load_ground_config",
     "render_ground_json",

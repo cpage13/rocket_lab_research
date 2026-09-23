@@ -91,6 +91,7 @@ from data_center.constants import (
 )
 from data_center.generations import (
     GENERATIONS_YAML_KEY,
+    KNOWN_GENS,
     GenerationSlopes,
     GenerationSpec,
     load_generations_yaml,
@@ -192,7 +193,13 @@ class CadenceDials(BaseModel):
     cadence_ceiling: int = Field(
         default=CADENCE_CEILING_DEFAULT,
         gt=0,
-        description="Hard cap on whole-number launches per year.",
+        description=(
+            "Carrying capacity of the logistic launch ramp, launches per year: a "
+            "horizon-scoped infrastructure parameter standing for the launch pads "
+            "and rocket production plausibly built within the modeled ten-year "
+            "window (RLDC-CADENCE-CEILING-150), not a cap on the system. Launches "
+            "are clamped to it inside the window; a longer-horizon run re-sets it."
+        ),
     )
     launches_at_year_5: int = Field(
         default=LAUNCHES_AT_YEAR_5_DEFAULT,
@@ -382,8 +389,9 @@ class GospelInputs(BaseModel):
     tjmax_lift_year: int = Field(
         default=TJMAX_LIFT_YEAR,
         description=(
-            "Year index (0-based) at which the radiator hot-loop arrives "
-            "and radiator t/kW steps down (D11)."
+            "Year index (0-based) at which the radiator dial switches from "
+            "'radiator_t_per_kw_pre' to 'radiator_t_per_kw_post' (D11). Inert "
+            "when the two dials are equal, as in the investor-set default."
         ),
         ge=0,
     )
@@ -426,19 +434,26 @@ class GospelInputs(BaseModel):
     radiator_t_per_kw_pre: float = Field(
         default=RADIATOR_T_PER_KW_PRE,
         description=(
-            "Radiator t/kW before the Tjmax lift (pre 'tjmax_lift_year'), "
-            "the conservative t/kW (D11)."
+            "Radiator mass per kW of flown power before the Tjmax lift (model "
+            "years before 'tjmax_lift_year'), t/kW. The investor-set default "
+            "(2026-07-14, RLDC-SOLAR-RADIATOR-MASS) is the AI-1-class deployed "
+            "double-sided radiator run hot, about 0.00165 t/kW, equal to the "
+            "post-lift dial so the Tjmax step is inert. The single-face "
+            "co-mounted 0.012 to 0.013 t/kW posture is the labeled "
+            "conservative exception."
         ),
         gt=0.0,
     )
     radiator_t_per_kw_post: float = Field(
         default=RADIATOR_T_PER_KW_POST,
         description=(
-            "Radiator t/kW after the Tjmax lift (post 'tjmax_lift_year'), "
-            "the hot-loop coolant arrives and lowers t/kW (D11). Cycle-2 "
-            "lifts this to 0.012 (central of the R1 0.010-0.014 band) for "
-            "the single-face co-mounted architecture (D16/D17); cycle-1's "
-            "value was 0.007."
+            "Radiator mass per kW of flown power from the Tjmax lift on "
+            "('tjmax_lift_year' and later), t/kW. The investor-set default "
+            "(2026-07-14, RLDC-SOLAR-RADIATOR-MASS) is the AI-1-class deployed "
+            "double-sided radiator run hot, about 0.00165 t/kW; the "
+            "temperature and architecture win is booked here in mass, never "
+            "in the cost dials. The single-face co-mounted 0.012 to 0.013 "
+            "t/kW posture is the labeled conservative exception."
         ),
         gt=0.0,
     )
@@ -717,6 +732,20 @@ class ValuationConfig(BaseModel):
         if v is not None:
             validate_generation_order(v)
         return v
+
+    def listed_generations(self) -> list[GenerationSpec]:
+        """Return the run's listed generation roadmap, before extrapolation.
+
+        The scenario's own ``generations`` list when it sets one, else the
+        bundled :data:`~data_center.generations.KNOWN_GENS`. The engine
+        extends this list on the slopes and the release cadence; the first
+        ``len(listed_generations())`` entries of the extended list are the
+        listed ones, every later entry is extrapolated.
+
+        Returns:
+            A new list of the listed generations, oldest first.
+        """
+        return list(self.generations) if self.generations is not None else list(KNOWN_GENS)
 
 
 # ===========================================================================

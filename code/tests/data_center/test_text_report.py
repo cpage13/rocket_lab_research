@@ -28,12 +28,18 @@ hand-built stub.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 
 from data_center.config import load_config
 from data_center.engine import run_valuation
 from data_center.output import ValuationOutput
 from data_center.text_report import render_headline, render_text
+
+# The shipped scenarios, anchored on this file so the suite runs from any cwd.
+_SCENARIOS = Path(__file__).resolve().parents[2] / "scenarios"
 
 # The eight v8 section headers, in render order (T80 section ordering).
 _SECTION_HEADERS: tuple[str, ...] = (
@@ -208,22 +214,66 @@ def test_rband_block_shows_cumulative_revenue(default_report: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_validation_block_renders_every_rule(
+def test_validation_block_renders_every_validation_result(
     default_report: str, default_output: ValuationOutput
 ) -> None:
-    """The validation block renders one line per V-rule (16 on the default scenario)."""
+    """Objective: the report shows the one public verdict list.
+
+    Expected: every ``meta.validation_results`` entry (the 16 V-rules plus
+    the model invariants) appears by id, so the report cannot drop a check
+    the JSON publishes.
+    """
     validation = default_report.split("VALIDATION CHECKS", 1)[1]
-    rules = default_output.meta.validation.rules
-    assert len(rules) == 16
-    for rule in rules:
-        assert rule.name in validation
+    results = default_output.meta.validation_results
+    assert len(results) > len(default_output.meta.validation.rules)
+    for result in results:
+        assert result.validation_id in validation
 
 
 def test_validation_block_marks_passing_rules(default_report: str) -> None:
-    """All V-rules pass on the default scenario, so the block shows PASS marks."""
+    """All checks pass on the default scenario, so the block shows PASS marks."""
     validation = default_report.split("VALIDATION CHECKS", 1)[1]
     assert "PASS" in validation
     assert "FAIL" not in validation
+
+
+def test_validation_block_agrees_with_the_json_on_a_non_default_scenario() -> None:
+    """Objective: one verdict source for the report and the JSON (ambitious).
+
+    The ambitious scenario differs from the default by design. Expected: the
+    report's summary line counts exactly the passing entries of
+    ``meta.validation_results``, it shows every non-passing id the JSON
+    shows, and no default-pinned check appears at all.
+    """
+    out = run_valuation(load_config(_SCENARIOS / "ambitious.yaml"))
+    report = render_text(out).split("VALIDATION CHECKS", 1)[1]
+    results = out.meta.validation_results
+    passing = [r for r in results if r.severity == "pass"]
+    assert f"{len(passing)} of {len(results)} checks pass." in report
+    for result in results:
+        if result.severity != "pass":
+            assert f"[{result.severity.value.upper():>4}] {result.validation_id}" in report
+    assert "default_" not in report
+
+
+def test_provenance_banner_counts_match_v13(
+    default_report: str, default_output: ValuationOutput
+) -> None:
+    """Objective: the banner and V13 count cells with the same walker.
+
+    Expected: the banner's cell count and distinct-formula count are the
+    ones V13 (``provenance_formula_keys``) reports, nested cost-breakdown
+    cells included.
+    """
+    v13 = next(
+        r for r in default_output.meta.validation.rules if r.name == "provenance_formula_keys"
+    )
+    match = re.search(r"all (\d+) cells reference one of (\d+) formula names", v13.computed)
+    assert match is not None
+    cells, formulas = match.groups()
+    banner = default_report.split("PROVENANCE SUMMARY", 1)[1].split("PER-GENERATION", 1)[0]
+    assert f"This run produced {cells} cells" in banner
+    assert f"across {formulas} distinct formulas" in banner
 
 
 # ---------------------------------------------------------------------------

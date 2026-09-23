@@ -16,6 +16,7 @@ Three test families:
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 from pydantic import BaseModel, ValidationError
@@ -462,6 +463,62 @@ def test_data_dictionary_describes_per_year_cells_as_leaves() -> None:
     assert dd["physical.years[].kw_per_node"].type == "cell"
     assert "physical.years[].kw_per_node.formula_name" not in dd
     assert dd["business.years[].living_fleet"].type == "cell"
+
+
+def _dictionary_path_nodes(doc: Any, path: str) -> list[Any]:
+    """Resolve a data-dictionary path against the serialised artifact.
+
+    A ``name[]`` segment fans out over the container's items (list items or
+    dict values), so a per-year path returns that field in every year.
+    """
+    nodes: list[Any] = [doc]
+    for segment in path.split("."):
+        fan_out = segment.endswith("[]")
+        key = segment[:-2] if fan_out else segment
+        next_nodes: list[Any] = []
+        for node in nodes:
+            if not isinstance(node, dict) or key not in node:
+                continue
+            child = node[key]
+            if fan_out:
+                next_nodes.extend(child.values() if isinstance(child, dict) else child)
+            else:
+                next_nodes.append(child)
+        nodes = next_nodes
+    return nodes
+
+
+def test_every_data_dictionary_cell_unit_is_the_cells_own_unit() -> None:
+    """Objective: the dictionary's units come from the cells, not name suffixes.
+
+    The original trigger: 15 money fields read unit "-" and
+    ``mounting_overhead_pct`` read "percent" for a 0-1 fraction. Expected:
+    for every cell entry, the unit equals the one unit every cell at that
+    path declares (a null unit reads "-"); a path whose cells differ (the
+    flat assumption index) says so; the fleet revenue unit is MUSD and the
+    mounting overhead unit is its cell's "fraction".
+    """
+    from data_center.json_output import PER_CELL_UNIT
+
+    out = _run_default()
+    doc = json.loads(out.model_dump_json())
+    checked = 0
+    for entry in out.meta.data_dictionary:
+        if entry.type != "cell":
+            continue
+        cells = _dictionary_path_nodes(doc, entry.path)
+        assert cells, f"{entry.path}: no cell found in the artifact"
+        units = {"-" if cell["unit"] is None else cell["unit"] for cell in cells}
+        expected = units.pop() if len(units) == 1 else PER_CELL_UNIT
+        assert entry.unit == expected, f"{entry.path}: dictionary {entry.unit!r} vs {expected!r}"
+        checked += 1
+    assert checked == len([e for e in out.meta.data_dictionary if e.type == "cell"]) > 50
+    units_by_path = {e.path: e.unit for e in out.meta.data_dictionary}
+    assert units_by_path["business.years[].revenue_annual_fleet_musd_central"] == "MUSD"
+    assert units_by_path["inputs.config.volume.mounting_overhead_pct"] == (
+        out.inputs.config.volume.mounting_overhead_pct.unit
+    )
+    assert units_by_path["inputs.config.volume.mounting_overhead_pct"] == "fraction"
 
 
 def test_engine_inputs_block_carries_v8_dial_blocks() -> None:

@@ -40,9 +40,11 @@ _BANNED_FIELD = "annual_rev_per_node_musd"
 
 # Unit families a field-name token must map to. A token in the field name
 # (e.g. `kw`, `_t`, `kg`) constrains the declared unit to one of these.
-_KW_UNITS = {"kW", "kW/pkg", "PFLOPS/kW", "MUSD/kW", "t/kW"}
+# Unit families, spelled as the cells and declared fields spell them (the
+# data dictionary reads each cell's own unit, so "kW/package" not "kW/pkg").
+_KW_UNITS = {"kW", "kW/package", "PFLOPS/kW", "MUSD/kW", "t/kW"}
 _TONNE_UNITS = {"t"}
-_KG_UNITS = {"kg", "kg/m2", "kg/pkg"}
+_KG_UNITS = {"kg", "kg/m2", "kg/package"}
 
 # Tolerance for the revenue − profit == cost algebraic identity (floats).
 _REL_TOL = 1e-9

@@ -271,8 +271,12 @@ pure speculation."""
 # ============================================================
 
 CADENCE_CEILING_DEFAULT: Final[int] = 150
-"""ESTIMATE/SCENARIO (NTR-010; v7 archaeology). Hard cap on launches
-per year; venture-model scenario, not Rocket Lab guidance."""
+"""ESTIMATE/SCENARIO (RLDC-CADENCE-CEILING-150, NTR-010; v7 archaeology).
+Carrying capacity of the logistic launch ramp: a horizon-scoped
+infrastructure parameter for the launch pads and rocket production
+plausibly built within the ten-year window, not a cap on the system.
+Launches are clamped to it inside the window; a longer-horizon run must
+re-set it. Venture-model scenario, not Rocket Lab guidance."""
 
 LAUNCHES_AT_YEAR_5_DEFAULT: Final[int] = 14
 """ESTIMATE/SCENARIO (NTR-010; v7 archaeology). Logistic anchor at
