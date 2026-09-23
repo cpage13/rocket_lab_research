@@ -1,18 +1,25 @@
-"""The dial schema and YAML loader for the communications CELLULAR cost model.
+"""The dial schema and YAML loader for the communications model families.
 
-This module defines the INPUT contract of the slim, roughly 6-variable
-cost-to-serve model for a Rocket Lab Neutron-launched CELLULAR direct-to-cell
-(satellite-to-phone) constellation. It mirrors the data-center model's config
-shape: a top-level frozen :class:`CommsConfig` (``extra="forbid"``) whose nested
-blocks are each their own frozen ``extra="forbid"`` BaseModel, every field with a
-named-constant default so a no-argument construct is fully valid, plus the
-``comms_config_from_dict`` / ``load_comms_config`` YAML loader pair. Nothing here
-computes a cost, a coverage fraction, a subscriber count, or a comparison; it is
-the contract the engine (Phase 2), the coverage->subscribers logic (Phase 3), the
-ground comparison (Phase 4), and the light output (Phase 5) consume.
+This module defines the INPUT contract of the slim cost-to-serve model for a
+Rocket Lab Neutron-launched communications constellation, shared by both model
+families: the High-Bandwidth Cellular Pure Play model (the no-``iridium`` default,
+cellular direct-to-cell on partner cellular spectrum) and the Iridium model (the
+MSS lane on Iridium's owned L-band, selected by the ``iridium`` block). It mirrors
+the data-center model's config shape: a top-level frozen :class:`CommsConfig`
+(``extra="forbid"``) whose nested blocks are each their own frozen
+``extra="forbid"`` BaseModel, every field with a named-constant default so a
+no-argument construct is fully valid, plus the ``comms_config_from_dict`` /
+``load_comms_config`` YAML loader pair. Nothing here computes a cost, a coverage
+fraction, a subscriber count, or a comparison; it is the contract the engine
+(``communications.engine``), the ground comparison (``communications.ground``), and
+the Iridium artifact writer (``communications.json_output``) consume. Cross-field
+rules are model validators: the coverage floor may not exceed the saturation cap,
+the off-peak concurrency may not exceed the peak, and the four ARPU mixes must sum
+to 100.
 
-The product is CELLULAR (the subscriber unit is a PERSON, a phone subscriber, NOT
-a household). It is NOT a market-share, demand, or revenue/DCF model. The blocks:
+The subscriber unit is a PERSON, NOT a household, and IoT devices are never summed
+with people. It is NOT a market-share, demand, or DCF model: revenue is a
+cost-coupled multiple or a price applied to a sized base. The blocks:
 
 * ``metadata: CommsMetadataDials`` -- base year, horizon, scenario name.
 * ``cadence: CadenceDials`` -- the shared whole-fleet logistic launch ramp
@@ -253,8 +260,9 @@ class SatelliteDials(BaseModel):
         le=16,
         description=(
             "Satellites per Neutron launch, a DIRECT input scalar (12 default, up "
-            "to 16). Mass-bound count for a Flatellite-class bird: ~12 (SSO), ~16 "
-            "(LEO). Source COMM-258 / COMM-260."
+            "to 16). Mass-bound count for a ~800 kg Flatellite-class bird on the "
+            "mission LEO basis: 12 loads ~9,600 kg, 73.8 percent of the ~13,000 kg "
+            "LEO envelope; 16 is the upper bound. Source COMM-258 / COMM-260."
         ),
     )
     satellite_lifetime_years: int = Field(
@@ -293,8 +301,10 @@ class CoverageDials(BaseModel):
     satellite) and CAPPED by ``max_fleet_satellites`` (past which the spread servable
     base is exhausted). At a small base the floor binds (the engine reports the
     coverage regime); at a large base the capacity need binds; at an enormous base
-    the cap binds. The ELEVATION MASK is the underlying physical dial behind the floor
-    (this default is the 25-degree quality-link, populated-band, 95%-coverage figure).
+    the cap binds. The floor may not exceed the cap (a model validator rejects it at
+    load), so the three regime labels stay consistent with the fleet the engine sizes.
+    The ELEVATION MASK is the underlying physical dial behind the floor (this default
+    is the 25-degree quality-link, populated-band, 95%-coverage figure).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -305,11 +315,13 @@ class CoverageDials(BaseModel):
         description=(
             "The coverage FLOOR: the minimum fleet for everyone in the served band "
             "to SEE a satellite (the lower bound on the fleet target, NOT the whole "
-            "fleet when the base is large). INVESTOR_SET to 340: the quality-link case "
-            "(25 degree elevation mask, populated mid-latitude band +/-55 deg at 95%, "
-            "~450 km, ~53 deg). Coverage sim (.agent/other/coverage_sim/FINDINGS.md: "
-            "341, rounded to 340) plus COMM-209 / COMM-216 / COMM-217 and "
-            "COMM-386..COMM-405. Configurable."
+            "fleet when the base is large; at most max_fleet_satellites). "
+            "INVESTOR_SET to 340: the quality-link case (25 degree elevation mask, "
+            "populated mid-latitude band +/-55 deg at 95%, ~450 km, ~53 deg). The "
+            "project coverage simulation (341, rounded to 340; the coverage-floor row "
+            "of communications/assumptions.md carries the result and its honest "
+            "bounds) plus COMM-209 / COMM-216 / COMM-217 and COMM-386..COMM-405. "
+            "Configurable."
         ),
     )
     max_fleet_satellites: int = Field(
@@ -325,6 +337,25 @@ class CoverageDials(BaseModel):
         ),
     )
 
+    @model_validator(mode="after")
+    def _floor_at_or_below_cap(self) -> CoverageDials:
+        """Reject a coverage floor above the saturation cap.
+
+        The fleet target is ``min(cap, max(floor, capacity_need))``: with the floor
+        above the cap the target silently becomes the cap while the binding regime
+        still reads "coverage" and the coverage fraction never reaches 1.0, so the
+        pair is rejected at config load.
+        """
+        if self.satellites_for_full_coverage > self.max_fleet_satellites:
+            raise ValueError(
+                "coverage.satellites_for_full_coverage "
+                f"({self.satellites_for_full_coverage}) must not exceed "
+                f"coverage.max_fleet_satellites ({self.max_fleet_satellites}): the "
+                "coverage floor is the lower bound on the fleet target and the "
+                "saturation cap the upper bound"
+            )
+        return self
+
 
 class SubscriberDials(BaseModel):
     """The CAPACITY dimension: the subscriber TARGET and the per-satellite density.
@@ -335,7 +366,9 @@ class SubscriberDials(BaseModel):
     ``subscribers_per_satellite`` attached subscribers per satellite (the capacity
     need), then floors by the coverage floor and caps by the saturation cap. The
     served count then RAMPS with the buildout (target x living-fleet / fleet-target),
-    reaching the target at full deployment. This is capacity-SIZED (the fleet tracks
+    reaching the target at full deployment, and never exceeds the fleet target's
+    people capacity (the cap binds in the saturated regime, and on an override larger
+    than the fleet carries). This is capacity-SIZED (the fleet tracks
     the base), NOT capacity-DERIVED in the old sense (no spectrum -> capacity ->
     demand chain; the served base is a sized input, not a demand estimate). None of
     the field names use a forbidden demand-side token.
@@ -378,7 +411,9 @@ class SubscriberDials(BaseModel):
             "TARGET as the base the served count ramps toward (the model serves this "
             "absolute count at full deployment; below full deployment it still scales "
             "by the buildout fraction). The fleet target is still sized from the "
-            "TARGET dial, not this override. Default None means use the target."
+            "TARGET dial, not this override, so an override above the fleet target's "
+            "people capacity is capped at that capacity (with a logged warning). "
+            "Default None means use the target."
         ),
     )
 
@@ -414,7 +449,8 @@ class RevenueDials(BaseModel):
             "The COST-PLUS / MARGIN-TARGET revenue multiple: annual revenue = annual "
             "cost x this. INVESTOR_SET to 1.5 (cost+50%, an implied (1.5 - 1) / 1.5 = "
             "33.3% gross margin), mirroring the data-center central R = 1.5 "
-            "(research/SOURCE_INDEX.md#REV-008). Each 5-year cohort earns this margin "
+            "(research/SOURCE_INDEX.md, RLDC-REVENUE-MULTIPLE-1_5X). Each 5-year "
+            "cohort earns this margin "
             "across its life. Configurable."
         ),
     )
@@ -458,7 +494,7 @@ class GroundInterfaceDials(BaseModel):
             "Dense-served incumbent-marginal CELLULAR ground cost per subscriber "
             "(the mobile-network all-in cost per human subscriber), grounded ~$140 "
             "to 310/sub/yr. MARKED INTERFACE INPUT; optional (None-able) so the cost "
-            "side never blocks. Sources COMM-096 / COMM-098 and "
+            "side never blocks. Source COMM-530 (the dense-served regime row) and "
             "research/economics/ground_cellular_cost_per_subscriber.md Section 2.4."
         ),
     )
@@ -712,7 +748,8 @@ class IridiumDials(BaseModel):
         gt=0,
         le=1.0,
         description=(
-            "The OFF-PEAK concurrency fraction. INVESTOR_SET to 0.005 (0.5%). Flagged as "
+            "The OFF-PEAK concurrency fraction, at most concurrency_peak (off peak is "
+            "the quieter hour by definition). INVESTOR_SET to 0.005 (0.5%). Flagged as "
             "the pair with concurrency_peak. Configurable."
         ),
     )
@@ -747,6 +784,22 @@ class IridiumDials(BaseModel):
         ),
     )
 
+    @model_validator(mode="after")
+    def _offpeak_at_or_below_peak(self) -> IridiumDials:
+        """Reject an off-peak concurrency above the busy-hour peak.
+
+        Off peak is the quieter hour by definition; an off-peak concurrency above the
+        peak would make the off-peak per-user rate fall below the peak rate, so the
+        pair is rejected at config load.
+        """
+        if self.concurrency_offpeak > self.concurrency_peak:
+            raise ValueError(
+                f"iridium.concurrency_offpeak ({self.concurrency_offpeak}) must not "
+                f"exceed iridium.concurrency_peak ({self.concurrency_peak}): off peak "
+                "is the quieter hour"
+            )
+        return self
+
 
 # ===========================================================================
 # 2. The top-level CommsConfig
@@ -754,11 +807,13 @@ class IridiumDials(BaseModel):
 
 
 class CommsConfig(BaseModel):
-    """The complete configuration for one communications cellular cost run.
+    """The complete configuration for one communications cost run (either family).
 
-    Construct one (the defaults reproduce the central case), or load one from YAML
-    with :func:`load_comms_config`. Hand it to ``run_comms_model`` (Phase 2) /
-    ``build_comms_output`` (Phase 5).
+    Construct one (the defaults reproduce the High-Bandwidth Cellular Pure Play
+    central case), or load one from YAML with :func:`load_comms_config`. Hand it to
+    ``communications.engine.run_comms_model``; the Iridium artifact writer
+    (``communications.json_output``) assembles the promoted JSON from the config and
+    the run.
 
     Every block defaults via ``default_factory`` (or, for ``ground`` and ``iridium``,
     a plain None) so a config constructed with no arguments, or a YAML omitting a

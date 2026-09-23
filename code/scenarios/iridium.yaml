@@ -21,13 +21,13 @@
 # the per-satellite subscriber density from L-band physics (held spectrum, device
 # spectral efficiency, aperture area, active rate, busy-hour concurrency) instead
 # of reading the fixed `subscribers_per_satellite` dial, then feeds the SAME
-# `compute_fleet_target` and fleet machinery (cadence, cohorts, cost, cost-plus
-# revenue). Every value below is set EXPLICITLY. All values EXCEPT the two cost
-# dials equal the schema default; the launch cost and the satellite build cost
-# deliberately DIVERGE from the shared-spine defaults (investor simplification
-# 2026-07-09, a flat cost model, see the `launch_cost:` and `satellite:` blocks
-# below). This file stays a faithful, self-documenting statement of the
-# phone-class baseline.
+# `compute_fleet_target` and fleet machinery (cadence, cohorts, cost). Every value
+# below is set EXPLICITLY. All values EXCEPT three equal the schema default: the
+# manifest share (all-in, 1.0) and the two cost dials (the launch cost and the
+# satellite build cost, a flat cost model, investor simplification 2026-07-09)
+# deliberately DIVERGE from the shared-spine defaults; see the `comms_cadence:`,
+# `launch_cost:`, and `satellite:` blocks below. This file stays a faithful,
+# self-documenting statement of the phone-class baseline.
 #
 # THE BASELINE NUMBERS this file reproduces (frozen in
 # tests/communications/test_iridium_model.py): per-satellite capacity
@@ -57,10 +57,12 @@
 # assumed zero: an explicit stated assumption (IRIDIUM_OPERATIONS_COST_MUSD), a
 # fixed line to research and add later. The prices-today ARPU revenue case is
 # PUBLISHED as the four-bucket case (the `arpu:` block at the end of this file,
-# investor-set Sheet A 2026-07-09); cost-plus stays beside it as the
-# cost-recovery floor. `spectrum_mhz` is a WIDTH held (8 MHz exclusive), not a
-# frequency. This file computes no conclusion: it is the input contract, and the
-# engine writes the trajectory.
+# investor-set Sheet A 2026-07-09); it is the Iridium model's only published
+# revenue case (the shared engine's cost-plus line is off every Iridium surface
+# since schema iridium-v3; the revenue multiple above only feeds the cellular
+# family). `spectrum_mhz` is a WIDTH held (8 MHz exclusive), not a frequency.
+# This file computes no conclusion: it is the input contract, and the engine
+# writes the trajectory.
 
 # =============================================================================
 # Pedal to the metal: the all-in manifest share (investor-set 2026-07-14)
@@ -90,8 +92,8 @@ comms_cadence:
 # the whole FY2036 build-and-hold at 1,450.0 $M (696 satellite units x 1.0 + 58
 # launches x 13.0: the 29-launch build completed in 2031 plus one full five-year
 # replacement of the fleet by 2036), a 145.0 $M/yr steady-state annual cost, and
-# a 250.0 $M final-year (FY2036) cash replacement, 25.0 $/subscriber against the
-# 10M configured base.
+# a 250.0 $M final-year (FY2036) cash replacement (the 2031 cohort retiring),
+# 25.0 $/subscriber over the 10M served base.
 #
 # The shared launch-cost spine is a log-linear curve from 25.0 $M at 5 launches
 # per year down to a 13.5 $M high-cadence floor at 100. Setting BOTH cadence
@@ -157,7 +159,9 @@ iridium:
 
   # A separate DEVICE passthrough counter (not people, not folded into the
   # subscriber count, zero fleet-sizing effect): 10,000,000 (low end of tens of
-  # millions). Contention, not population, is the real IoT constraint.
+  # millions). Contention, not population, is the real IoT constraint. Superseded
+  # on the promoted artifact while the `arpu:` block below is set: the published
+  # IoT count is then the ARPU IoT bucket (51,670,320 devices at the baseline).
   iot_devices: 10000000
 
   # The Iridium-model scenario label's single home.

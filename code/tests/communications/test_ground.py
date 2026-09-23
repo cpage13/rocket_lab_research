@@ -5,9 +5,10 @@ Exercises :func:`communications.ground.build_comms_ground_comparison`: the
 ratio orientation and the 0.5 / 2.0 materiality-band verdict labels, the
 canonical opposite-direction case (space wins the sparse fringe, loses the dense
 served market), the same-order band, one regime absent not blocking the other,
-the headline boolean's True / False / None states, and the basis-mismatch
-exception. The space side is a plain ``float`` (the model's own computed cellular
-annual cost per subscriber); no ProvenanceCells, no price/ARPU machinery.
+the headline boolean's True / False / None states, the basis-mismatch
+exception, and the zero-space-cost case (every ratio None). The space side is a
+plain ``float`` (the model's own computed cellular annual cost per subscriber); no
+ProvenanceCells, no price/ARPU machinery.
 """
 
 from __future__ import annotations
@@ -223,3 +224,30 @@ def test_both_regimes_absent_runs_with_default_block() -> None:
     assert result.sparse.ground_cost_per_subscriber_usd is None
     assert result.headline_space_below_sparse_fresh_build is None
     assert result.basis == GROUND_BASIS_DEFAULT
+
+
+def test_zero_space_cost_yields_none_ratios() -> None:
+    """A zero space cost makes every ratio undefined: None, never 0.0 or infinite.
+
+    Objective: the zero-denominator promise of the comparison. A zero space figure is
+    undefined (for example a run that serves nobody), so it must not read as a 0.0
+    space/ground ratio. Expected: on both supplied regimes the ground/space ratio,
+    the space/ground ratio, the label, and the space-is-cheaper boolean are None, and
+    the headline is None.
+    """
+    ground = GroundInterfaceDials(
+        dense_ground_cost_per_subscriber_usd=_DENSE_BELOW_HALF_USD,
+        sparse_ground_cost_per_subscriber_usd=_SPARSE_ABOVE_2X_USD,
+    )
+    result = build_comms_ground_comparison(
+        space_cost_per_subscriber_usd=0.0,
+        space_basis=GROUND_BASIS_DEFAULT,
+        ground=ground,
+    )
+    assert result is not None
+    for regime in (result.dense, result.sparse):
+        assert regime.ground_to_space_ratio is None
+        assert regime.space_to_ground_ratio is None
+        assert regime.conclusion_label is None
+        assert regime.space_is_cheaper is None
+    assert result.headline_space_below_sparse_fresh_build is None

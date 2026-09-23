@@ -4,7 +4,9 @@ Covers the slim ``CommsConfig`` dial tree: all-defaults construction, the frozen
 ``extra="forbid"`` contract, the reused cadence + launch-cost defaults (asserted
 both against the comms named constants AND against the shared ``common.cadence``
 authority, the drift guard), the new satellite / coverage / comms-share / ground
-blocks, the field bounds, and the YAML loader pair. Mirrors the data-center
+blocks, the field bounds, the cross-field validators (coverage floor at or below
+the cap, off-peak concurrency at or below the peak), and the YAML loader pair.
+Mirrors the data-center
 ``test_config.py`` assertion style without importing ``data_center`` (forbidden).
 """
 
@@ -48,6 +50,7 @@ from communications.config import (
     CommsMetadataDials,
     CoverageDials,
     GroundInterfaceDials,
+    IridiumDials,
     LaunchCostDials,
     RevenueDials,
     SatelliteDials,
@@ -378,3 +381,48 @@ def test_load_comms_config_non_mapping_root_raises(tmp_path: Path) -> None:
     bad.write_text("- just\n- a\n- list\n")
     with pytest.raises(ValueError, match="must contain a YAML mapping"):
         load_comms_config(bad)
+
+
+# -- cross-field validators (fail at load) ----------------------------
+
+
+def test_coverage_floor_above_cap_fails_at_load(tmp_path: Path) -> None:
+    """A coverage floor above the saturation cap fails at config load, with a clear message.
+
+    Objective: the floor-at-or-below-cap rule. Before it existed, a 340 floor over a
+    100 cap loaded silently, sized a 100-satellite fleet, and labeled it the coverage
+    regime. Expected: that pair fails in a scenario YAML (load_comms_config) and as a
+    bare block, naming both fields; a floor equal to the cap loads.
+    """
+    scenario = tmp_path / "floor_above_cap.yaml"
+    scenario.write_text(
+        "coverage:\n  satellites_for_full_coverage: 340\n  max_fleet_satellites: 100\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError, match="must not exceed coverage.max_fleet_satellites"):
+        load_comms_config(scenario)
+    with pytest.raises(ValidationError, match="satellites_for_full_coverage"):
+        CoverageDials(satellites_for_full_coverage=341, max_fleet_satellites=340)
+    equal = CoverageDials(satellites_for_full_coverage=340, max_fleet_satellites=340)
+    assert equal.satellites_for_full_coverage == equal.max_fleet_satellites
+
+
+def test_offpeak_concurrency_above_peak_fails_at_load(tmp_path: Path) -> None:
+    """An off-peak concurrency above the busy-hour peak fails at config load.
+
+    Objective: the off-peak-at-or-below-peak rule (off peak is the quieter hour).
+    Before it existed, 0.025 off peak over a 0.005 peak loaded and produced an
+    off-peak per-user rate below the peak rate. Expected: that pair fails in a
+    scenario YAML and as a bare block, naming both fields; equal values load.
+    """
+    scenario = tmp_path / "offpeak_above_peak.yaml"
+    scenario.write_text(
+        "iridium:\n  concurrency_peak: 0.005\n  concurrency_offpeak: 0.025\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError, match="must not exceed iridium.concurrency_peak"):
+        load_comms_config(scenario)
+    with pytest.raises(ValidationError, match="concurrency_offpeak"):
+        IridiumDials(concurrency_peak=0.01, concurrency_offpeak=0.02)
+    equal = IridiumDials(concurrency_peak=0.01, concurrency_offpeak=0.01)
+    assert equal.concurrency_offpeak == equal.concurrency_peak

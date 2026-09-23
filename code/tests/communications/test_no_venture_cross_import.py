@@ -27,9 +27,9 @@ _DEFAULT_YAML = _REPO_CODE / "scenarios" / "iridium.yaml"
 
 _COMMS_SRC_FILES = sorted(_COMMS_SRC.glob("*.py"))
 
-# The forbidden config-time tokens (case-insensitive). The verdict/conclusion
-# token set guards the OUTPUT JSON (a Phase-5 deliverable that does not exist
-# yet) and is intentionally not enforced here.
+# The forbidden config-time tokens (case-insensitive), scanned in the comms src and
+# the default scenario YAML. The promoted output JSON
+# (communications/models/iridium/default.json) is not token-scanned here.
 _FORBIDDEN_TOKENS = [
     "starship",
     "capture_share",

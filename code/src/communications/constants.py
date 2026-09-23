@@ -1,4 +1,4 @@
-"""Module-level ``Final`` named constants for the communications CELLULAR model.
+"""Module-level ``Final`` named constants for the communications model families.
 
 This module is the single source of truth for the comms config's "no bare
 numeric literals" rule (CLAUDE.md). Every default the ``communications.config``
@@ -222,7 +222,7 @@ ORBIT_SCENARIO_BASIS: Final[str] = (
     "decision."
 )
 """The orbit block's basis paragraph: the simulation support and every honest
-bound recorded by the 2026-07-11 calculation audit, carried verbatim on the
+bound recorded by the 2026-07-14 calculation audit, carried verbatim on the
 promoted artifact so the limitations travel with the numbers."""
 
 SATELLITE_BUILD_COST_MUSD_DEFAULT: Final[float] = 1.05
@@ -249,8 +249,9 @@ subscriber base is large: the capacity dimension (see
 SERVE the base, in which case the capacity need binds and the fleet target rises
 above the floor. The floor is the quality-link case (a 25 degree elevation mask over
 the populated mid-latitude band, +/-55 deg, at 95% coverage, ~450 km, ~53 deg
-inclined). Backed by the coverage sim (.agent/other/coverage_sim/FINDINGS.md:
-populated band, 450 km, 25 deg mask, 95% = 341 sats, investor-rounded to 340) and the
+inclined). Backed by the project coverage simulation (populated band, 450 km, 25 deg
+mask, 95% = 341 sats, investor-rounded to 340; the coverage-floor row of
+communications/assumptions.md carries the result and its honest bounds) and the
 corpus (COMM-209 / COMM-216 / COMM-217 from leo_constellation_coverage_minimums; the
 DTC coverage-geography band COMM-386..COMM-405). 340 sits inside the analytic ~290 to
 960 global-band floor (COMM-216) and the sim's populated-band 95% figure. The
@@ -315,7 +316,8 @@ low-density subscriber is servable (a dense cell saturates). CONFIGURABLE."""
 # ===========================================================================
 
 REVENUE_MULTIPLE_DEFAULT: Final[float] = 1.5
-"""INVESTOR_SET (mirrors the DC central R = 1.5, research/SOURCE_INDEX.md#REV-008).
+"""INVESTOR_SET (mirrors the DC central R = 1.5, research/SOURCE_INDEX.md
+RLDC-REVENUE-MULTIPLE-1_5X).
 The COST-PLUS / MARGIN-TARGET revenue case: annual revenue = annual cost x this
 multiple. 1.5 is cost+50%, an implied gross margin of (1.5 - 1) / 1.5 = 33.3%, the
 same owner-operator margin the data-center model carries as its central R. Each
