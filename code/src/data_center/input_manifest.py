@@ -89,11 +89,8 @@ class VolumeInputTree(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    si_areal_density_kg_m2: InputCell = Field(..., description="Solar-array areal density input.")
     si_bol_efficiency: InputCell = Field(..., description="Solar-array BOL efficiency input.")
-    fold_ratio: InputCell = Field(..., description="Solar-array folded-volume ratio input.")
     stowed_pitch_mm: InputCell = Field(..., description="Panel stowed-pitch input.")
-    radiator_solar_area_ratio: InputCell = Field(..., description="Radiator-to-solar area ratio.")
     mounting_overhead_pct: InputCell = Field(..., description="Array mounting overhead input.")
     neutron_fairing_usable_volume_m3: InputCell = Field(..., description="Fairing volume input.")
 
@@ -263,11 +260,8 @@ class InputManifest(BaseModel):
         """Return the volume config model represented by the manifest."""
         volume = self.config.volume
         return VolumeDials(
-            si_areal_density_kg_m2=_float_value(volume.si_areal_density_kg_m2),
             si_bol_efficiency=_float_value(volume.si_bol_efficiency),
-            fold_ratio=_float_value(volume.fold_ratio),
             stowed_pitch_mm=_float_value(volume.stowed_pitch_mm),
-            radiator_solar_area_ratio=_float_value(volume.radiator_solar_area_ratio),
             mounting_overhead_pct=_float_value(volume.mounting_overhead_pct),
             neutron_fairing_usable_volume_m3=_float_value(volume.neutron_fairing_usable_volume_m3),
         )
@@ -585,15 +579,6 @@ PHYSICAL_SPECS: Final[dict[str, CellSpec]] = {
 }
 
 VOLUME_SPECS: Final[dict[str, CellSpec]] = {
-    "si_areal_density_kg_m2": CellSpec(
-        label="Solar-array areal density",
-        unit="kg/m2",
-        role=AssumptionRole.DEFAULT,
-        source_status=SourceStatus.SOURCED_ESTIMATE,
-        claim_id="THR-006",
-        source_note="Supports deployable solar-array mass assumptions.",
-        rationale="The volume model uses this density to derive array scale.",
-    ),
     "si_bol_efficiency": CellSpec(
         label="Solar-array BOL efficiency",
         unit="fraction",
@@ -603,15 +588,6 @@ VOLUME_SPECS: Final[dict[str, CellSpec]] = {
         source_note="Supports solar-array technology relevance.",
         rationale="This efficiency connects node power to required collector area.",
     ),
-    "fold_ratio": CellSpec(
-        label="Solar-array fold ratio",
-        unit="ratio",
-        role=AssumptionRole.DEFAULT,
-        source_status=SourceStatus.SOURCED_ESTIMATE,
-        claim_id="THR-006",
-        source_note="Supports deployable array packaging assumptions.",
-        rationale="The volume check needs a stowed-to-deployed packaging ratio.",
-    ),
     "stowed_pitch_mm": CellSpec(
         label="Stowed panel pitch",
         unit="mm",
@@ -620,15 +596,6 @@ VOLUME_SPECS: Final[dict[str, CellSpec]] = {
         claim_id="THR-006",
         source_note="Supports deployable array packaging assumptions.",
         rationale="Panel pitch turns deployed area into stowed volume.",
-    ),
-    "radiator_solar_area_ratio": CellSpec(
-        label="Radiator-to-solar area ratio",
-        unit="ratio",
-        role=AssumptionRole.DEFAULT,
-        source_status=SourceStatus.DERIVED_ESTIMATE,
-        claim_id="THR-003",
-        source_note="Supports single-face radiator area modeling.",
-        rationale="The single-face co-mounted architecture links radiator and solar area.",
     ),
     "mounting_overhead_pct": CellSpec(
         label="Mounting overhead",

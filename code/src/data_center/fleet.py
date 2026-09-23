@@ -114,7 +114,7 @@ class FleetYear:
         year: Calendar year for this fleet record.
         launches: Launches in this calendar year.
         nodes_deployed_this_year: Nodes deployed this year (1 per launch, D8).
-        living_fleet: Living fleet count under the 5-year cliff (D1).
+        living_fleet: Living fleet count under the service_life_years cliff (D1).
         kw_deployed_this_year: Newly deployed node power this year.
         kw_living_fleet: Living-fleet node power this year.
         kw_on_orbit: Total kW on orbit (living fleet).

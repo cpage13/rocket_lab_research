@@ -28,7 +28,8 @@ Per-year data is keyed by a JSON-string year (``YearString``, e.g.
 what a cold agent's ``jq`` queries address (``.physical.years."2036"``).
 
 ``ValidationCheck`` / ``Severity`` are the cycle-1 types, reused verbatim
-for V1–V17 — cycle 2 does **not** define a new validation type.
+for the 16 wired rules (V1-V10 and V12-V17; V11 retired): cycle 2 does
+**not** define a new validation type.
 
 References:
     strategy_05_20_cycle2.md § 3 — the v8 schema.
@@ -319,7 +320,7 @@ class BusinessYear(BaseModel):
     )
     living_fleet: ProvenanceCell = Field(
         ...,
-        description="Living fleet count under the 5-year hard cliff (D1).",
+        description="Living fleet count under the service_life_years hard cliff (D1).",
     )
     kw_deployed_this_year: ProvenanceCell = Field(
         ...,
@@ -468,7 +469,9 @@ class MetaBlock(BaseModel):
 
     validation: ValidationReport = Field(
         ...,
-        description="The engine-computed V-rule report (V1..V17).",
+        description=(
+            "The engine-computed V-rule report: 16 rules, V1-V10 and V12-V17 (V11 retired)."
+        ),
     )
     data_dictionary: list[DataDictEntry] = Field(
         ...,

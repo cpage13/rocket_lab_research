@@ -191,6 +191,62 @@ def test_compute_n_packages_zero_when_mass_per_pkg_nonpositive() -> None:
     assert c.value == 0
 
 
+def test_compute_n_packages_keeps_the_last_package_at_an_exact_fit() -> None:
+    """Objective: an exact fit is not lost to float rounding.
+
+    A 10.5 t budget over Rubin VR200's 0.023 t + 2.6 kW x 0.020 t/kW
+    effective package mass is exactly 140 packages, but the float division
+    reads 139.99999999999997. Expected: N = 140; a budget one gram short of
+    the fit still floors to 139.
+    """
+    mass_per_pkg_t = 0.023 + 2.6 * (0.010 + 0.010)
+    assert 10.5 / mass_per_pkg_t < 140
+    exact = compute_n_packages(10.5, mass_per_pkg_t, mass_budget_path="a", mass_per_pkg_path="b")
+    assert exact.value == 140
+    short = compute_n_packages(
+        10.5 - 1e-6, mass_per_pkg_t, mass_budget_path="a", mass_per_pkg_path="b"
+    )
+    assert short.value == 139
+
+
+def test_exact_fit_scenario_packs_140_and_passes_every_rule() -> None:
+    """Objective: the exact-fit trigger end to end (envelope 12.5 t, fixed 2.0 t).
+
+    With solar and radiator both at 0.010 t/kW, FY2027's Rubin VR200 fills
+    the 10.5 t budget with exactly 140 packages. Expected: N = 140, the year
+    is mass-bound, and no validation rule fails (V1 tolerates the exact
+    fit's float rounding of the node mass).
+    """
+    cfg = config_from_dict(
+        {
+            "gospel": {
+                "mass_envelope_t": 12.5,
+                "node_mass_fixed_t": 2.0,
+                "solar_mass_t_per_kw": 0.010,
+                "radiator_t_per_kw_pre": 0.010,
+                "radiator_t_per_kw_post": 0.010,
+            }
+        }
+    )
+    out = run_valuation(cfg)
+    fy2027 = out.physical.years["2027"]
+    assert fy2027.frontier_generation.value == "Rubin VR200"
+    assert fy2027.gpus_per_node.value == 140
+    assert fy2027.binding_constraint.value == "mass"
+    assert not [r.name for r in out.meta.validation.rules if not r.pass_check]
+
+
+def test_default_package_counts_are_unchanged_by_the_fit_tolerance() -> None:
+    """Objective: the fit tolerance moves no default package count.
+
+    Expected: the default N trajectory is exactly the published one, FY2026
+    to FY2036.
+    """
+    out = run_valuation(ValuationConfig())
+    counts = [int(_num(py.gpus_per_node.value)) for py in out.physical.years.values()]
+    assert counts == [223, 178, 133, 125, 125, 108, 92, 92, 78, 66, 66]
+
+
 def test_compute_kw_per_node_is_n_times_kw_per_pkg() -> None:
     """node_kW = N x kW/pkg."""
     c = compute_kw_per_node(100, 2.05, n_packages_path="a", kw_per_pkg_path="b")
@@ -415,7 +471,7 @@ def test_compute_cadence_year_launch_cost_falls_with_cadence() -> None:
 
 def test_compute_volume_year_returns_breakdown() -> None:
     """compute_volume_year returns a VolumeBreakdown of cells."""
-    vb = compute_volume_year(100, 99.0, 2.05, ValuationConfig(), fy_path='physical.years."2026"')
+    vb = compute_volume_year(100, True, 2.05, ValuationConfig(), fy_path='physical.years."2026"')
     assert isinstance(vb, VolumeBreakdown)
     assert isinstance(vb.volume_per_node_m3, ProvenanceCell)
     assert isinstance(vb.binding_constraint, ProvenanceCell)
@@ -426,14 +482,61 @@ def test_compute_volume_year_returns_breakdown() -> None:
 
 
 def test_compute_volume_year_binding_is_mass_at_full_envelope() -> None:
-    """At ~99% mass utilisation and slack volume, the binding constraint is mass."""
-    vb = compute_volume_year(100, 99.0, 2.05, ValuationConfig(), fy_path='physical.years."2026"')
+    """A mass-bound year with slack fairing volume reports the mass constraint."""
+    vb = compute_volume_year(100, True, 2.05, ValuationConfig(), fy_path='physical.years."2026"')
     assert vb.binding_constraint.value == "mass"
+
+
+def test_default_binding_constraint_is_mass_every_year() -> None:
+    """Objective: floor packing leaves less than one package of mass every year.
+
+    Expected: every default year is labeled ``mass`` (the fairing never
+    fills), including years whose mass utilization sits below 99%.
+    """
+    out = run_valuation(ValuationConfig())
+    assert {py.binding_constraint.value for py in out.physical.years.values()} == {"mass"}
+
+
+def test_conservative_scenario_is_mass_bound_every_year() -> None:
+    """Objective: a year with more than 1% mass slack is still mass-bound.
+
+    ``conservative.yaml`` FY2036 packs 30 packages at 98.8% mass
+    utilization: the leftover budget is below one package, so mass binds.
+    Expected: every year is ``mass`` (the old 99% threshold said ``neither``).
+    """
+    out = run_valuation(load_config(_SCENARIOS / "conservative.yaml"))
+    assert _num(out.physical.years["2036"].mass_utilization_pct.value) < 99.0
+    assert {py.binding_constraint.value for py in out.physical.years.values()} == {"mass"}
 
 
 # ---------------------------------------------------------------------------
 # Fleet wiring
 # ---------------------------------------------------------------------------
+
+
+def test_cadence_is_computed_once_per_year(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Objective: each year's cadence is computed once and reused by the fleet.
+
+    Expected: a default run calls ``compute_cadence_year`` exactly once per
+    model year (11 calls for the ten-year window), and every business year's
+    launches equal the cadence carried on that year's computation.
+    """
+    import data_center.engine as engine_module
+
+    calls: list[int] = []
+    original = engine_module.compute_cadence_year
+
+    def counting(year_idx: int, config: ValuationConfig) -> CadenceYear:
+        calls.append(year_idx)
+        return original(year_idx, config)
+
+    monkeypatch.setattr(engine_module, "compute_cadence_year", counting)
+    out = run_valuation(ValuationConfig())
+    assert sorted(calls) == list(range(11))
+    cfg = ValuationConfig()
+    years = [compute_year(i, cfg, _default_gens()) for i in range(11)]
+    for year in years:
+        assert out.business.years[str(year.fy)].launches.value == year.cadence.launches.value
 
 
 def test_compute_fleet_trajectory_parallels_years() -> None:
@@ -508,11 +611,11 @@ def test_run_valuation_emits_horizon_plus_one_years() -> None:
     assert "2036" in out.physical.years
 
 
-def test_run_valuation_validation_populated_with_seventeen_passing_checks() -> None:
-    """run_valuation runs the 17 V-rules and they all pass on the default scenario."""
+def test_run_valuation_validation_populated_with_sixteen_passing_checks() -> None:
+    """run_valuation runs the 16 wired V-rules and they all pass on the default scenario."""
     out = run_valuation(ValuationConfig())
     rules = out.meta.validation.rules
-    assert len(rules) == 17
+    assert len(rules) == 16
     failed = [r.name for r in rules if not r.pass_check]
     assert not failed, f"unexpected failing checks: {failed}"
 

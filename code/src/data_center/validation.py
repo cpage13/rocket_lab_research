@@ -10,9 +10,11 @@ run::
 
     jq '.meta.validation.rules[] | select(.pass_check == false)' artifact.json
 
-and see every flagged anomaly without re-deriving the model. The 17 wired
-rules are V1..V17; they are listed in :data:`_RULES` in declaration order
-and that order is the order they appear in the artifact.
+and see every flagged anomaly without re-deriving the model. The 16 wired
+rules are V1..V10 and V12..V17 (V11, the legacy scalar-R guard, is retired:
+the config layer's ``extra="forbid"`` already rejects that field at load);
+they are listed in :data:`_RULES` in declaration order and that order is
+the order they appear in the artifact.
 
 **Cycle-2 v8 re-pathing (Phase 4A).** V1–V10 are the cycle-1 checks
 re-pointed at the v8 output structure (``physical.years`` / ``business.years``
@@ -20,17 +22,21 @@ re-pointed at the v8 output structure (``physical.years`` / ``business.years``
 still carries the field. Two rules lost their cycle-1 subject when the v8
 schema dropped the ``cost.compute_share`` and ``decisions`` blocks, so they
 are re-targeted to a v8-meaningful invariant (see V5 / V10 docstrings).
-Phase 5 adds V11–V17 and may further refine the re-targeted rules.
+Phase 5 adds the cross-check rules and may further refine the re-targeted rules.
 
-**Cycle-2 v8 new rules (Phase 5).** Seven new V-rules V11-V17 are fully
-implemented: :func:`check_no_legacy_r_scalar` (V11),
-:func:`check_operator_r_consistency` (V12),
+**Cycle-2 v8 new rules (Phase 5).** Six cross-check rules follow V1-V10 in
+:data:`_RULES`: :func:`check_operator_r_consistency` (V12),
 :func:`check_provenance_formula_keys` (V13),
 :func:`check_cadence_monotonicity` (V14),
 :func:`check_volume_fits_horizon` (V15),
 :func:`check_fleet_cliff_consistency` (V16), and
-:func:`check_radiator_dial_arch_consistency` (V17). They are wired into
-:data:`_RULES` after V1-V10.
+:func:`check_radiator_dial_arch_consistency` (V17).
+
+Rules that read one year (V6) read the run's anchor year
+(:func:`data_center.config.anchor_year`); rules that depend on the service
+life (V16) read the configured ``fleet.service_life_years``; V9 bands the
+life-independent per-node total cost, so no rule's verdict flips on the
+service life or the horizon alone.
 
 Severity tiers (see :class:`output.Severity`):
 
@@ -50,9 +56,14 @@ from typing import Final
 
 from pydantic import BaseModel
 
-from .config import BindingConstraint, OperatorModel, RadiatorArchitecture
+from common.cohort import cohort_is_alive_at
+
+from .config import OperatorModel, RadiatorArchitecture, anchor_year
+from .constants import PACKAGE_FIT_TOLERANCE, PERCENT_PER_FRACTION
+from .input_manifest import InputCell
 from .output import Severity, ValidationCheck, ValuationOutput
 from .provenance import FORMULAS, ProvenanceCell
+from .volume import FAIRING_FULL_UTILIZATION_PCT
 
 # ---------------------------------------------------------------------------
 # Numeric constants used by the rules.
@@ -68,6 +79,23 @@ from .provenance import FORMULAS, ProvenanceCell
 # utilisation as a PERCENT (0-100); cycle-1 carried a 0-1 fraction.
 MASS_UTIL_MIN_PCT: Final[float] = 85.0
 MASS_UTIL_MAX_PCT: Final[float] = 100.0
+
+# V1: slack on the upper bound, in percentage points, derived from the packing
+# tolerance so every fit the packer accepts passes V1. The packer keeps N
+# packages of mass m whenever N x m <= budget + PACKAGE_FIT_TOLERANCE x m, and
+# an accepted package weighs at most budget / (1 - PACKAGE_FIT_TOLERANCE),
+# which is no more than the envelope over the same factor. So an accepted
+# node overshoots the envelope by at most
+# PACKAGE_FIT_TOLERANCE / (1 - PACKAGE_FIT_TOLERANCE) of it. The factor below
+# doubles that bound to cover the float rounding of the mass and utilization
+# arithmetic as well (an exact fit reads 100.00000000000003%).
+MASS_UTIL_FIT_SLACK_FACTOR: Final[float] = 2.0
+MASS_UTIL_FIT_SLACK_PCT: Final[float] = (
+    MASS_UTIL_FIT_SLACK_FACTOR
+    * PERCENT_PER_FRACTION
+    * PACKAGE_FIT_TOLERANCE
+    / (1.0 - PACKAGE_FIT_TOLERANCE)
+)
 
 # V2 — sane $/pkg (NVIDIA's largest 'as sold' Blackwell rack is ~$3.5M;
 # anything above $5M is fictional / a data-entry mistake).
@@ -88,28 +116,24 @@ N_PACKAGES_MIN: Final[int] = 1
 # a dip larger than this is a generation-trajectory glitch.
 PF_PER_KW_MAX_DIP: Final[float] = 2.0
 
-# V6 — last-year PF/kW sanity band (Part IX of the brainstorm: 20-80
-# PFLOPS/kW spans pessimistic-to-optimistic post-Feynman slope).
+# V6: anchor-year PF/kW sanity band (Part IX of the brainstorm: 20-80
+# PFLOPS/kW spans pessimistic-to-optimistic post-Feynman slope). The band is
+# read at the run's anchor year (the year-10 cadence anchor), the vintage it
+# was sized for, not at whatever the last window year happens to be.
 PF_PER_KW_MIN: Final[float] = 20.0
 PF_PER_KW_MAX: Final[float] = 80.0
 
-# V9 — per-node ANNUAL $M sanity band. The v8 schema carries the annualized
-# cost per node (total / service_life); the cycle-1 node-total band
-# [50, 200] divided by a 5-year service life gives [10, 40].
-COST_ANNUAL_MIN_MUSD: Final[float] = 5.0
-COST_ANNUAL_MAX_MUSD: Final[float] = 60.0
+# V9: per-node TOTAL build + launch cost sanity band, $M. The cycle-1 V9
+# band, read on the life-independent node total
+# (physical.years[].cost_breakdown.node_total) so a service-life dial cannot
+# move the verdict (the annualized cost is the total divided by the life).
+NODE_TOTAL_MIN_MUSD: Final[float] = 50.0
+NODE_TOTAL_MAX_MUSD: Final[float] = 200.0
 
 # V10 — re-targeted to the data-dictionary block (the v8 schema dropped the
 # `decisions` block). The artifact is self-describing only if the data
 # dictionary is populated; this is the minimum entry count expected.
 DATA_DICT_MIN_ENTRIES: Final[int] = 30
-
-# V11 — the cycle-1 scalar R field name. The investor dropped the scalar
-# `r_revenue_cost` gospel field in favour of the R-band (D18); V11 fails if a
-# scenario YAML re-adds it. The check also rejects any other bare-`r` scalar
-# leaking into the gospel block — the R-band is the only sanctioned R input.
-LEGACY_R_SCALAR_FIELD: Final[str] = "r_revenue_cost"
-LEGACY_R_SCALAR_NAMES: Final[frozenset[str]] = frozenset({"r_revenue_cost", "r"})
 
 # V12 — the B2B-premium R floor. The B2B dedicated-optical/RF operator model
 # (D15) carries a premium over neocloud pricing (~1.16-1.19); the central R
@@ -125,15 +149,11 @@ B2B_R_CENTRAL_FLOOR: Final[float] = 1.40
 # comparing the launch count against it.
 CADENCE_CEILING_EPSILON: Final[float] = 1e-6
 
-# V16 — the cohort service-life cliff window. The living fleet at year Y is
-# the sum of node counts from cohorts launched in [Y - 4, Y] under the
-# 5-year hard cliff (D1). The window span is service_life - 1 = 4 years back.
-FLEET_CLIFF_LOOKBACK_YEARS: Final[int] = 4
-
 # V17 — the radiator t/kW lower bound for the single-face co-mounted
-# architecture (D16). R1's sourced band is 0.010-0.014 t/kW; a post-Tjmax
-# dial below 0.010 would mean a two-face dedicated-radiator value was used
-# with a co-mounted architecture lock — the cycle-1 mistake.
+# architecture (D16). R1's sourced band is 0.010-0.014 t/kW; a pre- or
+# post-Tjmax dial below 0.010 would mean a two-face dedicated-radiator value
+# was used with a co-mounted architecture lock: the cycle-1 mistake. (The
+# deployed double-sided architecture has no floor yet: an investor decision.)
 RADIATOR_T_PER_KW_CO_MOUNTED_MIN: Final[float] = 0.010
 
 
@@ -148,13 +168,16 @@ def check_mass_utilization_in_band(output: ValuationOutput) -> ValidationCheck:
     Mass is the only hard physical constraint; a correctly-sized node
     should pack the envelope tight. Below 85% means the engine is leaving
     a tonne+ of slack and N is being clamped by something other than mass;
-    above 100% is impossible by construction.
+    above 100% is impossible by construction (the upper bound carries
+    :data:`MASS_UTIL_FIT_SLACK_PCT`, derived from the packing tolerance, so a
+    fit the packer accepts never reads as an overweight node).
     """
     years = output.physical.years
+    upper_pct = MASS_UTIL_MAX_PCT + MASS_UTIL_FIT_SLACK_PCT
     failing = [
         fy
         for fy, py in years.items()
-        if not (MASS_UTIL_MIN_PCT <= _num(py.mass_utilization_pct.value) <= MASS_UTIL_MAX_PCT)
+        if not (MASS_UTIL_MIN_PCT <= _num(py.mass_utilization_pct.value) <= upper_pct)
     ]
     if failing:
         computed = f"failed years: {sorted(failing)}"
@@ -334,36 +357,38 @@ def check_monotonic_pf_per_kw(output: ValuationOutput) -> ValidationCheck:
 
 
 def check_pf_per_kw_in_band(output: ValuationOutput) -> ValidationCheck:
-    """Last year's ``physical.years[].pf_per_kw`` must lie in [20, 80].
+    """The anchor year's ``physical.years[].pf_per_kw`` must lie in [20, 80].
 
     Brainstorm Part IX maps this band to the pessimistic-to-optimistic
     post-Feynman PF/kW slope. Below 20 means silicon stopped outpacing
-    power; above 80 means the slope is unrealistically aggressive.
+    power; above 80 means the slope is unrealistically aggressive. The band
+    is read at the run's anchor year (:func:`data_center.config.anchor_year`:
+    the year-10 cadence anchor, or the final window year for a shorter
+    horizon), so a longer horizon does not move the year it judges.
     """
-    years = output.physical.years
-    if not years:
+    anchor_fy = str(anchor_year(output.metadata.base_year, output.metadata.horizon_years))
+    what_it_tests = (
+        f"anchor year's physical.pf_per_kw in [{PF_PER_KW_MIN}, "
+        f"{PF_PER_KW_MAX}] (Part IX sensitivity band)"
+    )
+    expected = f"FY{anchor_fy} in [{PF_PER_KW_MIN}, {PF_PER_KW_MAX}]"
+    anchor_py = output.physical.years.get(anchor_fy)
+    if anchor_py is None:
         return ValidationCheck(
             name="pf_per_kw_in_band",
-            what_it_tests=(
-                f"last year's physical.pf_per_kw in [{PF_PER_KW_MIN}, "
-                f"{PF_PER_KW_MAX}] (Part IX sensitivity band)"
-            ),
-            expected=f"last year in [{PF_PER_KW_MIN}, {PF_PER_KW_MAX}]",
-            computed="no years emitted",
+            what_it_tests=what_it_tests,
+            expected=expected,
+            computed=f"anchor year FY{anchor_fy} not emitted",
             pass_check=False,
             severity=Severity.MAJOR,
         )
-    last_fy = max(years, key=int)
-    pf_per_kw = _num(years[last_fy].pf_per_kw.value)
+    pf_per_kw = _num(anchor_py.pf_per_kw.value)
     in_band = PF_PER_KW_MIN <= pf_per_kw <= PF_PER_KW_MAX
     return ValidationCheck(
         name="pf_per_kw_in_band",
-        what_it_tests=(
-            f"last year's physical.pf_per_kw in [{PF_PER_KW_MIN}, "
-            f"{PF_PER_KW_MAX}] (Part IX sensitivity band)"
-        ),
-        expected=f"last year in [{PF_PER_KW_MIN}, {PF_PER_KW_MAX}]",
-        computed=f"FY{last_fy} pf_per_kw = {pf_per_kw:.2f}",
+        what_it_tests=what_it_tests,
+        expected=expected,
+        computed=f"FY{anchor_fy} pf_per_kw = {pf_per_kw:.2f}",
         pass_check=in_band,
         severity=Severity.MAJOR,
     )
@@ -460,40 +485,39 @@ def check_revenue_above_cost_per_node(output: ValuationOutput) -> ValidationChec
 
 
 # ---------------------------------------------------------------------------
-# V9 — cost_annual_per_node_in_band (major)
+# V9: node_total_in_band (major)
 # ---------------------------------------------------------------------------
 
 
-def check_cost_annual_per_node_in_band(output: ValuationOutput) -> ValidationCheck:
-    """Every year's ``cost_annual_per_node_musd`` must lie in [5, 60].
+def check_node_total_in_band(output: ValuationOutput) -> ValidationCheck:
+    """Every year's per-node total build + launch cost must lie in [50, 200] $M.
 
-    **Re-pathed (cycle-2 Phase 4A).** Cycle-1's V9 banded the per-node
-    *total* cost [50, 200]; the v8 schema carries the *annualized* per-node
-    cost (total / service life), so the band is the cycle-1 band over a
-    5-year life — [10, 40] — widened to [5, 60] to tolerate the 3-year and
-    7-year service-life scenarios.
+    Reads ``physical.years[].cost_breakdown.node_total``, the
+    life-independent per-node cost, with the cycle-1 V9 band. (The
+    annualized cost is this total divided by the service life, so banding it
+    instead would flip the verdict on the service-life dial alone.)
     """
     years = output.physical.years
     failing = [
-        (fy, _num(py.cost_annual_per_node_musd.value))
+        (fy, _num(py.cost_breakdown.node_total.value))
         for fy, py in years.items()
         if not (
-            COST_ANNUAL_MIN_MUSD <= _num(py.cost_annual_per_node_musd.value) <= COST_ANNUAL_MAX_MUSD
+            NODE_TOTAL_MIN_MUSD <= _num(py.cost_breakdown.node_total.value) <= NODE_TOTAL_MAX_MUSD
         )
     ]
     if failing:
         computed = "failed years: " + ", ".join(f"FY{fy}: ${v:.1f}M" for fy, v in sorted(failing))
     else:
-        vals = [_num(py.cost_annual_per_node_musd.value) for py in years.values()]
-        computed = f"all {len(years)} years cost_annual in [${min(vals):.1f}M, ${max(vals):.1f}M]"
+        vals = [_num(py.cost_breakdown.node_total.value) for py in years.values()]
+        computed = f"all {len(years)} years node_total in [${min(vals):.1f}M, ${max(vals):.1f}M]"
     return ValidationCheck(
-        name="cost_annual_per_node_in_band",
+        name="node_total_in_band",
         what_it_tests=(
-            f"every year's cost_annual_per_node_musd in "
-            f"[${COST_ANNUAL_MIN_MUSD:.0f}M, ${COST_ANNUAL_MAX_MUSD:.0f}M] "
-            f"(sanity range for one annualized Neutron SSO scenario node)"
+            f"every year's cost_breakdown.node_total in "
+            f"[${NODE_TOTAL_MIN_MUSD:.0f}M, ${NODE_TOTAL_MAX_MUSD:.0f}M] "
+            f"(sanity range for one Neutron SSO scenario node's build + launch cost)"
         ),
-        expected=(f"all years in [${COST_ANNUAL_MIN_MUSD:.0f}M, ${COST_ANNUAL_MAX_MUSD:.0f}M]"),
+        expected=(f"all years in [${NODE_TOTAL_MIN_MUSD:.0f}M, ${NODE_TOTAL_MAX_MUSD:.0f}M]"),
         computed=computed,
         pass_check=not failing,
         severity=Severity.MAJOR,
@@ -526,52 +550,6 @@ def check_data_dictionary_populated(output: ValuationOutput) -> ValidationCheck:
         expected=f">= {DATA_DICT_MIN_ENTRIES} entries",
         computed=f"{count} entries",
         pass_check=ok,
-        severity=Severity.MAJOR,
-    )
-
-
-# ---------------------------------------------------------------------------
-# V11 — no_legacy_r_scalar (major)
-# ---------------------------------------------------------------------------
-
-
-def check_no_legacy_r_scalar(output: ValuationOutput) -> ValidationCheck:
-    """The ``inputs.gospel`` block must carry no legacy scalar R field.
-
-    The investor dropped the cycle-1 scalar ``r_revenue_cost`` gospel field
-    in favour of the three-trajectory R-band (D18); R is now modelled only
-    as :class:`data_center.config.RBand`. V11 fails fast if a scenario YAML
-    accidentally re-adds ``r_revenue_cost`` (or any other bare-``r`` scalar)
-    to the gospel block — a stale scalar would silently shadow the band and
-    quietly mis-state revenue.
-
-    Args:
-        output: A fully-built v8 :class:`ValuationOutput`.
-
-    Returns:
-        A :class:`ValidationCheck`; fails (MAJOR) if a legacy scalar R name
-        is present in ``inputs.gospel``.
-    """
-    indexed_leaf_names = {path.rsplit(".", 1)[-1] for path in output.inputs.assumption_index}
-    gospel_keys = set(output.inputs.gospel) | indexed_leaf_names
-    offenders = sorted(gospel_keys & LEGACY_R_SCALAR_NAMES)
-    if offenders:
-        computed = f"inputs.gospel carries legacy scalar R field(s): {offenders}"
-    else:
-        computed = (
-            f"inputs.gospel has no legacy scalar R field "
-            f"({len(gospel_keys)} gospel keys, R modelled as the R-band)"
-        )
-    return ValidationCheck(
-        name="no_legacy_r_scalar",
-        what_it_tests=(
-            f"inputs.gospel carries no legacy scalar R field "
-            f"({sorted(LEGACY_R_SCALAR_NAMES)}); R is modelled only as the "
-            f"R-band (D18)"
-        ),
-        expected=f"no {LEGACY_R_SCALAR_FIELD} (or bare 'r') in inputs.gospel",
-        computed=computed,
-        pass_check=not offenders,
         severity=Severity.MAJOR,
     )
 
@@ -865,39 +843,45 @@ def check_cadence_monotonicity(output: ValuationOutput) -> ValidationCheck:
 
 
 def check_volume_fits_horizon(output: ValuationOutput) -> ValidationCheck:
-    """No year may be volume-only-bound — mass binds first (D6).
+    """Every year's stowed node must fit the fairing: volume utilization <= 100%.
 
     D6 makes mass the only hard physical constraint; the stowed-volume
-    check is for transparency and must never gate the package count. For
-    every year, ``physical.years[].binding_constraint`` must be one of
-    ``MASS`` / ``BOTH`` / ``NEITHER`` — a sole ``VOLUME`` value means the
-    radiator/solar dials are pushing the node to bust the fairing volume
-    before the mass envelope, contradicting D6. V15 fails if any year is
-    volume-only-bound.
+    check is for transparency and does not gate the package count, so the
+    mass-bound node must still fit the usable fairing volume. V15 reads
+    ``physical.years[].volume_utilization_pct`` directly (not the inferred
+    binding label) and fails on any year above
+    :data:`data_center.volume.FAIRING_FULL_UTILIZATION_PCT`.
 
     Args:
         output: A fully-built v8 :class:`ValuationOutput`.
 
     Returns:
-        A :class:`ValidationCheck`; fails (MAJOR) if any year's
-        ``binding_constraint`` is sole ``VOLUME``.
+        A :class:`ValidationCheck`; fails (MAJOR) if any year's stowed node
+        overfills the fairing.
     """
-    volume_only = BindingConstraint.VOLUME.value
     years = output.physical.years
-    failing = [fy for fy, py in years.items() if str(py.binding_constraint.value) == volume_only]
+    failing = [
+        (fy, _num(py.volume_utilization_pct.value))
+        for fy, py in years.items()
+        if _num(py.volume_utilization_pct.value) > FAIRING_FULL_UTILIZATION_PCT
+    ]
     if failing:
-        computed = f"volume-only-bound years: {sorted(failing)}"
+        computed = "fairing overfilled: " + ", ".join(
+            f"FY{fy}: {util:.2f}%" for fy, util in sorted(failing)
+        )
     else:
-        seen = sorted({str(py.binding_constraint.value) for py in years.values()})
-        computed = f"all {len(years)} years bound by {seen} (no sole VOLUME)"
+        vals = [_num(py.volume_utilization_pct.value) for py in years.values()]
+        computed = (
+            f"all {len(years)} years volume utilization in [{min(vals):.2f}%, {max(vals):.2f}%]"
+        )
     return ValidationCheck(
         name="volume_fits_horizon",
         what_it_tests=(
-            "every year's physical.binding_constraint is one of "
-            "{mass, both, neither}; sole 'volume' is forbidden (D6: "
-            "mass-only binding)"
+            "every year's physical.volume_utilization_pct <= "
+            f"{FAIRING_FULL_UTILIZATION_PCT:g} (the mass-bound node fits the "
+            "usable fairing volume; D6: volume does not gate N)"
         ),
-        expected="no year is volume-only-bound",
+        expected=f"all years <= {FAIRING_FULL_UTILIZATION_PCT:g}%",
         computed=computed,
         pass_check=not failing,
         severity=Severity.MAJOR,
@@ -912,12 +896,14 @@ def check_volume_fits_horizon(output: ValuationOutput) -> ValidationCheck:
 def check_fleet_cliff_consistency(output: ValuationOutput) -> ValidationCheck:
     """``living_fleet[Y]`` equals the cohort-cliff sum of node counts.
 
-    Under the 5-year hard cliff (D1) the living fleet at year Y is the sum
-    of node counts from cohorts launched in ``[Y - 4, Y]``. The engine
-    deploys the integer ``launches`` count directly, so V16 re-derives each
-    year's living fleet as ``sum(launches[c] for c in [Y - 4, Y])`` over
-    the trajectory years and fails on any mismatch with the emitted
-    ``business.years[].living_fleet``.
+    Under the configured ``fleet.service_life_years`` hard cliff (D1) the
+    living fleet at year Y is the sum of node counts from cohorts launched in
+    ``[Y - (service_life - 1), Y]``, the survival test of
+    :func:`common.cohort.cohort_is_alive_at` (the same test the engine's
+    fleet rollup uses). The engine deploys the integer ``launches`` count
+    directly, so V16 re-derives each year's living fleet as the sum of
+    launches over the living cohort years and fails on any mismatch with the
+    emitted ``business.years[].living_fleet``.
 
     The cohort-year window is intersected with the emitted trajectory —
     cohorts before the first model year do not exist, exactly as the
@@ -931,6 +917,8 @@ def check_fleet_cliff_consistency(output: ValuationOutput) -> ValidationCheck:
         living fleet differs from the re-derived cohort-cliff sum.
     """
     years = output.business.years
+    service_life = _input_int(output.inputs.config.fleet.service_life_years)
+    lookback = service_life - 1
     nodes_by_year: dict[int, int] = {
         int(fy): int(_num(by.launches.value)) for fy, by in years.items()
     }
@@ -938,9 +926,9 @@ def check_fleet_cliff_consistency(output: ValuationOutput) -> ValidationCheck:
     for fy, by in years.items():
         y = int(fy)
         derived = sum(
-            nodes_by_year[c]
-            for c in range(y - FLEET_CLIFF_LOOKBACK_YEARS, y + 1)
-            if c in nodes_by_year
+            nodes
+            for launch_year, nodes in nodes_by_year.items()
+            if cohort_is_alive_at(launch_year, y, service_life)
         )
         emitted = round(_num(by.living_fleet.value))
         if derived != emitted:
@@ -951,16 +939,13 @@ def check_fleet_cliff_consistency(output: ValuationOutput) -> ValidationCheck:
             for fy, emitted, derived in sorted(mismatches)
         )
     else:
-        computed = (
-            f"all {len(years)} years: living_fleet == "
-            f"sum(launches[Y-{FLEET_CLIFF_LOOKBACK_YEARS}..Y])"
-        )
+        computed = f"all {len(years)} years: living_fleet == sum(launches[Y-{lookback}..Y])"
     return ValidationCheck(
         name="fleet_cliff_consistency",
         what_it_tests=(
             "every year's business.living_fleet == sum of integer launches "
-            f"over the cohort window [Y-{FLEET_CLIFF_LOOKBACK_YEARS}, Y] "
-            f"(D1 5-year hard cliff)"
+            f"over the cohort window [Y-{lookback}, Y] "
+            f"(D1 {service_life}-year hard cliff)"
         ),
         expected="living_fleet matches the cohort-cliff sum every year",
         computed=computed,
@@ -975,37 +960,51 @@ def check_fleet_cliff_consistency(output: ValuationOutput) -> ValidationCheck:
 
 
 def check_radiator_dial_arch_consistency(output: ValuationOutput) -> ValidationCheck:
-    """Single-face co-mounted architecture implies the radiator dial >= 0.010.
+    """Single-face co-mounted architecture implies both radiator dials >= 0.010.
 
     The single-face co-mounted radiator architecture (D16) has an R1-sourced
-    post-Tjmax t/kW band of 0.010-0.014. V17 fails if
-    ``metadata.radiator_architecture`` is ``SINGLE_FACE_CO_MOUNTED`` while
-    ``inputs.gospel.radiator_t_per_kw_post`` is below the 0.010 lower bound
-    — that would mean a leaner two-face dedicated-radiator dial was paired
-    with the co-mounted architecture lock, the exact cycle-1 mistake D17
-    corrects.
+    t/kW band of 0.010-0.014. V17 fails if ``metadata.radiator_architecture``
+    is ``SINGLE_FACE_CO_MOUNTED`` while either radiator dial, the pre-lift
+    ``radiator_t_per_kw_pre`` or the post-lift ``radiator_t_per_kw_post``, is
+    below the 0.010 lower bound. Both are checked because the engine flies
+    the pre dial before ``tjmax_lift_year``: a co-mounted scenario that sets
+    only the post dial inherits a light pre dial and packs too many packages
+    in the early years. Either failure means a leaner two-face
+    dedicated-radiator dial was paired with the co-mounted architecture
+    lock, the exact cycle-1 mistake D17 corrects. The deployed double-sided
+    architecture carries no floor here (a floor for it is an open investor
+    decision).
 
     Args:
         output: A fully-built v8 :class:`ValuationOutput`.
 
     Returns:
         A :class:`ValidationCheck`; fails (MAJOR) if the architecture is
-        single-face co-mounted and the post-Tjmax radiator dial is below
-        the floor.
+        single-face co-mounted and either radiator dial is below the floor.
     """
     architecture = output.metadata.radiator_architecture
-    radiator_post = float(output.inputs.gospel["radiator_t_per_kw_post"])
+    physical = output.inputs.config.physical
+    radiator_pre = _input_float(physical.radiator_t_per_kw_pre)
+    radiator_post = _input_float(physical.radiator_t_per_kw_post)
     is_co_mounted = architecture == RadiatorArchitecture.SINGLE_FACE_CO_MOUNTED
-    failed = is_co_mounted and radiator_post < RADIATOR_T_PER_KW_CO_MOUNTED_MIN
+    below_floor = [
+        f"{name}={value}"
+        for name, value in (
+            ("radiator_t_per_kw_pre", radiator_pre),
+            ("radiator_t_per_kw_post", radiator_post),
+        )
+        if value < RADIATOR_T_PER_KW_CO_MOUNTED_MIN
+    ]
+    failed = is_co_mounted and bool(below_floor)
     if failed:
         computed = (
-            f"radiator_architecture={architecture.value}, "
-            f"radiator_t_per_kw_post={radiator_post} "
+            f"radiator_architecture={architecture.value}, {', '.join(below_floor)} "
             f"(< {RADIATOR_T_PER_KW_CO_MOUNTED_MIN} floor)"
         )
     elif is_co_mounted:
         computed = (
             f"radiator_architecture={architecture.value}, "
+            f"radiator_t_per_kw_pre={radiator_pre}, "
             f"radiator_t_per_kw_post={radiator_post} "
             f"(>= {RADIATOR_T_PER_KW_CO_MOUNTED_MIN} floor)"
         )
@@ -1015,10 +1014,13 @@ def check_radiator_dial_arch_consistency(output: ValuationOutput) -> ValidationC
         name="radiator_dial_matches_architecture",
         what_it_tests=(
             f"radiator_architecture == SINGLE_FACE_CO_MOUNTED implies "
-            f"inputs.gospel.radiator_t_per_kw_post >= "
+            f"inputs.config.physical.radiator_t_per_kw_pre and radiator_t_per_kw_post >= "
             f"{RADIATOR_T_PER_KW_CO_MOUNTED_MIN} (R1 0.010-0.014 band, D16/D17)"
         ),
-        expected=(f"radiator_t_per_kw_post >= {RADIATOR_T_PER_KW_CO_MOUNTED_MIN} when co-mounted"),
+        expected=(
+            f"radiator_t_per_kw_pre and radiator_t_per_kw_post >= "
+            f"{RADIATOR_T_PER_KW_CO_MOUNTED_MIN} when co-mounted"
+        ),
         computed=computed,
         pass_check=not failed,
         severity=Severity.MAJOR,
@@ -1026,7 +1028,7 @@ def check_radiator_dial_arch_consistency(output: ValuationOutput) -> ValidationC
 
 
 # ---------------------------------------------------------------------------
-# Cell-value unwrap helper
+# Cell-value unwrap helpers
 # ---------------------------------------------------------------------------
 
 
@@ -1052,8 +1054,32 @@ def _num(value: float | int | str | bool | None) -> float:
     return float(value)
 
 
+def _input_int(cell: InputCell) -> int:
+    """Unwrap an integer typed input cell (e.g. the service life) to ``int``.
+
+    Raises:
+        TypeError: If the cell's value is not an integer.
+    """
+    value = cell.value
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"validation rule expected an integer input at {cell.path}, got {value!r}")
+    return value
+
+
+def _input_float(cell: InputCell) -> float:
+    """Unwrap a numeric typed input cell (e.g. a radiator dial) to ``float``.
+
+    Raises:
+        TypeError: If the cell's value is not a real number.
+    """
+    value = cell.value
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"validation rule expected a numeric input at {cell.path}, got {value!r}")
+    return float(value)
+
+
 # ---------------------------------------------------------------------------
-# Top-level: run all rules in V1..V17 order
+# Top-level: run the 16 wired rules (V1-V10, V12-V17; V11 retired) in order
 # ---------------------------------------------------------------------------
 
 
@@ -1067,10 +1093,9 @@ _RULES: Final[tuple[Callable[[ValuationOutput], ValidationCheck], ...]] = (
     check_pf_per_kw_in_band,
     check_launch_cost_non_increasing,
     check_revenue_above_cost_per_node,
-    check_cost_annual_per_node_in_band,
+    check_node_total_in_band,
     check_data_dictionary_populated,
-    # V11-V17 — cycle-2 rules (strategy § 5.1).
-    check_no_legacy_r_scalar,
+    # V12-V17: cycle-2 rules (strategy § 5.1). V11 is retired.
     check_operator_r_consistency,
     check_provenance_formula_keys,
     check_cadence_monotonicity,
@@ -1081,15 +1106,15 @@ _RULES: Final[tuple[Callable[[ValuationOutput], ValidationCheck], ...]] = (
 
 
 def compute_validation(output: ValuationOutput) -> list[ValidationCheck]:
-    """Run all 17 V1..V17 rules and return the resulting checks in order.
+    """Run all 16 wired rules and return the resulting checks in order.
 
     Args:
         output: A fully-built v8 :class:`ValuationOutput` (post-engine).
 
     Returns:
-        A 17-element list of :class:`ValidationCheck` instances in V1..V17
-        declaration order (V1-V10 cycle-1 re-pathed, V11-V17 cycle-2 new).
-        The engine wires the result into
+        A 16-element list of :class:`ValidationCheck` instances in
+        declaration order (V1-V10 cycle-1 re-pathed, V12-V17 cycle-2; V11
+        retired). The engine wires the result into
         :attr:`ValuationOutput.meta.validation`.
     """
     return [rule(output) for rule in _RULES]
@@ -1098,15 +1123,14 @@ def compute_validation(output: ValuationOutput) -> list[ValidationCheck]:
 __all__ = [
     "B2B_R_CENTRAL_FLOOR",
     "CADENCE_CEILING_EPSILON",
-    "COST_ANNUAL_MAX_MUSD",
-    "COST_ANNUAL_MIN_MUSD",
     "DATA_DICT_MIN_ENTRIES",
-    "FLEET_CLIFF_LOOKBACK_YEARS",
-    "LEGACY_R_SCALAR_FIELD",
-    "LEGACY_R_SCALAR_NAMES",
     "MARGIN_PCT_MIN",
+    "MASS_UTIL_FIT_SLACK_FACTOR",
+    "MASS_UTIL_FIT_SLACK_PCT",
     "MASS_UTIL_MAX_PCT",
     "MASS_UTIL_MIN_PCT",
+    "NODE_TOTAL_MAX_MUSD",
+    "NODE_TOTAL_MIN_MUSD",
     "N_PACKAGES_MIN",
     "PF_PER_KW_MAX",
     "PF_PER_KW_MAX_DIP",
@@ -1114,15 +1138,14 @@ __all__ = [
     "RADIATOR_T_PER_KW_CO_MOUNTED_MIN",
     "USD_PER_PKG_MAX",
     "check_cadence_monotonicity",
-    "check_cost_annual_per_node_in_band",
     "check_data_dictionary_populated",
     "check_fleet_cliff_consistency",
     "check_gpu_count_positive",
     "check_launch_cost_non_increasing",
     "check_mass_utilization_in_band",
     "check_monotonic_pf_per_kw",
-    "check_no_legacy_r_scalar",
     "check_no_trillion_dollar_pkg",
+    "check_node_total_in_band",
     "check_operator_r_consistency",
     "check_pf_per_kw_in_band",
     "check_positive_margin_floor",

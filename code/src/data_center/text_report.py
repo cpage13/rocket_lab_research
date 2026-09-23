@@ -13,7 +13,7 @@ monospaced report covering, in order:
   6. Per-year fleet rollup (launches, nodes, living fleet, kW,
      fleet revenue + profit + margin band).
   7. R-band block (the low / central / high revenue trajectory).
-  8. Validation checks (V1..V17, pass/fail).
+  8. Validation checks (the 16 wired rules, V1-V10 and V12-V17; pass/fail).
 
 Every leaf value in the v8 output is a
 :class:`data_center.provenance.ProvenanceCell`; this renderer reads each
@@ -335,7 +335,7 @@ def _render_fleet(output: ValuationOutput) -> list[str]:
 
     The fleet table is the headline operational view: one row per
     fiscal year carrying the launch cadence, nodes deployed, the living
-    fleet under the 5-year cliff, kW on orbit, the fleet annual revenue
+    fleet under the service-life cliff, kW on orbit, the fleet annual revenue
     across the full R band (low / central / high), and the gross-margin
     band. ``mgn l/c/h`` packs the three R-band margins into one column.
     """

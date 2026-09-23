@@ -118,8 +118,14 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Per-package effective mass including apportioned solar + radiator.",
     ),
     "n_packages_from_mass_envelope": FormulaSpec(
-        formula="floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg)",
-        description="Packages per node, mass-bound under D6.",
+        formula=(
+            "floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg "
+            "+ PACKAGE_FIT_TOLERANCE)"
+        ),
+        description=(
+            "Packages per node, mass-bound under D6; the fit tolerance keeps an "
+            "exact fit's last package despite float rounding."
+        ),
     ),
     "kw_per_node_from_n_and_kw_per_pkg": FormulaSpec(
         formula="N x kw_per_pkg",
@@ -138,8 +144,11 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Solar collector area per package required to power it.",
     ),
     "volume_per_pkg_stowed": FormulaSpec(
-        formula="(solar_area_m2_per_pkg / fold_ratio) x (stowed_pitch_mm / 1000)",
-        description="Stowed volume per package (panel + co-mounted radiator).",
+        formula="solar_area_m2_per_pkg x (stowed_pitch_mm / 1000)",
+        description=(
+            "Stowed array volume per package: deployed area x stowed panel pitch "
+            "(a stack of panels, each one pitch thick)."
+        ),
     ),
     "volume_per_node_from_n_and_vol_per_pkg": FormulaSpec(
         formula="N x volume_per_pkg + node_volume_fixed_m3 + mounting_overhead x array_volume",
@@ -150,7 +159,11 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Fraction of Neutron fairing volume used.",
     ),
     "binding_constraint_from_utilizations": FormulaSpec(
-        formula="enum(mass_util > 1.0 ? MASS : 0, volume_util > 1.0 ? VOLUME : 0)",
+        formula=(
+            "mass binds if (mass_envelope_t - mass_per_node_t) < mass_per_pkg_t; "
+            "volume binds if volume_utilization_pct >= 100; "
+            "BOTH if both, MASS or VOLUME if one, NEITHER if none"
+        ),
         description="Which envelope (mass / volume / both / neither) is binding.",
     ),
     "pf_per_node_from_n_and_pf_per_pkg": FormulaSpec(
@@ -162,7 +175,7 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Compute density in PFLOPS/kW.",
     ),
     "cost_annual_per_node_from_breakdown": FormulaSpec(
-        formula="(compute + bus + solar + radiator + launch_cost(year)) / 5",
+        formula="(compute + bus + solar + radiator + launch_cost(year)) / service_life_years",
         description="Annualized cost per node over service life (D1).",
     ),
     "revenue_annual_per_node_from_cost_and_r": FormulaSpec(
@@ -195,8 +208,8 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Nodes deployed this year (1 node per Neutron flight).",
     ),
     "living_fleet_from_cohort_cliff": FormulaSpec(
-        formula="sum(cohorts[Y-4..Y].nodes_deployed)",
-        description="Living fleet under 5-year hard cliff (D1).",
+        formula="sum(cohorts[Y-(service_life_years-1)..Y].nodes_deployed)",
+        description="Living fleet under the service_life_years hard cliff (D1).",
     ),
     "kw_on_orbit_from_living_fleet": FormulaSpec(
         formula="sum(cohort.nodes x cohort.kw_per_node) for living cohorts",

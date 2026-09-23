@@ -472,7 +472,7 @@ def test_engine_inputs_block_carries_v8_dial_blocks() -> None:
     assert "pf_growth_per_gen" in inp.slopes
     assert inp.cadence.cadence_ceiling > 0
     assert inp.fleet.service_life_years > 0
-    assert inp.volume.fold_ratio > 0
+    assert inp.volume.stowed_pitch_mm > 0
     assert len(inp.r_band.central) >= 2
     assert inp.launch_cost.low_cadence_cost_musd > 0
     assert len(inp.generations) >= 5
@@ -490,11 +490,11 @@ def test_engine_generations_dictionary_summarises_each_generation() -> None:
     assert first.source_doc_path.startswith("research/")
 
 
-def test_engine_validation_report_has_seventeen_rules() -> None:
-    """meta.validation.rules carries the 17 wired V1..V17 checks."""
+def test_engine_validation_report_has_sixteen_rules() -> None:
+    """meta.validation.rules carries the 16 wired checks (V1..V10, V12..V17)."""
     out = _run_default()
     rules = out.meta.validation.rules
-    assert len(rules) == 17
+    assert len(rules) == 16
     assert all(isinstance(r, ValidationCheck) for r in rules)
 
 

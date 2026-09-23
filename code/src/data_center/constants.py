@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import Final
 
+from common.cadence import YEAR_10_ANCHOR_IDX
+
 # ============================================================
 # Year-bound constants
 # ============================================================
@@ -38,6 +40,23 @@ MAX_HORIZON_YEARS: Final[int] = 20
 """SOURCED_DECISION (cycle-1). Maximum analysis horizon. Beyond
 this generation-extrapolation slopes are pure speculation."""
 
+ANCHOR_MODEL_YEAR: Final[int] = int(YEAR_10_ANCHOR_IDX)
+"""SOURCED_DECISION (NTR-010 year-10 cadence anchor; ADR-003). Model-year
+index of the run's anchor year: the year the ``launches_at_year_10`` cadence
+anchor pins, which is also the deployed-year cohort the ground reference
+compares against and the year the headline checks and query examples read.
+Taken from :data:`common.cadence.YEAR_10_ANCHOR_IDX` so the anchor year and
+the cadence anchor cannot drift apart. With ``base_year`` 2026 it resolves to
+FY2036. :func:`data_center.config.anchor_year` falls back to the final
+window year when the horizon is shorter than this."""
+
+GENERATION_EXTENSION_LOOKAHEAD_YEARS: Final[int] = 1
+"""SOURCED_DECISION (cycle-1 engine rule). Years past the final window year
+that the generation list is extended to cover, so the final year's frontier
+generation is always resolved from a list that reaches beyond it. The window
+end plus this lookahead must stay within :data:`MAX_FY`, the upper bound on
+any generation's ``year_available``."""
+
 # ============================================================
 # Conversion constants
 # ============================================================
@@ -47,6 +66,30 @@ KG_PER_T: Final[float] = 1000.0
 
 USD_PER_MUSD: Final[float] = 1_000_000.0
 """SOURCED_FACT. Cost conversion: $1M = $1,000,000."""
+
+W_PER_KW: Final[float] = 1000.0
+"""SOURCED_FACT. Power conversion: 1 kW = 1000 W."""
+
+MM_PER_M: Final[float] = 1000.0
+"""SOURCED_FACT. Length conversion: 1 m = 1000 mm."""
+
+# ============================================================
+# Numerical tolerances
+# ============================================================
+
+PACKAGE_FIT_TOLERANCE: Final[float] = 1e-9
+"""SOURCED_DECISION (numerical). Slack, in packages, added before flooring
+the package count (:func:`data_center.engine.compute_n_packages`). At an
+exact fit the float division lands a few ulps short of the whole number
+(``10.5 / 0.07500000000000001`` is ``139.99999999999997``) and a bare floor
+would drop a package that fits. The price of the slack: a fit short by less
+than a billionth of a package also keeps its last package, so an accepted
+node can exceed the mass envelope by up to this fraction of one package's
+mass (milligrams for a tonne-class package). V1 derives its upper-bound slack
+from this value, so every fit the packer accepts passes V1."""
+
+PERCENT_PER_FRACTION: Final[float] = 100.0
+"""SOURCED_FACT (arithmetic). Conversion from a 0-1 fraction to a percent."""
 
 # ============================================================
 # Physics constants
@@ -112,6 +155,12 @@ bus_base_musd x (1 + bus_growth_pre) ** pre_years."""
 
 BUS_GROWTH_PRE: Final[float] = -0.03
 """ESTIMATE (cycle-1). Bus cost growth rate before flatten year."""
+
+BUS_GROWTH_PRE_FLOOR: Final[float] = -1.0
+"""SOURCED_FACT (arithmetic). Exclusive lower bound on ``bus_growth_pre``:
+the bus cost compounds as ``(1 + bus_growth_pre) ** years``, so a rate of
+-100% zeroes the bus and anything below it flips the cost's sign year by
+year."""
 
 BUS_FLATTEN_AFTER_YR: Final[int] = 5
 """ESTIMATE (cycle-1). Year after which bus cost flattens."""
@@ -185,6 +234,38 @@ FLOPS_PER_KW_PCT_PER_GEN_POST_FEYNMAN: Final[float] = 0.25
 """EXTRAPOLATION (D12). FLOPS/kW improvement per generation post-
 Feynman. Central 25%; sensitivity 15-35%."""
 
+USD_GROWTH_PER_GEN_DEFAULT: Final[float] = 0.30
+"""EXTRAPOLATION (GPU-012). Default post-Feynman $/package growth per
+generation (+30%). The single source for the
+:class:`data_center.generations.GenerationSlopes` field default."""
+
+KW_GROWTH_PER_GEN_DEFAULT: Final[float] = 0.20
+"""EXTRAPOLATION (GPU-010). Default post-Feynman per-package power growth
+per generation (+20%), corrected from 0.30 by validation V-A: 0.30 was the
+assembly-level growth rate, which double-counts when applied per package.
+The single source for the :class:`data_center.generations.GenerationSlopes`
+field default."""
+
+KG_GROWTH_PER_GEN_DEFAULT: Final[float] = -0.10
+"""EXTRAPOLATION (GPU-010). Default post-Feynman per-package mass growth per
+generation (-10%, denser packaging). The single source for the
+:class:`data_center.generations.GenerationSlopes` field default."""
+
+PF_GROWTH_PER_GEN_DEFAULT: Final[float] = 0.625
+"""EXTRAPOLATION (GPU-010). Default post-Feynman per-package dense-FP4
+PFLOPS growth per generation (+62.5%). The single source for the
+:class:`data_center.generations.GenerationSlopes` field default."""
+
+GENERATION_SLOPE_MIN: Final[float] = -0.5
+"""SOURCED_DECISION (cycle-1). Lower bound on any per-generation growth
+slope: a generation may lose at most half of a quantity; a steeper per-step
+collapse has no roadmap basis."""
+
+GENERATION_SLOPE_MAX: Final[float] = 2.0
+"""SOURCED_DECISION (cycle-1). Upper bound on any per-generation growth
+slope: at most a tripling per generation; beyond it the extrapolation is
+pure speculation."""
+
 # ============================================================
 # Cadence defaults (scenario dials retained from v7 archaeology, commit 8fdc210)
 # ============================================================
@@ -232,26 +313,13 @@ scenario, not published Rocket Lab guidance."""
 # Volume dials (R1 sourced)
 # ============================================================
 
-SI_AREAL_DENSITY_KG_M2: Final[float] = 2.0
-"""SOURCED/ESTIMATE (THR-006, THR-007). Published/planning central
-of 1.6-2.0 kg/m2; peer-review correction from earlier 1.8 draft. Full
-Si array areal density including structure."""
-
 SI_BOL_EFFICIENCY: Final[float] = 0.20
 """SOURCED (THR-007). Si BOL AM0 efficiency planning dial for Rocket
 Lab/Solestial-class silicon arrays."""
 
-FOLD_RATIO: Final[float] = 80.0
-"""SOURCED (THR-006). Deployed-to-stowed area ratio for ROSA-class
-deployable-array planning."""
-
 STOWED_PITCH_MM: Final[float] = 6.0
 """ESTIMATE (R1 build-up; not published). Per-panel stowed
 thickness with Si + co-mounted radiator."""
-
-RADIATOR_SOLAR_AREA_RATIO: Final[float] = 0.70
-"""SOURCED/ESTIMATE (THR-003, THR-004). Radiator area / solar area
-for the single-face co-mounted architecture."""
 
 MOUNTING_OVERHEAD_PCT: Final[float] = 0.30
 """SOURCED/ESTIMATE (THR-006). Mass/volume overhead from hinges,

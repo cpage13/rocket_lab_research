@@ -7,6 +7,8 @@ MetadataConfig, the extended ValuationConfig, and YAML scenario loading.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -24,6 +26,7 @@ from data_center.config import (
     WorkloadType,
     YearRValue,
     config_from_dict,
+    load_config,
 )
 from data_center.constants import (
     CADENCE_CEILING_DEFAULT,
@@ -109,7 +112,7 @@ def test_fleet_dials_rejects_out_of_range_service_life() -> None:
 
 def test_volume_dials_defaults() -> None:
     v = VolumeDials()
-    assert v.fold_ratio > 0
+    assert v.stowed_pitch_mm > 0
     assert 0 < v.si_bol_efficiency < 1
 
 
@@ -279,3 +282,144 @@ def test_scenario_with_unknown_cadence_field_fails_fast() -> None:
     """An unknown key in the cadence block fails-fast (extra='forbid')."""
     with pytest.raises(ValidationError):
         config_from_dict({"cadence": {"bogus_cadence_dial": 1.0}})
+
+
+# -- Cross-field validators: invalid combinations fail at load ---------
+#
+# Each case below used to load cleanly and then either crash mid-run with a
+# traceback or run into nonsense output. Every one must now fail at load
+# with a ValidationError whose message names the broken rule.
+
+
+def test_fixed_node_mass_at_or_above_envelope_fails_at_load() -> None:
+    """Objective: a node whose fixed mass fills the envelope cannot be built.
+
+    ``node_mass_fixed_t: 13.0`` on the 12.5 t envelope used to give N = -4,
+    negative kW and cost, and positive revenue. Expected: it fails at load,
+    as does a fixed mass exactly equal to the envelope.
+    """
+    with pytest.raises(ValidationError, match="node_mass_fixed_t must be below mass_envelope_t"):
+        config_from_dict({"gospel": {"node_mass_fixed_t": 13.0}})
+    with pytest.raises(ValidationError, match="node_mass_fixed_t must be below mass_envelope_t"):
+        config_from_dict({"gospel": {"mass_envelope_t": 10.0, "node_mass_fixed_t": 10.0}})
+
+
+@pytest.mark.parametrize(
+    "cadence",
+    [
+        {"launches_at_year_5": 0},
+        {"launches_at_year_5": 90, "launches_at_year_10": 90},
+        {"launches_at_year_5": 50, "launches_at_year_10": 40},
+        {"launches_at_year_10": 150},
+        {"cadence_ceiling": 80},
+    ],
+    ids=["y5_zero", "y5_equals_y10", "y10_below_y5", "y10_at_ceiling", "ceiling_below_y10"],
+)
+def test_cadence_anchors_outside_the_logistic_range_fail_at_load(cadence: dict[str, int]) -> None:
+    """Objective: cadence anchors must satisfy 0 < y5 < y10 < ceiling at load.
+
+    These used to pass load and then raise a ValueError traceback from the
+    logistic fit in ``common.cadence``. Expected: a ValidationError at load.
+    """
+    with pytest.raises(ValidationError, match="0 < launches_at_year_5 < launches_at_year_10"):
+        config_from_dict({"cadence": cadence})
+
+
+def test_reversed_launch_cost_anchors_fail_at_load() -> None:
+    """Objective: the low-cost anchor must sit at the lower cadence.
+
+    Reversed anchors used to flat-clamp every year to the low-cadence cost,
+    silently switching the cost-down off (FY2036 revenue $8,184M instead of
+    $7,419M). Expected: a ValidationError at load; equal cadences fail too.
+    """
+    with pytest.raises(ValidationError, match="low_cadence_launches < high_cadence_launches"):
+        config_from_dict(
+            {"launch_cost": {"low_cadence_launches": 100.0, "high_cadence_launches": 5.0}}
+        )
+    with pytest.raises(ValidationError, match="low_cadence_launches < high_cadence_launches"):
+        config_from_dict(
+            {"launch_cost": {"low_cadence_launches": 50.0, "high_cadence_launches": 50.0}}
+        )
+
+
+def test_r_band_out_of_order_fails_at_load() -> None:
+    """Objective: the R band must keep low <= central <= high at shared years.
+
+    ``low 3.0, central 1.5, high 1.1`` used to load and pass every rule.
+    Expected: a ValidationError naming the out-of-order anchor year.
+    """
+    with pytest.raises(ValidationError, match="R band out of order at fy 2026"):
+        config_from_dict(
+            {
+                "r_band": {
+                    "low": [{"fy": 2026, "r": 3.0}, {"fy": 2036, "r": 3.0}],
+                    "central": [{"fy": 2026, "r": 1.5}, {"fy": 2036, "r": 1.5}],
+                    "high": [{"fy": 2026, "r": 1.1}, {"fy": 2036, "r": 1.1}],
+                }
+            }
+        )
+
+
+def test_r_band_central_above_high_fails_at_load() -> None:
+    """Objective: central above high at one shared year fails at load.
+
+    Expected: a ValidationError naming the anchor year (2036) where central
+    exceeds high, even though every other year is in order.
+    """
+    with pytest.raises(ValidationError, match="R band out of order at fy 2036"):
+        config_from_dict({"r_band": {"central": [{"fy": 2026, "r": 1.5}, {"fy": 2036, "r": 1.9}]}})
+
+
+def test_r_band_duplicate_anchor_year_fails_at_load() -> None:
+    """Objective: a repeated anchor year (which silently collapsed) fails at load.
+
+    Expected: a ValidationError naming the repeated year.
+    """
+    with pytest.raises(ValidationError, match="must not repeat an anchor year"):
+        RBand(
+            central=[
+                YearRValue(fy=2026, r=1.5),
+                YearRValue(fy=2026, r=1.6),
+                YearRValue(fy=2036, r=1.5),
+            ]
+        )
+
+
+@pytest.mark.parametrize("bus_growth_pre", [-1.0, -1.5])
+def test_bus_decline_of_100_percent_or_more_fails_at_load(bus_growth_pre: float) -> None:
+    """Objective: ``bus_growth_pre <= -1`` would zero or sign-flip the bus cost.
+
+    Expected: a ValidationError at load; -0.99 still loads.
+    """
+    with pytest.raises(ValidationError, match="bus_growth_pre"):
+        config_from_dict({"gospel": {"bus_growth_pre": bus_growth_pre}})
+    assert config_from_dict({"gospel": {"bus_growth_pre": -0.99}}).gospel.bus_growth_pre == -0.99
+
+
+def test_window_past_max_fy_fails_at_load() -> None:
+    """Objective: the generation extension of a late window must stay within MAX_FY.
+
+    Expected: base year 2075 with a ten-year horizon (extension to 2086)
+    fails at load; base year 2060 with a 19-year horizon (to 2080) loads.
+    """
+    with pytest.raises(ValidationError, match="must not exceed 2080"):
+        MetadataConfig(base_year=2075, horizon_years=10)
+    assert MetadataConfig(base_year=2060, horizon_years=19).base_year == 2060
+
+
+def test_every_shipped_data_center_scenario_still_loads() -> None:
+    """Objective: the new validators reject no shipped scenario.
+
+    Expected: all seven data-center scenario files load.
+    """
+    scenarios = Path(__file__).resolve().parents[2] / "scenarios"
+    for name in (
+        "default",
+        "ai1_equivalent",
+        "ambitious",
+        "conservative",
+        "upside_7yr",
+        "volume_stress",
+        "with_premium",
+    ):
+        assert load_config(scenarios / f"{name}.yaml").scenario_name

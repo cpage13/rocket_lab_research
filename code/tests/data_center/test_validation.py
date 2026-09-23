@@ -1,4 +1,4 @@
-"""Tests for the v8 engine-computed validation rules (V1..V17).
+"""Tests for the v8 engine-computed validation rules (V1..V10, V12..V17).
 
 Two test families per rule:
 
@@ -6,8 +6,14 @@ Two test families per rule:
 2. **Tripping case** — a copy-mutated v8 artifact triggers the rule.
 
 Also locks the aggregator contract: :func:`compute_validation` returns
-exactly 17 checks in V1..V17 declaration order and all pass on the default
-scenario.
+exactly 16 checks in declaration order and all pass on the default
+scenario. (V11, the legacy scalar-R guard, is retired: the config layer's
+``extra="forbid"`` rejects that field at load, so the rule could never fire.)
+
+Rules must not flip on the service life or the horizon alone: V16 follows
+the configured service life, V9 bands the life-independent node total, and
+V6 reads the anchor year, so the shipped 3-year and 7-year scenarios and a
+14-year horizon pass them.
 
 **Cycle-2 v8 re-pathing (V1-V10).** The cycle-1 V-rules are re-pointed at
 the v8 output structure (``physical.years`` / ``business.years`` /
@@ -16,10 +22,10 @@ the v8 output structure (``physical.years`` / ``business.years`` /
 dropped the ``compute_share`` and ``decisions`` blocks, so they are
 re-targeted — V5 to PF/kW monotonicity, V10 to the data-dictionary block.
 
-**Cycle-2 new rules (V11-V17).** Seven new cross-check rules: V11
-no-legacy-r-scalar, V12 operator/R consistency, V13 provenance formula
-keys, V14 cadence monotonicity, V15 volume fits horizon, V16 fleet-cliff
-consistency, V17 radiator-dial-matches-architecture (strategy § 5.1).
+**Cycle-2 new rules (V12-V17).** Six cross-check rules: V12 operator/R
+consistency, V13 provenance formula keys, V14 cadence monotonicity, V15
+volume fits horizon, V16 fleet-cliff consistency, V17
+radiator-dial-matches-architecture (strategy § 5.1).
 
 The tripping fixtures use Pydantic's ``model_copy(update=...)`` to build a
 ProvenanceCell with an out-of-band value and re-key the per-year map —
@@ -28,10 +34,18 @@ exactly the kind of bad state the V-rules are designed to catch.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from data_center.config import RadiatorArchitecture, ValuationConfig, config_from_dict
-from data_center.engine import run_valuation
+from data_center.config import (
+    RadiatorArchitecture,
+    ValuationConfig,
+    config_from_dict,
+    load_config,
+)
+from data_center.constants import PACKAGE_FIT_TOLERANCE
+from data_center.engine import compute_mass_util, compute_n_packages, run_valuation
 from data_center.input_manifest import InputCell, InputPath
 from data_center.output import (
     PhysicalYear,
@@ -41,25 +55,24 @@ from data_center.output import (
 from data_center.provenance import ProvenanceCell
 from data_center.validation import (
     B2B_R_CENTRAL_FLOOR,
-    COST_ANNUAL_MAX_MUSD,
-    COST_ANNUAL_MIN_MUSD,
-    LEGACY_R_SCALAR_FIELD,
+    MASS_UTIL_FIT_SLACK_PCT,
     MASS_UTIL_MAX_PCT,
     MASS_UTIL_MIN_PCT,
+    NODE_TOTAL_MAX_MUSD,
+    NODE_TOTAL_MIN_MUSD,
     PF_PER_KW_MAX,
     PF_PER_KW_MIN,
     RADIATOR_T_PER_KW_CO_MOUNTED_MIN,
     USD_PER_PKG_MAX,
     check_cadence_monotonicity,
-    check_cost_annual_per_node_in_band,
     check_data_dictionary_populated,
     check_fleet_cliff_consistency,
     check_gpu_count_positive,
     check_launch_cost_non_increasing,
     check_mass_utilization_in_band,
     check_monotonic_pf_per_kw,
-    check_no_legacy_r_scalar,
     check_no_trillion_dollar_pkg,
+    check_node_total_in_band,
     check_operator_r_consistency,
     check_pf_per_kw_in_band,
     check_positive_margin_floor,
@@ -74,11 +87,30 @@ from data_center.validation import (
 # Shared fixtures + mutation helper
 # ---------------------------------------------------------------------------
 
+# Shipped scenarios, resolved from this file so the suite is cwd-independent.
+_SCENARIOS = Path(__file__).resolve().parents[2] / "scenarios"
+
+# The default window (base year 2026, ten-year horizon) anchors at FY2036.
+_DEFAULT_ANCHOR_FY = "2036"
+
 
 @pytest.fixture(scope="module")
 def default_output() -> ValuationOutput:
     """The default-scenario v8 engine output — every rule should pass."""
     return run_valuation(ValuationConfig())
+
+
+def _mutate_node_total(output: ValuationOutput, fy: str, value: float) -> ValuationOutput:
+    """Return a new output with one year's ``cost_breakdown.node_total`` replaced."""
+    py = output.physical.years[fy]
+    breakdown = py.cost_breakdown
+    new_breakdown = breakdown.model_copy(
+        update={"node_total": _set_cell(breakdown.node_total, value)}
+    )
+    new_years = dict(output.physical.years)
+    new_years[fy] = py.model_copy(update={"cost_breakdown": new_breakdown})
+    new_physical = output.physical.model_copy(update={"years": new_years})
+    return output.model_copy(update={"physical": new_physical})
 
 
 def _set_cell(cell: ProvenanceCell, value: float | int | str) -> ProvenanceCell:
@@ -160,25 +192,25 @@ def _mutate_physical_cell_attr(
 # ---------------------------------------------------------------------------
 
 
-def test_compute_validation_returns_exactly_seventeen_checks(
+def test_compute_validation_returns_exactly_sixteen_checks(
     default_output: ValuationOutput,
 ) -> None:
-    """The aggregator emits 17 checks (one per V1..V17)."""
-    assert len(compute_validation(default_output)) == 17
+    """The aggregator emits 16 checks (V1..V10 and V12..V17; V11 retired)."""
+    assert len(compute_validation(default_output)) == 16
 
 
 def test_compute_validation_default_scenario_all_pass(
     default_output: ValuationOutput,
 ) -> None:
-    """Every V1..V17 rule passes on the default scenario."""
+    """Every wired rule passes on the default scenario."""
     failing = [c for c in compute_validation(default_output) if not c.pass_check]
     assert not failing, f"unexpected failing checks: {[(c.name, c.computed) for c in failing]}"
 
 
-def test_compute_validation_preserves_v1_to_v17_order(
+def test_compute_validation_preserves_declaration_order(
     default_output: ValuationOutput,
 ) -> None:
-    """Aggregator output order is the V1..V17 declaration order."""
+    """Aggregator output order is the V1..V10, V12..V17 declaration order."""
     checks = compute_validation(default_output)
     expected = [
         "mass_utilization_in_band",
@@ -189,9 +221,8 @@ def test_compute_validation_preserves_v1_to_v17_order(
         "pf_per_kw_in_band",
         "launch_cost_non_increasing",
         "revenue_above_cost_per_node",
-        "cost_annual_per_node_in_band",
+        "node_total_in_band",
         "data_dictionary_populated",
-        "no_legacy_r_scalar",
         "operator_r_consistency",
         "provenance_formula_keys",
         "cadence_monotonicity",
@@ -213,10 +244,9 @@ def test_severity_classifications(default_output: ValuationOutput) -> None:
     assert by_name["pf_per_kw_in_band"].severity == Severity.MAJOR
     assert by_name["launch_cost_non_increasing"].severity == Severity.MINOR
     assert by_name["revenue_above_cost_per_node"].severity == Severity.CRITICAL
-    assert by_name["cost_annual_per_node_in_band"].severity == Severity.MAJOR
+    assert by_name["node_total_in_band"].severity == Severity.MAJOR
     assert by_name["data_dictionary_populated"].severity == Severity.MAJOR
-    # V11-V17 — all MAJOR (cycle-2 consistency / cross-check rules).
-    assert by_name["no_legacy_r_scalar"].severity == Severity.MAJOR
+    # V12-V17: all MAJOR (cycle-2 consistency / cross-check rules).
     assert by_name["operator_r_consistency"].severity == Severity.MAJOR
     assert by_name["provenance_formula_keys"].severity == Severity.MAJOR
     assert by_name["cadence_monotonicity"].severity == Severity.MAJOR
@@ -241,6 +271,51 @@ def test_v1_trips_when_mass_util_below_floor(default_output: ValuationOutput) ->
     """A year with mass_utilization_pct = 50 trips V1."""
     mutated = _mutate_physical(default_output, "2029", "mass_utilization_pct", 50.0)
     assert not check_mass_utilization_in_band(mutated).pass_check
+
+
+@pytest.mark.parametrize(
+    ("node_mass_fixed_t", "pkg_mass_t", "n_expected", "short_fraction"),
+    [
+        (2.5, 5.0, 2, 0.5),
+        (2.5, 10.0, 1, 0.5),
+        (2.0, 0.075, 140, 0.9),
+        (0.0, 12.0, 1, 0.999),
+    ],
+    ids=["5t_pkg_half_tol_short", "10t_pkg_half_tol_short", "vr200_exact_class", "zero_fixed_edge"],
+)
+def test_v1_passes_every_fit_the_packer_accepts(
+    default_output: ValuationOutput,
+    node_mass_fixed_t: float,
+    pkg_mass_t: float,
+    n_expected: int,
+    short_fraction: float,
+) -> None:
+    """Objective: V1's upper slack covers every fit the packing tolerance accepts.
+
+    The packer keeps a package the budget misses by less than
+    ``PACKAGE_FIT_TOLERANCE`` of a package, so the node can overshoot the
+    envelope slightly (a 5 t package 5e-10 packages short reads about
+    100.00000002%). Expected: at ``short_fraction`` of the tolerance short,
+    the packer keeps ``n_expected`` packages and V1 passes the resulting
+    utilization; a utilization past the derived slack still fails V1.
+    """
+    budget_t = n_expected * pkg_mass_t - short_fraction * PACKAGE_FIT_TOLERANCE * pkg_mass_t
+    envelope_t = node_mass_fixed_t + budget_t
+    n_cell = compute_n_packages(budget_t, pkg_mass_t, mass_budget_path="a", mass_per_pkg_path="b")
+    assert n_cell.value == n_expected
+    node_t = node_mass_fixed_t + n_expected * pkg_mass_t
+    util_cell = compute_mass_util(node_t, envelope_t, node_mass_path="a", mass_envelope_path="b")
+    util_pct = float(str(util_cell.value))
+    assert util_pct > MASS_UTIL_MAX_PCT
+    accepted = _mutate_physical(default_output, "2030", "mass_utilization_pct", util_pct)
+    assert check_mass_utilization_in_band(accepted).pass_check
+    overweight = _mutate_physical(
+        default_output,
+        "2030",
+        "mass_utilization_pct",
+        MASS_UTIL_MAX_PCT + 2.0 * MASS_UTIL_FIT_SLACK_PCT,
+    )
+    assert not check_mass_utilization_in_band(overweight).pass_check
 
 
 def test_v1_trips_when_mass_util_above_ceiling(default_output: ValuationOutput) -> None:
@@ -359,26 +434,43 @@ def test_v5_trips_when_pf_per_kw_drops_sharply(default_output: ValuationOutput) 
 
 
 def test_v6_default_scenario_passes(default_output: ValuationOutput) -> None:
-    """Default last-year PF/kW lies inside [20, 80]."""
+    """Default anchor-year (FY2036) PF/kW lies inside [20, 80]."""
     check = check_pf_per_kw_in_band(default_output)
     assert check.pass_check
     assert check.severity == Severity.MAJOR
+    assert check.computed.startswith(f"FY{_DEFAULT_ANCHOR_FY} ")
 
 
-def test_v6_trips_when_last_year_pf_per_kw_below_band(
+def test_v6_trips_when_anchor_year_pf_per_kw_below_band(
     default_output: ValuationOutput,
 ) -> None:
-    """A last-year PF/kW = 10 trips V6 (below the 20-floor)."""
-    mutated = _mutate_physical(default_output, _last_fy(default_output), "pf_per_kw", 10.0)
+    """An anchor-year PF/kW = 10 trips V6 (below the 20-floor)."""
+    mutated = _mutate_physical(default_output, _DEFAULT_ANCHOR_FY, "pf_per_kw", 10.0)
     assert not check_pf_per_kw_in_band(mutated).pass_check
 
 
-def test_v6_trips_when_last_year_pf_per_kw_above_band(
+def test_v6_trips_when_anchor_year_pf_per_kw_above_band(
     default_output: ValuationOutput,
 ) -> None:
-    """A last-year PF/kW = 200 trips V6 (above the 80-ceiling)."""
-    mutated = _mutate_physical(default_output, _last_fy(default_output), "pf_per_kw", 200.0)
+    """An anchor-year PF/kW = 200 trips V6 (above the 80-ceiling)."""
+    mutated = _mutate_physical(default_output, _DEFAULT_ANCHOR_FY, "pf_per_kw", 200.0)
     assert not check_pf_per_kw_in_band(mutated).pass_check
+
+
+def test_v6_reads_the_anchor_year_not_the_last_window_year() -> None:
+    """Objective: a longer horizon does not move the year V6 judges.
+
+    A 14-year default-dial run reaches FY2040, where default slopes put
+    PF/kW far above 80. Expected: V6 still reads FY2036 (the year-10
+    anchor) and passes, the verdict of the ten-year default.
+    """
+    output = run_valuation(config_from_dict({"metadata": {"base_year": 2026, "horizon_years": 14}}))
+    last_fy = _last_fy(output)
+    assert last_fy == "2040"
+    assert float(str(output.physical.years[last_fy].pf_per_kw.value)) > PF_PER_KW_MAX
+    check = check_pf_per_kw_in_band(output)
+    assert check.pass_check
+    assert check.computed.startswith("FY2036 ")
 
 
 def test_v6_band_constants() -> None:
@@ -425,33 +517,45 @@ def test_v8_trips_when_revenue_below_cost(default_output: ValuationOutput) -> No
 
 
 # ---------------------------------------------------------------------------
-# V9 — cost_annual_per_node_in_band (re-pathed from node_total)
+# V9: node_total_in_band (the life-independent per-node total)
 # ---------------------------------------------------------------------------
 
 
 def test_v9_default_scenario_passes(default_output: ValuationOutput) -> None:
-    """Default-scenario per-node annual cost sits in [5, 60] every year."""
-    check = check_cost_annual_per_node_in_band(default_output)
+    """Default-scenario per-node total build + launch cost sits in [50, 200] every year."""
+    check = check_node_total_in_band(default_output)
     assert check.pass_check
     assert check.severity == Severity.MAJOR
 
 
-def test_v9_trips_when_cost_too_high(default_output: ValuationOutput) -> None:
-    """A per-node annual cost of $500M trips V9."""
-    mutated = _mutate_physical(default_output, "2028", "cost_annual_per_node_musd", 500.0)
-    assert not check_cost_annual_per_node_in_band(mutated).pass_check
+def test_v9_trips_when_node_total_too_high(default_output: ValuationOutput) -> None:
+    """A per-node total of $500M trips V9."""
+    mutated = _mutate_node_total(default_output, "2028", 500.0)
+    assert not check_node_total_in_band(mutated).pass_check
 
 
-def test_v9_trips_when_cost_too_low(default_output: ValuationOutput) -> None:
-    """A per-node annual cost of $1M trips V9 (below floor)."""
-    mutated = _mutate_physical(default_output, "2028", "cost_annual_per_node_musd", 1.0)
-    assert not check_cost_annual_per_node_in_band(mutated).pass_check
+def test_v9_trips_when_node_total_too_low(default_output: ValuationOutput) -> None:
+    """A per-node total of $10M trips V9 (below floor)."""
+    mutated = _mutate_node_total(default_output, "2028", 10.0)
+    assert not check_node_total_in_band(mutated).pass_check
 
 
 def test_v9_band_constants() -> None:
-    """V9 band is [5, 60] $M for the annualized per-node cost."""
-    assert COST_ANNUAL_MIN_MUSD == 5.0
-    assert COST_ANNUAL_MAX_MUSD == 60.0
+    """V9 band is the cycle-1 [50, 200] $M per-node total band."""
+    assert NODE_TOTAL_MIN_MUSD == 50.0
+    assert NODE_TOTAL_MAX_MUSD == 200.0
+
+
+@pytest.mark.parametrize("service_life_years", [1, 3, 7, 20])
+def test_v9_verdict_does_not_depend_on_service_life(service_life_years: int) -> None:
+    """Objective: the service-life dial alone cannot flip V9.
+
+    The annualized cost moves with the life (1 year multiplies it by five,
+    20 years divides it by four) but the node total does not. Expected: V9
+    passes at every life from 1 to 20 years on otherwise-default dials.
+    """
+    cfg = config_from_dict({"fleet": {"service_life_years": service_life_years}})
+    assert check_node_total_in_band(run_valuation(cfg)).pass_check
 
 
 # ---------------------------------------------------------------------------
@@ -471,36 +575,6 @@ def test_v10_trips_when_data_dictionary_empty(default_output: ValuationOutput) -
     empty_meta = default_output.meta.model_copy(update={"data_dictionary": {}})
     mutated = default_output.model_copy(update={"meta": empty_meta})
     assert not check_data_dictionary_populated(mutated).pass_check
-
-
-# ---------------------------------------------------------------------------
-# V11 — no_legacy_r_scalar
-# ---------------------------------------------------------------------------
-
-
-def test_v11_default_scenario_passes(default_output: ValuationOutput) -> None:
-    """The default v8 inputs carry no legacy scalar R field."""
-    check = check_no_legacy_r_scalar(default_output)
-    assert check.pass_check
-    assert check.severity == Severity.MAJOR
-
-
-def test_v11_trips_when_r_revenue_cost_readded(
-    default_output: ValuationOutput,
-) -> None:
-    """A scenario that re-adds the legacy `r_revenue_cost` field trips V11."""
-    mutated = _mutate_gospel(default_output, LEGACY_R_SCALAR_FIELD, 1.5)
-    check = check_no_legacy_r_scalar(mutated)
-    assert not check.pass_check
-    assert LEGACY_R_SCALAR_FIELD in check.computed
-
-
-def test_v11_trips_when_bare_r_scalar_present(
-    default_output: ValuationOutput,
-) -> None:
-    """A bare `r` scalar leaking into the gospel block also trips V11."""
-    mutated = _mutate_gospel(default_output, "r", 1.4)
-    assert not check_no_legacy_r_scalar(mutated).pass_check
 
 
 # ---------------------------------------------------------------------------
@@ -631,27 +705,50 @@ def test_v14_trips_when_launches_exceed_ceiling(
 
 
 def test_v15_default_scenario_passes(default_output: ValuationOutput) -> None:
-    """No default-scenario year is volume-only-bound (D6 — mass binds)."""
+    """Every default-scenario year's stowed node fits the fairing (<= 100%)."""
     check = check_volume_fits_horizon(default_output)
     assert check.pass_check
     assert check.severity == Severity.MAJOR
 
 
-def test_v15_trips_when_a_year_is_volume_only_bound(
+def test_v15_trips_when_the_fairing_is_overfilled(
     default_output: ValuationOutput,
 ) -> None:
-    """A year whose binding_constraint is sole 'volume' trips V15."""
-    mutated = _mutate_physical(default_output, "2031", "binding_constraint", "volume")
+    """A year whose volume utilization exceeds 100% trips V15, whatever its label."""
+    mutated = _mutate_physical(default_output, "2031", "volume_utilization_pct", 100.5)
     check = check_volume_fits_horizon(mutated)
     assert not check.pass_check
     assert "2031" in check.computed
 
 
-def test_v15_passes_for_both_and_neither(default_output: ValuationOutput) -> None:
-    """'both' and 'neither' bindings are accepted — only sole 'volume' fails."""
-    once = _mutate_physical(default_output, "2030", "binding_constraint", "both")
-    twice = _mutate_physical(once, "2031", "binding_constraint", "neither")
-    assert check_volume_fits_horizon(twice).pass_check
+def test_v15_reads_utilization_not_the_binding_label(default_output: ValuationOutput) -> None:
+    """Objective: V15 judges the number, not the inferred label.
+
+    Expected: a year exactly full (100%) passes even if labeled 'both', and
+    a 'volume' label on a year that fits does not trip V15 on its own.
+    """
+    full = _mutate_physical(default_output, "2030", "volume_utilization_pct", 100.0)
+    labeled = _mutate_physical(full, "2030", "binding_constraint", "both")
+    relabeled = _mutate_physical(labeled, "2031", "binding_constraint", "volume")
+    assert check_volume_fits_horizon(relabeled).pass_check
+
+
+def test_v15_fails_on_the_volume_stress_fixture() -> None:
+    """Objective: the shipped V15 fixture still trips V15.
+
+    ``volume_stress.yaml`` cuts the usable fairing to 5 m3 (its only
+    artificial dial; the mass envelope is the default 12.5 t) against a
+    stowed node of well over 5 m3. Expected: every year is labeled ``both``
+    and overfills the fairing, and V15 fails naming the overfilled years.
+    """
+    output = run_valuation(load_config(_SCENARIOS / "volume_stress.yaml"))
+    assert output.inputs.config.physical.mass_envelope_t.value == 12.5
+    years = output.physical.years.values()
+    assert {py.binding_constraint.value for py in years} == {"both"}
+    assert all(float(str(py.volume_utilization_pct.value)) > 100.0 for py in years)
+    check = check_volume_fits_horizon(output)
+    assert not check.pass_check
+    assert "fairing overfilled" in check.computed
 
 
 # ---------------------------------------------------------------------------
@@ -674,6 +771,24 @@ def test_v16_trips_when_living_fleet_inconsistent(
     check = check_fleet_cliff_consistency(mutated)
     assert not check.pass_check
     assert "2032" in check.computed
+
+
+@pytest.mark.parametrize(
+    ("scenario", "service_life_years"),
+    [("conservative.yaml", 3), ("upside_7yr.yaml", 7)],
+)
+def test_v16_follows_the_configured_service_life(scenario: str, service_life_years: int) -> None:
+    """Objective: V16's cohort window is the configured service life, not 5 years.
+
+    Expected: the shipped 3-year and 7-year scenarios pass V16 (the engine's
+    living fleet is right; before the fix V16 re-derived a 5-year window and
+    failed both), and the rule text states the scenario's own window.
+    """
+    output = run_valuation(load_config(_SCENARIOS / scenario))
+    assert output.inputs.fleet.service_life_years == service_life_years
+    check = check_fleet_cliff_consistency(output)
+    assert check.pass_check, check.computed
+    assert f"[Y-{service_life_years - 1}, Y]" in check.what_it_tests
 
 
 # ---------------------------------------------------------------------------
@@ -708,11 +823,37 @@ def test_v17_trips_when_radiator_dial_below_floor(
 
 
 def test_v17_passes_at_exact_floor(default_output: ValuationOutput) -> None:
-    """A co-mounted radiator dial exactly at the 0.010 floor passes V17."""
-    mutated = _force_co_mounted(
-        _mutate_gospel(default_output, "radiator_t_per_kw_post", RADIATOR_T_PER_KW_CO_MOUNTED_MIN)
+    """Co-mounted radiator dials exactly at the 0.010 floor pass V17."""
+    at_floor_post = _mutate_gospel(
+        default_output, "radiator_t_per_kw_post", RADIATOR_T_PER_KW_CO_MOUNTED_MIN
     )
-    assert check_radiator_dial_arch_consistency(mutated).pass_check
+    at_floor_both = _mutate_gospel(
+        at_floor_post, "radiator_t_per_kw_pre", RADIATOR_T_PER_KW_CO_MOUNTED_MIN
+    )
+    assert check_radiator_dial_arch_consistency(_force_co_mounted(at_floor_both)).pass_check
+
+
+def test_v17_trips_when_only_the_pre_lift_dial_is_below_floor() -> None:
+    """Objective: a co-mounted run that sets only the post dial is caught.
+
+    The engine flies ``radiator_t_per_kw_pre`` before ``tjmax_lift_year``, so
+    a co-mounted scenario that sets post = 0.012 but inherits the light
+    0.00165 default pre dial packs too many packages in the early years.
+    Expected: V17 fails and names the pre dial.
+    """
+    cfg = config_from_dict(
+        {
+            "metadata": {
+                "base_year": 2026,
+                "horizon_years": 10,
+                "radiator_architecture": "single_face_co_mounted",
+            },
+            "gospel": {"radiator_t_per_kw_post": 0.012},
+        }
+    )
+    check = check_radiator_dial_arch_consistency(run_valuation(cfg))
+    assert not check.pass_check
+    assert "radiator_t_per_kw_pre=0.00165" in check.computed
 
 
 # ---------------------------------------------------------------------------
@@ -725,10 +866,10 @@ def test_aggregator_surfaces_multiple_concurrent_failures(
 ) -> None:
     """Trip V1 and V9 simultaneously — both surface in the aggregated list."""
     once = _mutate_physical(default_output, "2028", "mass_utilization_pct", 10.0)
-    twice = _mutate_physical(once, "2028", "cost_annual_per_node_musd", 500.0)
+    twice = _mutate_node_total(once, "2028", 500.0)
     failing = {c.name for c in compute_validation(twice) if not c.pass_check}
     assert "mass_utilization_in_band" in failing
-    assert "cost_annual_per_node_in_band" in failing
+    assert "node_total_in_band" in failing
 
 
 # ---------------------------------------------------------------------------

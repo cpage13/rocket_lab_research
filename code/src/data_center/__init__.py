@@ -7,7 +7,7 @@ around the GPU PACKAGE (NVIDIA's "as sold" unit):
 each fiscal year picks a frontier generation, derives N packages that fit
 under the selected Neutron SSO mass-envelope scenario, and computes per-node
 economics from the package's all-in kW/kg/$/PF figures. The cycle-2 model
-rolls the living fleet up by cohort (5-year cliff) and prices revenue as an
+rolls the living fleet up by cohort (service-life cliff) and prices revenue as an
 R band.
 
 The GPU-first per-node formulas (the heart of the model):

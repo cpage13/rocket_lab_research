@@ -211,10 +211,10 @@ def test_rband_block_shows_cumulative_revenue(default_report: str) -> None:
 def test_validation_block_renders_every_rule(
     default_report: str, default_output: ValuationOutput
 ) -> None:
-    """The validation block renders one line per V-rule (17 on the default scenario)."""
+    """The validation block renders one line per V-rule (16 on the default scenario)."""
     validation = default_report.split("VALIDATION CHECKS", 1)[1]
     rules = default_output.meta.validation.rules
-    assert len(rules) == 17
+    assert len(rules) == 16
     for rule in rules:
         assert rule.name in validation
 

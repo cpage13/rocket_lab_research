@@ -14,9 +14,14 @@ Three responsibilities:
   ``--json`` path has one place to call.
 
 The ``meta.query_examples`` block — the cold-reader contract — is the
-fixed 12-entry :data:`data_center.query_examples.QUERY_EXAMPLES` list;
-:func:`build_output` places it at ``meta.query_examples`` in every
-emitted :class:`ValuationOutput`.
+fixed 12-entry list :func:`data_center.query_examples.build_query_examples`
+builds for the run's anchor year; :func:`build_output` places it at
+``meta.query_examples`` in every emitted :class:`ValuationOutput`.
+
+The anchor-year checks in ``meta.validation_results`` read the run's anchor
+year (:func:`data_center.config.anchor_year`: the year-10 cadence anchor, or
+the final window year for a shorter horizon), never a hardcoded calendar
+year, so every window the config accepts builds without a missing-year error.
 """
 
 from __future__ import annotations
@@ -30,7 +35,7 @@ from typing import Any, Final, Union, get_args, get_origin  # typing-acceptable:
 
 from pydantic import BaseModel
 
-from data_center.config import ValuationConfig
+from data_center.config import ValuationConfig, anchor_year
 from data_center.constants import USD_PER_MUSD
 from data_center.generations import GenerationSpec
 from data_center.input_manifest import InputCell, SourceStatus, build_input_manifest
@@ -53,13 +58,12 @@ from data_center.output import (
     ValuationOutput,
 )
 from data_center.provenance import FORMULAS, FieldPath, ProvenanceCell
-from data_center.query_examples import QUERY_EXAMPLES
+from data_center.query_examples import build_query_examples
 from data_center.validation import compute_validation
 
 MODEL_PACKAGE_NAME: Final[str] = "rklb-value"
 DEFAULT_ARTIFACT_ROLE: Final[str] = "draft"
 PROMOTED_DEFAULT_ARTIFACT_ROLE: Final[str] = "promoted_default"
-TARGET_YEAR: Final[str] = "2036"
 DEPLOYED_KW_LOWER_BOUND: Final[float] = 60_000.0
 DEPLOYED_KW_UPPER_BOUND: Final[float] = 75_000.0
 DEFAULT_REVENUE_MULTIPLE: Final[float] = 1.5
@@ -501,7 +505,12 @@ def _integer_cell_value(cell: ProvenanceCell) -> int:
 
 
 def _build_validation_results(output: SpaceModelOutput) -> list[ValidationResult]:
-    """Build Phase-2 public validation metadata from the final output."""
+    """Build Phase-2 public validation metadata from the final output.
+
+    Mirrors every ``meta.validation.rules`` entry, then adds the anchor-year
+    checks, which read the run's anchor year
+    (:func:`data_center.config.anchor_year`; FY2036 for the default window).
+    """
     results: list[ValidationResult] = []
     for rule in output.meta.validation.rules:
         severity = ValidationSeverity.OK
@@ -523,25 +532,27 @@ def _build_validation_results(output: SpaceModelOutput) -> list[ValidationResult
             )
         )
 
-    business_year = output.business.years[TARGET_YEAR]
+    anchor = str(anchor_year(output.metadata.base_year, output.metadata.horizon_years))
+    business_year = output.business.years[anchor]
     deployed_kw = _numeric_cell_value(business_year.kw_deployed_this_year)
     deployed_ok = DEPLOYED_KW_LOWER_BOUND <= deployed_kw <= DEPLOYED_KW_UPPER_BOUND
+    deployed_id = f"default_{anchor}_deployed_capacity_around_70mw"
     results.append(
         _validation_result(
-            validation_id="default_2036_deployed_capacity_around_70mw",
+            validation_id=deployed_id,
             passed=deployed_ok,
-            what_tested="Default 2036 newly deployed capacity is around 70 MW/year.",
+            what_tested=f"Default {anchor} newly deployed capacity is around 70 MW/year.",
             expected_condition=(
                 f"{DEPLOYED_KW_LOWER_BOUND:g} <= kw_deployed_this_year <= "
                 f"{DEPLOYED_KW_UPPER_BOUND:g}"
             ),
             observed_result=_rule_to_validation_result(
-                "default_2036_deployed_capacity_around_70mw",
+                deployed_id,
                 deployed_ok,
                 "around 70 MW/year",
                 f"{deployed_kw:g} kW/year",
             ),
-            related_json_paths=[f'business.years."{TARGET_YEAR}".kw_deployed_this_year'],
+            related_json_paths=[f'business.years."{anchor}".kw_deployed_this_year'],
             remediation_hint="Check cadence and per-node power assumptions.",
         )
     )
@@ -561,8 +572,8 @@ def _build_validation_results(output: SpaceModelOutput) -> list[ValidationResult
                 f"{living_kw:g} kW living vs {deployed_kw:g} kW deployed",
             ),
             related_json_paths=[
-                f'business.years."{TARGET_YEAR}".kw_living_fleet',
-                f'business.years."{TARGET_YEAR}".kw_deployed_this_year',
+                f'business.years."{anchor}".kw_living_fleet',
+                f'business.years."{anchor}".kw_deployed_this_year',
             ],
             remediation_hint="Check cohort cliff and living-fleet rollup.",
         )
@@ -593,7 +604,7 @@ def _build_validation_results(output: SpaceModelOutput) -> list[ValidationResult
         _validation_result(
             validation_id="target_cadence_is_90_launches",
             passed=launches_ok,
-            what_tested="2036 target cadence is 90 launches/year.",
+            what_tested=f"{anchor} target cadence is 90 launches/year.",
             expected_condition=f"launches == {DEFAULT_TARGET_LAUNCHES}",
             observed_result=_rule_to_validation_result(
                 "target_cadence_is_90_launches",
@@ -603,7 +614,7 @@ def _build_validation_results(output: SpaceModelOutput) -> list[ValidationResult
             ),
             related_json_paths=[
                 "inputs.config.cadence.launches_at_year_10",
-                f'business.years."{TARGET_YEAR}".launches',
+                f'business.years."{anchor}".launches',
             ],
             remediation_hint="Check cadence anchors.",
         )
@@ -724,7 +735,7 @@ def build_output(
         formula_definitions=_build_formula_definitions(),
         validation_results=[],
         generations_dictionary=_build_generations_dictionary(extended_gens),
-        query_examples=QUERY_EXAMPLES,
+        query_examples=build_query_examples(anchor_year(md.base_year, md.horizon_years)),
         source_status_summary=SourceStatusSummary(
             certified=0,
             sourced_estimate=0,

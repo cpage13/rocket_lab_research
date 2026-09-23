@@ -9,7 +9,7 @@ v8 :class:`data_center.output.ValuationOutput`.
 The GPU-first per-node formulas (the heart of the model):
 
     mass_per_pkg = kg/1000 + kW × (solar_t_per_kW + radiator_t_per_kW)
-            N    = floor((mass_envelope − node_mass_fixed) / mass_per_pkg)
+            N    = floor((mass_envelope − node_mass_fixed) / mass_per_pkg + ε)
        node_kW   = N × kW/pkg
    compute_cost  = N × $/pkg
     node_total   = compute + bus + solar + radiator + launch_cost(cadence)
@@ -22,10 +22,20 @@ Launch cost is cadence-indexed (SOURCE_INDEX NTR-009): a log-linear curve over
 the launches-per-year the logistic cadence ramp produces. Bus cost compounds
 at `bus_growth_pre` through `bus_flatten_after_yr`, then holds flat (D12).
 
+(ε is :data:`~data_center.constants.PACKAGE_FIT_TOLERANCE`, so an exact fit
+keeps its last package despite float rounding.) Mass binds when the leftover budget after N
+packages is smaller than one more package; the volume model reports whether
+the fairing binds too.
+
+Each year's cadence (launches and the cadence-indexed launch cost) is
+computed once, in :func:`compute_year`, and carried on the
+:class:`YearComputation` for the fleet rollup.
+
 The fleet rollup vintages each calendar year's launches into a
-:class:`data_center.fleet.Cohort` and sums the living set (5-year hard cliff,
-D1). Revenue is an R band — low / central / high (D18) — so every
-revenue / gross-profit / margin figure surfaces as a three-way split.
+:class:`data_center.fleet.Cohort` and sums the living set (the
+``fleet.service_life_years`` hard cliff, D1). Revenue is an R band (low /
+central / high, D18), so every revenue / gross-profit / margin figure
+surfaces as a three-way split.
 
 Cycle-2 v8 output: the artifact has five top-level keys
 (``metadata`` / ``inputs`` / ``physical`` / ``business`` / ``meta``); every
@@ -47,7 +57,12 @@ from datetime import UTC, datetime
 
 from .cadence import compute_launch_cost_musd, compute_launches_per_year
 from .config import GospelInputs, RBand, ValuationConfig
-from .constants import KG_PER_T, USD_PER_MUSD
+from .constants import (
+    GENERATION_EXTENSION_LOOKAHEAD_YEARS,
+    KG_PER_T,
+    PACKAGE_FIT_TOLERANCE,
+    USD_PER_MUSD,
+)
 from .fleet import Cohort, FleetYear, compute_fleet_year, r_at_year
 from .generations import (
     KNOWN_GENS,
@@ -203,6 +218,11 @@ def compute_n_packages(
 ) -> ProvenanceCell:
     """Packages per node — the mass-bound floor (D6).
 
+    Floors ``mass_budget_t / mass_per_pkg_t`` after adding
+    :data:`~data_center.constants.PACKAGE_FIT_TOLERANCE`, so an exact fit is
+    not lost to float rounding (a fit short by less than that fraction of a
+    package also keeps its last package).
+
     Args:
         mass_budget_t: Mass available for packages (envelope - fixed), tonnes.
         mass_per_pkg_t: Per-package effective mass, tonnes.
@@ -212,7 +232,11 @@ def compute_n_packages(
     Returns:
         A :class:`ProvenanceCell` carrying the integer package count.
     """
-    value = math.floor(mass_budget_t / mass_per_pkg_t) if mass_per_pkg_t > 0 else 0
+    value = (
+        math.floor(mass_budget_t / mass_per_pkg_t + PACKAGE_FIT_TOLERANCE)
+        if mass_per_pkg_t > 0
+        else 0
+    )
     return cell(
         value=value,
         unit="count",
@@ -672,7 +696,7 @@ def compute_cadence_year(year_idx: int, config: ValuationConfig) -> CadenceYear:
 
 def compute_volume_year(
     n_packages: int,
-    mass_util_pct: float,
+    mass_bound: bool,
     kw_per_pkg: float,
     config: ValuationConfig,
     *,
@@ -682,14 +706,17 @@ def compute_volume_year(
 
     Chains the volume-model cell producers: solar area per package, stowed
     volume per package, total node volume, fairing utilization, and the
-    mass-vs-volume binding constraint. Reads dials from ``config.volume``.
+    mass-vs-volume binding constraint. Reads dials from ``config.volume``
+    and the fixed node volume from ``config.gospel.node_volume_fixed_m3``.
 
     Args:
         n_packages: Packages per node this year (the mass-bound N).
-        mass_util_pct: Mass utilization as a percent (0-100) — used for the
-            binding-constraint comparison.
+        mass_bound: Whether the mass envelope binds this year (the leftover
+            mass budget after N packages is below one package), decided by
+            :func:`compute_year` where N is computed.
         kw_per_pkg: The frontier generation's per-package kW this year.
-        config: The valuation config (provides the ``volume`` dial block).
+        config: The valuation config (provides the ``volume`` dial block and
+            the fixed node volume).
         fy_path: JSON path of this fiscal year's physical block, e.g.
             ``physical.years."2036"`` — used to build the cell-to-cell
             ``uses`` back-pointers so they resolve to real cells.
@@ -706,19 +733,19 @@ def compute_volume_year(
     )
     volume_per_pkg_cell = compute_volume_per_pkg(
         _cell_float(solar_area_cell),
-        vol.fold_ratio,
         vol.stowed_pitch_mm,
         solar_area_path=f"{fy_path}.solar_area_per_pkg_m2",
-        fold_ratio_path="inputs.config.volume.fold_ratio",
         pitch_path="inputs.config.volume.stowed_pitch_mm",
     )
     volume_per_node_cell = compute_volume_per_node(
         n_packages,
         _cell_float(volume_per_pkg_cell),
         vol.mounting_overhead_pct,
+        config.gospel.node_volume_fixed_m3,
         n_path=f"{fy_path}.gpus_per_node",
         vol_per_pkg_path=f"{fy_path}.volume_per_pkg_m3",
         mounting_path="inputs.config.volume.mounting_overhead_pct",
+        node_volume_fixed_path="inputs.config.physical.node_volume_fixed_m3",
     )
     volume_util_cell = compute_volume_utilization(
         _cell_float(volume_per_node_cell),
@@ -727,9 +754,13 @@ def compute_volume_year(
         fairing_volume_path="inputs.config.volume.neutron_fairing_usable_volume_m3",
     )
     binding_cell = compute_binding_constraint(
-        mass_util_pct,
+        mass_bound,
         _cell_float(volume_util_cell),
-        mass_util_path=f"{fy_path}.mass_utilization_pct",
+        mass_bound_uses=[
+            f"{fy_path}.gpus_per_node",
+            f"{fy_path}.mass_per_node_t",
+            "inputs.config.physical.mass_envelope_t",
+        ],
         volume_util_path=f"{fy_path}.volume_utilization_pct",
     )
     return VolumeBreakdown(
@@ -751,14 +782,17 @@ class YearComputation:
     """One fiscal year's GPU-first per-node computation (engine-internal).
 
     The engine's per-year intermediate: the frontier generation chosen for
-    the year plus the per-node :class:`PhysicalYear` of provenance cells.
-    This is not an output model — it is consumed by the fleet rollup and
-    by the v8 output assembly.
+    the year, the year's cadence, plus the per-node :class:`PhysicalYear` of
+    provenance cells. This is not an output model: it is consumed by the
+    fleet rollup and by the v8 output assembly.
 
     Attributes:
         year_idx: Zero-based model year index.
         fy: Calendar fiscal year (``base_year + year_idx``).
         frontier: The frontier :class:`GenerationSpec` for the year.
+        cadence: The year's launches and per-launch cost, computed once here
+            and reused by the fleet rollup (the two consumers cannot
+            disagree).
         physical: The per-node :class:`PhysicalYear` of provenance cells.
         n_packages: Packages per node (the mass-bound N), unwrapped.
         node_kw: Total node electrical power, kW, unwrapped.
@@ -769,6 +803,7 @@ class YearComputation:
     year_idx: int
     fy: int
     frontier: GenerationSpec
+    cadence: CadenceYear
     physical: PhysicalYear
     n_packages: int
     node_kw: float
@@ -823,6 +858,8 @@ def compute_year(
         mass_per_pkg_path="inputs.config.generations[].kg_per_pkg",
     )
     n = _cell_int(n_cell)
+    # Mass binds when the budget left after N packages cannot take one more.
+    mass_bound = (mass_budget_t - n * mass_per_pkg_t) < mass_per_pkg_t
 
     # The physical state — N, derived node power, derived mass, PFLOPS.
     kw_cell = compute_kw_per_node(
@@ -847,7 +884,6 @@ def compute_year(
         node_mass_path=f"{fy_path}.mass_per_node_t",
         mass_envelope_path="inputs.config.physical.mass_envelope_t",
     )
-    mass_util_pct = _cell_float(mass_util_cell)
     pf_node_cell = compute_pf_per_node(
         n,
         front.pf_per_pkg,
@@ -863,7 +899,7 @@ def compute_year(
     )
 
     # The volume model (transparency — does not gate N, D6).
-    volume = compute_volume_year(n, mass_util_pct, front.kw_per_pkg, config, fy_path=fy_path)
+    volume = compute_volume_year(n, mass_bound, front.kw_per_pkg, config, fy_path=fy_path)
 
     # The cost decomposition — five build lines + total + annualized.
     cadence_year = compute_cadence_year(year_idx, config)
@@ -991,6 +1027,7 @@ def compute_year(
         year_idx=year_idx,
         fy=fy_calendar,
         frontier=front,
+        cadence=cadence_year,
         physical=physical,
         n_packages=n,
         node_kw=node_kw,
@@ -1045,8 +1082,9 @@ def compute_fleet_trajectory(
 ) -> list[FleetYear]:
     """Build the per-year fleet rollup parallel to the per-node trajectory.
 
-    For each model year: prices the cadence (launches + launch cost), turns
-    the year's per-node economics into a deployment-year :class:`Cohort`
+    For each model year: reads the year's cadence (launches + launch cost,
+    computed once in :func:`compute_year`), turns the year's per-node
+    economics into a deployment-year :class:`Cohort`
     (node count = launches, D8 1 node per launch), and rolls the living
     cohort set up via :func:`data_center.fleet.compute_fleet_year`,
     threading the running cumulative revenue across all three R bands.
@@ -1068,9 +1106,8 @@ def compute_fleet_trajectory(
     cumul_low = 0.0
     cumul_high = 0.0
     for year in years:
-        cadence_year = compute_cadence_year(year.year_idx, config)
-        launches = int(_cell_float(cadence_year.launches))
-        launch_cost = _cell_float(cadence_year.launch_cost_musd)
+        launches = _cell_int(year.cadence.launches)
+        launch_cost = _cell_float(year.cadence.launch_cost_musd)
         nodes_deployed = launches
         cohorts.append(_year_to_cohort(year, nodes_deployed, r_band))
         fleet_year = compute_fleet_year(
@@ -1167,12 +1204,14 @@ def run_valuation(
     horizon_years = config.metadata.horizon_years
 
     # Generation list — scenario override or KNOWN_GENS extended to cover
-    # the horizon's fiscal year.
+    # the horizon's fiscal year plus the lookahead.
     if config.generations is not None:
         base_gens: list[GenerationSpec] = list(config.generations)
     else:
         base_gens = list(KNOWN_GENS)
-    target_yr = float(config.metadata.base_year + horizon_years + 1)
+    target_yr = float(
+        config.metadata.base_year + horizon_years + GENERATION_EXTENSION_LOOKAHEAD_YEARS
+    )
     extended_gens = extend_generations(
         base_gens, config.slopes, config.gospel.release_cadence_yr, target_yr
     )

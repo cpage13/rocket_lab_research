@@ -3,7 +3,8 @@
 The ``meta.query_examples`` block is the v8 cold-reader contract: a cold
 agent runs these worked ``jq`` expressions to answer common questions
 about a valuation run. This test guards that contract — for every one of
-the 12 :data:`data_center.query_examples.QUERY_EXAMPLES` it:
+the 12 examples :func:`data_center.query_examples.build_query_examples`
+builds for the default window's anchor year (FY2036) it:
 
 1. runs the example's exact ``jq`` expression against a freshly-generated
    default-scenario output JSON, via the real ``jq`` binary; and
@@ -31,7 +32,7 @@ from data_center.config import load_config
 from data_center.engine import run_valuation
 from data_center.json_output import render_json
 from data_center.output import QueryExample
-from data_center.query_examples import QUERY_EXAMPLES
+from data_center.query_examples import build_query_examples
 
 # Resolve `jq` once. The query_examples contract is jq-expressed, so the
 # test needs the jq binary; skip cleanly (not fail) if it is absent.
@@ -43,6 +44,11 @@ _DEFAULT_YAML = Path(__file__).resolve().parents[2] / "scenarios" / "default.yam
 
 # Number of mandatory query examples — fixed by strategy §3.3 / plan T58.
 _EXPECTED_COUNT = 12
+
+# The default window (base year 2026, ten-year horizon) anchors at FY2036;
+# the single-year examples address it and carry it in their names.
+_DEFAULT_ANCHOR_YEAR = 2036
+QUERY_EXAMPLES = build_query_examples(_DEFAULT_ANCHOR_YEAR)
 
 
 @pytest.fixture(scope="module")
@@ -65,7 +71,7 @@ def _run_jq(expression: str, json_path: Path) -> str:
     """Run a ``jq`` expression against a JSON file; return raw stdout.
 
     Args:
-        expression: The jq program (one of the QUERY_EXAMPLES jq strings).
+        expression: The jq program (one of the built example jq strings).
         json_path: Path to the JSON file to query.
 
     Returns:
@@ -94,8 +100,23 @@ def _run_jq(expression: str, json_path: Path) -> str:
 
 
 def test_query_examples_has_exactly_twelve_entries() -> None:
-    """QUERY_EXAMPLES is the fixed 12-entry contract (strategy §3.3)."""
+    """The built example list is the fixed 12-entry contract (strategy §3.3)."""
     assert len(QUERY_EXAMPLES) == _EXPECTED_COUNT
+
+
+def test_query_examples_address_the_given_anchor_year() -> None:
+    """Objective: the single-year examples follow the run's anchor year.
+
+    Expected: built for FY2050 (a base-2040 window), no example mentions
+    2036 and the anchor-year examples address ``business.years."2050"``.
+    """
+    examples = build_query_examples(2050)
+    assert len(examples) == _EXPECTED_COUNT
+    assert all("2036" not in e.model_dump_json() for e in examples)
+    names = {e.name for e in examples}
+    assert {"deployed_year_capacity_2050", "headline_2050_revenue_central"} <= names
+    trace = next(e for e in examples if e.name == "trace_a_cell")
+    assert trace.jq_expression == '.business.years."2050".revenue_annual_fleet_musd_central'
 
 
 def test_query_example_names_are_unique() -> None:

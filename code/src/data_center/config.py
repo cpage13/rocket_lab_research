@@ -27,6 +27,19 @@ here too.
 YAML loading: scenario files are YAML mappings whose top-level keys are
 the block names above — all optional (omitted = defaults). ``extra="forbid"``
 means a typo in a scenario file fails loudly.
+
+Cross-field validators reject, at load, every combination the engine cannot
+run or would run into nonsense: cadence anchors outside
+``0 < launches_at_year_5 < launches_at_year_10 < cadence_ceiling``, reversed
+launch-cost cadence anchors, R bands out of ``low <= central <= high`` order
+or with duplicate anchor years, a fixed node mass at or above the mass
+envelope, a bus decline of -100% or steeper, an unordered generations list,
+and a run window whose generation extension would pass
+:data:`~data_center.constants.MAX_FY`.
+
+:func:`anchor_year` is the one helper that resolves a run's anchor year (the
+year-10 cadence anchor, or the final window year for shorter horizons); the
+validation checks, the ground reference, and the query examples all read it.
 """
 
 from __future__ import annotations
@@ -36,15 +49,17 @@ from pathlib import Path
 from typing import Any  # typing-acceptable: Any types the dict deserialization boundary
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from data_center.constants import (
+    ANCHOR_MODEL_YEAR,
     BUS_BASE_MUSD,
     BUS_FLATTEN_AFTER_YR,
     BUS_GROWTH_PRE,
+    BUS_GROWTH_PRE_FLOOR,
     CADENCE_CEILING_DEFAULT,
     FIRST_LAUNCH_YEAR_DEFAULT,
-    FOLD_RATIO,
+    GENERATION_EXTENSION_LOOKAHEAD_YEARS,
     HIGH_CADENCE_COST_MUSD_DEFAULT,
     HIGH_CADENCE_LAUNCHES_DEFAULT,
     LAUNCHES_AT_YEAR_5_DEFAULT,
@@ -64,12 +79,10 @@ from data_center.constants import (
     R_BAND_HIGH_ANCHORS_DEFAULT,
     R_BAND_LOW_ANCHORS_DEFAULT,
     RADIATOR_COST_MUSD_PER_KW,
-    RADIATOR_SOLAR_AREA_RATIO,
     RADIATOR_T_PER_KW_POST,
     RADIATOR_T_PER_KW_PRE,
     RELEASE_CADENCE_YR,
     SERVICE_LIFE_YEARS,
-    SI_AREAL_DENSITY_KG_M2,
     SI_BOL_EFFICIENCY,
     SOLAR_COST_MUSD_PER_KW,
     SOLAR_MASS_T_PER_KW,
@@ -81,6 +94,7 @@ from data_center.generations import (
     GenerationSlopes,
     GenerationSpec,
     load_generations_yaml,
+    validate_generation_order,
 )
 
 # ===========================================================================
@@ -134,10 +148,16 @@ class RadiatorArchitecture(StrEnum):
 
 
 class BindingConstraint(StrEnum):
-    """Which physical envelope constraint binds the node's package count.
+    """Which physical envelope binds the node in a year (a reported label).
 
-    Mass-only binding is the model rule (D6); ``VOLUME`` (sole) appearing
-    is a model-consistency failure surfaced by V15.
+    Mass is the only envelope that sizes the node (D6). The engine labels a
+    year mass-bound when the mass budget left after packing N packages is
+    smaller than one more package, which floor packing makes true every year;
+    it adds the volume envelope when the stowed node fills the usable fairing
+    (volume utilization at or above 100%). So the engine emits ``MASS``, or
+    ``BOTH`` when the fairing is full as well; ``VOLUME`` and ``NEITHER``
+    complete the enumeration but floor packing cannot produce them. The label
+    is transparency only: V15 judges ``volume_utilization_pct`` directly.
     """
 
     MASS = "mass"
@@ -160,6 +180,11 @@ class CadenceDials(BaseModel):
     counts. ``first_launch_year`` only clamps earlier years to zero; it does
     not move the year-5 or year-10 anchors. Consumed by
     :func:`data_center.cadence.compute_launches_per_year`.
+
+    The logistic fit needs ``0 < launches_at_year_5 < launches_at_year_10 <
+    cadence_ceiling`` (the same condition :mod:`common.cadence` raises on);
+    :meth:`_anchors_inside_logistic_range` rejects any other combination at
+    load instead of letting the engine fail mid-run.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -185,6 +210,21 @@ class CadenceDials(BaseModel):
         description="Model-year index before which launch count is clamped to zero.",
     )
 
+    @model_validator(mode="after")
+    def _anchors_inside_logistic_range(self) -> CadenceDials:
+        """Require ``0 < launches_at_year_5 < launches_at_year_10 < cadence_ceiling``."""
+        y5 = self.launches_at_year_5
+        y10 = self.launches_at_year_10
+        ceiling = self.cadence_ceiling
+        if not 0 < y5 < y10 < ceiling:
+            raise ValueError(
+                "cadence anchors must satisfy 0 < launches_at_year_5 < "
+                "launches_at_year_10 < cadence_ceiling (the logistic ramp is fit "
+                f"through them); got launches_at_year_5={y5}, "
+                f"launches_at_year_10={y10}, cadence_ceiling={ceiling}"
+            )
+        return self
+
 
 class FleetDials(BaseModel):
     """Fleet-rollup dials governing the cohort-vintaging cliff.
@@ -209,38 +249,25 @@ class FleetDials(BaseModel):
 class VolumeDials(BaseModel):
     """Volume-envelope dials for the stowed solar+radiator volume check.
 
-    All defaults are R1-sourced. Consumed by the Phase 3 volume module;
+    All defaults are R1-sourced. Consumed by :mod:`data_center.volume`;
     the volume check is for transparency and does NOT gate package count
-    (mass-only binding, D6).
+    (mass-only binding, D6). The stowed array volume is the deployed array
+    area times the stowed panel pitch (a stowed array is a stack of panels),
+    so the block needs no deployed-to-stowed area ratio.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    si_areal_density_kg_m2: float = Field(
-        default=SI_AREAL_DENSITY_KG_M2,
-        gt=0,
-        description="Full Si array areal density including structure, kg/m2.",
-    )
     si_bol_efficiency: float = Field(
         default=SI_BOL_EFFICIENCY,
         gt=0,
         lt=1,
         description="Si beginning-of-life AM0 conversion efficiency.",
     )
-    fold_ratio: float = Field(
-        default=FOLD_RATIO,
-        gt=0,
-        description="Deployed-to-stowed solar-array area ratio.",
-    )
     stowed_pitch_mm: float = Field(
         default=STOWED_PITCH_MM,
         gt=0,
         description="Per-panel stowed thickness (Si + co-mounted radiator), mm.",
-    )
-    radiator_solar_area_ratio: float = Field(
-        default=RADIATOR_SOLAR_AREA_RATIO,
-        gt=0,
-        description="Radiator area / solar area for single-face co-mounted.",
     )
     mounting_overhead_pct: float = Field(
         default=MOUNTING_OVERHEAD_PCT,
@@ -259,7 +286,10 @@ class LaunchCostDials(BaseModel):
     """Cadence-indexed launch-cost dials feeding the log-linear cost curve.
 
     Defaults are the v7-archaeology values. Consumed by
-    :func:`data_center.cadence.compute_launch_cost_musd`.
+    :func:`data_center.cadence.compute_launch_cost_musd`. The low-cost anchor
+    must sit at a lower cadence than the high-cadence anchor
+    (:meth:`_cadence_anchors_ordered`): reversed anchors would flat-clamp every
+    year to the low-cadence cost and silently switch the cost-down off.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -285,6 +315,19 @@ class LaunchCostDials(BaseModel):
         description="Cadence (launches/yr) at the high-cost anchor.",
     )
 
+    @model_validator(mode="after")
+    def _cadence_anchors_ordered(self) -> LaunchCostDials:
+        """Require ``low_cadence_launches < high_cadence_launches``."""
+        if not self.low_cadence_launches < self.high_cadence_launches:
+            raise ValueError(
+                "launch-cost anchors must satisfy low_cadence_launches < "
+                "high_cadence_launches (the log-linear curve runs from the low "
+                f"to the high cadence); got low_cadence_launches="
+                f"{self.low_cadence_launches}, high_cadence_launches="
+                f"{self.high_cadence_launches}"
+            )
+        return self
+
 
 class GospelInputs(BaseModel):
     """The locked numeric anchors — gospel constants from plan § 0.
@@ -300,7 +343,9 @@ class GospelInputs(BaseModel):
 
     Defaults reproduce plan § 0's central case exactly — so a config
     constructed with no arguments, or a YAML omitting the ``gospel`` block,
-    is fully valid.
+    is fully valid. :meth:`_fixed_mass_inside_envelope` rejects a fixed node
+    mass at or above the mass envelope (no mass would be left for packages,
+    and the engine would report a negative package count).
 
     Excludes the per-generation values (in the engine's generation list)
     and the post-Feynman growth slopes (in :class:`GenerationSlopes`).
@@ -361,6 +406,7 @@ class GospelInputs(BaseModel):
             "Bus real-cost growth per year between year 0 and "
             "'bus_flatten_after_yr' (negative = decline)."
         ),
+        gt=BUS_GROWTH_PRE_FLOOR,
     )
     solar_cost_musd_per_kw: float = Field(
         default=SOLAR_COST_MUSD_PER_KW,
@@ -402,6 +448,17 @@ class GospelInputs(BaseModel):
         gt=0.0,
     )
 
+    @model_validator(mode="after")
+    def _fixed_mass_inside_envelope(self) -> GospelInputs:
+        """Require ``node_mass_fixed_t < mass_envelope_t``."""
+        if not self.node_mass_fixed_t < self.mass_envelope_t:
+            raise ValueError(
+                "node_mass_fixed_t must be below mass_envelope_t (the packages "
+                f"need a positive mass budget); got node_mass_fixed_t="
+                f"{self.node_mass_fixed_t}, mass_envelope_t={self.mass_envelope_t}"
+            )
+        return self
+
 
 class YearRValue(BaseModel):
     """A single (fiscal year, R) anchor on an R-band trajectory.
@@ -431,10 +488,12 @@ def _anchors_to_models(anchors: tuple[tuple[int, float], ...]) -> list[YearRValu
 class RBand(BaseModel):
     """The three R trajectories (low / central / high) with year anchors.
 
-    Each trajectory is a list of :class:`YearRValue` anchors, sorted by
-    ``fy`` ascending, with at least two anchors. The engine interpolates R
-    linearly between adjacent anchors. Defaults are scenario assumptions tied
-    to SOURCE_INDEX REV-008, not observed orbital-compute pricing.
+    Each trajectory is a list of :class:`YearRValue` anchors, strictly
+    ascending by ``fy`` (no duplicate anchor years), with at least two
+    anchors. The engine interpolates R linearly between adjacent anchors.
+    At every anchor year the bands share, ``low <= central <= high``
+    (:meth:`_bands_ordered`). Defaults are scenario assumptions tied to
+    SOURCE_INDEX REV-008, not observed orbital-compute pricing.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -455,13 +514,41 @@ class RBand(BaseModel):
     @field_validator("central", "low", "high")
     @classmethod
     def _at_least_two_anchors_sorted(cls, v: list[YearRValue]) -> list[YearRValue]:
-        """Each trajectory needs >= 2 anchors, sorted by fy ascending."""
+        """Each trajectory needs >= 2 anchors, strictly ascending by fy."""
         if len(v) < 2:
             raise ValueError("Each R-band trajectory needs at least 2 anchors")
         years = [a.fy for a in v]
         if years != sorted(years):
             raise ValueError("R-band anchors must be sorted by fy ascending")
+        if len(set(years)) != len(years):
+            raise ValueError(f"R-band anchors must not repeat an anchor year; got fy {years}")
         return v
+
+    @model_validator(mode="after")
+    def _bands_ordered(self) -> RBand:
+        """Require ``low <= central <= high`` at every shared anchor year."""
+        low = {a.fy: a.r for a in self.low}
+        central = {a.fy: a.r for a in self.central}
+        high = {a.fy: a.r for a in self.high}
+        for fy in sorted(central.keys() & low.keys()):
+            if low[fy] > central[fy]:
+                raise ValueError(
+                    f"R band out of order at fy {fy}: low r={low[fy]} is above central "
+                    f"r={central[fy]} (require low <= central <= high)"
+                )
+        for fy in sorted(central.keys() & high.keys()):
+            if central[fy] > high[fy]:
+                raise ValueError(
+                    f"R band out of order at fy {fy}: central r={central[fy]} is above "
+                    f"high r={high[fy]} (require low <= central <= high)"
+                )
+        for fy in sorted(low.keys() & high.keys()):
+            if low[fy] > high[fy]:
+                raise ValueError(
+                    f"R band out of order at fy {fy}: low r={low[fy]} is above high "
+                    f"r={high[fy]} (require low <= central <= high)"
+                )
+        return self
 
 
 class MetadataConfig(BaseModel):
@@ -470,7 +557,11 @@ class MetadataConfig(BaseModel):
     The three enums (workload, operator, radiator architecture) are
     investor-locked (D14-D16); their defaults are the only valid members.
     ``base_year`` and ``horizon_years`` move here from the cycle-1 gospel
-    block in the v8 schema.
+    block in the v8 schema. The window end plus the generation lookahead
+    (:data:`~data_center.constants.GENERATION_EXTENSION_LOOKAHEAD_YEARS`)
+    must stay within :data:`~data_center.constants.MAX_FY`
+    (:meth:`_window_inside_fiscal_bounds`), since the engine extends the
+    generation list that far and no generation may be dated past ``MAX_FY``.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -489,6 +580,41 @@ class MetadataConfig(BaseModel):
         le=MAX_HORIZON_YEARS,
         description="Number of fiscal-year steps after year 0.",
     )
+
+    @model_validator(mode="after")
+    def _window_inside_fiscal_bounds(self) -> MetadataConfig:
+        """Require the window end plus the generation lookahead to be <= MAX_FY."""
+        extension_end = self.base_year + self.horizon_years + GENERATION_EXTENSION_LOOKAHEAD_YEARS
+        if extension_end > MAX_FY:
+            raise ValueError(
+                "base_year + horizon_years + the generation lookahead "
+                f"({GENERATION_EXTENSION_LOOKAHEAD_YEARS} year) must not exceed "
+                f"{MAX_FY}; got base_year={self.base_year}, "
+                f"horizon_years={self.horizon_years}"
+            )
+        return self
+
+
+def anchor_year(base_year: int, horizon_years: int) -> int:
+    """Return a run's anchor fiscal year: the year-10 anchor, else the window end.
+
+    The anchor year is the model year the ``launches_at_year_10`` cadence
+    dial pins (:data:`~data_center.constants.ANCHOR_MODEL_YEAR`): the
+    deployed-year cohort the ground reference compares against (ADR-003),
+    the year the headline validation checks read, and the year the query
+    examples address. When the horizon is shorter than that, the anchor is
+    the final window year, so the anchor always lies inside
+    ``[base_year, base_year + horizon_years]``. The default window
+    (2026, 10 years) resolves to 2036.
+
+    Args:
+        base_year: Calendar year of model year 0.
+        horizon_years: Number of fiscal-year steps after year 0.
+
+    Returns:
+        The anchor fiscal year.
+    """
+    return base_year + min(ANCHOR_MODEL_YEAR, horizon_years)
 
 
 # ===========================================================================
@@ -524,7 +650,7 @@ class ValuationConfig(BaseModel):
     )
 
     slopes: GenerationSlopes = Field(
-        default_factory=lambda: _default_slopes(),
+        default_factory=GenerationSlopes,
         description=(
             "Post-Feynman per-generation growth slopes used to extrapolate "
             "generations beyond the last sourced generation."
@@ -584,32 +710,18 @@ class ValuationConfig(BaseModel):
         description="Cadence-indexed launch-cost dials (log-linear curve).",
     )
 
+    @field_validator("generations")
+    @classmethod
+    def _generations_ordered(cls, v: list[GenerationSpec] | None) -> list[GenerationSpec] | None:
+        """An override list must be non-empty and strictly ascending by year."""
+        if v is not None:
+            validate_generation_order(v)
+        return v
+
 
 # ===========================================================================
 # 3. Default-builder helpers
 # ===========================================================================
-
-
-def _default_slopes() -> GenerationSlopes:
-    """Build a default `GenerationSlopes` matching plan-§-0 growth rates.
-
-    The named constructor exists to satisfy mypy --strict + Pydantic v2:
-    `GenerationSlopes()` (no args) is rejected at strict check time
-    because mypy treats Pydantic field defaults as not satisfying the
-    call-arg requirement. Naming every kwarg here side-steps that quirk
-    while keeping `ValuationConfig.slopes` constructible via a no-arg
-    default_factory. Phase 4 can fold this back when mypy/Pydantic
-    settle the call-arg rule for `BaseModel` field defaults.
-    """
-    return GenerationSlopes(
-        usd_growth_per_gen=0.30,
-        # 0.20 — per-package power growth/gen; corrected from 0.30
-        # (assembly-rate misapplied) per validation V-A,
-        # sourcing_audit_05_21.md.
-        kw_growth_per_gen=0.20,
-        kg_growth_per_gen=-0.10,
-        pf_growth_per_gen=0.625,
-    )
 
 
 def _default_metadata() -> MetadataConfig:
@@ -695,6 +807,7 @@ __all__ = [
     "VolumeDials",
     "WorkloadType",
     "YearRValue",
+    "anchor_year",
     "config_from_dict",
     "load_config",
 ]

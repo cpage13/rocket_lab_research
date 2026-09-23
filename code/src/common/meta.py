@@ -81,7 +81,7 @@ class SourceStatusSummary(BaseModel):
 class ValidationCheck(BaseModel):
     """One engine-computed sanity check on the run.
 
-    The cycle-1 validation type, reused verbatim for V1–V17. The
+    The cycle-1 validation type, reused verbatim for every wired V-rule. The
     ``meta.validation.rules`` block lets a reader run
     ``jq '.meta.validation.rules[] | select(.pass_check == false)'`` and
     see every failed check without reading the engine.
@@ -127,7 +127,8 @@ class ValidationReport(BaseModel):
     rules: list[ValidationCheck] = Field(
         ...,
         description=(
-            "All V-rule results in declaration order (V1..V17). Run "
+            "All V-rule results in declaration order (16 rules: V1-V10 and "
+            "V12-V17, V11 retired). Run "
             "`jq '.meta.validation.rules[] | select(.pass_check==false)'` "
             "to find any failure."
         ),

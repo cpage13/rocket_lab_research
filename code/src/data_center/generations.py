@@ -19,7 +19,11 @@ claim-status ledger in ``research/SOURCE_INDEX.md``. The five known
 generations are classed FACT (B200/GB200, B300/GB300), ESTIMATE (Rubin
 VR200, Rubin Ultra), or EXTRAPOLATION (Feynman). Generations beyond Feynman
 are extrapolated by applying :class:`GenerationSlopes` every ``cadence_yr``
-years (default 18 months) until the target year is covered.
+years (default 18 months) until the target year is covered. The k-th
+extrapolated generation lands at ``latest.year_available + k x cadence_yr``
+(computed, not accumulated), and :func:`frontier_at` compares availability
+with :data:`FRONTIER_YEAR_TOLERANCE` so a generation due exactly in a fiscal
+year flies that year despite float rounding.
 
 D-decisions this module rests on:
     D6: the selected Neutron SSO mass-envelope scenario is the sole binding
@@ -35,12 +39,32 @@ frontier helpers' behaviour is pinned by ``tests/test_generations.py``.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final  # typing-acceptable: Any is the YAML deserialization boundary
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, PositiveInt
+
+from data_center.constants import (
+    GENERATION_SLOPE_MAX,
+    GENERATION_SLOPE_MIN,
+    KG_GROWTH_PER_GEN_DEFAULT,
+    KW_GROWTH_PER_GEN_DEFAULT,
+    MAX_FY,
+    MIN_FY,
+    PF_GROWTH_PER_GEN_DEFAULT,
+    USD_GROWTH_PER_GEN_DEFAULT,
+)
+
+FRONTIER_YEAR_TOLERANCE: Final[float] = 1e-9
+"""Slack, in years, when comparing a generation's ``year_available`` with a
+fiscal year. Extrapolated availability years are float sums of the release
+cadence, so a generation due exactly in a year can land a few ulps past it
+(``2029.0 + 1.4 + 1.4 + 1.4 + 1.4 + 1.4`` is ``2036.0000000000005``). A
+nanoyear is far below any calendar meaning and far above float error at
+these magnitudes, so a due generation always flies in its year."""
 
 
 class SourcingClass(StrEnum):
@@ -66,10 +90,11 @@ class Source(BaseModel):
 
     Carries the path to the source wiki doc, an optional anchor/section,
     an optional quoted figure as it appears in the source, and the
-    confidence tier.
+    confidence tier. ``extra="forbid"``: a typo in a scenario's source
+    block fails loudly.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     doc_path: str = Field(..., description="Path to the source wiki doc.")
     anchor: str | None = Field(None, description="Section / anchor in the doc.")
@@ -82,17 +107,21 @@ class GenerationSpec(BaseModel):
 
     All per-package physical values are **all-in / full-system** — the
     package's share of system electrical and mass including networking,
-    cooling, sled, NVLink fabric (not bare die TDP).
+    cooling, sled, NVLink fabric (not bare die TDP). ``year_available`` is
+    bounded by the same fiscal-year limits as the run window
+    (:data:`data_center.constants.MIN_FY` to :data:`~data_center.constants.MAX_FY`),
+    so every window the config accepts can be covered by extrapolation.
+    ``extra="forbid"``: a typo in a scenario's generation entry fails loudly.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str = Field(..., description="Human label, e.g. 'B300/GB300'.")
     year_available: float = Field(
         ...,
         description="Approximate calendar year of availability.",
-        ge=2020.0,
-        le=2050.0,
+        ge=MIN_FY,
+        le=MAX_FY,
     )
     usd_per_pkg: PositiveInt = Field(..., description="Real per-package price in $.")
     kw_per_pkg: PositiveFloat = Field(
@@ -114,19 +143,22 @@ class GenerationSlopes(BaseModel):
     Applied multiplicatively by :func:`extend_generations` when projecting
     beyond the last known generation. All slopes are gen-relative
     (e.g. ``0.30`` means +30% per generation; ``-0.10`` means -10% per
-    generation).
+    generation). The field defaults are the single source of the default
+    slopes (the named constants in :mod:`data_center.constants`), so
+    ``GenerationSlopes()`` is the default slope set. ``extra="forbid"``: a
+    typo in a scenario's ``slopes`` block fails loudly.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     usd_growth_per_gen: float = Field(
-        0.30,
+        default=USD_GROWTH_PER_GEN_DEFAULT,
         description="$/pkg growth per generation.",
-        ge=-0.5,
-        le=2.0,
+        ge=GENERATION_SLOPE_MIN,
+        le=GENERATION_SLOPE_MAX,
     )
     kw_growth_per_gen: float = Field(
-        0.20,
+        default=KW_GROWTH_PER_GEN_DEFAULT,
         description=(
             "kW/pkg growth per generation. 0.20, per-package power "
             "growth/gen; corrected from 0.30 (assembly-rate misapplied) "
@@ -135,22 +167,22 @@ class GenerationSlopes(BaseModel):
             "which grew that fast only because more packages were added "
             "per assembly; applied per-package it double-counts."
         ),
-        ge=-0.5,
-        le=2.0,
+        ge=GENERATION_SLOPE_MIN,
+        le=GENERATION_SLOPE_MAX,
     )
     kg_growth_per_gen: float = Field(
-        -0.10,
+        default=KG_GROWTH_PER_GEN_DEFAULT,
         description=("kg/pkg growth per generation (negative = denser packaging)."),
-        ge=-0.5,
-        le=2.0,
+        ge=GENERATION_SLOPE_MIN,
+        le=GENERATION_SLOPE_MAX,
     )
     pf_growth_per_gen: float = Field(
-        0.625,
+        default=PF_GROWTH_PER_GEN_DEFAULT,
         description=(
             "PF/pkg growth per generation. Default 0.625 → implied PF/kW slope ≈ 25%/gen."
         ),
-        ge=-0.5,
-        le=2.0,
+        ge=GENERATION_SLOPE_MIN,
+        le=GENERATION_SLOPE_MAX,
     )
 
 
@@ -255,6 +287,34 @@ class NoFrontierAvailableError(ValueError):
     """
 
 
+def validate_generation_order(gens: Sequence[GenerationSpec]) -> None:
+    """Fail loudly unless ``gens`` is non-empty and strictly ascending by year.
+
+    The frontier rule and the extrapolation both read the list as a roadmap:
+    the last entry is the latest generation, the one extrapolation extends
+    from. A newest-first or shuffled list would silently extrapolate from an
+    older generation, and two entries with the same ``year_available`` would
+    make the frontier choice ambiguous. Used by the config validator (load
+    time) and by :func:`extend_generations` (API callers).
+
+    Args:
+        gens: The generation list to check.
+
+    Raises:
+        ValueError: If ``gens`` is empty, or any entry's ``year_available`` is
+            not strictly greater than the previous entry's.
+    """
+    if not gens:
+        raise ValueError("the generations list needs at least one generation")
+    for prev, nxt in zip(gens, gens[1:], strict=False):
+        if nxt.year_available <= prev.year_available:
+            raise ValueError(
+                "generations must be listed oldest first with strictly increasing "
+                f"year_available: {nxt.name!r} ({nxt.year_available}) follows "
+                f"{prev.name!r} ({prev.year_available})"
+            )
+
+
 def extend_generations(
     known: list[GenerationSpec],
     slopes: GenerationSlopes,
@@ -263,10 +323,15 @@ def extend_generations(
 ) -> list[GenerationSpec]:
     """Extend the list with extrapolated generations until ``target_yr`` is covered.
 
-    Starting from the last entry in ``known``, repeatedly append a new
-    extrapolated generation spaced ``cadence_yr`` years apart, applying the
-    multiplicative :class:`GenerationSlopes`, until the next generation
-    would fall past ``target_yr``.
+    Starting from the latest entry in ``known`` (its last entry: the list must
+    be ordered, see :func:`validate_generation_order`), append extrapolated
+    generations while the next one is due by ``target_yr``. The k-th
+    extrapolated generation is available at
+    ``latest.year_available + k x cadence_yr``, computed from the latest known
+    year rather than accumulated step by step, so float error does not grow
+    with k; the due test uses :data:`FRONTIER_YEAR_TOLERANCE`. Each step
+    applies the multiplicative :class:`GenerationSlopes` to the previous
+    generation's values.
 
     The extrapolated generations inherit the last known generation's
     ``die_count`` (held constant — die-stacking projections beyond Feynman
@@ -274,7 +339,8 @@ def extend_generations(
     ``source.sourcing`` is :class:`SourcingClass.EXTRAPOLATION`.
 
     Args:
-        known: The known generations (typically :data:`KNOWN_GENS`).
+        known: The known generations (typically :data:`KNOWN_GENS`), ordered
+            oldest first with strictly increasing ``year_available``.
         slopes: The per-generation growth slopes.
         cadence_yr: Years between successive generations (default 1.5 →
             18 months, the D7 generation cadence).
@@ -285,19 +351,22 @@ def extend_generations(
         extrapolated generations. The input ``known`` list is not mutated.
 
     Raises:
-        ValueError: If ``known`` is empty (no anchor to extend from).
+        ValueError: If ``known`` is empty (no anchor to extend from) or is not
+            strictly ascending by ``year_available``.
     """
     if not known:
         raise ValueError("extend_generations requires at least one known generation")
+    validate_generation_order(known)
 
     out: list[GenerationSpec] = list(known)
+    latest_year = known[-1].year_available
     i = 1
-    while out[-1].year_available + cadence_yr <= target_yr:
+    while latest_year + i * cadence_yr <= target_yr + FRONTIER_YEAR_TOLERANCE:
         last = out[-1]
         out.append(
             GenerationSpec(
                 name=f"Gen+{i}(extrap)",
-                year_available=last.year_available + cadence_yr,
+                year_available=latest_year + i * cadence_yr,
                 usd_per_pkg=int(last.usd_per_pkg * (1 + slopes.usd_growth_per_gen)),
                 kw_per_pkg=last.kw_per_pkg * (1 + slopes.kw_growth_per_gen),
                 kg_per_pkg=last.kg_per_pkg * (1 + slopes.kg_growth_per_gen),
@@ -374,7 +443,9 @@ def frontier_at(year: float, gens: list[GenerationSpec]) -> GenerationSpec:
     """Return the latest generation available at ``year``.
 
     Picks the maximum-``year_available`` entry in ``gens`` whose
-    ``year_available <= year``.
+    ``year_available <= year`` (within :data:`FRONTIER_YEAR_TOLERANCE`, so a
+    generation whose float availability year lands a few ulps past ``year``
+    still counts as available that year).
 
     Args:
         year: The fiscal year of interest.
@@ -388,7 +459,7 @@ def frontier_at(year: float, gens: list[GenerationSpec]) -> GenerationSpec:
         NoFrontierAvailableError: If ``gens`` is empty or no entry has
             ``year_available <= year``.
     """
-    available = [g for g in gens if g.year_available <= year]
+    available = [g for g in gens if g.year_available <= year + FRONTIER_YEAR_TOLERANCE]
     if not available:
         raise NoFrontierAvailableError(
             f"no generation available at year {year} (candidates: {[g.name for g in gens]})"

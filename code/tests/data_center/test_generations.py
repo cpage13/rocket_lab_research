@@ -8,6 +8,11 @@ Coverage:
       Gen+1 / Gen+5 numeric parity with the prototype.
     - frontier_at: B300 / Rubin VR200 picks; extrapolated frontier at 2031;
       empty-list and no-available-generation error cases.
+    - Robustness: extrapolated years are latest + k x cadence (not
+      accumulated) and a generation due exactly in a year flies that year;
+      the list must be ordered; typos in slopes / generations / sources
+      fail loudly; ``year_available`` spans the full MIN_FY..MAX_FY range;
+      the slope defaults have one source.
 """
 
 from __future__ import annotations
@@ -20,6 +25,15 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from data_center.config import ValuationConfig, config_from_dict
+from data_center.constants import (
+    KG_GROWTH_PER_GEN_DEFAULT,
+    KW_GROWTH_PER_GEN_DEFAULT,
+    MAX_FY,
+    PF_GROWTH_PER_GEN_DEFAULT,
+    USD_GROWTH_PER_GEN_DEFAULT,
+)
+from data_center.engine import run_valuation
 from data_center.generations import (
     DEFAULT_GENERATIONS_DOC,
     GENERATIONS_YAML_KEY,
@@ -158,11 +172,11 @@ def test_year_available_lower_bound_rejected():
 
 
 def test_year_available_upper_bound_rejected():
-    """year_available above 2050.0 is rejected."""
+    """year_available above MAX_FY (2080) is rejected."""
     with pytest.raises(ValidationError):
         GenerationSpec(
             name="Too new",
-            year_available=2051.0,
+            year_available=MAX_FY + 1.0,
             usd_per_pkg=10_000,
             kw_per_pkg=1.0,
             kg_per_pkg=10.0,
@@ -381,3 +395,157 @@ def test_frontier_at_before_first_gen_raises():
     """A year earlier than the earliest known generation raises."""
     with pytest.raises(NoFrontierAvailableError):
         frontier_at(2020.0, list(KNOWN_GENS))
+
+
+# ---------------------------------------------------------------------
+# Robustness: cadence arithmetic, ordering, strict schemas, bounds
+# ---------------------------------------------------------------------
+
+
+def _spec_dict(name: str, year: float) -> dict[str, object]:
+    """A minimal valid generation-spec mapping for scenario-style configs."""
+    return {
+        "name": name,
+        "year_available": year,
+        "usd_per_pkg": 70_000,
+        "kw_per_pkg": 2.05,
+        "kg_per_pkg": 18.9,
+        "pf_per_pkg": 15.0,
+        "die_count": 2,
+        "source": {"doc_path": "tests/test_generations.py", "sourcing": "fact"},
+    }
+
+
+def test_extrapolated_years_are_latest_plus_k_times_cadence():
+    """Objective: extrapolated availability years do not accumulate float error.
+
+    With a 1.4-year cadence from Feynman (2029.0), the fifth extrapolated
+    generation is due in 2036. Stepwise addition gives 2036.0000000000005.
+    Expected: Gen+5 is dated 2029.0 + 5 x 1.4 and every Gen+k matches
+    2029.0 + k x 1.4 exactly.
+    """
+    out = extend_generations(list(KNOWN_GENS), GenerationSlopes(), 1.4, 2037.0)
+    extrapolated = out[len(KNOWN_GENS) :]
+    for k, gen in enumerate(extrapolated, start=1):
+        assert gen.year_available == 2029.0 + k * 1.4
+    assert extrapolated[4].name == "Gen+5(extrap)"
+
+
+def test_generation_due_exactly_in_a_year_flies_that_year():
+    """Objective: a generation whose float year lands a few ulps late is available.
+
+    Expected: ``frontier_at(2036.0)`` picks a generation dated
+    2036.0000000000005 (the accumulated 1.4-cadence value).
+    """
+    late_by_ulps = KNOWN_GENS[-1].model_copy(
+        update={"name": "Due-2036", "year_available": 2036.0000000000005}
+    )
+    assert frontier_at(2036.0, [*KNOWN_GENS, late_by_ulps]).name == "Due-2036"
+
+
+def test_release_cadence_1_4_flies_the_due_generation_in_fy2036():
+    """Objective: the cadence-1.4 trigger end to end.
+
+    Expected: with ``release_cadence_yr: 1.4`` the FY2036 frontier is
+    Gen+5(extrap) (due 2029.0 + 5 x 1.4 = 2036), not Gen+4.
+    """
+    cfg = config_from_dict({"gospel": {"release_cadence_yr": 1.4}})
+    fy2036 = run_valuation(cfg).physical.years["2036"]
+    assert fy2036.frontier_generation.value == "Gen+5(extrap)"
+
+
+def test_extend_generations_rejects_an_unordered_list():
+    """Objective: extrapolation never extends from an older entry.
+
+    Expected: a newest-first list raises ValueError naming the ordering rule.
+    """
+    with pytest.raises(ValueError, match="oldest first"):
+        extend_generations(list(reversed(KNOWN_GENS)), GenerationSlopes(), 1.5, 2037.0)
+
+
+def test_newest_first_generations_fail_at_load():
+    """Objective: a scenario's unordered generations list fails at load.
+
+    Expected: config_from_dict raises a ValidationError on a newest-first list.
+    """
+    with pytest.raises(ValidationError, match="oldest first"):
+        config_from_dict(
+            {"generations": [_spec_dict("Newer", 2026.5), _spec_dict("Older", 2025.5)]}
+        )
+
+
+def test_duplicate_generation_years_fail_at_load():
+    """Objective: two generations with the same year make the frontier ambiguous.
+
+    Expected: config_from_dict raises a ValidationError.
+    """
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        config_from_dict({"generations": [_spec_dict("A", 2025.5), _spec_dict("B", 2025.5)]})
+
+
+def test_empty_generations_list_fails_at_load():
+    """Objective: an empty override list has nothing to extend from.
+
+    Expected: config_from_dict raises a ValidationError at load.
+    """
+    with pytest.raises(ValidationError, match="at least one generation"):
+        config_from_dict({"generations": []})
+
+
+def test_slopes_typo_fails_at_load():
+    """Objective: a misspelled slope is not silently ignored.
+
+    Expected: ``slopes: {pf_growth: 0.1}`` raises a ValidationError naming
+    the unknown key.
+    """
+    with pytest.raises(ValidationError, match="pf_growth"):
+        config_from_dict({"slopes": {"pf_growth": 0.1}})
+
+
+def test_generation_entry_typo_fails_at_load():
+    """Objective: a misspelled generation field is not silently ignored.
+
+    Expected: an extra ``kw_per_package`` key raises a ValidationError.
+    """
+    entry = _spec_dict("Typo", 2025.5)
+    entry["kw_per_package"] = 3.0
+    with pytest.raises(ValidationError, match="kw_per_package"):
+        config_from_dict({"generations": [entry]})
+
+
+def test_source_typo_fails_at_load():
+    """Objective: a misspelled source field is not silently ignored.
+
+    Expected: an extra ``doc`` key in a generation's source raises a
+    ValidationError.
+    """
+    entry = _spec_dict("Typo", 2025.5)
+    entry["source"] = {"doc_path": "x", "sourcing": "fact", "doc": "y"}
+    with pytest.raises(ValidationError, match="doc"):
+        config_from_dict({"generations": [entry]})
+
+
+def test_late_window_extends_generations_past_2050():
+    """Objective: every window the config accepts can be extrapolated.
+
+    A 2031 base year with a 20-year horizon needs generations dated past
+    2050 (the old bound). Expected: the run completes and its FY2051 frontier
+    is an extrapolated generation.
+    """
+    cfg = config_from_dict({"metadata": {"base_year": 2031, "horizon_years": 20}})
+    out = run_valuation(cfg)
+    assert str(out.physical.years["2051"].frontier_generation.value).endswith("(extrap)")
+
+
+def test_slope_defaults_have_one_source():
+    """Objective: the default slopes are defined once.
+
+    Expected: ``GenerationSlopes()`` equals the named default constants and
+    ``ValuationConfig().slopes`` is exactly ``GenerationSlopes()``.
+    """
+    slopes = GenerationSlopes()
+    assert slopes.usd_growth_per_gen == USD_GROWTH_PER_GEN_DEFAULT
+    assert slopes.kw_growth_per_gen == KW_GROWTH_PER_GEN_DEFAULT
+    assert slopes.kg_growth_per_gen == KG_GROWTH_PER_GEN_DEFAULT
+    assert slopes.pf_growth_per_gen == PF_GROWTH_PER_GEN_DEFAULT
+    assert ValuationConfig().slopes == slopes

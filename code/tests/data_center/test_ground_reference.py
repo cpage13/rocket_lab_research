@@ -6,20 +6,23 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from data_center import cli
 from data_center.config import load_config
 from data_center.engine import run_valuation
 from data_center.ground import (
-    ANCHOR_YEAR,
     GroundReferenceOutput,
     build_ground_reference_output,
     default_ground_source_catalog,
+    ground_config_from_dict,
     load_ground_config,
     render_ground_json,
 )
 from data_center.output import SpaceModelOutput
 
+# The default window (base year 2026, ten-year horizon) anchors at FY2036.
+ANCHOR_YEAR = 2036
 ANCHOR_YEAR_KEY = str(ANCHOR_YEAR)
 DEFAULT_SCENARIO = Path("scenarios/default.yaml")
 GROUND_SCENARIO = Path("scenarios/ground_default.yaml")
@@ -132,3 +135,24 @@ def test_promote_writes_ground_reference_json(
     assert rebuilt.anchor.year == ANCHOR_YEAR
     assert rebuilt.anchor.basis == "deployed_this_year"
     assert rebuilt.comparison.ground_to_orbit_ratio.value is not None
+
+
+@pytest.mark.parametrize("pue", [0.5, 0.99])
+def test_ground_pue_below_one_fails_at_load(pue: float) -> None:
+    """Objective: a PUE below 1 (facility power below the IT load) is rejected.
+
+    Expected: ``ground_config_from_dict`` raises a ValidationError naming pue.
+    """
+    with pytest.raises(ValidationError, match="pue"):
+        ground_config_from_dict({"pue": pue})
+
+
+def test_ground_utilization_above_one_fails_at_load() -> None:
+    """Objective: average IT utilization above 1 is rejected by its own bound.
+
+    Expected: ``ground_config_from_dict`` raises a ValidationError naming
+    utilization; exactly 1.0 (always at full load) is accepted.
+    """
+    with pytest.raises(ValidationError, match="utilization"):
+        ground_config_from_dict({"utilization": 1.01})
+    assert ground_config_from_dict({"utilization": 1.0}).utilization == 1.0

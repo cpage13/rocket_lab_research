@@ -50,11 +50,8 @@ fleet:
 
 volume:
   # Stowed solar+radiator volume-envelope dials: R1-sourced.
-  si_areal_density_kg_m2: 2.0
   si_bol_efficiency: 0.20
-  fold_ratio: 80.0
   stowed_pitch_mm: 6.0
-  radiator_solar_area_ratio: 0.70
   mounting_overhead_pct: 0.30
   neutron_fairing_usable_volume_m3: 80.0
 
