@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from data_center.provenance import (
+from common.provenance import (
     FORMULAS,
     FieldPath,
     FormulaSpec,
@@ -91,15 +91,15 @@ def test_cell_serializes_to_json() -> None:
     """A ProvenanceCell round-trips cleanly through model_dump_json."""
     c = cell(
         value=1.5,
-        unit="ratio",
-        formula_name="r_at_year_from_band_anchors",
-        uses=["inputs.r_band.central"],
-        sources=["R2"],
-        description="R at 2026",
+        unit="MUSD",
+        formula_name="revenue_annual_per_node_from_cost_and_r",
+        uses=['physical.years."2026".cost_annual_per_node_musd'],
+        sources=["REV-008"],
+        description="Revenue at 2026",
     )
     j = c.model_dump_json()
     assert '"value":1.5' in j
-    assert '"formula_name":"r_at_year_from_band_anchors"' in j
+    assert '"formula_name":"revenue_annual_per_node_from_cost_and_r"' in j
 
 
 def test_field_path_is_alias_for_str() -> None:

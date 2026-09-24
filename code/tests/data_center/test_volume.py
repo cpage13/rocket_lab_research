@@ -17,6 +17,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from common.provenance import as_float
 from data_center.config import (
     BindingConstraint,
     VolumeDials,
@@ -33,12 +34,6 @@ from data_center.volume import (
     compute_volume_per_pkg,
     compute_volume_utilization,
 )
-
-
-def _num(value: float | int | str | bool | None) -> float:
-    """Unwrap a numeric ProvenanceCell value to a float."""
-    assert isinstance(value, (int, float)) and not isinstance(value, bool)
-    return float(value)
 
 
 def test_solar_area_per_pkg_for_1kw_si_20pct() -> None:
@@ -149,14 +144,14 @@ def test_volume_sanity_600kw_node_stows_about_22_m3() -> None:
     """
     solar_area = compute_solar_area_per_pkg(6.0, 0.20, kw_per_pkg_uses=["x"], efficiency_path="y")
     vol_pkg = compute_volume_per_pkg(
-        _num(solar_area.value),
+        as_float(solar_area),
         6.0,
         solar_area_path="x",
         pitch_path="z",
     )
     vol_node = compute_volume_per_node(
         100,
-        _num(vol_pkg.value),
+        as_float(vol_pkg),
         0.30,
         5.0,
         n_path="x",
@@ -164,14 +159,14 @@ def test_volume_sanity_600kw_node_stows_about_22_m3() -> None:
         mounting_path="z",
         node_volume_fixed_path="w",
     )
-    assert _num(vol_node.value) == pytest.approx(22.19, abs=0.01)
+    assert as_float(vol_node) == pytest.approx(22.19, abs=0.01)
     util = compute_volume_utilization(
-        _num(vol_node.value),
+        as_float(vol_node),
         80.0,
         node_volume_path="x",
         fairing_volume_path="y",
     )
-    assert _num(util.value) == pytest.approx(27.74, abs=0.01)
+    assert as_float(util) == pytest.approx(27.74, abs=0.01)
 
 
 def test_default_fy2036_node_stows_about_26_6_m3(default_output: SpaceModelOutput) -> None:
@@ -182,9 +177,9 @@ def test_default_fy2036_node_stows_about_26_6_m3(default_output: SpaceModelOutpu
     volume per node 26.6 m3, utilization 33.2%, and the node mass-bound.
     """
     py = default_output.physical.years["2036"]
-    assert _num(py.gpus_per_node.value) == 66
-    assert _num(py.volume_per_node_m3.value) == pytest.approx(26.57, abs=0.01)
-    assert _num(py.volume_utilization_pct.value) == pytest.approx(33.21, abs=0.01)
+    assert as_float(py.gpus_per_node) == 66
+    assert as_float(py.volume_per_node_m3) == pytest.approx(26.57, abs=0.01)
+    assert as_float(py.volume_utilization_pct) == pytest.approx(33.21, abs=0.01)
     assert py.binding_constraint.value == "mass"
 
 
@@ -199,7 +194,7 @@ def test_node_volume_fixed_dial_moves_the_reported_node_volume(
     default = default_output.physical.years["2036"]
     cfg = config_from_dict({"gospel": {"node_volume_fixed_m3": 50.0}})
     bumped = run_valuation(cfg).physical.years["2036"]
-    delta = _num(bumped.volume_per_node_m3.value) - _num(default.volume_per_node_m3.value)
+    delta = as_float(bumped.volume_per_node_m3) - as_float(default.volume_per_node_m3)
     assert delta == pytest.approx(45.0, abs=1e-9)
     assert bumped.gpus_per_node.value == default.gpus_per_node.value
     assert "inputs.config.physical.node_volume_fixed_m3" in bumped.volume_per_node_m3.uses

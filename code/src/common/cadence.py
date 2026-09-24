@@ -1,13 +1,20 @@
-"""Cadence model: launches per year and cadence-indexed launch cost.
+"""The shared cadence spine: the launch ramp, the cadence-indexed launch cost, their dials.
+
+The one source both ventures use for the whole-fleet Neutron launch cadence:
+the eight cadence and launch-cost defaults, the two validated dial blocks
+(:class:`CadenceDials` and :class:`LaunchCostDials`, the ``cadence`` and
+``launch_cost`` blocks of the data-center and communications configs), the
+two cell functions that turn them into provenance cells
+(:func:`compute_launches_per_year` and :func:`compute_launch_cost_musd`), and
+:func:`round_half_up`, the one half-up rounding both models use.
 
 The launch ramp is a logistic curve fit through the year-5 and year-10
 scenario anchors. Those anchors are source-indexed as model scenarios
 (``NTR-010``), not Rocket Lab guidance. Launch cost is the cadence-indexed
 internal-cost estimate from ``NTR-009``.
 
-The two public functions return :class:`ProvenanceCell` (cycle-2 Phase 2);
-``_log_interp`` stays a bare helper. The cells compute exactly the v7
-formulas. Phase 2 wraps the return shape, it does not change the numbers.
+The two cell functions return :class:`ProvenanceCell`; ``_log_interp`` stays
+a bare helper. The cells compute exactly the v7 formulas.
 """
 
 from __future__ import annotations
@@ -16,21 +23,24 @@ import logging
 import math
 from typing import Final
 
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
 from common.provenance import FieldPath, ProvenanceCell, cell
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Cadence + launch-cost default constants (defined locally in common so the
-# cadence functions resolve their own defaults with no data_center import;
-# copied verbatim, value and explanatory note, from data_center/constants.py,
-# which remains the authority. The test test_cadence_defaults_match_data_center_constants
-# guards against drift between the two copies.)
+# Cadence + launch-cost defaults (the one authority; both configs' dial blocks
+# below default to these)
 # ---------------------------------------------------------------------------
 
 CADENCE_CEILING_DEFAULT: Final[int] = 150
-"""ESTIMATE/SCENARIO (NTR-010; v7 archaeology). Hard cap on launches
-per year; venture-model scenario, not Rocket Lab guidance."""
+"""ESTIMATE/SCENARIO (RLDC-CADENCE-CEILING-150, NTR-010; v7 archaeology).
+Carrying capacity of the logistic launch ramp: a horizon-scoped
+infrastructure parameter for the launch pads and rocket production
+plausibly built within the ten-year window, not a cap on the system.
+Launches are clamped to it inside the window; a longer-horizon run must
+re-set it. Venture-model scenario, not Rocket Lab guidance."""
 
 LAUNCHES_AT_YEAR_5_DEFAULT: Final[int] = 14
 """ESTIMATE/SCENARIO (NTR-010; v7 archaeology). Logistic anchor at
@@ -70,7 +80,124 @@ YEAR_10_ANCHOR_IDX: Final[float] = 10.0
 """Launch-ramp anchor index for the year-10 cadence dial."""
 
 ROUND_TO_NEAREST_OFFSET: Final[float] = 0.5
-"""Offset used to convert non-negative raw launch rates to integer missions."""
+"""Offset added before flooring to round a non-negative quantity to the nearest
+integer, half up: every half-up rounding in the models uses it
+(:func:`round_half_up`, and the communications launch-share count, which adds
+its own float tolerance on top)."""
+
+
+# ---------------------------------------------------------------------------
+# The two dial blocks (each config's ``cadence`` and ``launch_cost`` block)
+# ---------------------------------------------------------------------------
+
+
+class CadenceDials(BaseModel):
+    """Whole-fleet launch-cadence dials feeding the logistic launches-per-year ramp.
+
+    The ``cadence`` block of both the data-center and the communications
+    config. The defaults are a source-indexed scenario: ``launches_at_year_5``
+    and ``launches_at_year_10`` fit the logistic curve to integer mission
+    counts. ``first_launch_year`` only clamps earlier years to zero; it does
+    not move the year-5 or year-10 anchors. Consumed by
+    :func:`compute_launches_per_year`.
+
+    The logistic fit needs ``0 < launches_at_year_5 < launches_at_year_10 <
+    cadence_ceiling`` (the condition :func:`compute_launches_per_year` raises
+    on); :meth:`_anchors_inside_logistic_range` rejects any other combination
+    at load instead of letting a model fail mid-run.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    cadence_ceiling: int = Field(
+        default=CADENCE_CEILING_DEFAULT,
+        gt=0,
+        description=(
+            "Carrying capacity of the logistic launch ramp, launches per year: a "
+            "horizon-scoped infrastructure parameter standing for the launch pads "
+            "and rocket production plausibly built within the modeled ten-year "
+            "window (RLDC-CADENCE-CEILING-150), not a cap on the system. Launches "
+            "are clamped to it inside the window; a longer-horizon run re-sets it."
+        ),
+    )
+    launches_at_year_5: int = Field(
+        default=LAUNCHES_AT_YEAR_5_DEFAULT,
+        ge=0,
+        description="Integer logistic anchor: launches per year at model year 5.",
+    )
+    launches_at_year_10: int = Field(
+        default=LAUNCHES_AT_YEAR_10_DEFAULT,
+        ge=0,
+        description="Integer logistic anchor: launches per year at model year 10.",
+    )
+    first_launch_year: int = Field(
+        default=FIRST_LAUNCH_YEAR_DEFAULT,
+        ge=0,
+        description="Model-year index before which launch count is clamped to zero.",
+    )
+
+    @model_validator(mode="after")
+    def _anchors_inside_logistic_range(self) -> CadenceDials:
+        """Require ``0 < launches_at_year_5 < launches_at_year_10 < cadence_ceiling``."""
+        y5 = self.launches_at_year_5
+        y10 = self.launches_at_year_10
+        ceiling = self.cadence_ceiling
+        if not 0 < y5 < y10 < ceiling:
+            raise ValueError(
+                "cadence anchors must satisfy 0 < launches_at_year_5 < "
+                "launches_at_year_10 < cadence_ceiling (the logistic ramp is fit "
+                f"through them); got launches_at_year_5={y5}, "
+                f"launches_at_year_10={y10}, cadence_ceiling={ceiling}"
+            )
+        return self
+
+
+class LaunchCostDials(BaseModel):
+    """Cadence-indexed launch-cost dials feeding the log-linear cost curve.
+
+    The ``launch_cost`` block of both the data-center and the communications
+    config; the cost is priced at the whole-fleet cadence. Consumed by
+    :func:`compute_launch_cost_musd`. The low-cost anchor must sit at a lower
+    cadence than the high-cadence anchor (:meth:`_cadence_anchors_ordered`):
+    reversed anchors would flat-clamp every year to the low-cadence cost and
+    silently switch the cost-down off.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    low_cadence_cost_musd: float = Field(
+        default=LOW_CADENCE_COST_MUSD_DEFAULT,
+        gt=0,
+        description="Launch cost at the low-cadence anchor, $M.",
+    )
+    high_cadence_cost_musd: float = Field(
+        default=HIGH_CADENCE_COST_MUSD_DEFAULT,
+        gt=0,
+        description="Launch cost at the high-cadence anchor, $M.",
+    )
+    low_cadence_launches: float = Field(
+        default=LOW_CADENCE_LAUNCHES_DEFAULT,
+        gt=0,
+        description="Cadence (launches/yr) at the low-cost anchor.",
+    )
+    high_cadence_launches: float = Field(
+        default=HIGH_CADENCE_LAUNCHES_DEFAULT,
+        gt=0,
+        description="Cadence (launches/yr) at the high-cost anchor.",
+    )
+
+    @model_validator(mode="after")
+    def _cadence_anchors_ordered(self) -> LaunchCostDials:
+        """Require ``low_cadence_launches < high_cadence_launches``."""
+        if not self.low_cadence_launches < self.high_cadence_launches:
+            raise ValueError(
+                "launch-cost anchors must satisfy low_cadence_launches < "
+                "high_cadence_launches (the log-linear curve runs from the low "
+                f"to the high cadence); got low_cadence_launches="
+                f"{self.low_cadence_launches}, high_cadence_launches="
+                f"{self.high_cadence_launches}"
+            )
+        return self
 
 
 def _log_interp(x: float, x_lo: float, x_hi: float, y_lo: float, y_hi: float) -> float:
@@ -119,16 +246,21 @@ def _logit_launch_anchor(launches: int, cadence_ceiling: int) -> float:
     return math.log(launches / (cadence_ceiling - launches))
 
 
-def _integer_launch_count(raw_launches: float) -> int:
-    """Round a non-negative raw launch rate to an integer mission count.
+def round_half_up(quantity: float) -> int:
+    """Round a non-negative quantity to the nearest integer, half up.
+
+    ``floor(quantity + ROUND_TO_NEAREST_OFFSET)``: the one half-up rounding both
+    models use (the launch ramp's mission counts here; the communications
+    subscriber density, served base, and ARPU bucket counts), where Python's
+    ``round`` would round an exact half to even.
 
     Args:
-        raw_launches: The smooth logistic launch-rate output.
+        quantity: A non-negative quantity, e.g. the smooth logistic launch rate.
 
     Returns:
-        The nearest whole-number launch count, rounded half up.
+        The nearest whole number, rounded half up.
     """
-    return math.floor(raw_launches + ROUND_TO_NEAREST_OFFSET)
+    return math.floor(quantity + ROUND_TO_NEAREST_OFFSET)
 
 
 def compute_launches_per_year(
@@ -175,7 +307,7 @@ def compute_launches_per_year(
         k = (logit_y10 - logit_y5) / (YEAR_10_ANCHOR_IDX - YEAR_5_ANCHOR_IDX)
         t0 = YEAR_5_ANCHOR_IDX - logit_y5 / k
         raw = cadence_ceiling / (1.0 + math.exp(-k * (year_idx - t0)))
-        value = min(_integer_launch_count(raw), cadence_ceiling)
+        value = min(round_half_up(raw), cadence_ceiling)
     return cell(
         value=value,
         unit="count",

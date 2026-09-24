@@ -22,13 +22,14 @@ The GPU-first per-node formulas (the heart of the model):
 
 The public surface:
 
-* :mod:`data_center.config`     — Pydantic config (gospel + slopes + v8 dial blocks).
-* :mod:`data_center.generations` — `KNOWN_GENS`, `extend_generations`, `frontier_at`.
-* :mod:`data_center.engine`     — the GPU-first engine + `run_valuation`.
-* :mod:`data_center.output`     — typed Pydantic v8 output models.
-* :mod:`data_center.json_output` — v8 output assembly + JSON serialiser.
-* :mod:`data_center.text_report` — human-readable text rendering.
-* :mod:`data_center.cli`        — the `rklb-value <config.yaml>` entry point.
+* :mod:`data_center.config`: Pydantic config (gospel + slopes + v8 dial blocks).
+* :mod:`data_center.generations`: `KNOWN_GENS`, `extend_generations`, `frontier_at`.
+* :mod:`data_center.engine`: the GPU-first engine + `run_valuation`.
+* :mod:`data_center.output`: the typed Pydantic models of the space artifact.
+* :mod:`data_center.json_output`: output assembly + the generated data dictionary
+  (serialized by :func:`common.file_io.render_artifact_json`).
+* :mod:`data_center.text_report`: human-readable text rendering.
+* :mod:`data_center.cli`: the `rklb-value <config.yaml>` entry point.
 
 Units: money in $M; time in project years. Year 0 = FY2026 (Neutron's
 first-flight year).
@@ -40,14 +41,13 @@ import logging
 
 from .config import ValuationConfig, load_config
 from .engine import run_valuation
-from .output import SpaceModelOutput, ValuationOutput
+from .output import SpaceModelOutput
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "SpaceModelOutput",
     "ValuationConfig",
-    "ValuationOutput",
     "load_config",
     "run_valuation",
 ]

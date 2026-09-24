@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from common.meta import (
     DataDictEntry,
+    FieldKind,
     QueryAppliesTo,
     QueryExample,
     Severity,
@@ -19,13 +20,19 @@ def test_validation_severity_strings() -> None:
     assert ValidationSeverity.FAIL == "fail"
 
 
-def test_query_applies_to_has_space_ground_both() -> None:
-    assert QueryAppliesTo.SPACE == "space"
-    assert QueryAppliesTo.GROUND == "ground"
-    assert QueryAppliesTo.BOTH == "both"
+def test_query_applies_to_names_the_two_artifacts() -> None:
+    """Objective: one query family per published artifact.
+
+    Expected: exactly ``space`` and ``ground``.
+    """
+    assert {member.value for member in QueryAppliesTo} == {"space", "ground"}
 
 
-def test_query_example_jq_property() -> None:
+def test_query_example_carries_its_jq_expression() -> None:
+    """Objective: a query example publishes its expression under one name.
+
+    Expected: ``jq_expression`` holds the expression and appears in the dump.
+    """
     example = QueryExample(
         name="example",
         question_answered="what?",
@@ -34,7 +41,8 @@ def test_query_example_jq_property() -> None:
         important_paths=["x"],
         applies_to=QueryAppliesTo.SPACE,
     )
-    assert example.jq == ".x"
+    assert example.jq_expression == ".x"
+    assert example.model_dump()["jq_expression"] == ".x"
 
 
 def test_validation_check_pass_flag() -> None:
@@ -82,6 +90,6 @@ def test_data_dict_entry_uses_field_path() -> None:
         description="a field",
         unit="MUSD",
         type="number",
-        source_class="DERIVED",
+        source_class=FieldKind.DERIVED,
     )
     assert entry.path == "a.b"

@@ -30,7 +30,8 @@ D-decisions this module rests on:
         constraint; power and volume are derived, not capped.
     D7: 18-month generation cadence (the frontier-gen rule).
     D8: the GPU package is the modelling unit (NVIDIA CES 2026 reversion).
-    D12: post-Feynman FLOPS/kW slope = 25%/gen (the extrapolation rule).
+    D12: post-Feynman generations extrapolate on the per-generation growth
+        slopes (:class:`GenerationSlopes`; the extrapolation rule).
     D13: the rack abstraction was killed in the cycle-1 rework.
 
 Sources: brainstorm Part VIII (§42–49), Part X (§50–60). The extend /
@@ -46,7 +47,6 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final  # typing-acceptable: Any is the YAML deserialization boundary
 
-import yaml
 from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, PositiveInt
 
 from common.file_io import ModelFileError, load_yaml_mapping
@@ -184,7 +184,8 @@ class GenerationSlopes(BaseModel):
     pf_growth_per_gen: float = Field(
         default=PF_GROWTH_PER_GEN_DEFAULT,
         description=(
-            "PF/pkg growth per generation. Default 0.625 → implied PF/kW slope ≈ 25%/gen."
+            "PF/pkg growth per generation. With the kW/pkg slope it sets the PF/kW "
+            "trend: (1 + pf_growth_per_gen) / (1 + kw_growth_per_gen) - 1 per generation."
         ),
         ge=GENERATION_SLOPE_MIN,
         le=GENERATION_SLOPE_MAX,
@@ -417,24 +418,6 @@ def extend_generations(
 
 GENERATIONS_YAML_KEY: Final[str] = "generations"
 """Top-level YAML key wrapping the list of generation specs."""
-
-
-def dump_generations_yaml(gens: list[GenerationSpec], path: Path) -> None:
-    """Serialise a generation list to YAML on disk.
-
-    Writes a single top-level mapping ``{GENERATIONS_YAML_KEY: [...]}`` so
-    the file can carry future top-level metadata without breaking the
-    schema.
-
-    Args:
-        gens: The generations to serialise.
-        path: Output file path.
-    """
-    payload: dict[str, list[dict[str, Any]]] = {
-        GENERATIONS_YAML_KEY: [g.model_dump(mode="json") for g in gens]
-    }
-    with path.open("w", encoding="utf-8") as fh:
-        yaml.safe_dump(payload, fh, sort_keys=False, indent=2)
 
 
 def load_generations_yaml(path: Path) -> list[GenerationSpec]:

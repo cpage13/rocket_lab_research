@@ -12,8 +12,8 @@ from common.input_manifest import (
     SourceRefType,
     SourceStatus,
     _cell,
-    _int_value,
 )
+from common.provenance import as_float, as_int
 
 
 def test_input_cell_full_field_list() -> None:
@@ -86,11 +86,14 @@ def test_assumption_role_values() -> None:
     }
 
 
-def test_source_ref_type_four_values() -> None:
+def test_source_ref_type_three_values() -> None:
+    """Objective: the source-reference vocabulary is exactly the kinds the builders emit.
+
+    Expected: a SOURCE_INDEX claim, a research document, or a model derivation.
+    """
     assert {t.value for t in SourceRefType} == {
         "source_index",
         "research_doc",
-        "external_url",
         "model_derivation",
     }
 
@@ -111,7 +114,12 @@ def test_cell_builder_round_trip() -> None:
     assert cell_obj.source_refs[0].claim_id == "COMM-001"
 
 
-def test_int_value_rejects_bool() -> None:
+def test_the_strict_unwrap_rejects_a_flag_input() -> None:
+    """Objective: an input cell's flag is never read as a number.
+
+    Expected: ``as_int`` and ``as_float`` both raise ``TypeError`` naming the
+    input's path for a ``True`` value.
+    """
     spec = CellSpec(
         label="A flag",
         unit=None,
@@ -122,5 +130,7 @@ def test_int_value_rejects_bool() -> None:
         rationale="rationale",
     )
     bool_cell = _cell("inputs.flag", True, "A flag.", spec)
-    with pytest.raises(TypeError):
-        _int_value(bool_cell)
+    with pytest.raises(TypeError, match="input inputs.flag is not an integer"):
+        as_int(bool_cell)
+    with pytest.raises(TypeError, match="input inputs.flag is not numeric"):
+        as_float(bool_cell)

@@ -13,8 +13,8 @@ import pytest
 from data_center.config import RBand, YearRValue
 from data_center.fleet import (
     Cohort,
-    _r_at_year,  # noqa: PLC2701 — private helper under test
     compute_fleet_year,
+    interpolate_r,
     r_at_year,
 )
 
@@ -67,27 +67,27 @@ def test_cohort_dead_before_launch() -> None:
 def test_r_at_year_at_anchor() -> None:
     """R equals the anchor value exactly at an anchor year."""
     anchors = [YearRValue(fy=2026, r=1.50), YearRValue(fy=2036, r=1.30)]
-    assert _r_at_year(anchors, 2026) == 1.50
-    assert _r_at_year(anchors, 2036) == 1.30
+    assert interpolate_r(anchors, 2026) == 1.50
+    assert interpolate_r(anchors, 2036) == 1.30
 
 
 def test_r_at_year_interpolated() -> None:
     """R is linearly interpolated between adjacent anchors."""
     anchors = [YearRValue(fy=2026, r=1.50), YearRValue(fy=2036, r=1.30)]
     # 2031 is midway -> R = 1.40
-    assert _r_at_year(anchors, 2031) == pytest.approx(1.40)
+    assert interpolate_r(anchors, 2031) == pytest.approx(1.40)
 
 
 def test_r_at_year_clamps_before_first_anchor() -> None:
     """R clamps flat to the first anchor below the anchor range."""
     anchors = [YearRValue(fy=2026, r=1.50), YearRValue(fy=2036, r=1.30)]
-    assert _r_at_year(anchors, 2020) == 1.50
+    assert interpolate_r(anchors, 2020) == 1.50
 
 
 def test_r_at_year_clamps_after_last_anchor() -> None:
     """R clamps flat to the last anchor above the anchor range."""
     anchors = [YearRValue(fy=2026, r=1.50), YearRValue(fy=2036, r=1.30)]
-    assert _r_at_year(anchors, 2050) == 1.30
+    assert interpolate_r(anchors, 2050) == 1.30
 
 
 def test_r_at_year_band_returns_triple() -> None:
@@ -200,12 +200,13 @@ def test_fleet_year_cumulative_revenue_low_and_high() -> None:
     assert fy.revenue_cumulative_musd_high.value == 360.0
 
 
-def test_fleet_year_kw_on_orbit_sums_cohorts() -> None:
-    """kW on orbit sums every living cohort's nodes x kw_per_node."""
+def test_fleet_year_kw_living_fleet_sums_cohorts() -> None:
+    """Living-fleet kW sums every living cohort's nodes x kw_per_node (one field, no alias)."""
     cohorts = [_make_cohort(2026, nodes=10), _make_cohort(2027, nodes=5)]
     fy = compute_fleet_year(2027, cohorts, 5, 25.0, 0.0, service_life_years=5, prior_year=None)
     # 10 x 200 + 5 x 200 = 3000 kW
-    assert fy.kw_on_orbit.value == 3000.0
+    assert fy.kw_living_fleet.value == 3000.0
+    assert "kw_on_orbit" not in type(fy).model_fields
 
 
 def test_fleet_year_empty_cohort_history() -> None:

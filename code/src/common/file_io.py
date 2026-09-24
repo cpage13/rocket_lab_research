@@ -2,13 +2,17 @@
 
 Every scenario loader in the repository (the data-center config and the
 generations file it may reference, the ground reference, the communications
-config) reads YAML through :func:`load_yaml_mapping`. Both promotion commands
+config) reads YAML through :func:`load_yaml_mapping`. Every published JSON
+artifact (the space model, the ground reference, the Iridium model) is
+serialized by :func:`render_artifact_json`, and both promotion commands
 (``rklb-value --promote`` and ``python -m communications.json_output``) write
-their artifacts through :func:`write_files_with_rollback` (every file, or every
-destination put back as it was) and find the repository through
-:func:`locate_source_checkout`. All three report failure as one
-:class:`ModelFileError` carrying the path and a one-line reason: the single
-file-boundary error type every command-line entry point catches.
+theirs as :func:`artifact_write` entries through
+:func:`write_files_with_rollback` (every file is written, or the destinations
+already replaced are restored and the error says which, if any, could not be)
+and find the repository through :func:`locate_source_checkout`. All three
+report failure as one :class:`ModelFileError` carrying the path and a one-line
+reason: the single file-boundary error type every command-line entry point
+catches.
 
 YAML is parsed with PyYAML's libyaml-backed ``CSafeLoader`` when this PyYAML
 build includes libyaml (about ten times faster on the default scenario), else
@@ -18,21 +22,29 @@ with the pure-Python ``SafeLoader``. Both construct only plain Python types
 
 from __future__ import annotations
 
+import errno
 import logging
 import os
 import shutil
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final  # typing-acceptable: Any types the YAML deserialization boundary
 
 import yaml
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
 TEXT_ENCODING: Final[str] = "utf-8"
 """Encoding of every scenario YAML read and every artifact written."""
+
+ARTIFACT_JSON_INDENT: Final[int] = 2
+"""Indentation of every published JSON artifact (the house ``model_dump_json`` form)."""
+
+ARTIFACT_FILE_END: Final[str] = "\n"
+"""The one newline a promoted artifact file ends with (the rendered JSON has none)."""
 
 _YAML_LOADER: Final[type[yaml.SafeLoader] | type[yaml.CSafeLoader]] = (
     yaml.CSafeLoader if yaml.__with_libyaml__ else yaml.SafeLoader
@@ -50,6 +62,11 @@ _STAGED_SUFFIX: Final[str] = ".tmp"
 
 _BACKUP_SUFFIX: Final[str] = ".bak"
 """Suffix of a destination's preserved previous content, kept until the write completes."""
+
+_MAX_NAME_ATTEMPTS: Final[int] = 8
+"""How many fresh random names a staged or backup file tries before the write gives up.
+A collision needs another file already holding the same 128-bit random name, so a
+second attempt essentially never happens; the bound only rules out an endless loop."""
 
 _MODULE_DEPTH_BELOW_CODE_DIR: Final[int] = 2
 """How far a model module sits below ``code/``: ``code/src/<package>/<module>.py``
@@ -150,6 +167,38 @@ class PendingWrite:
     text: str
 
 
+def render_artifact_json(artifact: BaseModel) -> str:
+    """Serialize a typed artifact as the house JSON: indented, without a trailing newline.
+
+    The one serializer for the space model, the ground reference, and the
+    Iridium model, whether printed (``rklb-value --json``) or promoted
+    (:func:`artifact_write`).
+
+    Args:
+        artifact: The built artifact model.
+
+    Returns:
+        The artifact as indented JSON.
+    """
+    return artifact.model_dump_json(indent=ARTIFACT_JSON_INDENT)
+
+
+def artifact_write(path: Path, artifact: BaseModel) -> PendingWrite:
+    """Return the pending write that promotes one artifact to ``path``.
+
+    The file holds :func:`render_artifact_json` plus :data:`ARTIFACT_FILE_END`,
+    so every promoted artifact ends in exactly one newline.
+
+    Args:
+        path: The artifact's destination.
+        artifact: The built artifact model.
+
+    Returns:
+        The :class:`PendingWrite` for :func:`write_files_with_rollback`.
+    """
+    return PendingWrite(path, render_artifact_json(artifact) + ARTIFACT_FILE_END)
+
+
 @dataclass(frozen=True)
 class _PreparedWrite:
     """A write ready to rename: its destination, its staged new content, and its backup.
@@ -166,13 +215,57 @@ class _PreparedWrite:
     backup: Path | None
 
 
+def _random_token() -> str:
+    """Return the random part of a staged or backup file's name (128 random bits, as hex)."""
+    return uuid.uuid4().hex
+
+
 def _sibling(destination: Path, suffix: str) -> Path:
-    """Return a new, uniquely named hidden file path beside ``destination``."""
-    return destination.with_name(f"{_HIDDEN_PREFIX}{destination.name}.{uuid.uuid4().hex}{suffix}")
+    """Return a fresh hidden file path beside ``destination`` (a name, not yet a file)."""
+    return destination.with_name(f"{_HIDDEN_PREFIX}{destination.name}.{_random_token()}{suffix}")
+
+
+def _create_beside(destination: Path, suffix: str, create: Callable[[Path], None]) -> Path:
+    """Create a new hidden file beside ``destination`` under a name no other file holds.
+
+    ``create`` must create its path exclusively: it raises
+    :class:`FileExistsError`, having created nothing, when the path already
+    exists, and removes what it created before raising any other error. A
+    name another file already holds is therefore left alone and a fresh name
+    is drawn, up to :data:`_MAX_NAME_ATTEMPTS` times.
+
+    Args:
+        destination: The artifact the new file sits beside.
+        suffix: The new file's suffix (staged or backup).
+        create: Creates and fills the file at the path it is given.
+
+    Returns:
+        The path of the file this call created.
+
+    Raises:
+        OSError: If ``create`` fails, or (``FileExistsError``) if every name
+            tried was already taken.
+    """
+    for _ in range(_MAX_NAME_ATTEMPTS):
+        candidate = _sibling(destination, suffix)
+        try:
+            create(candidate)
+        except FileExistsError:
+            logger.debug("%s already exists; drawing a fresh name", candidate)
+            continue
+        return candidate
+    raise FileExistsError(
+        errno.EEXIST,
+        f"no free name for a {suffix} file beside it after {_MAX_NAME_ATTEMPTS} attempts",
+    )
 
 
 def _remove_created(paths: Iterable[Path]) -> None:
-    """Remove staged or backup files this write created (best effort, each failure logged)."""
+    """Remove staged or backup files this call created (best effort, each failure logged).
+
+    Only ever given paths this call created: a staged or backup file is made
+    exclusively (:func:`_create_beside`), so no pre-existing file reaches here.
+    """
     for path in paths:
         try:
             path.unlink(missing_ok=True)
@@ -191,7 +284,7 @@ def _leftovers(prepared: Iterable[_PreparedWrite]) -> list[Path]:
 
 
 def _stage(write: PendingWrite) -> Path:
-    """Write one artifact in full, flushed to disk, to a hidden file beside it.
+    """Write one artifact in full, flushed to disk, to a new hidden file beside it.
 
     Returns:
         The staged file's path.
@@ -200,27 +293,32 @@ def _stage(write: PendingWrite) -> Path:
         OSError: If the directory or the staged file cannot be written (a
             partially written staged file is removed first).
     """
-    staged = _sibling(write.path, _STAGED_SUFFIX)
-    try:
-        write.path.parent.mkdir(parents=True, exist_ok=True)
-        with staged.open("x", encoding=TEXT_ENCODING) as handle:
-            handle.write(write.text)
-            handle.flush()
-            os.fsync(handle.fileno())
-    except OSError:
-        _remove_created([staged])
-        raise
-    return staged
+
+    def create(staged: Path) -> None:
+        """Create ``staged`` exclusively and write the artifact into it."""
+        handle = staged.open("x", encoding=TEXT_ENCODING)
+        try:
+            with handle:
+                handle.write(write.text)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except OSError:
+            _remove_created([staged])
+            raise
+
+    write.path.parent.mkdir(parents=True, exist_ok=True)
+    return _create_beside(write.path, _STAGED_SUFFIX, create)
 
 
 def _preserve(destination: Path) -> Path | None:
-    """Keep a destination's current content in a hidden backup file beside it.
+    """Keep a destination's current content in a new hidden backup file beside it.
 
     A hard link keeps the very file, content and metadata, at no copying cost.
     Where the file system refuses one (a locked or append-only file, a file
     system without hard links), a byte copy with the same permission bits is
     kept instead; the copy deliberately leaves out file flags, so the backup of
-    a locked file can still be removed.
+    a locked file can still be removed. Both are created exclusively: neither
+    the link nor the copy ever lands on an existing file.
 
     Returns:
         The backup's path, or None when the destination does not exist yet.
@@ -231,21 +329,53 @@ def _preserve(destination: Path) -> Path | None:
     """
     if not destination.exists():
         return None
-    backup = _sibling(destination, _BACKUP_SUFFIX)
-    try:
-        os.link(destination, backup)
-    except OSError:
+
+    def create(backup: Path) -> None:
+        """Hard-link ``destination`` to ``backup``, or copy it there, exclusively."""
         try:
-            shutil.copyfile(destination, backup)
+            os.link(destination, backup)
+        except FileExistsError:
+            raise
+        except OSError as exc:
+            logger.debug("no hard link for %s (%s); copying it", destination, _os_reason(exc))
+        else:
+            return
+        target = backup.open("xb")
+        try:
+            with target, destination.open("rb") as source:
+                shutil.copyfileobj(source, target)
             shutil.copymode(destination, backup)
         except OSError:
             _remove_created([backup])
             raise
-    return backup
+
+    return _create_beside(destination, _BACKUP_SUFFIX, create)
+
+
+def _refuse_non_regular(destination: Path) -> None:
+    """Refuse a destination that is a symbolic link or exists as anything but a regular file.
+
+    A promoted artifact is a regular file. Renaming over a symbolic link would
+    replace the link itself and leave its target stale, so a link (or a
+    directory, or a device) is an error, raised before anything is written.
+
+    Raises:
+        ModelFileError: If ``destination`` is a symbolic link or a non-regular file.
+    """
+    if destination.is_symlink():
+        raise ModelFileError(
+            destination,
+            "is a symbolic link, and an artifact replaces only a regular file (point "
+            "the output at the link's target); no destination was changed",
+        )
+    if destination.exists() and not destination.is_file():
+        raise ModelFileError(
+            destination, "exists and is not a regular file; no destination was changed"
+        )
 
 
 def _roll_back(replaced: Sequence[_PreparedWrite]) -> str:
-    """Put every replaced destination back as it was; describe the outcome in one line.
+    """Restore every replaced destination it can; describe the outcome in one line.
 
     A destination with a backup is restored by renaming the backup over it; a
     destination that did not exist before the write is removed. A destination
@@ -288,26 +418,32 @@ def _roll_back(replaced: Sequence[_PreparedWrite]) -> str:
 
 
 def write_files_with_rollback(writes: Sequence[PendingWrite]) -> None:
-    """Write every artifact, or put every destination back as it was.
+    """Write every artifact; if one cannot be written, restore those already replaced.
 
-    The write runs in three steps:
+    Every destination must be a regular file or not exist yet: a symbolic
+    link or any other non-regular file is refused before anything is written.
+    The write then runs in three steps:
 
-    1. Stage: each text is written in full, and flushed to disk, to a hidden
-       ``.tmp`` file beside its destination (missing parent directories are
-       created and left in place).
-    2. Preserve: each existing destination is kept beside itself as a hidden
-       ``.bak`` file (a hard link, or a byte copy where hard links are refused).
+    1. Stage: each text is written in full, and flushed to disk, to a new
+       hidden ``.tmp`` file beside its destination (missing parent directories
+       are created and left in place).
+    2. Preserve: each existing destination is kept beside itself as a new
+       hidden ``.bak`` file (a hard link, or a byte copy where hard links are
+       refused).
     3. Replace: each staged file is renamed over its destination with
        :func:`os.replace`, one at a time, in ``writes`` order.
 
-    Each rename is atomic within its directory, so a reader never sees a
-    half-written file; the set of renames is not atomic, so between two
-    renames the destinations briefly hold a mix of new and previous content.
-    A failure in step 1 or 2 changes no destination. A failure in step 3
-    rolls back: every destination already replaced is restored from its backup
-    (one that did not exist before is removed), and the error states which
-    destinations were restored and which, if any, still hold new content and
-    where their previous content is kept. Every staged and backup file this
+    Staged and backup files are created exclusively under fresh random names,
+    and a name another file already holds is skipped, so the call never
+    overwrites or removes a file it did not create. Each rename is atomic
+    within its directory, so a reader never sees a half-written file; the set
+    of renames is not atomic, so between two renames the destinations briefly
+    hold a mix of new and previous content. A failure in step 1 or 2 changes
+    no destination. A failure in step 3 rolls back: each destination already
+    replaced is restored from its backup (one that did not exist before is
+    removed). A restore can itself fail; the error then says so: it states
+    which destinations were restored and which, if any, still hold new content
+    and where their previous content is kept. Every staged and backup file this
     call created is removed, except a backup still needed for recovery; on
     success the backups are removed. The rollback runs in this process: if the
     process is killed between two renames, the hidden ``.bak`` files beside the
@@ -317,10 +453,13 @@ def write_files_with_rollback(writes: Sequence[PendingWrite]) -> None:
         writes: The artifacts to write, in rename order.
 
     Raises:
-        ModelFileError: If any artifact cannot be staged, preserved, or
-            renamed. The one-line message names the failing destination, the
-            operating system's reason, and the outcome for every destination.
+        ModelFileError: If a destination is not a regular file, or any
+            artifact cannot be staged, preserved, or renamed. The one-line
+            message names the failing destination, the operating system's
+            reason, and the outcome for every destination.
     """
+    for write in writes:
+        _refuse_non_regular(write.path)
     prepared: list[_PreparedWrite] = []
     for write in writes:
         try:
@@ -421,11 +560,15 @@ def locate_source_checkout(module_file: str | Path) -> SourceCheckout:
 
 
 __all__ = [
+    "ARTIFACT_FILE_END",
+    "ARTIFACT_JSON_INDENT",
     "TEXT_ENCODING",
     "ModelFileError",
     "PendingWrite",
     "SourceCheckout",
+    "artifact_write",
     "load_yaml_mapping",
     "locate_source_checkout",
+    "render_artifact_json",
     "write_files_with_rollback",
 ]

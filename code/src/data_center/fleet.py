@@ -11,14 +11,14 @@ current algorithmic contract.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict
 
 from common.cohort import cohort_is_alive_at
+from common.provenance import FieldPath, cell
 from data_center.config import RBand, YearRValue
-from data_center.provenance import FieldPath, ProvenanceCell, cell
+from data_center.output import BusinessYear
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +67,17 @@ class Cohort(BaseModel):
         return cohort_is_alive_at(self.launch_year, year, service_life)
 
 
-def _r_at_year(anchors: list[YearRValue], year: int) -> float:
-    """Linear interpolation between R-band anchors.
+def interpolate_r(anchors: list[YearRValue], year: int) -> float:
+    """R on one band trajectory at ``year``: linear between anchors, flat outside.
+
+    The one R-band interpolation: the engine prices every cohort with it
+    (through :func:`r_at_year`) and V12 reads the central band's base-year R
+    with it, so the two cannot disagree.
 
     Args:
-        anchors: The R-band trajectory's anchors, sorted by ``fy`` ascending.
+        anchors: The trajectory's anchors, sorted by ``fy`` ascending (the
+            :class:`data_center.config.RBand` validator guarantees the order
+            and at least two anchors).
         year: The calendar year at which to evaluate R.
 
     Returns:
@@ -101,67 +107,10 @@ def r_at_year(r_band: RBand, year: int) -> tuple[float, float, float]:
         A ``(central, low, high)`` tuple of interpolated R values.
     """
     return (
-        _r_at_year(r_band.central, year),
-        _r_at_year(r_band.low, year),
-        _r_at_year(r_band.high, year),
+        interpolate_r(r_band.central, year),
+        interpolate_r(r_band.low, year),
+        interpolate_r(r_band.high, year),
     )
-
-
-@dataclass(frozen=True)
-class FleetYear:
-    """Per-year fleet rollup. All ProvenanceCells.
-
-    Attributes:
-        year: Calendar year for this fleet record.
-        launches: Launches in this calendar year.
-        nodes_deployed_this_year: Nodes deployed this year (1 per launch, D8).
-        living_fleet: Living fleet count under the service_life_years cliff (D1).
-        kw_deployed_this_year: Newly deployed node power this year.
-        kw_living_fleet: Living-fleet node power this year.
-        kw_on_orbit: Total kW on orbit (living fleet).
-        pf_deployed_this_year: Newly deployed node compute this year.
-        pf_living_fleet: Living-fleet node compute this year.
-        pf_on_orbit: Total PFLOPS on orbit (living fleet).
-        launch_cost_this_year_musd: Per-launch cost at this year's cadence.
-        cost_annual_fleet_musd: Fleet annual cost (cohort-vintaged).
-        revenue_annual_fleet_musd_central: Fleet annual revenue, central R.
-        revenue_annual_fleet_musd_low: Fleet annual revenue, low R.
-        revenue_annual_fleet_musd_high: Fleet annual revenue, high R.
-        revenue_cumulative_musd_central: Cumulative revenue, central R.
-        revenue_cumulative_musd_low: Cumulative revenue, low R.
-        revenue_cumulative_musd_high: Cumulative revenue, high R.
-        gross_profit_annual_fleet_musd_central: Fleet gross profit, central R.
-        gross_profit_annual_fleet_musd_low: Fleet gross profit, low R.
-        gross_profit_annual_fleet_musd_high: Fleet gross profit, high R.
-        margin_central_pct: Fleet gross margin, central R.
-        margin_low_pct: Fleet gross margin, low R.
-        margin_high_pct: Fleet gross margin, high R.
-    """
-
-    year: int
-    launches: ProvenanceCell
-    nodes_deployed_this_year: ProvenanceCell
-    living_fleet: ProvenanceCell
-    kw_deployed_this_year: ProvenanceCell
-    kw_living_fleet: ProvenanceCell
-    kw_on_orbit: ProvenanceCell
-    pf_deployed_this_year: ProvenanceCell
-    pf_living_fleet: ProvenanceCell
-    pf_on_orbit: ProvenanceCell
-    launch_cost_this_year_musd: ProvenanceCell
-    cost_annual_fleet_musd: ProvenanceCell
-    revenue_annual_fleet_musd_central: ProvenanceCell
-    revenue_annual_fleet_musd_low: ProvenanceCell
-    revenue_annual_fleet_musd_high: ProvenanceCell
-    revenue_cumulative_musd_central: ProvenanceCell
-    revenue_cumulative_musd_low: ProvenanceCell
-    revenue_cumulative_musd_high: ProvenanceCell
-    gross_profit_annual_fleet_musd_central: ProvenanceCell
-    gross_profit_annual_fleet_musd_low: ProvenanceCell
-    gross_profit_annual_fleet_musd_high: ProvenanceCell
-    margin_central_pct: ProvenanceCell
-    margin_low_pct: ProvenanceCell
-    margin_high_pct: ProvenanceCell
 
 
 def business_year_path(year: int) -> FieldPath:
@@ -216,8 +165,8 @@ def compute_fleet_year(
     *,
     service_life_years: int,
     prior_year: int | None,
-) -> FleetYear:
-    """Compose fleet rollup for one calendar year.
+) -> BusinessYear:
+    """Compose the fleet rollup for one calendar year: the ``business.years`` record.
 
     Living cohorts are those with launch_year in
     ``[year - (service_life_years - 1), year]`` under the service-life hard
@@ -252,7 +201,7 @@ def compute_fleet_year(
             extends, or ``None`` for the first model year (no prior total).
 
     Returns:
-        A :class:`FleetYear` of provenance cells.
+        The year's :class:`data_center.output.BusinessYear` of provenance cells.
     """
     if isinstance(launches_this_year, bool) or not isinstance(launches_this_year, int):
         raise TypeError("launches_this_year must be an integer mission count")
@@ -292,7 +241,7 @@ def compute_fleet_year(
             uses.append(f"{business_year_path(prior_year)}.revenue_cumulative_musd_{band}")
         return uses
 
-    return FleetYear(
+    return BusinessYear(
         year=year,
         launches=cell(
             value=launches_this_year,
@@ -345,14 +294,6 @@ def compute_fleet_year(
             sources=["cohort rollup of physical.years per-node kw_per_node"],
             description=f"Living-fleet kW at {year}.",
         ),
-        kw_on_orbit=cell(
-            value=kw,
-            unit="kW",
-            formula_name="kw_on_orbit_from_living_fleet",
-            uses=_vintage_uses(living, "kw_per_node"),
-            sources=["cohort rollup of physical.years per-node kw_per_node"],
-            description=f"Total kW on orbit at {year}.",
-        ),
         pf_deployed_this_year=cell(
             value=deployed_pf,
             unit="PFLOPS",
@@ -368,14 +309,6 @@ def compute_fleet_year(
             uses=_vintage_uses(living, "pf_per_node"),
             sources=["cohort rollup of physical.years per-node pf_per_node"],
             description=f"Living-fleet PFLOPS at {year}.",
-        ),
-        pf_on_orbit=cell(
-            value=pf,
-            unit="PFLOPS",
-            formula_name="pf_on_orbit_from_living_fleet",
-            uses=_vintage_uses(living, "pf_per_node"),
-            sources=["cohort rollup of physical.years per-node pf_per_node"],
-            description=f"Total PFLOPS on orbit at {year}.",
         ),
         launch_cost_this_year_musd=cell(
             value=launch_cost_musd,
@@ -530,9 +463,9 @@ def compute_fleet_year(
 
 __all__ = [
     "Cohort",
-    "FleetYear",
     "business_year_path",
     "compute_fleet_year",
+    "interpolate_r",
     "physical_year_path",
     "r_at_year",
 ]

@@ -1,12 +1,12 @@
-"""Regression guard for the v8 provenance ``uses[]`` back-pointer graph.
+"""Regression guard for the provenance ``uses[]`` back-pointer graph.
 
-The cycle-2 v8 JSON is meant to be *traceable*: a cold agent starting at
+The space artifact is meant to be *traceable*: a cold agent starting at
 any cell can follow ``uses[]`` back to the input dials. That only works if
 every ``uses`` path resolves to a *real* upstream — a specific
-:class:`data_center.provenance.ProvenanceCell` or an ``inputs.*`` dial —
+:class:`common.provenance.ProvenanceCell` or an ``inputs.*`` dial,
 never to a placeholder, never to itself, never to a bare year-container.
 
-This module rebuilds the v8 artifact for every committed scenario,
+This module rebuilds the space artifact for every committed scenario,
 serialises it, extracts every ``uses[]`` entry across every cell, and
 resolves each one against the JSON. It asserts the three defects the
 ``json_audit_05_21.md`` audit found are gone and stay gone:
@@ -48,6 +48,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from common.file_io import render_artifact_json
 from data_center.config import config_from_dict, load_config
 from data_center.engine import run_valuation
 from data_center.generations import KNOWN_GENS
@@ -57,9 +58,7 @@ from data_center.ground import (
     build_ground_reference_output,
     ground_config_from_dict,
     load_ground_config,
-    render_ground_json,
 )
-from data_center.json_output import render_json
 from data_center.output import SpaceModelOutput
 
 _SCENARIO_NAMES = (
@@ -88,10 +87,10 @@ def _tokenise(path: str) -> list[str]:
     """Split a ``uses[]`` path into segments.
 
     Handles the four path forms a ``uses`` entry can take: plain dotted
-    segments (``inputs.r_band.central``), double-quoted year segments
-    (``physical.years."2036".kw_per_node``), a trailing ``[]`` list
-    wildcard (``inputs.generations[].kw_per_pkg``), and a list index
-    (``ground.component_costs[3].cost``).
+    segments (``inputs.config.cadence.cadence_ceiling``), double-quoted year
+    segments (``physical.years."2036".kw_per_node``), a trailing ``[]`` list
+    wildcard (``inputs.config.generations[].year_available``), and a list
+    index (``ground.component_costs[3].cost``).
 
     Args:
         path: A ``uses[]`` JSON-path string.
@@ -120,7 +119,7 @@ def _resolve(doc: dict[str, Any], path: str) -> Any | None:
     """Resolve a ``uses[]`` path against the serialised artifact.
 
     Args:
-        doc: The full serialised v8 artifact.
+        doc: The full serialised space artifact.
         path: A ``uses[]`` JSON-path string.
 
     Returns:
@@ -215,10 +214,10 @@ def _classify(doc: dict[str, Any], cell_path: str, use_path: str) -> str:
 
 @pytest.fixture(scope="module", params=_SCENARIO_NAMES)
 def scenario_doc(request: pytest.FixtureRequest, scenarios_dir: Path) -> dict[str, Any]:
-    """Build + serialise one scenario's v8 artifact, parametrised over every scenario."""
+    """Build + serialise one scenario's space artifact, parametrised over every scenario."""
     name: str = request.param
     config = load_config(scenarios_dir / f"{name}.yaml")
-    return json.loads(render_json(run_valuation(config)))  # type: ignore[no-any-return]
+    return json.loads(render_artifact_json(run_valuation(config)))  # type: ignore[no-any-return]
 
 
 def test_every_uses_pointer_resolves(scenario_doc: dict[str, Any]) -> None:
@@ -324,7 +323,7 @@ def default_space_and_ground_docs(
         space_model_path="data_center/models/space/default.json",
         ground_scenario_path=DEFAULT_GROUND_SCENARIO_PATH,
     )
-    return json.loads(render_json(space)), json.loads(render_ground_json(ground))
+    return json.loads(render_artifact_json(space)), json.loads(render_artifact_json(ground))
 
 
 def test_every_ground_uses_pointer_resolves(
@@ -460,8 +459,8 @@ def test_a_dial_moves_only_cells_whose_uses_reach_it(
     least one cell, and every moved cell's transitive ``uses`` closure
     contains the dial's path.
     """
-    base_doc = json.loads(render_json(run_valuation(config_from_dict(base))))
-    moved_doc = json.loads(render_json(run_valuation(config_from_dict(perturbed))))
+    base_doc = json.loads(render_artifact_json(run_valuation(config_from_dict(base))))
+    moved_doc = json.loads(render_artifact_json(run_valuation(config_from_dict(perturbed))))
     base_cells = dict(_walk_cells(base_doc))
     moved = [
         path

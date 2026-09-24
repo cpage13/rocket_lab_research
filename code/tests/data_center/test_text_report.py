@@ -1,7 +1,7 @@
-"""Tests for the v8 text report (cycle-2 Phase 6, T85).
+"""Tests for the text report (cycle-2 Phase 6, T85).
 
-``data_center.text_report.render_text`` walks a typed v8
-:class:`data_center.output.ValuationOutput` and emits the human-readable
+``data_center.text_report.render_text`` walks a typed
+:class:`data_center.output.SpaceModelOutput` and emits the human-readable
 fixed-width report. After cycle-2 Phase 6 (T80-T84) that report has
 eight sections in a fixed order: the metadata header, the
 provenance-summary banner, the per-generation reference table, the
@@ -15,7 +15,7 @@ These tests guard that layout:
 1. every section header is present, in order;
 2. the renderer is total — no exception, no ``KeyError``, no empty
    section, on the real default-scenario output;
-3. the v8-specific content lands — the provenance banner cites
+3. the cycle-2 content lands: the provenance banner cites
    formulas, the physical table shows volume-util, the fleet table
    shows the revenue band, the R-band block shows all three
    trajectories;
@@ -23,7 +23,7 @@ These tests guard that layout:
 
 The report is rendered from the session's default run (``default_output``
 in ``conftest.py``), the real engine's output, so the tests exercise the
-renderer against a genuine v8 artifact rather than a hand-built stub.
+renderer against a genuine space artifact rather than a hand-built stub.
 """
 
 from __future__ import annotations
@@ -35,10 +35,10 @@ import pytest
 
 from data_center.config import load_config
 from data_center.engine import run_valuation
-from data_center.output import ValuationOutput
+from data_center.output import SpaceModelOutput
 from data_center.text_report import render_headline, render_text
 
-# The eight v8 section headers, in render order (T80 section ordering).
+# The eight section headers, in render order (T80 section ordering).
 _SECTION_HEADERS: tuple[str, ...] = (
     "ROCKET LAB ORBITAL DATA-CENTER VENTURE",
     "PROVENANCE SUMMARY",
@@ -52,7 +52,7 @@ _SECTION_HEADERS: tuple[str, ...] = (
 
 
 @pytest.fixture(scope="module")
-def default_report(default_output: ValuationOutput) -> str:
+def default_report(default_output: SpaceModelOutput) -> str:
     """Render the default-scenario text report once for the module."""
     return render_text(default_output)
 
@@ -69,13 +69,13 @@ def test_render_text_returns_a_nonempty_string(default_report: str) -> None:
 
 
 def test_all_eight_sections_present(default_report: str) -> None:
-    """Every one of the eight v8 section headers appears in the report."""
+    """Every one of the eight section headers appears in the report."""
     for header in _SECTION_HEADERS:
         assert header in default_report, f"missing section: {header}"
 
 
 def test_sections_appear_in_render_order(default_report: str) -> None:
-    """The eight sections appear in the fixed v8 order (T80)."""
+    """The eight sections appear in the fixed order (T80)."""
     positions = [default_report.index(h) for h in _SECTION_HEADERS]
     assert positions == sorted(positions)
 
@@ -92,9 +92,30 @@ def test_provenance_summary_precedes_generation_table(default_report: str) -> No
 # ---------------------------------------------------------------------------
 
 
-def test_render_text_raises_no_exception(default_output: ValuationOutput) -> None:
-    """render_text is total — it does not raise on a real v8 artifact."""
+def test_render_text_raises_no_exception(default_output: SpaceModelOutput) -> None:
+    """render_text is total: it does not raise on a real space artifact."""
     render_text(default_output)
+
+
+def test_a_non_numeric_cell_raises_instead_of_printing_zero(
+    default_output: SpaceModelOutput,
+) -> None:
+    """Objective: the report never prints a made-up number for a bad cell.
+
+    The report used to read cells through a lenient unwrap that printed 0.0
+    for a string or null value. Expected: with FY2030's ``kw_per_node`` set to
+    a string, ``render_text`` raises ``TypeError`` naming the cell's formula.
+    """
+    year = default_output.physical.years["2030"]
+    bad = year.model_copy(
+        update={"kw_per_node": year.kw_per_node.model_copy(update={"value": "n/a"})}
+    )
+    years = {**default_output.physical.years, "2030": bad}
+    broken = default_output.model_copy(
+        update={"physical": default_output.physical.model_copy(update={"years": years})}
+    )
+    with pytest.raises(TypeError, match="kw_per_node_from_n_and_kw_per_pkg"):
+        render_text(broken)
 
 
 def test_no_section_is_empty(default_report: str) -> None:
@@ -144,7 +165,7 @@ def test_physical_table_has_volume_utilization_column(default_report: str) -> No
 
 
 def test_physical_table_renders_every_year(
-    default_report: str, default_output: ValuationOutput
+    default_report: str, default_output: SpaceModelOutput
 ) -> None:
     """The physical table renders one row per fiscal year."""
     metrics = default_report.split("PER-YEAR SYSTEM METRICS", 1)[1].split("PER-YEAR PER-NODE", 1)[0]
@@ -206,7 +227,7 @@ def test_rband_block_shows_cumulative_revenue(default_report: str) -> None:
 
 
 def test_validation_block_renders_every_validation_result(
-    default_report: str, default_output: ValuationOutput
+    default_report: str, default_output: SpaceModelOutput
 ) -> None:
     """Objective: the report shows the one public verdict list.
 
@@ -250,7 +271,7 @@ def test_validation_block_agrees_with_the_json_on_a_non_default_scenario(
 
 
 def test_provenance_banner_counts_match_v13(
-    default_report: str, default_output: ValuationOutput
+    default_report: str, default_output: SpaceModelOutput
 ) -> None:
     """Objective: the banner and V13 count cells with the same walker.
 
@@ -274,7 +295,7 @@ def test_provenance_banner_counts_match_v13(
 # ---------------------------------------------------------------------------
 
 
-def test_render_headline_is_one_line(default_output: ValuationOutput) -> None:
+def test_render_headline_is_one_line(default_output: SpaceModelOutput) -> None:
     """render_headline produces a single-line GPU-first headline."""
     headline = render_headline(default_output)
     assert isinstance(headline, str)
@@ -282,7 +303,7 @@ def test_render_headline_is_one_line(default_output: ValuationOutput) -> None:
     assert "GPU-first" in headline
 
 
-def test_render_headline_reports_fleet_revenue(default_output: ValuationOutput) -> None:
+def test_render_headline_reports_fleet_revenue(default_output: SpaceModelOutput) -> None:
     """The headline reports the horizon-year fleet revenue and margin."""
     headline = render_headline(default_output)
     assert "fleet annual revenue" in headline

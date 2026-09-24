@@ -26,19 +26,17 @@ COUNT_UNIT: Final[str] = "count"
 
 
 class FieldKind(StrEnum):
-    """The semantic kind of one leaf field in the output JSON.
+    """The provenance class of one leaf field, published as a data-dictionary entry's
+    ``source_class``.
 
-    Used in the ``data_dictionary`` so a reader knows what a number *is*:
-    a dial they set (``INPUT``), a model constant (``CONSTANT``), a level
-    prevailing in a year (``STATE``), a per-year flow (``FLOW``), a running
-    total (``STOCK``), or a function of other fields (``DERIVED``).
+    The field's position in the artifact decides it: an input the scenario
+    sets (``INPUT``, under ``inputs``), a run-identity constant (``CONSTANT``,
+    under ``metadata``), or a value the model computes (``DERIVED``, everything
+    else).
     """
 
     INPUT = "input"
     CONSTANT = "constant"
-    STATE = "state"
-    FLOW = "flow"
-    STOCK = "stock"
     DERIVED = "derived"
 
 
@@ -68,7 +66,6 @@ class QueryAppliesTo(StrEnum):
 
     SPACE = "space"
     GROUND = "ground"
-    BOTH = "both"
 
 
 class SourceStatusSummary(BaseModel):
@@ -220,9 +217,9 @@ class DataDictEntry(BaseModel):
         ...,
         description="The leaf value's wire type (e.g. 'number', 'integer', 'string').",
     )
-    source_class: str = Field(
+    source_class: FieldKind = Field(
         ...,
-        description=("Provenance class of the field: INPUT / CONSTANT / DERIVED."),
+        description="Provenance class of the field: input, constant, or derived.",
     )
 
 
@@ -242,11 +239,6 @@ class QueryExample(BaseModel):
     expected_shape: str = Field(..., description="What the query result looks like.")
     important_paths: list[str] = Field(..., description="Important JSON paths touched.")
     applies_to: QueryAppliesTo = Field(..., description="Model family this query applies to.")
-
-    @property
-    def jq(self) -> str:
-        """Return the jq expression for existing test and renderer helpers."""
-        return self.jq_expression
 
 
 class FormulaDefinition(BaseModel):

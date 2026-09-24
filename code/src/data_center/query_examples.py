@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 
-from data_center.output import QueryAppliesTo, QueryExample
+from common.meta import QueryAppliesTo, QueryExample, ValidationSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,10 @@ def build_query_examples(anchor_fy: int) -> list[QueryExample]:
         QueryExample(
             name="validation_warnings",
             question_answered="Which validation results warn or fail?",
-            jq_expression='[.meta.validation_results[] | select(.severity != "pass")]',
+            jq_expression=(
+                "[.meta.validation_results[] | "
+                f'select(.severity != "{ValidationSeverity.OK.value}")]'
+            ),
             expected_shape="zero or more validation result objects",
             important_paths=["meta.validation_results"],
             applies_to=QueryAppliesTo.SPACE,
@@ -89,11 +92,10 @@ def build_query_examples(anchor_fy: int) -> list[QueryExample]:
         ),
         QueryExample(
             name="trace_revenue_multiple_assumption",
-            question_answered="What supports the default central revenue multiple?",
-            jq_expression=(
-                ".inputs.config.revenue.central[] | select(.path == "
-                '"inputs.config.revenue.central.2026")'
+            question_answered=(
+                "What supports the central revenue multiple (its first anchor year)?"
             ),
+            jq_expression=".inputs.config.revenue.central[0]",
             expected_shape="InputCell object",
             important_paths=["inputs.config.revenue.central"],
             applies_to=QueryAppliesTo.SPACE,

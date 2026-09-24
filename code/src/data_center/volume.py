@@ -25,9 +25,9 @@ import logging
 from dataclasses import dataclass
 from typing import Final
 
+from common.provenance import FieldPath, ProvenanceCell, cell
 from data_center.config import BindingConstraint
 from data_center.constants import MM_PER_M, SOLAR_CONSTANT_W_M2, W_PER_KW
-from data_center.provenance import FieldPath, ProvenanceCell, cell
 
 logger = logging.getLogger(__name__)
 

@@ -14,8 +14,10 @@ fraction, a subscriber count, or a comparison; it is the contract the engine
 (``communications.engine``), the ground comparison (``communications.ground``), and
 the Iridium artifact writer (``communications.json_output``) consume. Cross-field
 rules are model validators: the coverage floor may not exceed the saturation cap,
-the off-peak concurrency may not exceed the peak, and the four ARPU mixes must sum
-to 100.
+the off-peak concurrency may not exceed the peak, the four ARPU mixes must sum to
+100, and (the shared dial blocks' own validators) the cadence anchors must satisfy
+``0 < launches_at_year_5 < launches_at_year_10 < cadence_ceiling`` and the
+launch-cost anchors ``low_cadence_launches < high_cadence_launches``.
 
 The subscriber unit is a PERSON, NOT a household, and IoT devices are never summed
 with people. It is NOT a market-share, demand, or DCF model: revenue is a
@@ -23,12 +25,14 @@ cost-coupled multiple or a price applied to a sized base. The blocks:
 
 * ``metadata: CommsMetadataDials`` -- base year, horizon, scenario name.
 * ``cadence: CadenceDials`` -- the shared whole-fleet logistic launch ramp
-  (the DC shape, REUSED verbatim: ceiling 150, year-5 14, year-10 90, first 1).
+  (:class:`common.cadence.CadenceDials`, the data-center block itself: ceiling
+  150, year-5 14, year-10 90, first 1, with its load-time anchor validator).
   This prices the launch cost at the whole-fleet cadence (variable 2's ramp).
 * ``comms_cadence: CommsCadenceDials`` -- the comms slice's SHARE of the fleet
   cadence (variable 2's share); how many launches comms flies.
 * ``launch_cost: LaunchCostDials`` -- the cadence-indexed log-linear launch-cost
-  curve (the DC shape, REUSED verbatim: 25.0 / 13.5 / 5.0 / 100.0) (variable 6).
+  curve (:class:`common.cadence.LaunchCostDials`, the data-center block itself:
+  25.0 / 13.5 / 5.0 / 100.0, with its anchor-order validator) (variable 6).
 * ``satellite: SatelliteDials`` -- the fixed CELLULAR-satellite spec: satellites
   per launch (variable 1), lifetime (variable 4, the cohort cliff), and the flat
   mass-manufactured hardware build cost (variable 5).
@@ -66,6 +70,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from common.cadence import CadenceDials, LaunchCostDials
 from common.file_io import load_yaml_mapping
 from communications.constants import (
     ACTIVE_USER_RATE_MBPS_DEFAULT,
@@ -83,21 +88,13 @@ from communications.constants import (
     ARPU_STANDARD_PRICE_USD_MONTH_DEFAULT,
     ARPU_USD_PER_MONTH_DEFAULT,
     BASE_YEAR_DEFAULT,
-    CADENCE_CEILING_DEFAULT,
     COMMS_SHARE_DEFAULT,
     CONCURRENCY_OFFPEAK_DEFAULT,
     CONCURRENCY_PEAK_DEFAULT,
-    FIRST_LAUNCH_YEAR_DEFAULT,
     GROUND_BASIS_DEFAULT,
-    HIGH_CADENCE_COST_MUSD_DEFAULT,
-    HIGH_CADENCE_LAUNCHES_DEFAULT,
     HORIZON_YEARS_DEFAULT,
     IOT_DEVICES_DEFAULT,
     IRIDIUM_SCENARIO_NAME_DEFAULT,
-    LAUNCHES_AT_YEAR_5_DEFAULT,
-    LAUNCHES_AT_YEAR_10_DEFAULT,
-    LOW_CADENCE_COST_MUSD_DEFAULT,
-    LOW_CADENCE_LAUNCHES_DEFAULT,
     MAX_FLEET_SATELLITES_DEFAULT,
     MAX_FY,
     MAX_HORIZON_YEARS,
@@ -149,41 +146,6 @@ class CommsMetadataDials(BaseModel):
     )
 
 
-class CadenceDials(BaseModel):
-    """Whole-fleet launch-cadence dials feeding the shared logistic ramp.
-
-    REUSED VERBATIM from the DC ``CadenceDials`` shape (same field names, same
-    bounds, same named-constant defaults sourced from the shared
-    ``common.cadence`` spine). This is the WHOLE-FLEET Neutron cadence (the 90/year
-    FY2036 ramp) that prices the launch cost; the comms slice flies a SHARE of it
-    (see :class:`CommsCadenceDials`). Consumed by
-    ``common.cadence.compute_launches_per_year``.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    cadence_ceiling: int = Field(
-        default=CADENCE_CEILING_DEFAULT,
-        gt=0,
-        description="Hard cap on whole-number launches per year.",
-    )
-    launches_at_year_5: int = Field(
-        default=LAUNCHES_AT_YEAR_5_DEFAULT,
-        ge=0,
-        description="Integer logistic anchor: launches per year at model year 5.",
-    )
-    launches_at_year_10: int = Field(
-        default=LAUNCHES_AT_YEAR_10_DEFAULT,
-        ge=0,
-        description="Integer logistic anchor: launches per year at model year 10.",
-    )
-    first_launch_year: int = Field(
-        default=FIRST_LAUNCH_YEAR_DEFAULT,
-        ge=0,
-        description="Model-year index before which launch count is clamped to zero.",
-    )
-
-
 class CommsCadenceDials(BaseModel):
     """The comms slice's SHARE of the whole-fleet cadence (variable 2's share).
 
@@ -207,39 +169,6 @@ class CommsCadenceDials(BaseModel):
             "to 0.18 (~16 of the 90 FY2036 launches/year); the investor's ~15 to 20 "
             "band maps to ~0.167 to ~0.222. Configurable."
         ),
-    )
-
-
-class LaunchCostDials(BaseModel):
-    """Cadence-indexed launch-cost dials feeding the log-linear cost curve.
-
-    REUSED VERBATIM from the DC ``LaunchCostDials`` shape (same field names, same
-    bounds, same named-constant defaults from the shared ``common.cadence`` spine).
-    The cost is priced at the WHOLE-FLEET cadence. Consumed by
-    ``common.cadence.compute_launch_cost_musd``.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    low_cadence_cost_musd: float = Field(
-        default=LOW_CADENCE_COST_MUSD_DEFAULT,
-        gt=0,
-        description="Launch cost at the low-cadence anchor, $M.",
-    )
-    high_cadence_cost_musd: float = Field(
-        default=HIGH_CADENCE_COST_MUSD_DEFAULT,
-        gt=0,
-        description="Launch cost at the high-cadence anchor, $M.",
-    )
-    low_cadence_launches: float = Field(
-        default=LOW_CADENCE_LAUNCHES_DEFAULT,
-        gt=0,
-        description="Cadence (launches/yr) at the low-cost anchor.",
-    )
-    high_cadence_launches: float = Field(
-        default=HIGH_CADENCE_LAUNCHES_DEFAULT,
-        gt=0,
-        description="Cadence (launches/yr) at the high-cost anchor.",
     )
 
 
@@ -938,7 +867,6 @@ def load_comms_config(path: str | Path) -> CommsConfig:
 # Re-export the public config surface so external callers (engine, ground, output,
 # tests) import from one place.
 __all__ = [
-    "CadenceDials",
     "CommsCadenceDials",
     "CommsConfig",
     "CommsMetadataDials",
@@ -946,7 +874,6 @@ __all__ = [
     "GroundInterfaceDials",
     "IridiumArpuDials",
     "IridiumDials",
-    "LaunchCostDials",
     "RevenueDials",
     "SatelliteDials",
     "SubscriberDials",

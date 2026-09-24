@@ -1,9 +1,9 @@
-"""Tests for the v8 engine-computed validation rules (V1..V10, V12..V17).
+"""Tests for the engine-computed validation rules (V1..V10, V12..V17).
 
 Two test families per rule:
 
 1. **Passing case** — the default-scenario engine output trips no rule.
-2. **Tripping case** — a copy-mutated v8 artifact triggers the rule.
+2. **Tripping case**: a copy-mutated space artifact triggers the rule.
 
 Also locks the aggregator contract: :func:`compute_validation` returns
 exactly 16 checks in declaration order and all pass on the default
@@ -15,10 +15,10 @@ the configured service life, V9 bands the life-independent node total, and
 V6 reads the anchor year, so the shipped 3-year and 7-year scenarios and a
 14-year horizon pass them.
 
-**Cycle-2 v8 re-pathing (V1-V10).** The cycle-1 V-rules are re-pointed at
-the v8 output structure (``physical.years`` / ``business.years`` /
-``inputs.generations``). V5 (was ``monotonic_compute_share``) and V10 (was
-``decisions_populated``) lost their cycle-1 subject when the v8 schema
+**Cycle-2 re-pathing (V1-V10).** The cycle-1 V-rules are re-pointed at
+the cycle-2 output structure (``physical.years`` / ``business.years`` /
+``inputs.config.generations``). V5 (was ``monotonic_compute_share``) and V10 (was
+``decisions_populated``) lost their cycle-1 subject when the cycle-2 schema
 dropped the ``compute_share`` and ``decisions`` blocks, so they are
 re-targeted — V5 to PF/kW monotonicity, V10 to the data-dictionary block.
 
@@ -38,6 +38,9 @@ from pathlib import Path
 
 import pytest
 
+from common.input_manifest import InputCell, InputPath
+from common.meta import Severity, ValidationSeverity
+from common.provenance import ProvenanceCell, as_int
 from data_center.config import (
     RadiatorArchitecture,
     config_from_dict,
@@ -45,13 +48,7 @@ from data_center.config import (
 )
 from data_center.constants import PACKAGE_FIT_TOLERANCE
 from data_center.engine import compute_mass_util, compute_n_packages, run_valuation
-from data_center.input_manifest import InputCell, InputPath
-from data_center.output import (
-    PhysicalYear,
-    Severity,
-    ValuationOutput,
-)
-from data_center.provenance import ProvenanceCell
+from data_center.output import PhysicalYear, SpaceModelOutput
 from data_center.validation import (
     B2B_R_CENTRAL_FLOOR,
     MASS_UTIL_FIT_SLACK_PCT,
@@ -63,6 +60,7 @@ from data_center.validation import (
     PF_PER_KW_MIN,
     RADIATOR_T_PER_KW_CO_MOUNTED_MIN,
     USD_PER_PKG_MAX,
+    build_validation_results,
     check_cadence_monotonicity,
     check_data_dictionary_populated,
     check_fleet_cliff_consistency,
@@ -94,7 +92,7 @@ _DEFAULT_ANCHOR_FY = "2036"
 # shared from ``conftest.py``.
 
 
-def _mutate_node_total(output: ValuationOutput, fy: str, value: float) -> ValuationOutput:
+def _mutate_node_total(output: SpaceModelOutput, fy: str, value: float) -> SpaceModelOutput:
     """Return a new output with one year's ``cost_breakdown.node_total`` replaced."""
     py = output.physical.years[fy]
     breakdown = py.cost_breakdown
@@ -113,8 +111,8 @@ def _set_cell(cell: ProvenanceCell, value: float | int | str) -> ProvenanceCell:
 
 
 def _mutate_physical(
-    output: ValuationOutput, fy: str, field: str, value: float | int | str
-) -> ValuationOutput:
+    output: SpaceModelOutput, fy: str, field: str, value: float | int | str
+) -> SpaceModelOutput:
     """Return a new output with one physical-year cell's value replaced."""
     py = output.physical.years[fy]
     new_py = py.model_copy(update={field: _set_cell(getattr(py, field), value)})
@@ -125,8 +123,8 @@ def _mutate_physical(
 
 
 def _mutate_business(
-    output: ValuationOutput, fy: str, field: str, value: float | int | str
-) -> ValuationOutput:
+    output: SpaceModelOutput, fy: str, field: str, value: float | int | str
+) -> SpaceModelOutput:
     """Return a new output with one business-year cell's value replaced."""
     by = output.business.years[fy]
     new_by = by.model_copy(update={field: _set_cell(getattr(by, field), value)})
@@ -136,13 +134,13 @@ def _mutate_business(
     return output.model_copy(update={"business": new_business})
 
 
-def _last_fy(output: ValuationOutput) -> str:
+def _last_fy(output: SpaceModelOutput) -> str:
     """The latest fiscal year (JSON-string key) of the physical block."""
     return max(output.physical.years, key=int)
 
 
-def _mutate_gospel(output: ValuationOutput, key: str, value: float | int) -> ValuationOutput:
-    """Return a new output with one ``inputs.gospel`` key set/added."""
+def _mutate_gospel(output: SpaceModelOutput, key: str, value: float | int) -> SpaceModelOutput:
+    """Return a new output with one ``inputs.config.physical`` cell set or added."""
     path = InputPath(f"inputs.config.physical.{key}")
     if hasattr(output.inputs.config.physical, key):
         current = getattr(output.inputs.config.physical, key)
@@ -163,8 +161,8 @@ def _mutate_gospel(output: ValuationOutput, key: str, value: float | int) -> Val
 
 
 def _mutate_physical_cell_attr(
-    output: ValuationOutput, fy: str, field: str, attr: str, value: str
-) -> ValuationOutput:
+    output: SpaceModelOutput, fy: str, field: str, attr: str, value: str
+) -> SpaceModelOutput:
     """Return a new output with one physical-year cell's ``attr`` replaced.
 
     Unlike :func:`_mutate_physical` (which replaces a cell's ``value``),
@@ -187,14 +185,14 @@ def _mutate_physical_cell_attr(
 
 
 def test_compute_validation_returns_exactly_sixteen_checks(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """The aggregator emits 16 checks (V1..V10 and V12..V17; V11 retired)."""
     assert len(compute_validation(default_output)) == 16
 
 
 def test_compute_validation_default_scenario_all_pass(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """Every wired rule passes on the default scenario."""
     failing = [c for c in compute_validation(default_output) if not c.pass_check]
@@ -202,7 +200,7 @@ def test_compute_validation_default_scenario_all_pass(
 
 
 def test_compute_validation_preserves_declaration_order(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """Aggregator output order is the V1..V10, V12..V17 declaration order."""
     checks = compute_validation(default_output)
@@ -227,7 +225,7 @@ def test_compute_validation_preserves_declaration_order(
     assert [c.name for c in checks] == expected
 
 
-def test_severity_classifications(default_output: ValuationOutput) -> None:
+def test_severity_classifications(default_output: SpaceModelOutput) -> None:
     """Each rule's severity matches its tier."""
     by_name = {c.name: c for c in compute_validation(default_output)}
     assert by_name["mass_utilization_in_band"].severity == Severity.CRITICAL
@@ -254,14 +252,14 @@ def test_severity_classifications(default_output: ValuationOutput) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_v1_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v1_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """Default-scenario mass utilisation is tight in every year."""
     check = check_mass_utilization_in_band(default_output)
     assert check.pass_check
     assert check.severity == Severity.CRITICAL
 
 
-def test_v1_trips_when_mass_util_below_floor(default_output: ValuationOutput) -> None:
+def test_v1_trips_when_mass_util_below_floor(default_output: SpaceModelOutput) -> None:
     """A year with mass_utilization_pct = 50 trips V1."""
     mutated = _mutate_physical(default_output, "2029", "mass_utilization_pct", 50.0)
     assert not check_mass_utilization_in_band(mutated).pass_check
@@ -278,7 +276,7 @@ def test_v1_trips_when_mass_util_below_floor(default_output: ValuationOutput) ->
     ids=["5t_pkg_half_tol_short", "10t_pkg_half_tol_short", "vr200_exact_class", "zero_fixed_edge"],
 )
 def test_v1_passes_every_fit_the_packer_accepts(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
     node_mass_fixed_t: float,
     pkg_mass_t: float,
     n_expected: int,
@@ -314,7 +312,7 @@ def test_v1_passes_every_fit_the_packer_accepts(
     assert not check_mass_utilization_in_band(overweight).pass_check
 
 
-def test_v1_trips_when_mass_util_above_ceiling(default_output: ValuationOutput) -> None:
+def test_v1_trips_when_mass_util_above_ceiling(default_output: SpaceModelOutput) -> None:
     """A year with mass_utilization_pct = 105 trips V1."""
     mutated = _mutate_physical(default_output, "2026", "mass_utilization_pct", 105.0)
     assert not check_mass_utilization_in_band(mutated).pass_check
@@ -331,7 +329,7 @@ def test_v1_band_constants() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_v2_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v2_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """Every generation's $/pkg is well under the V2 ceiling."""
     check = check_no_trillion_dollar_pkg(default_output)
     assert check.pass_check
@@ -374,14 +372,14 @@ def test_v2_usd_per_pkg_max_constant() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_v3_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v3_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """Default active-fleet central margin stays above the 25% floor."""
     check = check_positive_margin_floor(default_output)
     assert check.pass_check
     assert check.severity == Severity.CRITICAL
 
 
-def test_v3_trips_when_margin_negative(default_output: ValuationOutput) -> None:
+def test_v3_trips_when_margin_negative(default_output: SpaceModelOutput) -> None:
     """An active year below the margin floor trips V3."""
     mutated = _mutate_business(default_output, "2030", "margin_central_pct", 24.0)
     assert not check_positive_margin_floor(mutated).pass_check
@@ -392,7 +390,7 @@ def test_v3_trips_when_margin_negative(default_output: ValuationOutput) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_v4_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v4_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """Default scenario fits many packages every year."""
     check = check_gpu_count_positive(default_output)
     assert check.pass_check
@@ -410,14 +408,14 @@ def test_v4_trips_when_no_packages_fit() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_v5_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v5_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """PF/kW is near-monotonic up on the default trajectory."""
     check = check_monotonic_pf_per_kw(default_output)
     assert check.pass_check
     assert check.severity == Severity.MAJOR
 
 
-def test_v5_trips_when_pf_per_kw_drops_sharply(default_output: ValuationOutput) -> None:
+def test_v5_trips_when_pf_per_kw_drops_sharply(default_output: SpaceModelOutput) -> None:
     """A sharp PF/kW drop year-over-year trips V5."""
     # Drop the last year's PF/kW well below the prior year's.
     mutated = _mutate_physical(default_output, _last_fy(default_output), "pf_per_kw", 1.0)
@@ -429,7 +427,7 @@ def test_v5_trips_when_pf_per_kw_drops_sharply(default_output: ValuationOutput) 
 # ---------------------------------------------------------------------------
 
 
-def test_v6_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v6_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """Default anchor-year (FY2036) PF/kW lies inside [20, 80]."""
     check = check_pf_per_kw_in_band(default_output)
     assert check.pass_check
@@ -438,7 +436,7 @@ def test_v6_default_scenario_passes(default_output: ValuationOutput) -> None:
 
 
 def test_v6_trips_when_anchor_year_pf_per_kw_below_band(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """An anchor-year PF/kW = 10 trips V6 (below the 20-floor)."""
     mutated = _mutate_physical(default_output, _DEFAULT_ANCHOR_FY, "pf_per_kw", 10.0)
@@ -446,7 +444,7 @@ def test_v6_trips_when_anchor_year_pf_per_kw_below_band(
 
 
 def test_v6_trips_when_anchor_year_pf_per_kw_above_band(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """An anchor-year PF/kW = 200 trips V6 (above the 80-ceiling)."""
     mutated = _mutate_physical(default_output, _DEFAULT_ANCHOR_FY, "pf_per_kw", 200.0)
@@ -480,14 +478,14 @@ def test_v6_band_constants() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_v7_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v7_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """Default scenario's launch cost ramps down monotonically."""
     check = check_launch_cost_non_increasing(default_output)
     assert check.pass_check
     assert check.severity == Severity.MINOR
 
 
-def test_v7_trips_when_launch_cost_jumps_up(default_output: ValuationOutput) -> None:
+def test_v7_trips_when_launch_cost_jumps_up(default_output: SpaceModelOutput) -> None:
     """A year-on-year jump up in launch cost trips V7."""
     # Drop an early year's launch cost low so the next transition is a jump up.
     mutated = _mutate_business(default_output, "2029", "launch_cost_this_year_musd", 1.0)
@@ -499,14 +497,14 @@ def test_v7_trips_when_launch_cost_jumps_up(default_output: ValuationOutput) -> 
 # ---------------------------------------------------------------------------
 
 
-def test_v8_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v8_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """Default R band > 1 → per-node central revenue > annual cost every year."""
     check = check_revenue_above_cost_per_node(default_output)
     assert check.pass_check
     assert check.severity == Severity.CRITICAL
 
 
-def test_v8_trips_when_revenue_below_cost(default_output: ValuationOutput) -> None:
+def test_v8_trips_when_revenue_below_cost(default_output: SpaceModelOutput) -> None:
     """A year whose central revenue falls below its annual cost trips V8."""
     mutated = _mutate_physical(default_output, "2031", "revenue_annual_per_node_musd_central", 0.1)
     assert not check_revenue_above_cost_per_node(mutated).pass_check
@@ -517,20 +515,20 @@ def test_v8_trips_when_revenue_below_cost(default_output: ValuationOutput) -> No
 # ---------------------------------------------------------------------------
 
 
-def test_v9_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v9_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """Default-scenario per-node total build + launch cost sits in [50, 200] every year."""
     check = check_node_total_in_band(default_output)
     assert check.pass_check
     assert check.severity == Severity.MAJOR
 
 
-def test_v9_trips_when_node_total_too_high(default_output: ValuationOutput) -> None:
+def test_v9_trips_when_node_total_too_high(default_output: SpaceModelOutput) -> None:
     """A per-node total of $500M trips V9."""
     mutated = _mutate_node_total(default_output, "2028", 500.0)
     assert not check_node_total_in_band(mutated).pass_check
 
 
-def test_v9_trips_when_node_total_too_low(default_output: ValuationOutput) -> None:
+def test_v9_trips_when_node_total_too_low(default_output: SpaceModelOutput) -> None:
     """A per-node total of $10M trips V9 (below floor)."""
     mutated = _mutate_node_total(default_output, "2028", 10.0)
     assert not check_node_total_in_band(mutated).pass_check
@@ -559,14 +557,14 @@ def test_v9_verdict_does_not_depend_on_service_life(service_life_years: int) -> 
 # ---------------------------------------------------------------------------
 
 
-def test_v10_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v10_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """The engine populates a substantial data dictionary."""
     check = check_data_dictionary_populated(default_output)
     assert check.pass_check
     assert check.severity == Severity.MAJOR
 
 
-def test_v10_trips_when_data_dictionary_empty(default_output: ValuationOutput) -> None:
+def test_v10_trips_when_data_dictionary_empty(default_output: SpaceModelOutput) -> None:
     """An empty data dictionary trips V10."""
     empty_meta = default_output.meta.model_copy(update={"data_dictionary": {}})
     mutated = default_output.model_copy(update={"meta": empty_meta})
@@ -578,7 +576,7 @@ def test_v10_trips_when_data_dictionary_empty(default_output: ValuationOutput) -
 # ---------------------------------------------------------------------------
 
 
-def test_v12_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v12_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """The default B2B run starts central R at 1.50 — above the 1.40 floor."""
     check = check_operator_r_consistency(default_output)
     assert check.pass_check
@@ -624,14 +622,14 @@ def test_v12_passes_when_b2b_central_r_exactly_at_floor() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_v13_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v13_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """Every ProvenanceCell in the default output references a known formula."""
     check = check_provenance_formula_keys(default_output)
     assert check.pass_check
     assert check.severity == Severity.MAJOR
 
 
-def test_v13_trips_on_unknown_formula_name(default_output: ValuationOutput) -> None:
+def test_v13_trips_on_unknown_formula_name(default_output: SpaceModelOutput) -> None:
     """A cell whose formula_name is absent from FORMULAS trips V13."""
     mutated = _mutate_physical_cell_attr(
         default_output, "2030", "kw_per_node", "formula_name", "totally_made_up_formula"
@@ -641,13 +639,14 @@ def test_v13_trips_on_unknown_formula_name(default_output: ValuationOutput) -> N
     assert "totally_made_up_formula" in check.computed
 
 
-def test_v13_counts_every_cell(default_output: ValuationOutput) -> None:
+def test_v13_counts_every_cell(default_output: SpaceModelOutput) -> None:
     """V13's computed string reports the number of cells walked."""
     check = check_provenance_formula_keys(default_output)
-    # 11 years x (25 physical + 23 business) cells = 528. Physical has 25:
+    # 11 years x (25 physical + 21 business) cells = 506. Physical has 25:
     # the 19 standalone per-node cells (17 original + solar_area_per_pkg_m2
-    # + volume_per_pkg_m3) plus the 6-cell cost_breakdown sub-object.
-    assert "528 cells" in check.computed
+    # + volume_per_pkg_m3) plus the 6-cell cost_breakdown sub-object; business
+    # has 21 since v9 dropped the kw_on_orbit / pf_on_orbit duplicates.
+    assert "506 cells" in check.computed
 
 
 # ---------------------------------------------------------------------------
@@ -655,21 +654,21 @@ def test_v13_counts_every_cell(default_output: ValuationOutput) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_v14_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v14_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """Default-scenario launches ramp up monotonically within the ceiling."""
     check = check_cadence_monotonicity(default_output)
     assert check.pass_check
     assert check.severity == Severity.MAJOR
 
 
-def test_v14_trips_when_launches_dip(default_output: ValuationOutput) -> None:
+def test_v14_trips_when_launches_dip(default_output: SpaceModelOutput) -> None:
     """A year-over-year dip in launches trips V14."""
     # Force an early year's launches high so the next transition is a drop.
     mutated = _mutate_business(default_output, "2027", "launches", 999.0)
     assert not check_cadence_monotonicity(mutated).pass_check
 
 
-def test_v14_trips_when_launches_are_fractional(default_output: ValuationOutput) -> None:
+def test_v14_trips_when_launches_are_fractional(default_output: SpaceModelOutput) -> None:
     """A fractional launch count means a raw cadence rate leaked into output."""
     mutated = _mutate_business(default_output, "2027", "launches", 2.5)
     check = check_cadence_monotonicity(mutated)
@@ -677,7 +676,7 @@ def test_v14_trips_when_launches_are_fractional(default_output: ValuationOutput)
     assert "fractional" in check.computed
 
 
-def test_v14_trips_when_nodes_do_not_match_launches(default_output: ValuationOutput) -> None:
+def test_v14_trips_when_nodes_do_not_match_launches(default_output: SpaceModelOutput) -> None:
     """One launch deploys one node in this model; the public counts must match."""
     mutated = _mutate_business(default_output, "2027", "nodes_deployed_this_year", 3)
     check = check_cadence_monotonicity(mutated)
@@ -686,7 +685,7 @@ def test_v14_trips_when_nodes_do_not_match_launches(default_output: ValuationOut
 
 
 def test_v14_trips_when_launches_exceed_ceiling(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """A year whose launches exceed the cadence ceiling trips V14."""
     # The last year is the cadence peak; pushing it past the 150 ceiling
@@ -695,12 +694,46 @@ def test_v14_trips_when_launches_exceed_ceiling(
     assert not check_cadence_monotonicity(mutated).pass_check
 
 
+def test_a_fractional_launch_count_is_a_v14_failure_not_a_crash(
+    default_output: SpaceModelOutput,
+) -> None:
+    """Objective: V14 alone owns launch-count integrality; nothing else raises on it.
+
+    The trigger: a hand-edited artifact with fractional launch and node counts
+    made the strict integer reads in V16 and the model invariants raise
+    ``TypeError``, aborting the whole validation. Expected: all 16 rules and
+    the invariants still run; V14 fails naming the fractional years, V16
+    reports the resulting cliff-sum mismatch, and the anchor-year invariant
+    fails on the fractional FY2036 launch count.
+    """
+    mutated = _mutate_business(default_output, "2027", "launches", 2.5)
+    mutated = _mutate_business(mutated, "2036", "launches", 89.5)
+    mutated = _mutate_business(mutated, "2033", "nodes_deployed_this_year", 30.5)
+
+    checks = {check.name: check for check in compute_validation(mutated)}
+    assert len(checks) == 16
+    cadence = checks["cadence_monotonicity"]
+    assert not cadence.pass_check
+    assert "fractional launches at FY2027=2.50, FY2036=89.50" in cadence.computed
+    assert "fractional nodes at FY2033=30.50" in cadence.computed
+    assert not checks["fleet_cliff_consistency"].pass_check
+
+    rules = mutated.meta.validation.model_copy(update={"rules": list(checks.values())})
+    with_rules = mutated.model_copy(
+        update={"meta": mutated.meta.model_copy(update={"validation": rules})}
+    )
+    results = {result.validation_id: result for result in build_validation_results(with_rules)}
+    anchor = results["anchor_year_launches_match_year_10_dial"]
+    assert anchor.severity is ValidationSeverity.FAIL
+    assert anchor.observed_result == "89.5 launches in FY2036"
+
+
 # ---------------------------------------------------------------------------
 # V15 — volume_fits_horizon
 # ---------------------------------------------------------------------------
 
 
-def test_v15_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v15_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """Every default-scenario year's stowed node fits the fairing (<= 100%)."""
     check = check_volume_fits_horizon(default_output)
     assert check.pass_check
@@ -708,7 +741,7 @@ def test_v15_default_scenario_passes(default_output: ValuationOutput) -> None:
 
 
 def test_v15_trips_when_the_fairing_is_overfilled(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """A year whose volume utilization exceeds 100% trips V15, whatever its label."""
     mutated = _mutate_physical(default_output, "2031", "volume_utilization_pct", 100.5)
@@ -717,7 +750,7 @@ def test_v15_trips_when_the_fairing_is_overfilled(
     assert "2031" in check.computed
 
 
-def test_v15_reads_utilization_not_the_binding_label(default_output: ValuationOutput) -> None:
+def test_v15_reads_utilization_not_the_binding_label(default_output: SpaceModelOutput) -> None:
     """Objective: V15 judges the number, not the inferred label.
 
     Expected: a year exactly full (100%) passes even if labeled 'both', and
@@ -752,7 +785,7 @@ def test_v15_fails_on_the_volume_stress_fixture(scenarios_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_v16_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v16_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """Default-scenario living_fleet matches the cohort-cliff sum every year."""
     check = check_fleet_cliff_consistency(default_output)
     assert check.pass_check
@@ -760,7 +793,7 @@ def test_v16_default_scenario_passes(default_output: ValuationOutput) -> None:
 
 
 def test_v16_trips_when_living_fleet_inconsistent(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """A living_fleet value that breaks the cliff arithmetic trips V16."""
     mutated = _mutate_business(default_output, "2032", "living_fleet", 9999)
@@ -783,7 +816,7 @@ def test_v16_follows_the_configured_service_life(
     failed both), and the rule text states the scenario's own window.
     """
     output = run_valuation(load_config(scenarios_dir / scenario))
-    assert output.inputs.fleet.service_life_years == service_life_years
+    assert as_int(output.inputs.config.fleet.service_life_years) == service_life_years
     check = check_fleet_cliff_consistency(output)
     assert check.pass_check, check.computed
     assert f"[Y-{service_life_years - 1}, Y]" in check.what_it_tests
@@ -794,7 +827,7 @@ def test_v16_follows_the_configured_service_life(
 # ---------------------------------------------------------------------------
 
 
-def _force_co_mounted(output: ValuationOutput) -> ValuationOutput:
+def _force_co_mounted(output: SpaceModelOutput) -> SpaceModelOutput:
     """Return a copy with the co-mounted architecture (to exercise V17's floor)."""
     new_md = output.metadata.model_copy(
         update={"radiator_architecture": RadiatorArchitecture.SINGLE_FACE_CO_MOUNTED}
@@ -802,7 +835,7 @@ def _force_co_mounted(output: ValuationOutput) -> ValuationOutput:
     return output.model_copy(update={"metadata": new_md})
 
 
-def test_v17_default_scenario_passes(default_output: ValuationOutput) -> None:
+def test_v17_default_scenario_passes(default_output: SpaceModelOutput) -> None:
     """The deployed double-sided default takes V17's not-applicable pass path."""
     check = check_radiator_dial_arch_consistency(default_output)
     assert check.pass_check
@@ -811,7 +844,7 @@ def test_v17_default_scenario_passes(default_output: ValuationOutput) -> None:
 
 
 def test_v17_trips_when_radiator_dial_below_floor(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """A co-mounted run with radiator_t_per_kw_post below 0.010 trips V17."""
     mutated = _force_co_mounted(_mutate_gospel(default_output, "radiator_t_per_kw_post", 0.005))
@@ -820,7 +853,7 @@ def test_v17_trips_when_radiator_dial_below_floor(
     assert "0.005" in check.computed
 
 
-def test_v17_passes_at_exact_floor(default_output: ValuationOutput) -> None:
+def test_v17_passes_at_exact_floor(default_output: SpaceModelOutput) -> None:
     """Co-mounted radiator dials exactly at the 0.010 floor pass V17."""
     at_floor_post = _mutate_gospel(
         default_output, "radiator_t_per_kw_post", RADIATOR_T_PER_KW_CO_MOUNTED_MIN
@@ -860,7 +893,7 @@ def test_v17_trips_when_only_the_pre_lift_dial_is_below_floor() -> None:
 
 
 def test_aggregator_surfaces_multiple_concurrent_failures(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """Trip V1 and V9 simultaneously — both surface in the aggregated list."""
     once = _mutate_physical(default_output, "2028", "mass_utilization_pct", 10.0)
@@ -876,14 +909,14 @@ def test_aggregator_surfaces_multiple_concurrent_failures(
 
 
 def test_every_check_emits_non_empty_computed_string(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """`computed` is a reader-facing string — no rule may leave it blank."""
     blanks = [c.name for c in compute_validation(default_output) if not c.computed.strip()]
     assert not blanks, f"checks with empty 'computed': {blanks}"
 
 
-def test_every_check_emits_known_severity(default_output: ValuationOutput) -> None:
+def test_every_check_emits_known_severity(default_output: SpaceModelOutput) -> None:
     """Severity is a known string-enum value."""
     for c in compute_validation(default_output):
         assert c.severity in {Severity.CRITICAL, Severity.MAJOR, Severity.MINOR}

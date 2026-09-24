@@ -44,3 +44,11 @@ data_center/models/space/*
 data_center/models/ground/*
 !data_center/models/ground/default.json
 data_center/conclusion_*.md
+
+# The artifact writer's recovery files (code/src/common/file_io.py): a staged
+# `.<artifact>.<random>.tmp` or a backup `.<artifact>.<random>.bak`, left beside a
+# promoted artifact only when a write or its rollback fails. They stay local in
+# every promoted-model directory (the data_center/models rules above already
+# ignore everything there but default.json).
+communications/models/**/.*.tmp
+communications/models/**/.*.bak

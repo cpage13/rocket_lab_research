@@ -1,8 +1,11 @@
 """Tests for the cycle-2 v8 config models in ``config.py``.
 
-Covers the four enums, the four dial blocks (CadenceDials, FleetDials,
-VolumeDials, LaunchCostDials), the R-band models (RBand, YearRValue),
-MetadataConfig, the extended ValuationConfig, and YAML scenario loading.
+Covers the four enums, the data-center dial blocks (FleetDials, VolumeDials),
+the R-band models (RBand, YearRValue), MetadataConfig, the extended
+ValuationConfig (its ``cadence`` and ``launch_cost`` blocks are the shared
+:mod:`common.cadence` classes, whose own defaults and bounds are tested in
+``tests/common/test_cadence_move.py``; their load-time validators are
+exercised here through ``config_from_dict``), and YAML scenario loading.
 """
 
 from __future__ import annotations
@@ -12,11 +15,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from common.cadence import CadenceDials, LaunchCostDials
 from data_center.config import (
     BindingConstraint,
-    CadenceDials,
     FleetDials,
-    LaunchCostDials,
     MetadataConfig,
     OperatorModel,
     RadiatorArchitecture,
@@ -28,13 +30,7 @@ from data_center.config import (
     config_from_dict,
     load_config,
 )
-from data_center.constants import (
-    CADENCE_CEILING_DEFAULT,
-    FIRST_LAUNCH_YEAR_DEFAULT,
-    HIGH_CADENCE_COST_MUSD_DEFAULT,
-    LOW_CADENCE_COST_MUSD_DEFAULT,
-    SERVICE_LIFE_YEARS,
-)
+from data_center.constants import SERVICE_LIFE_YEARS
 from data_center.engine import run_valuation
 from data_center.generations import KNOWN_GENS
 
@@ -70,31 +66,6 @@ def test_binding_constraint_members() -> None:
     assert {m.value for m in BindingConstraint} == {"mass", "volume", "both", "neither"}
 
 
-# -- CadenceDials -----------------------------------------------------
-
-
-def test_cadence_dials_defaults() -> None:
-    c = CadenceDials()
-    assert c.cadence_ceiling == CADENCE_CEILING_DEFAULT
-    assert c.first_launch_year == FIRST_LAUNCH_YEAR_DEFAULT
-
-
-def test_cadence_dials_rejects_unknown_field() -> None:
-    with pytest.raises(ValidationError):
-        CadenceDials.model_validate({"bogus": 1})
-
-
-def test_cadence_dials_rejects_nonpositive_ceiling() -> None:
-    with pytest.raises(ValidationError):
-        CadenceDials(cadence_ceiling=0.0)
-
-
-def test_cadence_dials_frozen() -> None:
-    c = CadenceDials()
-    with pytest.raises(ValidationError):
-        c.cadence_ceiling = 99.0
-
-
 # -- FleetDials -------------------------------------------------------
 
 
@@ -126,21 +97,6 @@ def test_volume_dials_rejects_efficiency_above_one() -> None:
 def test_volume_dials_rejects_unknown_field() -> None:
     with pytest.raises(ValidationError):
         VolumeDials.model_validate({"bogus_dial": 1.0})
-
-
-# -- LaunchCostDials --------------------------------------------------
-
-
-def test_launch_cost_dials_defaults() -> None:
-    lc = LaunchCostDials()
-    assert lc.low_cadence_cost_musd == LOW_CADENCE_COST_MUSD_DEFAULT
-    assert lc.high_cadence_cost_musd == HIGH_CADENCE_COST_MUSD_DEFAULT
-
-
-def test_launch_cost_dials_rejects_old_v7_field_name() -> None:
-    """The v7 field name ``launch_y0_musd`` must fail-fast (D24, no shim)."""
-    with pytest.raises(ValidationError):
-        LaunchCostDials.model_validate({"launch_y0_musd": 25.0})
 
 
 # -- RBand / YearRValue -----------------------------------------------

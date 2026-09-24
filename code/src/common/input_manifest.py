@@ -29,6 +29,10 @@ InputPath = NewType("InputPath", str)
 type InputScalar = int | float | str | bool
 type InputValue = InputScalar | list[InputScalar]
 
+type ConfigFieldName = str
+"""The name of one field of a config block (e.g. ``cadence_ceiling``), the key of
+a block's per-field source-metadata table."""
+
 
 class AssumptionRole(StrEnum):
     """Public role of one modeled input assumption.
@@ -62,7 +66,6 @@ class SourceRefType(StrEnum):
 
     SOURCE_INDEX = "source_index"
     RESEARCH_DOC = "research_doc"
-    EXTERNAL_URL = "external_url"
     MODEL_DERIVATION = "model_derivation"
 
 
@@ -72,7 +75,7 @@ class SourceRef(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     ref_type: SourceRefType = Field(..., description="Kind of source reference.")
-    ref: str = Field(..., description="Durable path, URL, claim ID, or derivation path.")
+    ref: str = Field(..., description="Durable document path, claim ID, or derivation path.")
     claim_id: str | None = Field(default=None, description="SOURCE_INDEX claim ID when relevant.")
     note: str | None = Field(default=None, description="What this reference supports.")
 
@@ -270,49 +273,10 @@ def _spec_cell(
     return _override_cell(path, value, default_value, description, spec, scenario_path)
 
 
-def _int_value(cell: InputCell) -> int:
-    """Return an input cell's scalar value as ``int``."""
-    value = cell.value
-    if isinstance(value, (bool, list)):
-        raise TypeError(f"{cell.path} is not an integer scalar")
-    return int(value)
-
-
-def _number_value(cell: InputCell) -> float | int:
-    """Return an input cell's scalar numeric value."""
-    value = cell.value
-    if isinstance(value, (bool, list, str)):
-        raise TypeError(f"{cell.path} is not a numeric scalar")
-    return value
-
-
-def _float_value(cell: InputCell) -> float:
-    """Return an input cell's scalar value as ``float``."""
-    value = cell.value
-    if isinstance(value, (bool, list)):
-        raise TypeError(f"{cell.path} is not a numeric scalar")
-    return float(value)
-
-
-def _str_value(cell: InputCell) -> str:
-    """Return an input cell's scalar value as ``str``."""
-    value = cell.value
-    if not isinstance(value, str):
-        raise TypeError(f"{cell.path} is not a string scalar")
-    return value
-
-
-def _first_research_ref(cell: InputCell) -> str:
-    """Return the first research-document ref attached to an input cell."""
-    for ref in cell.source_refs:
-        if ref.ref_type is SourceRefType.RESEARCH_DOC:
-            return ref.ref
-    return ""
-
-
 __all__ = [
     "AssumptionRole",
     "CellSpec",
+    "ConfigFieldName",
     "InputCell",
     "InputPath",
     "InputScalar",

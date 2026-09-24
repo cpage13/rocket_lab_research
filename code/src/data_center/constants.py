@@ -7,8 +7,10 @@ Every constant carries a docstring with:
 
 This module is the single source of truth for the calculator's
 "no bare numeric literals" rule (CLAUDE.md). Every dial that is a
-fixed constant (not a YAML-tunable Pydantic field) lives here. Claim IDs
-refer to `research/SOURCE_INDEX.md`.
+fixed constant (not a YAML-tunable Pydantic field) lives here, except the
+eight cadence and launch-cost defaults, which both ventures share and which
+live once in :mod:`common.cadence`. Claim IDs refer to
+`research/SOURCE_INDEX.md`.
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ years earlier."""
 
 MAX_FY: Final[int] = 2080
 """SOURCED_DECISION (cycle-1). Upper bound for any FY field. Beyond
-this the extrapolation slopes (D12, 25%/gen) have no defensible
+this the post-Feynman extrapolation slopes (D12) have no defensible
 basis."""
 
 MIN_HORIZON_YEARS: Final[int] = 5
@@ -116,16 +118,6 @@ RELEASE_CADENCE_YR: Final[float] = 1.5
 """SOURCED_DECISION (D7). Time between successive GPU generation
 releases (frontier-gen rule), 1.5 yr = 18 months. Cycle-1 field
 name `release_cadence_yr` kept."""
-
-# ============================================================
-# Trajectory horizon anchor
-# ============================================================
-
-HORIZON_ANCHOR_YEARS: Final[int] = 10
-"""SOURCED_DECISION (cycle-1 D1 service life). Trajectory horizon
-anchor — the cycle-1 linear launch-cost ramp is defined relative to
-a fixed 10-year anchor. Migrated from engine.py's Phase-0 temporary
-`_HORIZON_ANCHOR_YEARS`."""
 
 # ============================================================
 # Mass envelope + bus (D-decisions / R1 estimates)
@@ -233,10 +225,6 @@ step is real."""
 # Slopes (D12)
 # ============================================================
 
-FLOPS_PER_KW_PCT_PER_GEN_POST_FEYNMAN: Final[float] = 0.25
-"""EXTRAPOLATION (D12). FLOPS/kW improvement per generation post-
-Feynman. Central 25%; sensitivity 15-35%."""
-
 USD_GROWTH_PER_GEN_DEFAULT: Final[float] = 0.30
 """EXTRAPOLATION (GPU-012). Default post-Feynman $/package growth per
 generation (+30%). The single source for the
@@ -268,53 +256,6 @@ GENERATION_SLOPE_MAX: Final[float] = 2.0
 """SOURCED_DECISION (cycle-1). Upper bound on any per-generation growth
 slope: at most a tripling per generation; beyond it the extrapolation is
 pure speculation."""
-
-# ============================================================
-# Cadence defaults (scenario dials retained from v7 archaeology, commit 8fdc210)
-# ============================================================
-
-CADENCE_CEILING_DEFAULT: Final[int] = 150
-"""ESTIMATE/SCENARIO (RLDC-CADENCE-CEILING-150, NTR-010; v7 archaeology).
-Carrying capacity of the logistic launch ramp: a horizon-scoped
-infrastructure parameter for the launch pads and rocket production
-plausibly built within the ten-year window, not a cap on the system.
-Launches are clamped to it inside the window; a longer-horizon run must
-re-set it. Venture-model scenario, not Rocket Lab guidance."""
-
-LAUNCHES_AT_YEAR_5_DEFAULT: Final[int] = 14
-"""ESTIMATE/SCENARIO (NTR-010; v7 archaeology). Logistic anchor at
-model year 5. Public launch counts are integer missions, not fractional
-rates."""
-
-LAUNCHES_AT_YEAR_10_DEFAULT: Final[int] = 90
-"""ESTIMATE/SCENARIO (NTR-010; v7 archaeology). Logistic anchor at
-model year 10; high-cadence venture scenario. With base year 2026, this
-anchors FY2036 at about 90 launches."""
-
-FIRST_LAUNCH_YEAR_DEFAULT: Final[int] = 1
-"""ESTIMATE/SCENARIO (NTR-011; v7 archaeology). First venture launch
-index (FY2027 if base_year=2026), downstream of Rocket Lab's forward-
-looking late-2026 Neutron first-flight target."""
-
-# ============================================================
-# Launch cost dials (lifted verbatim from v7)
-# ============================================================
-
-LOW_CADENCE_COST_MUSD_DEFAULT: Final[float] = 25.0
-"""ESTIMATE (NTR-009). Launch cost at low cadence (<=5 launches/yr).
-Use as a cadence-specific model estimate, not a certified internal
-Rocket Lab cost."""
-
-HIGH_CADENCE_COST_MUSD_DEFAULT: Final[float] = 13.5
-"""ESTIMATE (NTR-009). Launch cost at high cadence (>=100 launches/yr).
-Learning-curve scenario inside the $12-15M very-high-cadence band."""
-
-LOW_CADENCE_LAUNCHES_DEFAULT: Final[float] = 5.0
-"""ESTIMATE (NTR-009). Cadence at low-cost anchor."""
-
-HIGH_CADENCE_LAUNCHES_DEFAULT: Final[float] = 100.0
-"""ESTIMATE (NTR-009, NTR-010). Cadence at high-cost anchor; model
-scenario, not published Rocket Lab guidance."""
 
 # ============================================================
 # Volume dials (R1 sourced)

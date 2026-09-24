@@ -1,11 +1,12 @@
 """Tests for the clean-rewrite communications config in ``config.py``.
 
 Covers the slim ``CommsConfig`` dial tree: all-defaults construction, the frozen /
-``extra="forbid"`` contract, the reused cadence + launch-cost defaults (asserted
-both against the comms named constants AND against the shared ``common.cadence``
-authority, the drift guard), the new satellite / coverage / comms-share / ground
-blocks, the field bounds, the cross-field validators (coverage floor at or below
-the cap, off-peak concurrency at or below the peak), and the YAML loader pair.
+``extra="forbid"`` contract, the shared cadence and launch-cost blocks (the
+``common.cadence`` classes themselves, with their load-time validators; the
+classes' own defaults and bounds are tested once, in
+``tests/common/test_cadence_move.py``), the satellite / coverage / comms-share /
+ground blocks, the field bounds, the cross-field validators (coverage floor at or
+below the cap, off-peak concurrency at or below the peak), and the YAML loader pair.
 Mirrors the data-center
 ``test_config.py`` assertion style without importing ``data_center`` (forbidden).
 """
@@ -17,42 +18,15 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-# The shared-spine authority the comms cadence + launch-cost defaults must match.
-# Importing from ``common`` is allowed; importing ``data_center`` is forbidden.
-from common.cadence import (
-    CADENCE_CEILING_DEFAULT as COMMON_CADENCE_CEILING_DEFAULT,
-)
-from common.cadence import (
-    FIRST_LAUNCH_YEAR_DEFAULT as COMMON_FIRST_LAUNCH_YEAR_DEFAULT,
-)
-from common.cadence import (
-    HIGH_CADENCE_COST_MUSD_DEFAULT as COMMON_HIGH_CADENCE_COST_MUSD_DEFAULT,
-)
-from common.cadence import (
-    HIGH_CADENCE_LAUNCHES_DEFAULT as COMMON_HIGH_CADENCE_LAUNCHES_DEFAULT,
-)
-from common.cadence import (
-    LAUNCHES_AT_YEAR_5_DEFAULT as COMMON_LAUNCHES_AT_YEAR_5_DEFAULT,
-)
-from common.cadence import (
-    LAUNCHES_AT_YEAR_10_DEFAULT as COMMON_LAUNCHES_AT_YEAR_10_DEFAULT,
-)
-from common.cadence import (
-    LOW_CADENCE_COST_MUSD_DEFAULT as COMMON_LOW_CADENCE_COST_MUSD_DEFAULT,
-)
-from common.cadence import (
-    LOW_CADENCE_LAUNCHES_DEFAULT as COMMON_LOW_CADENCE_LAUNCHES_DEFAULT,
-)
+from common.cadence import CadenceDials, LaunchCostDials
 from common.file_io import ModelFileError
 from communications.config import (
-    CadenceDials,
     CommsCadenceDials,
     CommsConfig,
     CommsMetadataDials,
     CoverageDials,
     GroundInterfaceDials,
     IridiumDials,
-    LaunchCostDials,
     RevenueDials,
     SatelliteDials,
     SubscriberDials,
@@ -62,15 +36,9 @@ from communications.config import (
 from communications.constants import (
     ARPU_USD_PER_MONTH_DEFAULT,
     BASE_YEAR_DEFAULT,
-    CADENCE_CEILING_DEFAULT,
     COMMS_SHARE_DEFAULT,
-    FIRST_LAUNCH_YEAR_DEFAULT,
     GROUND_BASIS_DEFAULT,
-    HIGH_CADENCE_COST_MUSD_DEFAULT,
     HORIZON_YEARS_DEFAULT,
-    LAUNCHES_AT_YEAR_5_DEFAULT,
-    LAUNCHES_AT_YEAR_10_DEFAULT,
-    LOW_CADENCE_COST_MUSD_DEFAULT,
     MAX_FLEET_SATELLITES_DEFAULT,
     REVENUE_MULTIPLE_DEFAULT,
     SATELLITE_BUILD_COST_MUSD_DEFAULT,
@@ -99,6 +67,33 @@ def test_comms_config_default_construction_has_all_blocks() -> None:
     assert c.ground is None
 
 
+@pytest.mark.parametrize(
+    ("block", "dials", "message"),
+    [
+        ("cadence", {"launches_at_year_5": 0}, "0 < launches_at_year_5 < launches_at_year_10"),
+        (
+            "launch_cost",
+            {"low_cadence_launches": 100.0, "high_cadence_launches": 5.0},
+            "low_cadence_launches < high_cadence_launches",
+        ),
+    ],
+    ids=["cadence_anchor_zero", "reversed_launch_cost_anchors"],
+)
+def test_the_shared_cadence_validators_guard_the_comms_config(
+    block: str, dials: dict[str, float], message: str
+) -> None:
+    """Objective: the comms config validates its cadence blocks like the data-center one.
+
+    The comms copy of the two blocks used to accept a zero year-5 anchor (the run
+    then raised mid-model) and reversed launch-cost anchors (the cost-down silently
+    switched off). Both configs now hold the one :mod:`common.cadence` pair.
+    Expected: each fails at load with the shared validator's message.
+    """
+    assert CommsConfig.model_fields[block].annotation in (CadenceDials, LaunchCostDials)
+    with pytest.raises(ValidationError, match=message):
+        comms_config_from_dict({block: dials})
+
+
 def test_comms_config_default_metadata_is_central_case() -> None:
     """The metadata factory supplies base year 2026 and horizon 10."""
     c = CommsConfig()
@@ -114,13 +109,6 @@ def test_comms_config_is_frozen() -> None:
     c = CommsConfig()
     with pytest.raises(ValidationError):
         c.ground = GroundInterfaceDials()
-
-
-def test_cadence_dials_frozen() -> None:
-    """Mutating a frozen nested-block field raises ``ValidationError``."""
-    cad = CadenceDials()
-    with pytest.raises(ValidationError):
-        cad.cadence_ceiling = 99
 
 
 def test_satellite_dials_frozen() -> None:
@@ -145,11 +133,6 @@ def test_comms_config_rejects_unknown_top_level_block() -> None:
         CommsConfig.model_validate({"bogus_block": {}})
 
 
-def test_cadence_dials_rejects_unknown_field() -> None:
-    with pytest.raises(ValidationError):
-        CadenceDials.model_validate({"bogus": 1})
-
-
 def test_satellite_dials_rejects_unknown_field() -> None:
     with pytest.raises(ValidationError):
         SatelliteDials.model_validate({"bogus_dial": 1})
@@ -163,61 +146,6 @@ def test_revenue_dials_rejects_unknown_field() -> None:
 def test_ground_interface_dials_rejects_unknown_field() -> None:
     with pytest.raises(ValidationError):
         GroundInterfaceDials.model_validate({"bogus_dial": 1.0})
-
-
-# -- cadence + launch-cost defaults match the named constants ---------
-
-
-def test_cadence_dials_defaults() -> None:
-    cad = CadenceDials()
-    assert cad.cadence_ceiling == CADENCE_CEILING_DEFAULT
-    assert cad.launches_at_year_5 == LAUNCHES_AT_YEAR_5_DEFAULT
-    assert cad.launches_at_year_10 == LAUNCHES_AT_YEAR_10_DEFAULT
-    assert cad.first_launch_year == FIRST_LAUNCH_YEAR_DEFAULT
-
-
-def test_launch_cost_dials_defaults() -> None:
-    lc = LaunchCostDials()
-    assert lc.low_cadence_cost_musd == LOW_CADENCE_COST_MUSD_DEFAULT
-    assert lc.high_cadence_cost_musd == HIGH_CADENCE_COST_MUSD_DEFAULT
-
-
-def test_cadence_default_values_are_the_known_anchors() -> None:
-    """The reused cadence anchors are the known venture-scenario integers."""
-    cad = CadenceDials()
-    assert cad.cadence_ceiling == 150
-    assert cad.launches_at_year_5 == 14
-    assert cad.launches_at_year_10 == 90
-    assert cad.first_launch_year == 1
-
-
-def test_launch_cost_default_values_are_the_known_anchors() -> None:
-    """The reused launch-cost anchors are the known $M / cadence pairs."""
-    lc = LaunchCostDials()
-    assert lc.low_cadence_cost_musd == 25.0
-    assert lc.high_cadence_cost_musd == 13.5
-    assert lc.low_cadence_launches == 5.0
-    assert lc.high_cadence_launches == 100.0
-
-
-# -- drift guard: comms defaults == common.cadence authority ----------
-
-
-def test_cadence_defaults_match_common_authority() -> None:
-    """The comms cadence + launch-cost defaults equal the shared ``common.cadence``
-    exports (the single authority), so the comms config cannot drift from the
-    shared spine. Asserted against ``common.cadence``, never ``data_center``.
-    """
-    cad = CadenceDials()
-    lc = LaunchCostDials()
-    assert cad.cadence_ceiling == COMMON_CADENCE_CEILING_DEFAULT
-    assert cad.launches_at_year_5 == COMMON_LAUNCHES_AT_YEAR_5_DEFAULT
-    assert cad.launches_at_year_10 == COMMON_LAUNCHES_AT_YEAR_10_DEFAULT
-    assert cad.first_launch_year == COMMON_FIRST_LAUNCH_YEAR_DEFAULT
-    assert lc.low_cadence_cost_musd == COMMON_LOW_CADENCE_COST_MUSD_DEFAULT
-    assert lc.high_cadence_cost_musd == COMMON_HIGH_CADENCE_COST_MUSD_DEFAULT
-    assert lc.low_cadence_launches == COMMON_LOW_CADENCE_LAUNCHES_DEFAULT
-    assert lc.high_cadence_launches == COMMON_HIGH_CADENCE_LAUNCHES_DEFAULT
 
 
 # -- the new dial defaults (the four investor-set values + spec dials) --

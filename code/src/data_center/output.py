@@ -1,21 +1,22 @@
-"""v8 ``ValuationOutput`` — the cycle-2 output JSON schema.
+"""The space artifact's schema: :class:`SpaceModelOutput` and its blocks.
 
 This module is the single source of truth for the shape of the
-``rklb-value <scenario> --json`` artifact. The v8 schema is a clean break
-from the cycle-1 v7 shape (D24, no back-compat shim). The top-level
-structure has exactly five keys (D21):
+``rklb-value <scenario> --json`` artifact, versioned by
+:data:`SCHEMA_VERSION`. Its cycle-2 layout was a clean break from the
+cycle-1 v7 shape (D24, no back-compat shim). The top-level structure has
+exactly five keys (D21):
 
-* ``metadata`` — the run's identity (schema version, base year, horizon,
+* ``metadata``: the run's identity (schema version, base year, horizon,
   the three investor-locked enums, generated-at timestamp).
-* ``inputs`` — the gospel anchors, the post-Feynman slopes, and the v8
+* ``inputs``: the gospel anchors, the post-Feynman slopes, and the
   dial blocks (cadence / fleet / volume / R-band / launch-cost) plus the
   per-generation list.
-* ``physical`` — the per-year per-node trajectory, each leaf wrapped in a
-  :class:`data_center.provenance.ProvenanceCell`.
-* ``business`` — the per-year living-fleet rollup, each leaf a
+* ``physical``: the per-year per-node trajectory, each leaf wrapped in a
+  :class:`common.provenance.ProvenanceCell`.
+* ``business``: the per-year living-fleet rollup, each leaf a
   ProvenanceCell. The cycle-1 ``summary`` block is dropped; its content
   lives here in ``business.years``.
-* ``meta`` — the engine-computed validation report, the introspection-built
+* ``meta``: the engine-computed validation report, the introspection-built
   data dictionary, the per-generation summary, and the ``query_examples``
   block (the cold-reader contract).
 
@@ -32,8 +33,8 @@ for the 16 wired rules (V1-V10 and V12-V17; V11 retired): cycle 2 does
 **not** define a new validation type.
 
 References:
-    strategy_05_20_cycle2.md § 3 — the v8 schema.
-    plan_05_20_cycle2.md § 5 T50 — the v8 ``ValuationOutput`` sketch.
+    strategy_05_20_cycle2.md § 3: the v8 schema.
+    plan_05_20_cycle2.md § 5 T50: the v8 ``SpaceModelOutput`` sketch.
 """
 
 from __future__ import annotations
@@ -44,33 +45,34 @@ from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from common.input_manifest import SourceStatus
 from common.meta import (
     DataDictEntry,
-    FieldKind,
     FormulaDefinition,
-    QueryAppliesTo,
     QueryExample,
-    Severity,
     SourceStatusSummary,
-    ValidationCheck,
     ValidationReport,
     ValidationResult,
-    ValidationSeverity,
 )
+from common.provenance import ProvenanceCell, YearString
 from data_center.config import (
     OperatorModel,
     RadiatorArchitecture,
     WorkloadType,
 )
 from data_center.constants import MAX_FY, MAX_HORIZON_YEARS, MIN_FY, MIN_HORIZON_YEARS
-from data_center.input_manifest import InputManifest, SourceStatus
-from data_center.provenance import ProvenanceCell, YearString
+from data_center.input_manifest import InputManifest
 
 logger = logging.getLogger(__name__)
 
-# The v8 output JSON schema version. The single place the schema-version
-# string is defined; mirrors ``GROUND_SCHEMA_VERSION`` in ``ground.py``.
-SCHEMA_VERSION: Final[str] = "v8"
+SCHEMA_VERSION: Final[str] = "v9"
+"""The space artifact's schema version, the single place it is defined (mirrors
+``GROUND_SCHEMA_VERSION`` in ``ground.py``). ``v9`` (2026-09-23) removes the
+duplicate ``business.years[].kw_on_orbit`` and ``pf_on_orbit`` (same values
+and formulas as ``kw_living_fleet`` and ``pf_living_fleet``, which stay) and
+publishes the data dictionary's ``source_class`` in lowercase
+(``input`` / ``constant`` / ``derived``). ``v8`` was the cycle-2 five-block
+schema."""
 
 YEAR_UNIT: Final[str] = "year"
 """Declared data-dictionary unit for a calendar-year field (a non-cell leaf
@@ -79,9 +81,9 @@ declares its unit once in ``json_schema_extra``; cells carry their own)."""
 YEARS_UNIT: Final[str] = "years"
 """Declared data-dictionary unit for a duration in years."""
 
-# The cold-reader contract enums and summary type (FieldKind, Severity,
-# ValidationSeverity, QueryAppliesTo, SourceStatusSummary) are venture-agnostic
-# and now live in :mod:`common.meta`; they are imported above.
+# The cold-reader contract types the meta block holds (the validation, data-
+# dictionary, query-example, and formula-definition models) live in
+# :mod:`common.meta`; import them from there.
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +114,7 @@ class ArtifactRole(StrEnum):
 class RunMetadata(BaseModel):
     """The ``metadata`` block — the run's identity.
 
-    Carries the v8 schema version, the base year + horizon, the three
+    Carries the artifact's schema version, the base year + horizon, the three
     investor-locked enums (workload / operator / radiator architecture),
     the deployment philosophy, and an ISO-8601 generated-at timestamp.
     The enum locks + base year + horizon mirror
@@ -124,7 +126,10 @@ class RunMetadata(BaseModel):
 
     schema_version: str = Field(
         ...,
-        description="The output JSON schema version (e.g. 'v8').",
+        description=(
+            "The artifact's JSON schema version ('v9' for the space model, "
+            "'ground-v2' for the ground reference)."
+        ),
     )
     scenario_name: str = Field(
         ...,
@@ -368,10 +373,6 @@ class BusinessYear(BaseModel):
         ...,
         description="Living-fleet node power in this year, kW.",
     )
-    kw_on_orbit: ProvenanceCell = Field(
-        ...,
-        description="Total kW on orbit (living fleet).",
-    )
     pf_deployed_this_year: ProvenanceCell = Field(
         ...,
         description="Newly deployed node compute in this year, PFLOPS.",
@@ -379,10 +380,6 @@ class BusinessYear(BaseModel):
     pf_living_fleet: ProvenanceCell = Field(
         ...,
         description="Living-fleet node compute in this year, PFLOPS.",
-    )
-    pf_on_orbit: ProvenanceCell = Field(
-        ...,
-        description="Total PFLOPS on orbit (living fleet).",
     )
     launch_cost_this_year_musd: ProvenanceCell = Field(
         ...,
@@ -482,7 +479,7 @@ class GenerationSummary(BaseModel):
 
     A flattened, render-friendly view of one GPU generation: the headline
     per-package physical + cost numbers a reader scans without walking the
-    full ``inputs.generations`` list.
+    full ``inputs.config.generations`` list.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -587,22 +584,22 @@ class MetaBlock(BaseModel):
 
 
 class SpaceModelOutput(BaseModel):
-    """The complete output of one valuation run — the v8 artifact.
+    """The complete output of one valuation run: the space artifact.
 
     Top-level shape, in strategy § 3.1 order (D21 — two data sections plus
     meta, no cycle-1 ``summary``):
 
-    1. ``metadata`` — the run's identity (schema version, base year,
+    1. ``metadata``: the run's identity (schema version, base year,
        horizon, the three investor-locked enums, generated-at timestamp).
-    2. ``inputs`` — gospel anchors + slopes + the v8 dial blocks +
+    2. ``inputs``: gospel anchors + slopes + the dial blocks +
        the per-generation list.
-    3. ``physical`` — the per-year per-node trajectory (ProvenanceCells).
-    4. ``business`` — the per-year living-fleet rollup (ProvenanceCells).
-    5. ``meta`` — validation report, data dictionary, generation summary,
+    3. ``physical``: the per-year per-node trajectory (ProvenanceCells).
+    4. ``business``: the per-year living-fleet rollup (ProvenanceCells).
+    5. ``meta``: validation report, data dictionary, generation summary,
        query_examples.
 
     Frozen — once built the artifact is immutable. Serialize via
-    ``model_dump_json(indent=2)``.
+    :func:`common.file_io.render_artifact_json`.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -629,10 +626,6 @@ class SpaceModelOutput(BaseModel):
     )
 
 
-ValuationOutput = SpaceModelOutput
-"""Historical internal name for :class:`SpaceModelOutput`."""
-
-
 __all__ = [
     "SCHEMA_VERSION",
     "YEARS_UNIT",
@@ -641,22 +634,10 @@ __all__ = [
     "BusinessBlock",
     "BusinessYear",
     "CostBreakdownBlock",
-    "DataDictEntry",
-    "FieldKind",
-    "FormulaDefinition",
     "GenerationSummary",
     "MetaBlock",
     "PhysicalBlock",
     "PhysicalYear",
-    "QueryAppliesTo",
-    "QueryExample",
     "RunMetadata",
-    "Severity",
     "SpaceModelOutput",
-    "SourceStatusSummary",
-    "ValidationCheck",
-    "ValidationResult",
-    "ValidationSeverity",
-    "ValidationReport",
-    "ValuationOutput",
 ]

@@ -39,10 +39,11 @@ which is exactly what comms needs (no per-satellite economics ride on the
 cohort, unlike the DC ``Cohort``), so comms uses it directly with no subclass.
 
 The two shared ``common.cadence`` functions return a ``ProvenanceCell``; this
-engine unwraps each ``.value`` to a plain ``float``/``int`` ONCE (via the
-private ``_cell_float`` / ``_cell_int`` helpers, mirroring the DC engine) at the
-single seam where the model touches a cell. Everything downstream is plain
-numerics; the comms output stays light (no provenance envelope).
+engine unwraps each ``.value`` to a plain ``float``/``int`` ONCE (via the shared
+strict :func:`common.provenance.as_float` / :func:`common.provenance.as_int`,
+the unwrap the DC engine uses too) at the single seam where the model touches a
+cell. Everything downstream is plain numerics; the comms output stays light (no
+provenance envelope).
 
 This module imports only from ``common.*`` and ``communications.*`` (never
 ``data_center``, per the cross-import guard) and uses none of the forbidden
@@ -116,14 +117,16 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
+from typing import Final
 
 from common.cadence import (
     ROUND_TO_NEAREST_OFFSET,
     compute_launch_cost_musd,
     compute_launches_per_year,
+    round_half_up,
 )
 from common.cohort import LivedCohort, cohort_is_alive_at, living_cohorts
-from common.provenance import ProvenanceCell
+from common.provenance import as_float, as_int
 from communications.config import CommsConfig, IridiumArpuDials, IridiumDials
 from communications.constants import (
     APERTURE_FOLD_CAVEAT_NOTE,
@@ -154,35 +157,31 @@ logger = logging.getLogger(__name__)
 # Fixed model constants (named, never bare literals; see CLAUDE.md).
 # ---------------------------------------------------------------------------
 
-FULL_COVERAGE_FRACTION: float = 1.0
+FULL_COVERAGE_FRACTION: Final[float] = 1.0
 """The coverage fraction at the coverage FLOOR: the living fleet is clamped to this
 so the coverage metric (``living_fleet / coverage_floor``) never reports above 1.0
 once the fleet meets or exceeds the floor (with a large base the fleet runs well
 above the floor, so coverage saturates at 1.0 while the build continues toward the
 capacity-sized fleet target)."""
 
-NO_COVERAGE_FRACTION: float = 0.0
-"""The lower clamp on the coverage fraction: a negative coverage fraction is
-meaningless (the engine never produces one), so it floors at zero."""
-
-FULL_BUILDOUT_FRACTION: float = 1.0
+FULL_BUILDOUT_FRACTION: Final[float] = 1.0
 """The buildout fraction at full deployment: the living fleet is clamped to this so
 the served-subscribers mapping (``buildout_fraction x subscriber_target``) never
 scales beyond the target when the build overshoots the fleet target by less than one
 launch's worth."""
 
-NO_BUILDOUT_FRACTION: float = 0.0
+NO_BUILDOUT_FRACTION: Final[float] = 0.0
 """The lower clamp on the buildout fraction fed to the served-subscribers mapping: a
 negative buildout fraction is meaningless (the engine never produces one), so it
 floors at zero before scaling the subscriber target."""
 
-MUSD_TO_USD: float = 1_000_000.0
+MUSD_TO_USD: Final[float] = 1_000_000.0
 """Conversion from the model's internal money unit ($M) to whole USD. The per-person
 cost figures are reported in USD per person per year (the unit the ground interface
 is on), so a $M cost line is multiplied by this before dividing by the served-people
 base, and a USD revenue line is divided by it to report $M."""
 
-LAUNCH_SHARE_ROUNDING_TOLERANCE: float = 1e-9
+LAUNCH_SHARE_ROUNDING_TOLERANCE: Final[float] = 1e-9
 """Absolute tolerance added before the half-up rounding of the comms launch share
 (``fleet_launches x share_of_fleet``), so an exact half rounds up as intended. The
 product of an integer cadence and a decimal share carries binary representation
@@ -192,67 +191,26 @@ below this tolerance, while 1e-9 of a launch is far below any meaningful fractio
 share dial can express, so the tolerance only ever repairs representation error. A
 fixed numerical constant, not a tunable."""
 
-MIN_SUBSCRIBERS_PER_SATELLITE: int = 1
+MIN_SUBSCRIBERS_PER_SATELLITE: Final[int] = 1
 """The smallest derived subscriber density the fleet sizing accepts: one person per
 satellite. A density that rounds below this describes a satellite that cannot carry
 a single subscriber at the configured load, so the fleet sizing would divide by zero;
 the derivation raises a clear error instead. A structural bound, not a tunable."""
 
-MARGIN_PERCENT_SCALE: float = 100.0
+MARGIN_PERCENT_SCALE: Final[float] = 100.0
 """The percent scale for a gross margin: ``(revenue - cost) / revenue`` times this
 yields a percentage (e.g. 0.333 -> 33.3), mirroring the data-center fleet-margin
 convention so the two models report margin in the same unit."""
 
-ZERO_MARGIN_PCT: float = 0.0
+ZERO_MARGIN_PCT: Final[float] = 0.0
 """The gross-margin percent when revenue is zero (an empty fleet, or a build-out
 year before any satellite is on orbit): the margin is undefined, so it reports 0.0
 rather than dividing by zero, mirroring the data-center fleet-margin guard."""
 
-NO_ANNUAL_COST_MUSD: float = 0.0
+NO_ANNUAL_COST_MUSD: Final[float] = 0.0
 """The per-satellite annual cost ($M/yr) returned for a non-positive satellite life
 (guarded, though the lifetime dial is ``ge=1``): with no life to spread it over, the
 annualized cost basis is 0.0."""
-
-
-# ---------------------------------------------------------------------------
-# ProvenanceCell unwrap seam (mirrors the DC engine's _cell_float / _cell_int).
-# This is the ONLY place the comms model touches a ProvenanceCell; everything
-# downstream is plain floats/ints.
-# ---------------------------------------------------------------------------
-
-
-def _cell_float(c: ProvenanceCell) -> float:
-    """Unwrap a numeric :class:`ProvenanceCell` to a plain ``float``.
-
-    Args:
-        c: A ProvenanceCell whose ``value`` is numeric.
-
-    Returns:
-        The cell's value as a ``float``.
-
-    Raises:
-        TypeError: If the cell's value is a bool or not a real number.
-    """
-    if isinstance(c.value, bool) or not isinstance(c.value, (int, float)):
-        raise TypeError(f"ProvenanceCell {c.formula_name!r} is not numeric: {c.value!r}")
-    return float(c.value)
-
-
-def _cell_int(c: ProvenanceCell) -> int:
-    """Unwrap an integer :class:`ProvenanceCell` to a plain ``int``.
-
-    Args:
-        c: A ProvenanceCell whose ``value`` is an integer.
-
-    Returns:
-        The cell's value as an ``int``.
-
-    Raises:
-        TypeError: If the cell's value is a bool or not an int.
-    """
-    if isinstance(c.value, bool) or not isinstance(c.value, int):
-        raise TypeError(f"ProvenanceCell {c.formula_name!r} is not an int: {c.value!r}")
-    return c.value
 
 
 # ---------------------------------------------------------------------------
@@ -260,29 +218,11 @@ def _cell_int(c: ProvenanceCell) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _round_half_up(x: float) -> int:
-    """Round a non-negative quantity to the nearest integer, half up.
-
-    Mirrors ``common.cadence._integer_launch_count`` using the shared
-    ``ROUND_TO_NEAREST_OFFSET`` authority (imported from ``common.cadence``, not
-    redefined): ``floor(x + 0.5)``. Used for the subscriber density, the served
-    count, and the ARPU bucket counts. The comms launch share has its own helper
-    (:func:`_comms_launch_count`) because it adds a representation-error tolerance.
-
-    Args:
-        x: A non-negative quantity.
-
-    Returns:
-        The nearest whole number, rounded half up.
-    """
-    return math.floor(x + ROUND_TO_NEAREST_OFFSET)
-
-
 def _comms_launch_count(fleet_launches: int, share_of_fleet: float) -> int:
     """Turn the comms slice of the whole-fleet cadence into a whole launch count.
 
     ``floor(fleet_launches x share_of_fleet + 0.5 + LAUNCH_SHARE_ROUNDING_TOLERANCE)``:
-    half up, like :func:`_round_half_up`, plus the named
+    half up, like :func:`common.cadence.round_half_up`, plus the named
     :data:`LAUNCH_SHARE_ROUNDING_TOLERANCE` so an exact half is not lost to binary
     representation error (a 0.35 share of 90 launches is 31.5, which rounds to 32,
     although the float product is 31.499999999999996).
@@ -516,7 +456,7 @@ def derive_iridium_subscribers_per_satellite(
         subscribers_per_satellite = round_half_up(
             per_satellite_capacity_gbps x GBPS_TO_MBPS / offered_load_per_subscriber_mbps)
 
-    Uses the engine's :func:`_round_half_up` (NOT ``floor`` or ``int()``): it matches
+    Uses the shared :func:`common.cadence.round_half_up` (NOT ``floor`` or ``int()``): it matches
     the engine's rounding idiom AND is robust to floating-point representation error
     at the exact-integer boundary (e.g. 31200.0000001 rounds to 31200). This is the
     OPPOSITE rounding convention from the launch coupling's ``floor``, and both are
@@ -540,7 +480,7 @@ def derive_iridium_subscribers_per_satellite(
     """
     offered_load_per_subscriber_mbps = active_user_rate_mbps * concurrency_peak
     per_satellite_capacity_mbps = per_satellite_capacity_gbps * GBPS_TO_MBPS
-    density = _round_half_up(per_satellite_capacity_mbps / offered_load_per_subscriber_mbps)
+    density = round_half_up(per_satellite_capacity_mbps / offered_load_per_subscriber_mbps)
     if density < MIN_SUBSCRIBERS_PER_SATELLITE:
         raise ValueError(
             "the Iridium dials derive fewer than one subscriber per satellite: "
@@ -654,32 +594,31 @@ def subscribers_served_at(
     base = override if override is not None else subscriber_target
     capped_base = min(base, people_capacity)
     clamped = min(FULL_BUILDOUT_FRACTION, max(NO_BUILDOUT_FRACTION, buildout_fraction))
-    return _round_half_up(clamped * capped_base)
+    return round_half_up(clamped * capped_base)
 
 
-def _final_year_cash_cost_per_subscriber_usd(
-    final_year_replacement_cost_musd: float | None, subscribers_served: int
-) -> float | None:
-    """Divide the final-year cash replacement ($M) by the served base into USD per person.
+def usd_per_person(cost_musd: float | None, people_served: int) -> float | None:
+    """Divide a $M cost by the served-people base into USD per person.
 
-    The final-year cash replacement cost (converted from $M to whole USD via
-    :data:`MUSD_TO_USD`) over the served-people base at the final year's buildout
-    (the same base the annualized per-person figure uses, so an override or a
-    capacity-capped base flows through both). ``None`` when the final year replaced
-    no retiring cohort (no cash replacement basis exists) or nobody is served (the
-    division is undefined): an undefined figure is never published as 0.0.
+    The one per-person conversion: the cost (converted from $M to whole USD via
+    :data:`MUSD_TO_USD`) over the served people. It prices both published
+    per-person figures on the same base: the final-year cash cost (the final
+    year's replacement line) and the annualized cost (the final year's annualized
+    fleet cost), so an override or a capacity-capped base flows through both.
+    ``None`` when there is no cost basis (the final year replaced no retiring
+    cohort) or nobody is served (the division is undefined): an undefined figure
+    is never published as 0.0.
 
     Args:
-        final_year_replacement_cost_musd: The final model year's replacement line, $M,
-            or ``None`` when that year replaced no retiring cohort.
-        subscribers_served: The served-PERSON count at the final year's buildout.
+        cost_musd: The cost, $M, or ``None`` when no basis exists.
+        people_served: The served-PERSON count.
 
     Returns:
-        The final-year cash cost per served person, USD per person, or ``None``.
+        The cost per served person, USD, or ``None``.
     """
-    if final_year_replacement_cost_musd is None or subscribers_served <= 0:
+    if cost_musd is None or people_served <= 0:
         return None
-    return final_year_replacement_cost_musd * MUSD_TO_USD / subscribers_served
+    return cost_musd * MUSD_TO_USD / people_served
 
 
 # ---------------------------------------------------------------------------
@@ -744,9 +683,11 @@ def _per_satellite_annual_cost_musd(
     return lifetime_cost_per_satellite_musd / satellite_lifetime_years
 
 
-def _gross_margin_pct(revenue_musd: float, cost_musd: float) -> float:
-    """Gross margin as a percent: ``(revenue - cost) / revenue x 100``.
+def margin_pct(revenue_musd: float, cost_musd: float) -> float:
+    """A margin as a percent: ``(revenue - cost) / revenue x 100``.
 
+    The one margin formula: the per-cohort and per-year gross margins, and the
+    published ARPU margin (whose cost is the built fleet's annualized cost).
     Mirrors the DC fleet-margin formula, including its zero-revenue guard (a year
     with no living fleet, hence no revenue, reports :data:`ZERO_MARGIN_PCT` rather
     than dividing by zero).
@@ -756,7 +697,7 @@ def _gross_margin_pct(revenue_musd: float, cost_musd: float) -> float:
         cost_musd: The annual cost (the annualized cost basis), $M.
 
     Returns:
-        The gross margin in percent, or :data:`ZERO_MARGIN_PCT` when revenue is not
+        The margin in percent, or :data:`ZERO_MARGIN_PCT` when revenue is not
         positive.
     """
     if revenue_musd <= 0.0:
@@ -1195,12 +1136,12 @@ def derive_arpu_buckets(people_capacity: int, dials: IridiumArpuDials) -> Iridiu
     """
     people_share = (dials.standard_mix_pct + dials.premium_mix_pct) / ARPU_MIX_TOTAL_PCT
     total_connections_float = people_capacity / people_share
-    premium_count = _round_half_up(
+    premium_count = round_half_up(
         total_connections_float * dials.premium_mix_pct / ARPU_MIX_TOTAL_PCT
     )
     standard_count = people_capacity - premium_count
-    iot_count = _round_half_up(total_connections_float * dials.iot_mix_pct / ARPU_MIX_TOTAL_PCT)
-    government_count = _round_half_up(
+    iot_count = round_half_up(total_connections_float * dials.iot_mix_pct / ARPU_MIX_TOTAL_PCT)
+    government_count = round_half_up(
         total_connections_float * dials.government_mix_pct / ARPU_MIX_TOTAL_PCT
     )
     standard = _arpu_bucket(dials.standard_mix_pct, dials.standard_price_usd_month, standard_count)
@@ -1220,7 +1161,7 @@ def derive_arpu_buckets(people_capacity: int, dials: IridiumArpuDials) -> Iridiu
         premium=premium,
         iot=iot,
         government=government,
-        total_connections=_round_half_up(total_connections_float),
+        total_connections=round_half_up(total_connections_float),
         arpu_revenue_total_musd_yr=total_revenue_musd_yr,
     )
 
@@ -1483,7 +1424,7 @@ def _comms_launches_for_year(year_idx: int, config: CommsConfig) -> tuple[int, i
         per-launch cost in $M priced at the whole-fleet cadence.
     """
     cad = config.cadence
-    fleet_launches = _cell_int(
+    fleet_launches = as_int(
         compute_launches_per_year(
             year_idx,
             cadence_ceiling=cad.cadence_ceiling,
@@ -1494,7 +1435,7 @@ def _comms_launches_for_year(year_idx: int, config: CommsConfig) -> tuple[int, i
     )
     comms_launches = _comms_launch_count(fleet_launches, config.comms_cadence.share_of_fleet)
     lc = config.launch_cost
-    launch_cost_per_launch_musd = _cell_float(
+    launch_cost_per_launch_musd = as_float(
         compute_launch_cost_musd(
             float(fleet_launches),
             low_cadence_cost_musd=lc.low_cadence_cost_musd,
@@ -1562,8 +1503,8 @@ def _cohort_economics_for_year(
             cohort_subscribers = 0
         subscribers_allocated += cohort_subscribers
         arpu_revenue_musd = cohort_subscribers * arpu_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
-        cost_plus_margin_pct = _gross_margin_pct(cost_plus_revenue_musd, annual_cost_musd)
-        arpu_margin_pct = _gross_margin_pct(arpu_revenue_musd, annual_cost_musd)
+        cost_plus_margin_pct = margin_pct(cost_plus_revenue_musd, annual_cost_musd)
+        arpu_margin_pct = margin_pct(arpu_revenue_musd, annual_cost_musd)
         lines.append(
             CommsCohortYear(
                 launch_year=build.launch_year,
@@ -1741,16 +1682,14 @@ def _compute_comms_year(
     arpu_usd_per_month = config.revenue.arpu_usd_per_month
     # Case 1, COST-PLUS: revenue = annual cost x the multiple (cost-coupled).
     cost_plus_revenue_this_year_musd = annual_cost_this_year_musd * revenue_multiple
-    cost_plus_gross_margin_pct = _gross_margin_pct(
+    cost_plus_gross_margin_pct = margin_pct(
         cost_plus_revenue_this_year_musd, annual_cost_this_year_musd
     )
     # Case 2, ARPU: revenue = served base x monthly ARPU x 12 (price x served base).
     arpu_revenue_this_year_musd = (
         subscribers_served_this_year * arpu_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
     )
-    arpu_gross_margin_pct = _gross_margin_pct(
-        arpu_revenue_this_year_musd, annual_cost_this_year_musd
-    )
+    arpu_gross_margin_pct = margin_pct(arpu_revenue_this_year_musd, annual_cost_this_year_musd)
     cohort_lines = _cohort_economics_for_year(
         fy=fy,
         life=life,
@@ -1982,7 +1921,7 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
     )
     # The final-year cash cost per served person (a lumpy cash figure over the same
     # served base the annualized per-person figure uses).
-    final_year_cash_cost_per_subscriber_usd = _final_year_cash_cost_per_subscriber_usd(
+    final_year_cash_cost_per_subscriber_usd = usd_per_person(
         final_year_replacement_cost_musd, subscribers_served
     )
 
@@ -2047,7 +1986,9 @@ __all__ = [
     "derive_iridium_subscribers_per_satellite",
     "derive_per_satellite_capacity_gbps",
     "iridium_assumptions",
+    "margin_pct",
     "resolve_device_spectral_efficiency",
     "run_comms_model",
     "subscribers_served_at",
+    "usd_per_person",
 ]

@@ -1,15 +1,15 @@
-"""Regression tests for the v8 output naming convention (plan §5 T62).
+"""Regression tests for the output naming convention (plan §5 T62).
 
 Cycle-1 shipped a field ``annual_rev_per_node_musd`` that was *named*
 revenue but *held* gross profit (revenue − cost). The investor caught it
 when "2036 revenue" would not reconcile against the cost block. D25 fixed
-it: v8 splits the per-node and fleet money lines into explicit
+it: the cycle-2 schema splits the per-node and fleet money lines into explicit
 ``revenue_*`` / ``cost_*`` / ``gross_profit_*`` fields.
 
 This module guards that the bug cannot return. Three families:
 
-1. **The old field is gone** — no field path anywhere in a v8
-   ``ValuationOutput`` is named ``annual_rev_per_node_musd``.
+1. **The old field is gone**: no field path anywhere in the space artifact
+   (a ``SpaceModelOutput``) is named ``annual_rev_per_node_musd``.
 2. **revenue ≠ profit** — a field named ``revenue_*`` carries revenue,
    not profit. Proven algebraically: ``revenue − gross_profit == cost``
    for every band, and ``revenue > gross_profit`` (since R > 1). A
@@ -30,7 +30,7 @@ import pytest
 
 from data_center.output import SpaceModelOutput
 
-# The cycle-1 misnamed field — must not exist anywhere in v8 output.
+# The cycle-1 misnamed field: it must not exist anywhere in the output.
 _BANNED_FIELD = "annual_rev_per_node_musd"
 
 # Unit families a field-name token must map to. A token in the field name
@@ -61,7 +61,7 @@ def _walk_field_paths(node: Any, prefix: str = "") -> Iterator[str]:
 
     Dict keys extend the path; list elements are walked under the same
     path (the index is not part of the name). Used to enumerate every
-    field name a v8 output exposes.
+    field name the output exposes.
     """
     if isinstance(node, dict):
         for key, value in node.items():
@@ -79,7 +79,7 @@ def _walk_field_paths(node: Any, prefix: str = "") -> Iterator[str]:
 
 
 def test_banned_field_absent_everywhere(default_output_json: dict[str, Any]) -> None:
-    """No field path in a v8 output is named ``annual_rev_per_node_musd``."""
+    """No field path in the output is named ``annual_rev_per_node_musd``."""
     offending = [p for p in _walk_field_paths(default_output_json) if p.endswith(_BANNED_FIELD)]
     assert offending == [], f"cycle-1 misnamed field resurfaced at: {offending}"
 

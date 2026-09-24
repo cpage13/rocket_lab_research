@@ -1,16 +1,16 @@
-"""Tests for the v8 typed Pydantic output models in :mod:`data_center.output`.
+"""Tests for the space artifact's typed Pydantic models in :mod:`data_center.output`.
 
 Three test families:
 
-1. **Schema shape** — the v8 ``ValuationOutput`` has exactly the five
+1. **Schema shape**: ``SpaceModelOutput`` has exactly the five
    top-level keys ``{metadata, inputs, physical, business, meta}`` (D21);
    ``physical.years`` / ``business.years`` carry ProvenanceCell-wrapped
    per-year data; the ``meta`` block carries the four sub-blocks.
-2. **Construction + round-trip** — a hand-built minimal v8
-   ``ValuationOutput`` serialises via ``model_dump_json`` and re-validates.
-3. **Engine integration** — running the default scenario through the
-   engine produces a structurally-valid v8 artifact and a populated
-   data dictionary.
+2. **Construction + round-trip**: a hand-built minimal
+   ``SpaceModelOutput`` serialises via ``model_dump_json`` and re-validates.
+3. **Engine integration**: running the default scenario through the
+   engine produces a structurally-valid space artifact, stamped with the
+   current schema version, and a populated data dictionary.
 """
 
 from __future__ import annotations
@@ -21,32 +21,34 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, ValidationError
 
+from common.meta import (
+    DataDictEntry,
+    FieldKind,
+    Severity,
+    SourceStatusSummary,
+    ValidationCheck,
+    ValidationReport,
+)
+from common.provenance import ProvenanceCell, as_float, as_int
 from data_center.config import (
     ValuationConfig,
 )
 from data_center.generations import KNOWN_GENS
-from data_center.input_manifest import build_input_manifest
+from data_center.input_manifest import build_input_manifest, revenue_anchors
 from data_center.output import (
     SCHEMA_VERSION,
     BusinessBlock,
     BusinessYear,
     CostBreakdownBlock,
-    DataDictEntry,
-    FieldKind,
     MetaBlock,
     PhysicalBlock,
     PhysicalYear,
     RunMetadata,
-    Severity,
-    SourceStatusSummary,
-    ValidationCheck,
-    ValidationReport,
-    ValuationOutput,
+    SpaceModelOutput,
 )
-from data_center.provenance import ProvenanceCell
 
-# Top-level keys of the v8 artifact (D21).
-V8_TOP_LEVEL_KEYS = {"metadata", "inputs", "physical", "business", "meta"}
+# Top-level keys of the space artifact (D21).
+TOP_LEVEL_KEYS = {"metadata", "inputs", "physical", "business", "meta"}
 
 # Every per-year cell field on PhysicalYear / BusinessYear.
 PHYSICAL_YEAR_FIELDS = set(PhysicalYear.model_fields.keys())
@@ -54,7 +56,7 @@ BUSINESS_YEAR_FIELDS = set(BusinessYear.model_fields.keys())
 
 
 # ---------------------------------------------------------------------------
-# Helpers — a hand-built minimal v8 ValuationOutput
+# Helpers: a hand-built minimal SpaceModelOutput
 # ---------------------------------------------------------------------------
 
 
@@ -78,7 +80,7 @@ def _str_cell(value: str) -> ProvenanceCell:
         unit="-",
         formula="pick",
         formula_name="frontier_generation_from_cadence",
-        uses=["inputs.generations[].year_available"],
+        uses=["inputs.config.generations[].year_available"],
         sources=["unit test"],
         description="A test enum cell.",
     )
@@ -132,10 +134,8 @@ def _make_business_year() -> BusinessYear:
         living_fleet=_num_cell(40.0, "count"),
         kw_deployed_this_year=_num_cell(4200.0, "kW"),
         kw_living_fleet=_num_cell(12000.0, "kW"),
-        kw_on_orbit=_num_cell(12000.0, "kW"),
         pf_deployed_this_year=_num_cell(25200.0, "PFLOPS"),
         pf_living_fleet=_num_cell(72000.0, "PFLOPS"),
-        pf_on_orbit=_num_cell(72000.0, "PFLOPS"),
         launch_cost_this_year_musd=_num_cell(18.0, "MUSD"),
         cost_annual_fleet_musd=_num_cell(520.0, "MUSD"),
         revenue_annual_fleet_musd_central=_num_cell(780.0, "MUSD"),
@@ -153,8 +153,8 @@ def _make_business_year() -> BusinessYear:
     )
 
 
-def _make_minimal_output() -> ValuationOutput:
-    """A minimum-valid v8 ValuationOutput — one physical + one business year."""
+def _make_minimal_output() -> SpaceModelOutput:
+    """A minimum-valid SpaceModelOutput: one physical + one business year."""
     metadata = RunMetadata(
         schema_version=SCHEMA_VERSION,
         scenario_name="Test scenario",
@@ -196,7 +196,7 @@ def _make_minimal_output() -> ValuationOutput:
                 description="Total node electrical power, kW.",
                 unit="kW",
                 type="cell",
-                source_class="DERIVED",
+                source_class=FieldKind.DERIVED,
             )
         ],
         formula_definitions=[],
@@ -215,7 +215,7 @@ def _make_minimal_output() -> ValuationOutput:
         ),
         schema_version_notes="unit test",
     )
-    return ValuationOutput(
+    return SpaceModelOutput(
         metadata=metadata,
         inputs=inputs,
         physical=physical,
@@ -225,25 +225,25 @@ def _make_minimal_output() -> ValuationOutput:
 
 
 # ---------------------------------------------------------------------------
-# Schema shape — the v8 five-block structure
+# Schema shape: the five-block structure
 # ---------------------------------------------------------------------------
 
 
-def test_v8_top_level_has_exactly_five_keys() -> None:
-    """ValuationOutput has exactly {metadata, inputs, physical, business, meta}."""
-    assert set(ValuationOutput.model_fields.keys()) == V8_TOP_LEVEL_KEYS
+def test_top_level_has_exactly_five_keys() -> None:
+    """SpaceModelOutput has exactly {metadata, inputs, physical, business, meta}."""
+    assert set(SpaceModelOutput.model_fields.keys()) == TOP_LEVEL_KEYS
 
 
-def test_v8_top_level_keys_match_in_serialised_json() -> None:
-    """The serialised artifact's top-level keys are the v8 five (D21)."""
+def test_top_level_keys_match_in_serialised_json() -> None:
+    """The serialised artifact's top-level keys are the five (D21)."""
     out = _make_minimal_output()
     parsed = json.loads(out.model_dump_json())
-    assert set(parsed.keys()) == V8_TOP_LEVEL_KEYS
+    assert set(parsed.keys()) == TOP_LEVEL_KEYS
 
 
-def test_v8_drops_cycle1_summary_and_decisions_blocks() -> None:
+def test_cycle1_summary_and_decisions_blocks_are_gone() -> None:
     """The cycle-1 `summary` / `decisions` / `manifest` / `about` blocks are gone."""
-    fields = set(ValuationOutput.model_fields.keys())
+    fields = set(SpaceModelOutput.model_fields.keys())
     for cycle1_only in ("summary", "decisions", "manifest", "about", "years"):
         assert cycle1_only not in fields
 
@@ -275,9 +275,16 @@ def test_cost_breakdown_block_has_six_cell_fields() -> None:
         assert info.annotation is ProvenanceCell, f"{name} is not a ProvenanceCell"
 
 
-def test_business_year_has_nineteen_cell_fields() -> None:
-    """BusinessYear carries the 19 per-fleet ProvenanceCell fields."""
-    assert len(BUSINESS_YEAR_FIELDS) == 24
+def test_business_year_has_twenty_one_cell_fields() -> None:
+    """Objective: one field per fleet quantity, with no duplicate aliases.
+
+    Expected: ``year`` plus 21 ProvenanceCell fields; the duplicates
+    ``kw_on_orbit`` and ``pf_on_orbit`` (schema v8) are gone
+    (``kw_living_fleet`` and ``pf_living_fleet`` carry those values).
+    """
+    assert len(BUSINESS_YEAR_FIELDS) == 22
+    assert {"kw_on_orbit", "pf_on_orbit"}.isdisjoint(BUSINESS_YEAR_FIELDS)
+    assert {"kw_living_fleet", "pf_living_fleet"} <= BUSINESS_YEAR_FIELDS
     for name, info in BusinessYear.model_fields.items():
         if name == "year":
             assert info.annotation is int
@@ -325,24 +332,24 @@ def test_run_metadata_carries_schema_version_and_generated_at() -> None:
 
 
 def test_minimal_valuation_output_constructs() -> None:
-    """A minimum-valid v8 ValuationOutput can be built."""
+    """A minimum-valid SpaceModelOutput can be built."""
     out = _make_minimal_output()
-    assert out.metadata.schema_version == "v8"
+    assert out.metadata.schema_version == "v9"
     assert "2026" in out.physical.years
     assert "2026" in out.business.years
     assert len(out.meta.validation.rules) == 1
 
 
 def test_round_trip_serialises_and_validates() -> None:
-    """A v8 ValuationOutput round-trips: dump -> load -> validate yields equal."""
+    """A SpaceModelOutput round-trips: dump -> load -> validate yields equal."""
     original = _make_minimal_output()
     text = original.model_dump_json(indent=2)
-    rebuilt = ValuationOutput.model_validate(json.loads(text))
+    rebuilt = SpaceModelOutput.model_validate(json.loads(text))
     assert rebuilt == original
 
 
 def test_frozen_instances_reject_mutation() -> None:
-    """Every v8 model is frozen — mutation raises ValidationError."""
+    """Every output model is frozen: mutation raises ValidationError."""
     out = _make_minimal_output()
     with pytest.raises(ValidationError):
         out.metadata.schema_version = "evil"  # type: ignore[misc]
@@ -361,10 +368,10 @@ def test_provenance_cell_is_the_per_year_leaf() -> None:
 
 
 def test_schema_introspection_produces_a_json_schema() -> None:
-    """ValuationOutput.model_json_schema() works and surfaces the v8 keys."""
-    schema = ValuationOutput.model_json_schema()
+    """SpaceModelOutput.model_json_schema() works and surfaces the five keys."""
+    schema = SpaceModelOutput.model_json_schema()
     assert schema["type"] == "object"
-    for key in V8_TOP_LEVEL_KEYS:
+    for key in TOP_LEVEL_KEYS:
         assert key in schema["properties"], f"top-level key missing: {key}"
 
 
@@ -380,14 +387,14 @@ def test_enums_are_string_typed() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_engine_produces_v8_top_level_structure(default_output: ValuationOutput) -> None:
-    """The engine's run_valuation emits the v8 five-block artifact."""
+def test_engine_produces_the_five_block_structure(default_output: SpaceModelOutput) -> None:
+    """The engine's run_valuation emits the five-block space artifact."""
     out = default_output
     parsed = json.loads(out.model_dump_json())
-    assert set(parsed.keys()) == V8_TOP_LEVEL_KEYS
+    assert set(parsed.keys()) == TOP_LEVEL_KEYS
 
 
-def test_engine_emits_eleven_physical_and_business_years(default_output: ValuationOutput) -> None:
+def test_engine_emits_eleven_physical_and_business_years(default_output: SpaceModelOutput) -> None:
     """The default scenario (horizon 10) emits 11 physical + 11 business years."""
     out = default_output
     assert len(out.physical.years) == 11
@@ -398,15 +405,21 @@ def test_engine_emits_eleven_physical_and_business_years(default_output: Valuati
     assert "2036" in out.business.years
 
 
-def test_engine_metadata_schema_version_is_v8(default_output: ValuationOutput) -> None:
-    """The engine stamps the artifact schema_version as 'v8'."""
+def test_engine_stamps_the_current_schema_version(default_output: SpaceModelOutput) -> None:
+    """Objective: the artifact records the schema it follows.
+
+    Expected: ``metadata.schema_version`` is :data:`SCHEMA_VERSION`, pinned
+    here to ``v9`` so a schema bump is always a deliberate test change.
+    """
     out = default_output
-    assert out.metadata.schema_version == "v8"
+    assert out.metadata.schema_version == SCHEMA_VERSION == "v9"
     assert out.metadata.base_year == 2026
     assert out.metadata.horizon_years == 10
 
 
-def test_engine_per_year_cells_carry_values_and_provenance(default_output: ValuationOutput) -> None:
+def test_engine_per_year_cells_carry_values_and_provenance(
+    default_output: SpaceModelOutput,
+) -> None:
     """Every physical-year leaf is a ProvenanceCell with a value + formula_name."""
     out = default_output
     py = out.physical.years["2030"]
@@ -422,7 +435,7 @@ def test_engine_per_year_cells_carry_values_and_provenance(default_output: Valua
             assert cell.formula_name, f"{name} has no formula_name"
 
 
-def test_engine_business_year_cells_carry_values(default_output: ValuationOutput) -> None:
+def test_engine_business_year_cells_carry_values(default_output: SpaceModelOutput) -> None:
     """Every business-year leaf is a ProvenanceCell with a value."""
     out = default_output
     by = out.business.years["2032"]
@@ -435,7 +448,7 @@ def test_engine_business_year_cells_carry_values(default_output: ValuationOutput
         assert cell.value is not None, f"{name} has a None value"
 
 
-def test_engine_emits_populated_data_dictionary(default_output: ValuationOutput) -> None:
+def test_engine_emits_populated_data_dictionary(default_output: SpaceModelOutput) -> None:
     """run_valuation populates meta.data_dictionary with described entries."""
     out = default_output
     dd = out.meta.data_dictionary
@@ -447,8 +460,25 @@ def test_engine_emits_populated_data_dictionary(default_output: ValuationOutput)
         assert entry.source_class, f"empty source_class for {entry.path}"
 
 
+def test_data_dictionary_source_class_follows_the_block(default_output: SpaceModelOutput) -> None:
+    """Objective: one provenance-class vocabulary, the FieldKind enum.
+
+    Expected: every entry's ``source_class`` is a :class:`FieldKind` set by the
+    field's top-level block: ``input`` under ``inputs``, ``constant`` under
+    ``metadata``, ``derived`` everywhere else (and published lowercase).
+    """
+    expected = {"inputs": FieldKind.INPUT, "metadata": FieldKind.CONSTANT}
+    for entry in default_output.meta.data_dictionary:
+        head = entry.path.split(".", 1)[0].removesuffix("[]")
+        assert entry.source_class is expected.get(head, FieldKind.DERIVED), entry.path
+    dumped = {
+        entry["source_class"] for entry in default_output.model_dump()["meta"]["data_dictionary"]
+    }
+    assert dumped == {"input", "constant", "derived"}
+
+
 def test_data_dictionary_describes_per_year_cells_as_leaves(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """The data dictionary treats a ProvenanceCell as a leaf (one entry per field)."""
     out = default_output
@@ -483,7 +513,7 @@ def _dictionary_path_nodes(doc: Any, path: str) -> list[Any]:
 
 
 def test_every_data_dictionary_cell_unit_is_the_cells_own_unit(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """Objective: the dictionary's units come from the cells, not name suffixes.
 
@@ -517,27 +547,33 @@ def test_every_data_dictionary_cell_unit_is_the_cells_own_unit(
     assert units_by_path["inputs.config.volume.mounting_overhead_pct"] == "fraction"
 
 
-def test_engine_inputs_block_carries_v8_dial_blocks(default_output: ValuationOutput) -> None:
-    """inputs carries gospel + slopes + the five v8 dial blocks + generations."""
-    out = default_output
-    inp = out.inputs
-    assert "inputs.config.physical.mass_envelope_t" in inp.assumption_index
-    assert "pf_growth_per_gen" in inp.slopes
-    assert inp.cadence.cadence_ceiling > 0
-    assert inp.fleet.service_life_years > 0
-    assert inp.volume.stowed_pitch_mm > 0
-    assert len(inp.r_band.central) >= 2
-    assert inp.launch_cost.low_cadence_cost_musd > 0
-    assert len(inp.generations) >= 5
+def test_engine_inputs_block_carries_every_dial_block(default_output: SpaceModelOutput) -> None:
+    """Objective: the typed input tree carries every dial block the run consumed.
+
+    Expected: the physical and slope cells, the cadence, fleet, volume, and
+    launch-cost cells, at least two anchors per R band (their years read back
+    through :func:`revenue_anchors`), and every listed generation.
+    """
+    tree = default_output.inputs.config
+    assert "inputs.config.physical.mass_envelope_t" in default_output.inputs.assumption_index
+    assert as_float(tree.generation_slopes.pf_growth_per_gen) > 0
+    assert as_int(tree.cadence.cadence_ceiling) > 0
+    assert as_int(tree.fleet.service_life_years) > 0
+    assert as_float(tree.volume.stowed_pitch_mm) > 0
+    assert as_float(tree.launch.low_cadence_cost_musd) > 0
+    central = revenue_anchors(tree.revenue.central)
+    assert len(central) >= 2
+    assert [anchor.fy for anchor in central] == sorted(anchor.fy for anchor in central)
+    assert len(tree.generations) >= 5
 
 
 def test_engine_generations_dictionary_summarises_each_generation(
-    default_output: ValuationOutput,
+    default_output: SpaceModelOutput,
 ) -> None:
     """meta.generations_dictionary has one compact summary per generation."""
     out = default_output
     gd = out.meta.generations_dictionary
-    assert len(gd) == len(out.inputs.generations)
+    assert len(gd) == len(out.inputs.config.generations)
     first = gd[0]
     assert first.name
     assert first.die_count >= 1
@@ -545,7 +581,7 @@ def test_engine_generations_dictionary_summarises_each_generation(
     assert first.source_doc_path.startswith("research/")
 
 
-def test_engine_validation_report_has_sixteen_rules(default_output: ValuationOutput) -> None:
+def test_engine_validation_report_has_sixteen_rules(default_output: SpaceModelOutput) -> None:
     """meta.validation.rules carries the 16 wired checks (V1..V10, V12..V17)."""
     out = default_output
     rules = out.meta.validation.rules
@@ -553,11 +589,11 @@ def test_engine_validation_report_has_sixteen_rules(default_output: ValuationOut
     assert all(isinstance(r, ValidationCheck) for r in rules)
 
 
-def test_engine_output_roundtrips_via_model_validate(default_output: ValuationOutput) -> None:
-    """The engine's v8 output round-trips through JSON."""
+def test_engine_output_roundtrips_via_model_validate(default_output: SpaceModelOutput) -> None:
+    """The engine's space artifact round-trips through JSON."""
     out = default_output
-    rebuilt = ValuationOutput.model_validate(json.loads(out.model_dump_json()))
-    assert rebuilt.metadata.schema_version == "v8"
+    rebuilt = SpaceModelOutput.model_validate(json.loads(out.model_dump_json()))
+    assert rebuilt.metadata.schema_version == "v9"
     assert len(rebuilt.physical.years) == 11
     assert rebuilt.physical.years["2026"].gpus_per_node.value == 223
 
@@ -591,8 +627,8 @@ def _walk_fields(model_cls: type[BaseModel]) -> list[tuple[str, str | None]]:
 
 
 def test_every_leaf_field_has_a_description() -> None:
-    """Every leaf Field on ValuationOutput carries a non-empty description."""
-    leaves = _walk_fields(ValuationOutput)
+    """Every leaf Field on SpaceModelOutput carries a non-empty description."""
+    leaves = _walk_fields(SpaceModelOutput)
     assert len(leaves) > 30
     missing = [path for path, desc in leaves if not desc or not desc.strip()]
     assert not missing, f"fields missing description: {missing}"

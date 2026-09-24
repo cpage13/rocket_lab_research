@@ -1,7 +1,7 @@
-"""Engine-computed sanity checks for one v8 ``ValuationOutput``.
+"""Engine-computed sanity checks for one space artifact (a ``SpaceModelOutput``).
 
 This module computes the ``meta.validation`` block. Each rule examines the
-typed v8 :class:`ValuationOutput` and returns a :class:`ValidationCheck`
+typed :class:`SpaceModelOutput` and returns a :class:`ValidationCheck`
 describing what it tested, what it expected, what it found, whether the
 check passed, and how bad a failure would be.
 
@@ -16,15 +16,16 @@ the config layer's ``extra="forbid"`` already rejects that field at load);
 they are listed in :data:`_RULES` in declaration order and that order is
 the order they appear in the artifact.
 
-**Cycle-2 v8 re-pathing (Phase 4A).** V1–V10 are the cycle-1 checks
-re-pointed at the v8 output structure (``physical.years`` / ``business.years``
-/ ``inputs.generations``); their intent is unchanged where the v8 schema
-still carries the field. Two rules lost their cycle-1 subject when the v8
-schema dropped the ``cost.compute_share`` and ``decisions`` blocks, so they
-are re-targeted to a v8-meaningful invariant (see V5 / V10 docstrings).
+**Cycle-2 re-pathing (Phase 4A).** V1-V10 are the cycle-1 checks
+re-pointed at the cycle-2 output structure (``physical.years`` /
+``business.years`` / ``inputs.config.generations``); their intent is unchanged
+where the artifact still carries the field. Two rules lost their cycle-1
+subject when the cycle-2 schema dropped the ``cost.compute_share`` and
+``decisions`` blocks, so they are re-targeted to an invariant the artifact
+still carries (see V5 / V10 docstrings).
 Phase 5 adds the cross-check rules and may further refine the re-targeted rules.
 
-**Cycle-2 v8 new rules (Phase 5).** Six cross-check rules follow V1-V10 in
+**Cycle-2 new rules (Phase 5).** Six cross-check rules follow V1-V10 in
 :data:`_RULES`: :func:`check_operator_r_consistency` (V12),
 :func:`check_provenance_formula_keys` (V13),
 :func:`check_cadence_monotonicity` (V14),
@@ -50,7 +51,7 @@ in :mod:`data_center.constants` (the anchor-year capacity band, the central R,
 the service life). A non-default scenario is therefore never failed for
 differing from the default by design.
 
-Severity tiers (see :class:`output.Severity`):
+Severity tiers (see :class:`common.meta.Severity`):
 
 * ``CRITICAL`` — model is invalid; do not quote.
 * ``MAJOR`` — substantive defect that affects the headline.
@@ -70,6 +71,14 @@ from typing import Final
 from pydantic import BaseModel
 
 from common.cohort import cohort_is_alive_at
+from common.meta import Severity, ValidationCheck, ValidationResult, ValidationSeverity
+from common.provenance import (
+    FORMULAS,
+    FiscalYear,
+    ProvenanceCell,
+    as_float,
+    as_int,
+)
 
 from .config import OperatorModel, RadiatorArchitecture, anchor_year
 from .constants import (
@@ -79,15 +88,9 @@ from .constants import (
     R_BAND_CENTRAL_ANCHORS_DEFAULT,
     SERVICE_LIFE_YEARS,
 )
-from .input_manifest import InputCell
-from .output import (
-    Severity,
-    ValidationCheck,
-    ValidationResult,
-    ValidationSeverity,
-    ValuationOutput,
-)
-from .provenance import FORMULAS, ProvenanceCell
+from .fleet import interpolate_r
+from .input_manifest import revenue_anchors
+from .output import SpaceModelOutput
 from .volume import FAIRING_FULL_UTILIZATION_PCT
 
 logger = logging.getLogger(__name__)
@@ -101,8 +104,8 @@ logger = logging.getLogger(__name__)
 # every threshold in one place.
 # ---------------------------------------------------------------------------
 
-# V1 — mass utilisation must be tight (D2 says mass is the only constraint,
-# so every year should pack close to the envelope). v8 carries mass
+# V1: mass utilisation must be tight (D2 says mass is the only constraint,
+# so every year should pack close to the envelope). The artifact carries mass
 # utilisation as a PERCENT (0-100); cycle-1 carried a 0-1 fraction.
 MASS_UTIL_MIN_PCT: Final[float] = 85.0
 MASS_UTIL_MAX_PCT: Final[float] = 100.0
@@ -130,15 +133,15 @@ USD_PER_PKG_MAX: Final[int] = 5_000_000
 
 # V3 — active-fleet gross-margin floor. The default five-year operating plan
 # should not decay from the 1.50 cost multiple into a low-margin tail; active
-# years must stay at or above this floor. v8 carries margin as a PERCENT
-# (0-100). No-fleet years are ignored because revenue is zero.
+# years must stay at or above this floor. The artifact carries margin as a
+# PERCENT (0-100). No-fleet years are ignored because revenue is zero.
 MARGIN_PCT_MIN: Final[float] = 25.0
 
 # V4 — at least one package on the node (a zero-N year means the mass
 # envelope is too small to carry even one frontier-generation GPU).
 N_PACKAGES_MIN: Final[int] = 1
 
-# V5 — re-targeted to PF/kW (the v8 schema dropped cost.compute_share).
+# V5: re-targeted to PF/kW (the cycle-2 schema dropped cost.compute_share).
 # Compute density trends upward year-over-year as silicon outpaces power;
 # a dip larger than this is a generation-trajectory glitch.
 PF_PER_KW_MAX_DIP: Final[float] = 2.0
@@ -157,8 +160,8 @@ PF_PER_KW_MAX: Final[float] = 80.0
 NODE_TOTAL_MIN_MUSD: Final[float] = 50.0
 NODE_TOTAL_MAX_MUSD: Final[float] = 200.0
 
-# V10 — re-targeted to the data-dictionary block (the v8 schema dropped the
-# `decisions` block). The artifact is self-describing only if the data
+# V10: re-targeted to the data-dictionary block (the cycle-2 schema dropped
+# the `decisions` block). The artifact is self-describing only if the data
 # dictionary is populated; this is the minimum entry count expected.
 DATA_DICT_MIN_ENTRIES: Final[int] = 30
 
@@ -172,7 +175,7 @@ B2B_R_CENTRAL_FLOOR: Final[float] = 1.40
 
 # V14 — launches per year must be integer, non-decreasing, equal to deployed
 # nodes, and never exceed the cadence ceiling. The ceiling is read per-run from
-# `inputs.cadence.cadence_ceiling`; this is the numeric slack tolerated when
+# `inputs.config.cadence.cadence_ceiling`; this is the numeric slack tolerated when
 # comparing the launch count against it.
 CADENCE_CEILING_EPSILON: Final[float] = 1e-6
 
@@ -203,7 +206,7 @@ RULE_REMEDIATION_HINT: Final[str] = "Review model inputs and formulas."
 # ---------------------------------------------------------------------------
 
 
-def check_mass_utilization_in_band(output: ValuationOutput) -> ValidationCheck:
+def check_mass_utilization_in_band(output: SpaceModelOutput) -> ValidationCheck:
     """Every year's ``physical.years[].mass_utilization_pct`` in [85, 100] (D2).
 
     Mass is the only hard physical constraint; a correctly-sized node
@@ -218,12 +221,12 @@ def check_mass_utilization_in_band(output: ValuationOutput) -> ValidationCheck:
     failing = [
         fy
         for fy, py in years.items()
-        if not (MASS_UTIL_MIN_PCT <= _num(py.mass_utilization_pct.value) <= upper_pct)
+        if not (MASS_UTIL_MIN_PCT <= as_float(py.mass_utilization_pct) <= upper_pct)
     ]
     if failing:
         computed = f"failed years: {sorted(failing)}"
     else:
-        vals = [_num(py.mass_utilization_pct.value) for py in years.values()]
+        vals = [as_float(py.mass_utilization_pct) for py in years.values()]
         computed = f"all {len(years)} years in [{min(vals):.2f}%, {max(vals):.2f}%]"
     return ValidationCheck(
         name="mass_utilization_in_band",
@@ -244,23 +247,20 @@ def check_mass_utilization_in_band(output: ValuationOutput) -> ValidationCheck:
 # ---------------------------------------------------------------------------
 
 
-def check_no_trillion_dollar_pkg(output: ValuationOutput) -> ValidationCheck:
-    """``inputs.generations[*].usd_per_pkg`` must stay below ``USD_PER_PKG_MAX``.
+def check_no_trillion_dollar_pkg(output: SpaceModelOutput) -> ValidationCheck:
+    """``inputs.config.generations[*].usd_per_pkg`` must stay below ``USD_PER_PKG_MAX``.
 
     NVIDIA's "as sold" unit prices are tracked in plan § 0; even Feynman
     is $225K. Anything north of $5M is a data-entry typo or a fictional
     generation list.
     """
-    gens = output.inputs.generations
-    failing = [
-        (str(g["name"]), int(g["usd_per_pkg"]))
-        for g in gens
-        if int(g["usd_per_pkg"]) >= USD_PER_PKG_MAX
-    ]
+    gens = output.inputs.config.generations
+    prices = [(str(g.name.value), as_int(g.usd_per_pkg)) for g in gens]
+    failing = [(name, usd) for name, usd in prices if usd >= USD_PER_PKG_MAX]
     if failing:
         computed = "failed generations: " + ", ".join(f"{name}=${usd:,}" for name, usd in failing)
     else:
-        max_pkg = max(int(g["usd_per_pkg"]) for g in gens)
+        max_pkg = max(usd for _, usd in prices)
         computed = f"all {len(gens)} generations under ${USD_PER_PKG_MAX:,} (max ${max_pkg:,})"
     return ValidationCheck(
         name="no_trillion_dollar_pkg",
@@ -279,7 +279,7 @@ def check_no_trillion_dollar_pkg(output: ValuationOutput) -> ValidationCheck:
 # ---------------------------------------------------------------------------
 
 
-def check_positive_margin_floor(output: ValuationOutput) -> ValidationCheck:
+def check_positive_margin_floor(output: SpaceModelOutput) -> ValidationCheck:
     """Every active year's central gross margin must be above the floor.
 
     Margin = (R - 1) / R x 100. A 25% floor corresponds to R = 4/3, so the
@@ -289,17 +289,17 @@ def check_positive_margin_floor(output: ValuationOutput) -> ValidationCheck:
     """
     years = output.business.years
     active_years = {
-        fy: by for fy, by in years.items() if _num(by.revenue_annual_fleet_musd_central.value) > 0
+        fy: by for fy, by in years.items() if as_float(by.revenue_annual_fleet_musd_central) > 0
     }
     failing = [
-        fy for fy, by in active_years.items() if _num(by.margin_central_pct.value) < MARGIN_PCT_MIN
+        fy for fy, by in active_years.items() if as_float(by.margin_central_pct) < MARGIN_PCT_MIN
     ]
     if failing:
         computed = f"failed years: {sorted(failing)}"
     elif not active_years:
         computed = "no active revenue years"
     else:
-        vals = [_num(by.margin_central_pct.value) for by in active_years.values()]
+        vals = [as_float(by.margin_central_pct) for by in active_years.values()]
         computed = (
             f"all {len(active_years)} active years central margin in "
             f"[{min(vals):.2f}%, {max(vals):.2f}%]"
@@ -322,7 +322,7 @@ def check_positive_margin_floor(output: ValuationOutput) -> ValidationCheck:
 # ---------------------------------------------------------------------------
 
 
-def check_gpu_count_positive(output: ValuationOutput) -> ValidationCheck:
+def check_gpu_count_positive(output: SpaceModelOutput) -> ValidationCheck:
     """Every year's ``physical.years[].gpus_per_node`` must be >= 1.
 
     A zero-N year means the chosen frontier generation does not fit on
@@ -330,12 +330,12 @@ def check_gpu_count_positive(output: ValuationOutput) -> ValidationCheck:
     (too small) or the generation's per-package mass is absurd.
     """
     years = output.physical.years
-    failing = [fy for fy, py in years.items() if _num(py.gpus_per_node.value) < N_PACKAGES_MIN]
+    failing = [fy for fy, py in years.items() if as_float(py.gpus_per_node) < N_PACKAGES_MIN]
     if failing:
         computed = f"failed years: {sorted(failing)}"
     else:
-        vals = [int(_num(py.gpus_per_node.value)) for py in years.values()]
-        computed = f"all {len(years)} years N in [{min(vals)}, {max(vals)}]"
+        vals = [as_float(py.gpus_per_node) for py in years.values()]
+        computed = f"all {len(years)} years N in [{min(vals):g}, {max(vals):g}]"
     return ValidationCheck(
         name="gpu_count_positive",
         what_it_tests=(
@@ -354,13 +354,13 @@ def check_gpu_count_positive(output: ValuationOutput) -> ValidationCheck:
 # ---------------------------------------------------------------------------
 
 
-def check_monotonic_pf_per_kw(output: ValuationOutput) -> ValidationCheck:
+def check_monotonic_pf_per_kw(output: SpaceModelOutput) -> ValidationCheck:
     """PF/kW must be near-monotonic year-over-year.
 
     **Re-targeted (cycle-2 Phase 4A).** Cycle-1's V5 checked
-    ``cost.compute_share`` monotonicity; the v8 schema dropped the
+    ``cost.compute_share`` monotonicity; the cycle-2 schema dropped the
     compute-share field, so V5 is re-pointed at the next-best
-    trajectory invariant — compute density. PF/kW trends up as silicon
+    trajectory invariant, compute density. PF/kW trends up as silicon
     (PF/pkg) outpaces power (kW/pkg); for every consecutive pair:
 
         ``pf_per_kw[i+1] >= pf_per_kw[i] - PF_PER_KW_MAX_DIP``
@@ -371,8 +371,8 @@ def check_monotonic_pf_per_kw(output: ValuationOutput) -> ValidationCheck:
     items = sorted(output.physical.years.items(), key=lambda kv: int(kv[0]))
     failing: list[tuple[str, str]] = []
     for (fy_a, py_a), (fy_b, py_b) in zip(items, items[1:], strict=False):
-        prev = _num(py_a.pf_per_kw.value)
-        nxt = _num(py_b.pf_per_kw.value)
+        prev = as_float(py_a.pf_per_kw)
+        nxt = as_float(py_b.pf_per_kw)
         if nxt < prev - PF_PER_KW_MAX_DIP:
             failing.append((fy_a, fy_b))
     if failing:
@@ -397,7 +397,7 @@ def check_monotonic_pf_per_kw(output: ValuationOutput) -> ValidationCheck:
 # ---------------------------------------------------------------------------
 
 
-def check_pf_per_kw_in_band(output: ValuationOutput) -> ValidationCheck:
+def check_pf_per_kw_in_band(output: SpaceModelOutput) -> ValidationCheck:
     """The anchor year's ``physical.years[].pf_per_kw`` must lie in [20, 80].
 
     Brainstorm Part IX maps this band to the pessimistic-to-optimistic
@@ -423,7 +423,7 @@ def check_pf_per_kw_in_band(output: ValuationOutput) -> ValidationCheck:
             pass_check=False,
             severity=Severity.MAJOR,
         )
-    pf_per_kw = _num(anchor_py.pf_per_kw.value)
+    pf_per_kw = as_float(anchor_py.pf_per_kw)
     in_band = PF_PER_KW_MIN <= pf_per_kw <= PF_PER_KW_MAX
     return ValidationCheck(
         name="pf_per_kw_in_band",
@@ -440,7 +440,7 @@ def check_pf_per_kw_in_band(output: ValuationOutput) -> ValidationCheck:
 # ---------------------------------------------------------------------------
 
 
-def check_launch_cost_non_increasing(output: ValuationOutput) -> ValidationCheck:
+def check_launch_cost_non_increasing(output: SpaceModelOutput) -> ValidationCheck:
     """``business.years[].launch_cost_this_year_musd`` non-increasing year-over-year.
 
     Per D12, launch cost falls as Neutron's cadence matures (the
@@ -451,15 +451,15 @@ def check_launch_cost_non_increasing(output: ValuationOutput) -> ValidationCheck
     items = sorted(output.business.years.items(), key=lambda kv: int(kv[0]))
     failing: list[tuple[str, str]] = []
     for (fy_a, by_a), (fy_b, by_b) in zip(items, items[1:], strict=False):
-        prev = _num(by_a.launch_cost_this_year_musd.value)
-        nxt = _num(by_b.launch_cost_this_year_musd.value)
+        prev = as_float(by_a.launch_cost_this_year_musd)
+        nxt = as_float(by_b.launch_cost_this_year_musd)
         if nxt > prev:
             failing.append((fy_a, fy_b))
     if failing:
         computed = "failed pairs: " + ", ".join(f"FY{a}->FY{b}" for a, b in failing)
     elif items:
-        first = _num(items[0][1].launch_cost_this_year_musd.value)
-        last = _num(items[-1][1].launch_cost_this_year_musd.value)
+        first = as_float(items[0][1].launch_cost_this_year_musd)
+        last = as_float(items[-1][1].launch_cost_this_year_musd)
         computed = f"launch cost ${first:.2f}M -> ${last:.2f}M (non-increasing)"
     else:
         computed = "no years emitted"
@@ -481,12 +481,12 @@ def check_launch_cost_non_increasing(output: ValuationOutput) -> ValidationCheck
 # ---------------------------------------------------------------------------
 
 
-def check_revenue_above_cost_per_node(output: ValuationOutput) -> ValidationCheck:
+def check_revenue_above_cost_per_node(output: SpaceModelOutput) -> ValidationCheck:
     """Every year's per-node central revenue must exceed per-node annual cost.
 
     **Re-pathed (cycle-2 Phase 4A).** Cycle-1's V8 compared lifetime
-    revenue / cost per package; the v8 schema carries annualized per-node
-    economics, so V8 checks the same R > 1 floor on the v8 fields:
+    revenue / cost per package; the space artifact carries annualized
+    per-node economics, so V8 checks the same R > 1 floor on those fields:
     ``revenue_annual_per_node_musd_central > cost_annual_per_node_musd``
     in every year. A violation means R <= 1 for that vintage.
     """
@@ -494,17 +494,17 @@ def check_revenue_above_cost_per_node(output: ValuationOutput) -> ValidationChec
     failing = [
         fy
         for fy, py in years.items()
-        if _num(py.revenue_annual_per_node_musd_central.value)
-        <= _num(py.cost_annual_per_node_musd.value)
+        if as_float(py.revenue_annual_per_node_musd_central)
+        <= as_float(py.cost_annual_per_node_musd)
     ]
     if failing:
         computed = f"failed years: {sorted(failing)}"
     else:
         ratios = [
-            _num(py.revenue_annual_per_node_musd_central.value)
-            / _num(py.cost_annual_per_node_musd.value)
+            as_float(py.revenue_annual_per_node_musd_central)
+            / as_float(py.cost_annual_per_node_musd)
             for py in years.values()
-            if _num(py.cost_annual_per_node_musd.value) > 0
+            if as_float(py.cost_annual_per_node_musd) > 0
         ]
         if ratios:
             computed = (
@@ -530,7 +530,7 @@ def check_revenue_above_cost_per_node(output: ValuationOutput) -> ValidationChec
 # ---------------------------------------------------------------------------
 
 
-def check_node_total_in_band(output: ValuationOutput) -> ValidationCheck:
+def check_node_total_in_band(output: SpaceModelOutput) -> ValidationCheck:
     """Every year's per-node total build + launch cost must lie in [50, 200] $M.
 
     Reads ``physical.years[].cost_breakdown.node_total``, the
@@ -540,16 +540,16 @@ def check_node_total_in_band(output: ValuationOutput) -> ValidationCheck:
     """
     years = output.physical.years
     failing = [
-        (fy, _num(py.cost_breakdown.node_total.value))
+        (fy, as_float(py.cost_breakdown.node_total))
         for fy, py in years.items()
         if not (
-            NODE_TOTAL_MIN_MUSD <= _num(py.cost_breakdown.node_total.value) <= NODE_TOTAL_MAX_MUSD
+            NODE_TOTAL_MIN_MUSD <= as_float(py.cost_breakdown.node_total) <= NODE_TOTAL_MAX_MUSD
         )
     ]
     if failing:
         computed = "failed years: " + ", ".join(f"FY{fy}: ${v:.1f}M" for fy, v in sorted(failing))
     else:
-        vals = [_num(py.cost_breakdown.node_total.value) for py in years.values()]
+        vals = [as_float(py.cost_breakdown.node_total) for py in years.values()]
         computed = f"all {len(years)} years node_total in [${min(vals):.1f}M, ${max(vals):.1f}M]"
     return ValidationCheck(
         name="node_total_in_band",
@@ -570,13 +570,13 @@ def check_node_total_in_band(output: ValuationOutput) -> ValidationCheck:
 # ---------------------------------------------------------------------------
 
 
-def check_data_dictionary_populated(output: ValuationOutput) -> ValidationCheck:
+def check_data_dictionary_populated(output: SpaceModelOutput) -> ValidationCheck:
     """The ``meta.data_dictionary`` block must be populated.
 
     **Re-targeted (cycle-2 Phase 4A).** Cycle-1's V10 asserted the
-    ``decisions`` block held all 13 D-decisions; the v8 schema dropped the
-    ``decisions`` block, so V10 is re-pointed at the v8 self-describing
-    block — the data dictionary. The artifact is only self-describing if
+    ``decisions`` block held all 13 D-decisions; the cycle-2 schema dropped
+    the ``decisions`` block, so V10 is re-pointed at the artifact's
+    self-describing block, the data dictionary. The artifact is only self-describing if
     the introspected data dictionary covers every emitted leaf; an empty
     or near-empty dictionary means the build step silently failed.
     """
@@ -600,35 +600,7 @@ def check_data_dictionary_populated(output: ValuationOutput) -> ValidationCheck:
 # ---------------------------------------------------------------------------
 
 
-def _r_central_at(output: ValuationOutput, year: int) -> float:
-    """Return the central-R-band value at ``year``.
-
-    Evaluates the central R trajectory the same way the engine does
-    (:func:`data_center.fleet.r_at_year`): clamped flat outside the anchor
-    range, linearly interpolated between adjacent anchors otherwise. The
-    R-band's anchors are guaranteed sorted by ``fy`` ascending and at least
-    two entries long (:class:`data_center.config.RBand` validator).
-
-    Args:
-        output: A fully-built v8 :class:`ValuationOutput`.
-        year: The calendar year at which to evaluate central R.
-
-    Returns:
-        The interpolated central-R value at ``year``.
-    """
-    anchors = output.inputs.r_band.central
-    if year <= anchors[0].fy:
-        return anchors[0].r
-    if year >= anchors[-1].fy:
-        return anchors[-1].r
-    for a, b in zip(anchors, anchors[1:], strict=False):
-        if a.fy <= year <= b.fy:
-            frac = (year - a.fy) / (b.fy - a.fy)
-            return a.r + frac * (b.r - a.r)
-    return anchors[-1].r  # unreachable — covered by the clamps above
-
-
-def check_operator_r_consistency(output: ValuationOutput) -> ValidationCheck:
+def check_operator_r_consistency(output: SpaceModelOutput) -> ValidationCheck:
     """B2B operator model implies central R at base year >= the B2B floor.
 
     The B2B dedicated-optical/RF operator model (D15) carries a pricing
@@ -642,7 +614,7 @@ def check_operator_r_consistency(output: ValuationOutput) -> ValidationCheck:
     scenarios while keeping the premium meaningfully above neocloud.
 
     Args:
-        output: A fully-built v8 :class:`ValuationOutput`.
+        output: A fully-built space artifact.
 
     Returns:
         A :class:`ValidationCheck`; fails (MAJOR) if the operator model is
@@ -650,7 +622,7 @@ def check_operator_r_consistency(output: ValuationOutput) -> ValidationCheck:
     """
     base_year = output.metadata.base_year
     operator = output.metadata.operator_model
-    r_central_base = _r_central_at(output, base_year)
+    r_central_base = interpolate_r(revenue_anchors(output.inputs.config.revenue.central), base_year)
     is_b2b = operator == OperatorModel.B2B_DEDICATED_OPTICAL_RF
     # The rule only constrains B2B runs; a non-B2B operator model passes
     # vacuously (the floor is a B2B-premium check).
@@ -691,12 +663,12 @@ def _cells_of(record: BaseModel) -> list[ProvenanceCell]:
 
     A field is either a ProvenanceCell leaf or a nested :class:`BaseModel`
     sub-object (e.g. ``PhysicalYear.cost_breakdown``, a
-    :class:`output.CostBreakdownBlock` of six cells); a nested model is
+    :class:`data_center.output.CostBreakdownBlock` of six cells); a nested model is
     walked one level deeper to reach the cells it holds.
 
     Args:
-        record: One per-year record (a :class:`output.PhysicalYear` or
-            :class:`output.BusinessYear`).
+        record: One per-year record (a :class:`data_center.output.PhysicalYear` or
+            :class:`data_center.output.BusinessYear`).
 
     Returns:
         Every ProvenanceCell the record carries, in field-declaration order.
@@ -711,20 +683,20 @@ def _cells_of(record: BaseModel) -> list[ProvenanceCell]:
     return cells
 
 
-def collect_provenance_cells(output: ValuationOutput) -> list[ProvenanceCell]:
-    """Collect every :class:`ProvenanceCell` leaf in the v8 output.
+def collect_provenance_cells(output: SpaceModelOutput) -> list[ProvenanceCell]:
+    """Collect every :class:`ProvenanceCell` leaf in the space artifact.
 
     The one recursive cell walker: V13 counts with it and the text report's
     provenance banner reuses it, so the two always report the same totals.
     ProvenanceCell leaves live only in the per-year ``physical.years`` and
-    ``business.years`` maps: every field of :class:`output.PhysicalYear`
-    and :class:`output.BusinessYear` is a ProvenanceCell or a nested
+    ``business.years`` maps: every field of :class:`data_center.output.PhysicalYear`
+    and :class:`data_center.output.BusinessYear` is a ProvenanceCell or a nested
     sub-object of cells (``cost_breakdown``). The ``inputs`` block carries
     input cells, not provenance cells, so walking the two per-year maps
     reaches every provenance cell in the artifact.
 
     Args:
-        output: A fully-built v8 :class:`ValuationOutput`.
+        output: A fully-built space artifact.
 
     Returns:
         Every ProvenanceCell in the artifact, physical years then business
@@ -738,11 +710,11 @@ def collect_provenance_cells(output: ValuationOutput) -> list[ProvenanceCell]:
     return cells
 
 
-def check_provenance_formula_keys(output: ValuationOutput) -> ValidationCheck:
+def check_provenance_formula_keys(output: SpaceModelOutput) -> ValidationCheck:
     """Every ProvenanceCell's ``formula_name`` must exist in :data:`FORMULAS`.
 
-    Every leaf numeric value in the v8 output is a
-    :class:`data_center.provenance.ProvenanceCell` carrying a
+    Every leaf numeric value in the space artifact is a
+    :class:`common.provenance.ProvenanceCell` carrying a
     ``formula_name`` — a stable key into the :data:`FORMULAS` lookup table.
     V13 walks every cell and fails if any ``formula_name`` is absent from
     :data:`FORMULAS`. This catches a silent typo in a formula-name string
@@ -751,7 +723,7 @@ def check_provenance_formula_keys(output: ValuationOutput) -> ValidationCheck:
     in :data:`FORMULAS` before use.
 
     Args:
-        output: A fully-built v8 :class:`ValuationOutput`.
+        output: A fully-built space artifact.
 
     Returns:
         A :class:`ValidationCheck`; fails (MAJOR) if any cell references a
@@ -785,13 +757,13 @@ def check_provenance_formula_keys(output: ValuationOutput) -> ValidationCheck:
 # ---------------------------------------------------------------------------
 
 
-def check_cadence_monotonicity(output: ValuationOutput) -> ValidationCheck:
+def check_cadence_monotonicity(output: SpaceModelOutput) -> ValidationCheck:
     """Launches per year are integer, monotonic, and within the ceiling.
 
     The launch cadence is a logistic ramp (D7): launches per year must be
     whole-number mission counts, monotonically non-decreasing across the
     horizon, and no year may exceed the configured
-    ``inputs.cadence.cadence_ceiling`` hard cap. The emitted
+    ``inputs.config.cadence.cadence_ceiling``. The emitted
     ``nodes_deployed_this_year`` count must also equal launches because the
     default node contract is one node per Neutron flight. A fractional value
     would mean a raw launch rate leaked into the public model; a decrease
@@ -800,17 +772,17 @@ def check_cadence_monotonicity(output: ValuationOutput) -> ValidationCheck:
     cadence.
 
     Args:
-        output: A fully-built v8 :class:`ValuationOutput`.
+        output: A fully-built space artifact.
 
     Returns:
         A :class:`ValidationCheck`; fails (MAJOR) if launch/node counts are
         fractional, launches dip year-over-year, nodes differ from launches,
         or launches exceed the cadence ceiling.
     """
-    ceiling = output.inputs.cadence.cadence_ceiling
+    ceiling = as_int(output.inputs.config.cadence.cadence_ceiling)
     items = sorted(output.business.years.items(), key=lambda kv: int(kv[0]))
-    launches = [(fy, _num(by.launches.value)) for fy, by in items]
-    nodes = [(fy, _num(by.nodes_deployed_this_year.value)) for fy, by in items]
+    launches = [(fy, as_float(by.launches)) for fy, by in items]
+    nodes = [(fy, as_float(by.nodes_deployed_this_year)) for fy, by in items]
     fractional = [(fy, val) for fy, val in launches if not val.is_integer()]
     fractional_nodes = [(fy, val) for fy, val in nodes if not val.is_integer()]
     node_mismatches = [
@@ -871,7 +843,7 @@ def check_cadence_monotonicity(output: ValuationOutput) -> ValidationCheck:
         what_it_tests=(
             "business.launches integer-valued, non-decreasing year-over-year, "
             "equal to nodes_deployed_this_year, and every year <= "
-            "inputs.cadence.cadence_ceiling (D7 logistic ramp)"
+            "inputs.config.cadence.cadence_ceiling (D7 logistic ramp)"
         ),
         expected="integer, nodes == launches, non-decreasing, and <= cadence_ceiling",
         computed=computed,
@@ -885,7 +857,7 @@ def check_cadence_monotonicity(output: ValuationOutput) -> ValidationCheck:
 # ---------------------------------------------------------------------------
 
 
-def check_volume_fits_horizon(output: ValuationOutput) -> ValidationCheck:
+def check_volume_fits_horizon(output: SpaceModelOutput) -> ValidationCheck:
     """Every year's stowed node must fit the fairing: volume utilization <= 100%.
 
     D6 makes mass the only hard physical constraint; the stowed-volume
@@ -896,7 +868,7 @@ def check_volume_fits_horizon(output: ValuationOutput) -> ValidationCheck:
     :data:`data_center.volume.FAIRING_FULL_UTILIZATION_PCT`.
 
     Args:
-        output: A fully-built v8 :class:`ValuationOutput`.
+        output: A fully-built space artifact.
 
     Returns:
         A :class:`ValidationCheck`; fails (MAJOR) if any year's stowed node
@@ -904,16 +876,16 @@ def check_volume_fits_horizon(output: ValuationOutput) -> ValidationCheck:
     """
     years = output.physical.years
     failing = [
-        (fy, _num(py.volume_utilization_pct.value))
+        (fy, as_float(py.volume_utilization_pct))
         for fy, py in years.items()
-        if _num(py.volume_utilization_pct.value) > FAIRING_FULL_UTILIZATION_PCT
+        if as_float(py.volume_utilization_pct) > FAIRING_FULL_UTILIZATION_PCT
     ]
     if failing:
         computed = "fairing overfilled: " + ", ".join(
             f"FY{fy}: {util:.2f}%" for fy, util in sorted(failing)
         )
     else:
-        vals = [_num(py.volume_utilization_pct.value) for py in years.values()]
+        vals = [as_float(py.volume_utilization_pct) for py in years.values()]
         computed = (
             f"all {len(years)} years volume utilization in [{min(vals):.2f}%, {max(vals):.2f}%]"
         )
@@ -936,7 +908,7 @@ def check_volume_fits_horizon(output: ValuationOutput) -> ValidationCheck:
 # ---------------------------------------------------------------------------
 
 
-def check_fleet_cliff_consistency(output: ValuationOutput) -> ValidationCheck:
+def check_fleet_cliff_consistency(output: SpaceModelOutput) -> ValidationCheck:
     """``living_fleet[Y]`` equals the cohort-cliff sum of node counts.
 
     Under the configured ``fleet.service_life_years`` hard cliff (D1) the
@@ -953,32 +925,34 @@ def check_fleet_cliff_consistency(output: ValuationOutput) -> ValidationCheck:
     engine's fleet rollup treats them.
 
     Args:
-        output: A fully-built v8 :class:`ValuationOutput`.
+        output: A fully-built space artifact.
 
     Returns:
         A :class:`ValidationCheck`; fails (MAJOR) if any year's emitted
         living fleet differs from the re-derived cohort-cliff sum.
     """
     years = output.business.years
-    service_life = _input_int(output.inputs.config.fleet.service_life_years)
+    service_life = as_int(output.inputs.config.fleet.service_life_years)
     lookback = service_life - 1
-    nodes_by_year: dict[int, int] = {
-        int(fy): int(_num(by.launches.value)) for fy, by in years.items()
+    # Launch counts are read as numbers, not strict integers: V14 owns their
+    # integrality, so a fractional count is V14's failure, never a crash here.
+    launches_by_year: dict[FiscalYear, float] = {
+        int(fy): as_float(by.launches) for fy, by in years.items()
     }
-    mismatches: list[tuple[str, int, int]] = []
+    mismatches: list[tuple[str, float, float]] = []
     for fy, by in years.items():
         y = int(fy)
         derived = sum(
-            nodes
-            for launch_year, nodes in nodes_by_year.items()
+            launches
+            for launch_year, launches in launches_by_year.items()
             if cohort_is_alive_at(launch_year, y, service_life)
         )
-        emitted = round(_num(by.living_fleet.value))
+        emitted = as_float(by.living_fleet)
         if derived != emitted:
             mismatches.append((fy, emitted, derived))
     if mismatches:
         computed = "mismatches: " + ", ".join(
-            f"FY{fy}: emitted {emitted} vs cliff-sum {derived}"
+            f"FY{fy}: emitted {emitted:g} vs cliff-sum {derived:g}"
             for fy, emitted, derived in sorted(mismatches)
         )
     else:
@@ -1002,7 +976,7 @@ def check_fleet_cliff_consistency(output: ValuationOutput) -> ValidationCheck:
 # ---------------------------------------------------------------------------
 
 
-def check_radiator_dial_arch_consistency(output: ValuationOutput) -> ValidationCheck:
+def check_radiator_dial_arch_consistency(output: SpaceModelOutput) -> ValidationCheck:
     """Single-face co-mounted architecture implies both radiator dials >= 0.010.
 
     The single-face co-mounted radiator architecture (D16) has an R1-sourced
@@ -1019,7 +993,7 @@ def check_radiator_dial_arch_consistency(output: ValuationOutput) -> ValidationC
     decision).
 
     Args:
-        output: A fully-built v8 :class:`ValuationOutput`.
+        output: A fully-built space artifact.
 
     Returns:
         A :class:`ValidationCheck`; fails (MAJOR) if the architecture is
@@ -1027,8 +1001,8 @@ def check_radiator_dial_arch_consistency(output: ValuationOutput) -> ValidationC
     """
     architecture = output.metadata.radiator_architecture
     physical = output.inputs.config.physical
-    radiator_pre = _input_float(physical.radiator_t_per_kw_pre)
-    radiator_post = _input_float(physical.radiator_t_per_kw_post)
+    radiator_pre = as_float(physical.radiator_t_per_kw_pre)
+    radiator_post = as_float(physical.radiator_t_per_kw_post)
     is_co_mounted = architecture == RadiatorArchitecture.SINGLE_FACE_CO_MOUNTED
     below_floor = [
         f"{name}={value}"
@@ -1068,57 +1042,6 @@ def check_radiator_dial_arch_consistency(output: ValuationOutput) -> ValidationC
         pass_check=not failed,
         severity=Severity.MAJOR,
     )
-
-
-# ---------------------------------------------------------------------------
-# Cell-value unwrap helpers
-# ---------------------------------------------------------------------------
-
-
-def _num(value: float | int | str | bool | None) -> float:
-    """Unwrap a :class:`ProvenanceCell` value to a numeric ``float``.
-
-    The v8 output's leaf values are ProvenanceCell values — a union over
-    numeric / str / bool / None. The validation rules only ever read
-    numeric cells; this helper narrows the union for mypy and raises if a
-    rule is pointed at a non-numeric cell by mistake.
-
-    Args:
-        value: A ProvenanceCell's ``value`` field.
-
-    Returns:
-        The value as a ``float``.
-
-    Raises:
-        TypeError: If the value is not a real number.
-    """
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise TypeError(f"validation rule expected a numeric cell value, got {value!r}")
-    return float(value)
-
-
-def _input_int(cell: InputCell) -> int:
-    """Unwrap an integer typed input cell (e.g. the service life) to ``int``.
-
-    Raises:
-        TypeError: If the cell's value is not an integer.
-    """
-    value = cell.value
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise TypeError(f"validation rule expected an integer input at {cell.path}, got {value!r}")
-    return value
-
-
-def _input_float(cell: InputCell) -> float:
-    """Unwrap a numeric typed input cell (e.g. a radiator dial) to ``float``.
-
-    Raises:
-        TypeError: If the cell's value is not a real number.
-    """
-    value = cell.value
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise TypeError(f"validation rule expected a numeric input at {cell.path}, got {value!r}")
-    return float(value)
 
 
 # ---------------------------------------------------------------------------
@@ -1180,7 +1103,7 @@ def _rule_result(rule: ValidationCheck) -> ValidationResult:
     )
 
 
-def _model_invariant_results(output: ValuationOutput) -> list[ValidationResult]:
+def _model_invariant_results(output: SpaceModelOutput) -> list[ValidationResult]:
     """Checks that hold for every scenario, read against the run's own config.
 
     * The anchor-year launches reproduce the ``launches_at_year_10`` dial
@@ -1205,15 +1128,16 @@ def _model_invariant_results(output: ValuationOutput) -> list[ValidationResult]:
     results: list[ValidationResult] = []
 
     if anchor - md.base_year == ANCHOR_MODEL_YEAR:
-        dial = _input_int(output.inputs.config.cadence.launches_at_year_10)
-        launches = int(_num(business_year.launches.value))
+        dial = as_int(output.inputs.config.cadence.launches_at_year_10)
+        # Read as a number: V14 owns the launch count's integrality.
+        launches = as_float(business_year.launches)
         results.append(
             _result(
                 validation_id="anchor_year_launches_match_year_10_dial",
                 passed=launches == dial,
                 what_tested=(f"The FY{anchor} launch count reproduces the year-10 cadence dial."),
                 expected_condition=f"launches == cadence.launches_at_year_10 ({dial})",
-                observed_result=f"{launches} launches in FY{anchor}",
+                observed_result=f"{launches:g} launches in FY{anchor}",
                 related_json_paths=[
                     "inputs.config.cadence.launches_at_year_10",
                     f"{anchor_path}.launches",
@@ -1222,15 +1146,15 @@ def _model_invariant_results(output: ValuationOutput) -> list[ValidationResult]:
             )
         )
 
-    service_life = _input_int(output.inputs.config.fleet.service_life_years)
+    service_life = as_int(output.inputs.config.fleet.service_life_years)
     earlier_living_nodes = sum(
-        int(_num(year.nodes_deployed_this_year.value))
+        as_float(year.nodes_deployed_this_year)
         for fy, year in output.business.years.items()
         if int(fy) < anchor and cohort_is_alive_at(int(fy), anchor, service_life)
     )
     if earlier_living_nodes > 0:
-        deployed_kw = _num(business_year.kw_deployed_this_year.value)
-        living_kw = _num(business_year.kw_living_fleet.value)
+        deployed_kw = as_float(business_year.kw_deployed_this_year)
+        living_kw = as_float(business_year.kw_living_fleet)
         results.append(
             _result(
                 validation_id="living_fleet_distinct_from_deployed_year_cohort",
@@ -1263,7 +1187,7 @@ def _model_invariant_results(output: ValuationOutput) -> list[ValidationResult]:
     return results
 
 
-def _default_guard_results(output: ValuationOutput) -> list[ValidationResult]:
+def _default_guard_results(output: SpaceModelOutput) -> list[ValidationResult]:
     """Guards for the canonical default scenario only.
 
     Each compares the promoted default with the code defaults in
@@ -1281,9 +1205,9 @@ def _default_guard_results(output: ValuationOutput) -> list[ValidationResult]:
     md = output.metadata
     anchor = anchor_year(md.base_year, md.horizon_years)
     business_year = output.business.years[str(anchor)]
-    deployed_kw = _num(business_year.kw_deployed_this_year.value)
-    first_central_r = _input_float(output.inputs.config.revenue.central[0])
-    service_life = _input_int(output.inputs.config.fleet.service_life_years)
+    deployed_kw = as_float(business_year.kw_deployed_this_year)
+    first_central_r = as_float(output.inputs.config.revenue.central[0])
+    service_life = as_int(output.inputs.config.fleet.service_life_years)
     return [
         _result(
             validation_id=f"default_{anchor}_deployed_capacity_around_70mw",
@@ -1323,7 +1247,7 @@ def _default_guard_results(output: ValuationOutput) -> list[ValidationResult]:
     ]
 
 
-def build_validation_results(output: ValuationOutput) -> list[ValidationResult]:
+def build_validation_results(output: SpaceModelOutput) -> list[ValidationResult]:
     """Build ``meta.validation_results``, the one public verdict list.
 
     Mirrors every ``meta.validation.rules`` entry, then appends the model
@@ -1350,8 +1274,8 @@ def build_validation_results(output: ValuationOutput) -> list[ValidationResult]:
 # ---------------------------------------------------------------------------
 
 
-_RULES: Final[tuple[Callable[[ValuationOutput], ValidationCheck], ...]] = (
-    # V1-V10 — cycle-1 rules, re-pathed to the v8 output structure.
+_RULES: Final[tuple[Callable[[SpaceModelOutput], ValidationCheck], ...]] = (
+    # V1-V10: cycle-1 rules, re-pathed to the cycle-2 output structure.
     check_mass_utilization_in_band,
     check_no_trillion_dollar_pkg,
     check_positive_margin_floor,
@@ -1372,17 +1296,17 @@ _RULES: Final[tuple[Callable[[ValuationOutput], ValidationCheck], ...]] = (
 )
 
 
-def compute_validation(output: ValuationOutput) -> list[ValidationCheck]:
+def compute_validation(output: SpaceModelOutput) -> list[ValidationCheck]:
     """Run all 16 wired rules and return the resulting checks in order.
 
     Args:
-        output: A fully-built v8 :class:`ValuationOutput` (post-engine).
+        output: A fully-built space artifact (post-engine).
 
     Returns:
         A 16-element list of :class:`ValidationCheck` instances in
         declaration order (V1-V10 cycle-1 re-pathed, V12-V17 cycle-2; V11
         retired). The engine wires the result into
-        :attr:`ValuationOutput.meta.validation`.
+        :attr:`SpaceModelOutput.meta.validation`.
     """
     return [rule(output) for rule in _RULES]
 

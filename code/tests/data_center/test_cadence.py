@@ -8,19 +8,17 @@ from __future__ import annotations
 
 import pytest
 
-from data_center.cadence import (
-    _log_interp,
-    compute_launch_cost_musd,
-    compute_launches_per_year,
-)
-from data_center.constants import (
+from common.cadence import (
     CADENCE_CEILING_DEFAULT,
     HIGH_CADENCE_COST_MUSD_DEFAULT,
     LAUNCHES_AT_YEAR_5_DEFAULT,
     LAUNCHES_AT_YEAR_10_DEFAULT,
     LOW_CADENCE_COST_MUSD_DEFAULT,
+    _log_interp,
+    compute_launch_cost_musd,
+    compute_launches_per_year,
 )
-from data_center.provenance import ProvenanceCell
+from common.provenance import ProvenanceCell
 
 # -- compute_launches_per_year ----------------------------------------
 

@@ -1,10 +1,10 @@
-"""Tests for the v8 GPU-first valuation engine.
+"""Tests for the GPU-first valuation engine.
 
 Locks the GPU-first per-node formulas, the frontier-generation picker, the
 Tjmax step at year 5, the cadence-indexed launch cost, the bus-cost
-decline-then-flatten, the cadence / volume / fleet wiring, and the v8
+decline-then-flatten, the cadence / volume / fleet wiring, and the
 ``run_valuation`` entry point that produces the five-block
-:class:`data_center.output.ValuationOutput`.
+:class:`data_center.output.SpaceModelOutput`.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from common.provenance import ProvenanceCell, as_float, as_int
 from data_center.config import (
     ValuationConfig,
     config_from_dict,
@@ -22,6 +23,7 @@ from data_center.config import (
 from data_center.engine import (
     CadenceYear,
     CostBreakdown,
+    PackageMass,
     YearComputation,
     bus_cost_for_year,
     compute_cadence_year,
@@ -40,21 +42,19 @@ from data_center.engine import (
     radiator_t_per_kw_for_year,
     run_valuation,
 )
-from data_center.fleet import Cohort, FleetYear
 from data_center.generations import (
     KNOWN_GENS,
     GenerationSpec,
     extend_generations,
 )
-from data_center.output import CostBreakdownBlock, PhysicalYear, SpaceModelOutput, ValuationOutput
-from data_center.provenance import ProvenanceCell
+from data_center.output import (
+    SCHEMA_VERSION,
+    BusinessYear,
+    CostBreakdownBlock,
+    PhysicalYear,
+    SpaceModelOutput,
+)
 from data_center.volume import VolumeBreakdown
-
-
-def _num(value: float | int | str | bool | None) -> float:
-    """Unwrap a numeric ProvenanceCell value to a float."""
-    assert isinstance(value, (int, float)) and not isinstance(value, bool)
-    return float(value)
 
 
 def _default_gens() -> list[GenerationSpec]:
@@ -159,22 +159,27 @@ def test_bus_cost_compounds_then_flattens() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_compute_mass_per_pkg_returns_provenance_cell() -> None:
-    """compute_mass_per_pkg returns a tonnes-valued ProvenanceCell."""
-    c = compute_mass_per_pkg(
+def test_compute_mass_per_pkg_returns_mass_and_its_inputs() -> None:
+    """Objective: the per-package mass and the inputs it cites, without an output cell.
+
+    Expected: a :class:`PackageMass` whose tonnes value is the generation mass
+    plus kW x (solar + radiator) t/kW, and whose ``uses`` list every input
+    path once, in first-seen order (the repeated ``"a"`` is kept once).
+    """
+    mass = compute_mass_per_pkg(
         0.0189,
         2.05,
         0.011,
         0.012,
         gen_mass_uses=["a"],
-        kw_per_pkg_uses=["b"],
+        kw_per_pkg_uses=["b", "a"],
         solar_dial_path="c",
         radiator_dial_path="d",
         radiator_selector_path="e",
     )
-    assert isinstance(c, ProvenanceCell)
-    assert c.unit == "t"
-    assert c.value == pytest.approx(0.0189 + 2.05 * (0.011 + 0.012))
+    assert isinstance(mass, PackageMass)
+    assert mass.mass_t == pytest.approx(0.0189 + 2.05 * (0.011 + 0.012))
+    assert mass.uses == ["a", "b", "c", "d", "e"]
 
 
 def test_compute_n_packages_is_mass_bound_floor() -> None:
@@ -246,7 +251,7 @@ def test_default_package_counts_are_unchanged_by_the_fit_tolerance(
     to FY2036.
     """
     out = default_output
-    counts = [int(_num(py.gpus_per_node.value)) for py in out.physical.years.values()]
+    counts = [as_int(py.gpus_per_node) for py in out.physical.years.values()]
     assert counts == [223, 178, 133, 125, 125, 108, 92, 92, 78, 66, 66]
 
 
@@ -271,7 +276,7 @@ def test_compute_mass_per_node_adds_fixed_bus_mass() -> None:
 
 
 def test_compute_mass_util_is_percent_of_envelope() -> None:
-    """mass utilisation is a PERCENT of the mass envelope in v8."""
+    """mass utilisation is a PERCENT of the mass envelope (cycle-1 carried a fraction)."""
     c = compute_mass_util(12.4, 12.5, node_mass_path="a", mass_envelope_path="b")
     assert c.value == pytest.approx(99.2)
     assert c.unit == "percent"
@@ -380,7 +385,7 @@ def test_compute_year_node_kw_equals_n_times_kw_per_pkg() -> None:
     """node_kW = N x kW/pkg for the frontier generation."""
     for i in range(11):
         yc = compute_year(i, ValuationConfig(), _default_gens())
-        assert _num(yc.physical.kw_per_node.value) == pytest.approx(
+        assert as_float(yc.physical.kw_per_node) == pytest.approx(
             yc.n_packages * yc.frontier.kw_per_pkg, rel=1e-9
         )
 
@@ -398,9 +403,9 @@ def test_compute_year_revenue_band_is_cost_times_r() -> None:
     """Per-node revenue at each band = cost_annual x R(band) — central > low."""
     yc = compute_year(0, ValuationConfig(), _default_gens())
     py = yc.physical
-    rev_c = _num(py.revenue_annual_per_node_musd_central.value)
-    rev_l = _num(py.revenue_annual_per_node_musd_low.value)
-    rev_h = _num(py.revenue_annual_per_node_musd_high.value)
+    rev_c = as_float(py.revenue_annual_per_node_musd_central)
+    rev_l = as_float(py.revenue_annual_per_node_musd_low)
+    rev_h = as_float(py.revenue_annual_per_node_musd_high)
     assert rev_l < rev_c < rev_h
     # FY2026 central R is 1.50.
     assert rev_c == pytest.approx(yc.cost_annual_musd * 1.50, rel=1e-9)
@@ -411,8 +416,8 @@ def test_compute_year_gross_profit_is_revenue_minus_cost() -> None:
     yc = compute_year(4, ValuationConfig(), _default_gens())
     py = yc.physical
     for band in ("central", "low", "high"):
-        rev = _num(getattr(py, f"revenue_annual_per_node_musd_{band}").value)
-        gp = _num(getattr(py, f"gross_profit_annual_per_node_musd_{band}").value)
+        rev = as_float(getattr(py, f"revenue_annual_per_node_musd_{band}"))
+        gp = as_float(getattr(py, f"gross_profit_annual_per_node_musd_{band}"))
         assert gp == pytest.approx(rev - yc.cost_annual_musd, rel=1e-9)
 
 
@@ -433,7 +438,7 @@ def test_compute_year_mass_util_close_to_one() -> None:
     """Every year packs the mass envelope tight (>= 85%, D2)."""
     for i in range(11):
         yc = compute_year(i, ValuationConfig(), _default_gens())
-        assert 85.0 <= _num(yc.physical.mass_utilization_pct.value) <= 100.0
+        assert 85.0 <= as_float(yc.physical.mass_utilization_pct) <= 100.0
 
 
 # ---------------------------------------------------------------------------
@@ -452,7 +457,7 @@ def test_compute_cadence_year_returns_two_cells() -> None:
 def test_compute_cadence_year_launches_ramp_up() -> None:
     """Launches per year rise across the horizon (logistic ramp)."""
     cfg = ValuationConfig()
-    launches = [_num(compute_cadence_year(i, cfg).launches.value) for i in range(11)]
+    launches = [as_float(compute_cadence_year(i, cfg).launches) for i in range(11)]
     assert launches[0] < launches[5] < launches[10]
     # first_launch_year only clamps pre-launch years; the anchors stay put.
     assert launches[5] == pytest.approx(14.0, rel=1e-6)
@@ -462,8 +467,8 @@ def test_compute_cadence_year_launches_ramp_up() -> None:
 def test_compute_cadence_year_launch_cost_falls_with_cadence() -> None:
     """Launch cost falls as the cadence ramps up (D12)."""
     cfg = ValuationConfig()
-    cost0 = _num(compute_cadence_year(0, cfg).launch_cost_musd.value)
-    cost10 = _num(compute_cadence_year(10, cfg).launch_cost_musd.value)
+    cost0 = as_float(compute_cadence_year(0, cfg).launch_cost_musd)
+    cost10 = as_float(compute_cadence_year(10, cfg).launch_cost_musd)
     assert cost10 < cost0
 
 
@@ -512,7 +517,7 @@ def test_conservative_scenario_is_mass_bound_every_year(scenarios_dir: Path) -> 
     Expected: every year is ``mass`` (the old 99% threshold said ``neither``).
     """
     out = run_valuation(load_config(scenarios_dir / "conservative.yaml"))
-    assert _num(out.physical.years["2036"].mass_utilization_pct.value) < 99.0
+    assert as_float(out.physical.years["2036"].mass_utilization_pct) < 99.0
     assert {py.binding_constraint.value for py in out.physical.years.values()} == {"mass"}
 
 
@@ -547,13 +552,18 @@ def test_cadence_is_computed_once_per_year(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_compute_fleet_trajectory_parallels_years() -> None:
-    """compute_fleet_trajectory yields one FleetYear per model year."""
+    """Objective: the fleet rollup builds the published record directly.
+
+    Expected: one :class:`BusinessYear` per model year, in year order (no
+    engine-internal copy type to transcribe).
+    """
     cfg = ValuationConfig()
     gens = _default_gens()
     years = [compute_year(i, cfg, gens) for i in range(11)]
     fleet = compute_fleet_trajectory(cfg, years)
     assert len(fleet) == 11
-    assert all(isinstance(fy, FleetYear) for fy in fleet)
+    assert all(isinstance(by, BusinessYear) for by in fleet)
+    assert [by.year for by in fleet] == [year.fy for year in years]
 
 
 def test_compute_fleet_trajectory_living_fleet_grows() -> None:
@@ -562,7 +572,7 @@ def test_compute_fleet_trajectory_living_fleet_grows() -> None:
     gens = _default_gens()
     years = [compute_year(i, cfg, gens) for i in range(11)]
     fleet = compute_fleet_trajectory(cfg, years)
-    living = [_num(fy.living_fleet.value) for fy in fleet]
+    living = [as_float(fy.living_fleet) for fy in fleet]
     assert living[0] < living[5] < living[10]
 
 
@@ -572,7 +582,7 @@ def test_compute_fleet_trajectory_cumulative_revenue_monotonic() -> None:
     gens = _default_gens()
     years = [compute_year(i, cfg, gens) for i in range(11)]
     fleet = compute_fleet_trajectory(cfg, years)
-    cumul = [_num(fy.revenue_cumulative_musd_central.value) for fy in fleet]
+    cumul = [as_float(fy.revenue_cumulative_musd_central) for fy in fleet]
     for a, b in zip(cumul[:-1], cumul[1:], strict=True):
         assert b >= a
 
@@ -587,26 +597,24 @@ def test_compute_fleet_trajectory_margin_flat_under_flat_r_band() -> None:
     gens = _default_gens()
     years = [compute_year(i, cfg, gens) for i in range(11)]
     fleet = compute_fleet_trajectory(cfg, years)
-    active_margins = [
-        _num(fy.margin_central_pct.value) for fy in fleet if _num(fy.launches.value) > 0
-    ]
+    active_margins = [as_float(fy.margin_central_pct) for fy in fleet if as_float(fy.launches) > 0]
     margin_first = active_margins[0]
-    margin_last = _num(fleet[-1].margin_central_pct.value)
+    margin_last = as_float(fleet[-1].margin_central_pct)
     assert margin_first > 0
     assert margin_last > 0
     assert margin_last == pytest.approx(margin_first)
 
 
 # ---------------------------------------------------------------------------
-# run_valuation — the v8 entry point
+# run_valuation: the model's entry point
 # ---------------------------------------------------------------------------
 
 
-def test_run_valuation_returns_v8_valuation_output(default_output: SpaceModelOutput) -> None:
-    """The engine's top-level entry returns a v8 ValuationOutput."""
+def test_run_valuation_returns_the_space_artifact(default_output: SpaceModelOutput) -> None:
+    """The engine's top-level entry returns the space artifact at the current schema version."""
     out = default_output
-    assert isinstance(out, ValuationOutput)
-    assert out.metadata.schema_version == "v8"
+    assert isinstance(out, SpaceModelOutput)
+    assert out.metadata.schema_version == SCHEMA_VERSION
 
 
 def test_run_valuation_emits_horizon_plus_one_years(default_output: SpaceModelOutput) -> None:
@@ -646,13 +654,13 @@ def test_run_valuation_data_dictionary_is_introspected(default_output: SpaceMode
 def test_run_valuation_year_zero_n_is_223(default_output: SpaceModelOutput) -> None:
     """Year 0 (FY2026) packs 223 packages (light-radiator rebase)."""
     out = default_output
-    assert int(_num(out.physical.years["2026"].gpus_per_node.value)) == 223
+    assert as_int(out.physical.years["2026"].gpus_per_node) == 223
 
 
 def test_run_valuation_year_ten_n_is_66(default_output: SpaceModelOutput) -> None:
     """Year 10 (FY2036) packs 66 packages (2026-07-14 AI-1-class radiator rebase)."""
     out = default_output
-    assert int(_num(out.physical.years["2036"].gpus_per_node.value)) == 66
+    assert as_int(out.physical.years["2036"].gpus_per_node) == 66
 
 
 def test_run_valuation_uses_integer_launch_counts_for_business_math(
@@ -670,7 +678,7 @@ def test_run_valuation_uses_integer_launch_counts_for_business_math(
         launch_counts[int(fy)] = launches
 
     assert launch_counts[2036] == 90
-    assert int(_num(out.business.years["2036"].living_fleet.value)) == sum(
+    assert as_int(out.business.years["2036"].living_fleet) == sum(
         launch_counts[fy] for fy in range(2032, 2037)
     )
 
@@ -684,18 +692,18 @@ def test_default_yaml_loads_and_runs(default_output: SpaceModelOutput) -> None:
     """The repository's default scenario loads and runs end-to-end."""
     out = default_output
     assert len(out.physical.years) == 11
-    assert out.metadata.schema_version == "v8"
+    assert out.metadata.schema_version == "v9"
 
 
 def test_all_five_scenarios_load_and_run(scenarios_dir: Path) -> None:
-    """Every cycle-1 scenario YAML loads and runs to a v8 artifact."""
+    """Every cycle-1 scenario YAML loads and runs to a space artifact."""
     for stem in ("default", "conservative", "ambitious", "upside_7yr", "with_premium"):
         cfg = load_config(scenarios_dir / f"{stem}.yaml")
         out = run_valuation(cfg)
         assert len(out.physical.years) == cfg.metadata.horizon_years + 1
         # Every year packs at least one package.
         for py in out.physical.years.values():
-            assert int(_num(py.gpus_per_node.value)) > 0
+            assert as_int(py.gpus_per_node) > 0
 
 
 def test_conservative_scenario_uses_shorter_service_life(scenarios_dir: Path) -> None:
@@ -719,8 +727,8 @@ def test_upside_7yr_grows_living_fleet_beyond_default(
     """
     default_out = default_output
     upside_out = run_valuation(load_config(scenarios_dir / "upside_7yr.yaml"))
-    default_2036 = int(_num(default_out.business.years["2036"].living_fleet.value))
-    upside_2036 = int(_num(upside_out.business.years["2036"].living_fleet.value))
+    default_2036 = as_int(default_out.business.years["2036"].living_fleet)
+    upside_2036 = as_int(upside_out.business.years["2036"].living_fleet)
     assert default_2036 == 268
     assert upside_2036 > default_2036
     # 7-year window: 2036 living == launches over FY2030..FY2036 (vs FY2032..FY2036
@@ -737,9 +745,9 @@ def test_upside_7yr_central_margin_flat_at_1_47(scenarios_dir: Path) -> None:
     """
     out = run_valuation(load_config(scenarios_dir / "upside_7yr.yaml"))
     margins = [
-        _num(by.margin_central_pct.value)
+        as_float(by.margin_central_pct)
         for by in out.business.years.values()
-        if _num(by.launches.value) > 0
+        if as_float(by.launches) > 0
     ]
     expected_margin_pct = (1.47 - 1.0) / 1.47 * 100.0
     assert margins  # at least one active year
@@ -750,12 +758,6 @@ def test_upside_7yr_central_margin_flat_at_1_47(scenarios_dir: Path) -> None:
 def test_run_valuation_uses_known_gens_by_default(default_output: SpaceModelOutput) -> None:
     """With no generation override, run_valuation uses the bundled KNOWN_GENS."""
     out = default_output
-    gen_names = [str(g["name"]) for g in out.inputs.generations]
+    gen_names = [str(g.name.value) for g in out.inputs.config.generations]
     assert "B200/GB200" in gen_names
     assert "Feynman" in gen_names
-
-
-def test_cohort_and_fleetyear_are_importable() -> None:
-    """The fleet model types are importable from the fleet module."""
-    assert Cohort is not None
-    assert FleetYear is not None

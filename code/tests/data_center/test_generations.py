@@ -44,7 +44,6 @@ from data_center.generations import (
     NoFrontierAvailableError,
     Source,
     SourcingClass,
-    dump_generations_yaml,
     extend_generations,
     frontier_at,
     load_generations_yaml,
@@ -227,14 +226,6 @@ def test_yaml_round_trip_in_memory():
     reloaded = [
         GenerationSpec.model_validate(entry) for entry in reloaded_dict[GENERATIONS_YAML_KEY]
     ]
-    assert reloaded == list(KNOWN_GENS)
-
-
-def test_yaml_round_trip_via_disk(tmp_path):
-    """Dump → file → load via the public helpers returns equal generations."""
-    path = tmp_path / "round_trip.yaml"
-    dump_generations_yaml(list(KNOWN_GENS), path)
-    reloaded = load_generations_yaml(path)
     assert reloaded == list(KNOWN_GENS)
 
 

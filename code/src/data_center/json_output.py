@@ -1,23 +1,22 @@
-"""v8 output assembly + JSON serialiser for :class:`ValuationOutput`.
+"""Output assembly for :class:`SpaceModelOutput`: the space artifact and its data dictionary.
 
-Three responsibilities:
+Two responsibilities (the artifact is serialized by the shared
+:func:`common.file_io.render_artifact_json`):
 
-* :func:`build_output` — assemble the complete v8 :class:`ValuationOutput`
-  from a :class:`data_center.config.ValuationConfig`, the extended
-  generation list, and the per-year ``physical`` / ``business`` maps the
-  engine computes. The engine's :func:`data_center.engine.run_valuation`
-  delegates the v8 assembly to this function (plan § 5 T51/T52).
+* :func:`build_output`: assemble the complete space artifact, a
+  :class:`SpaceModelOutput`, from a :class:`data_center.config.ValuationConfig`,
+  the extended generation list, and the per-year ``physical`` / ``business``
+  maps the engine computes. The engine's :func:`data_center.engine.run_valuation`
+  delegates the assembly to this function (plan § 5 T51/T52).
 * :func:`build_data_dictionary`: walk a built output (the space artifact
   or the ground reference) and return its path-sorted data dictionary. The
   dictionary is *generated*, not hand-maintained: a cell's unit is read
   from the cell itself, a non-cell field's unit from its declaration.
-* :func:`render_json` — wrap ``model_dump_json(indent=2)`` so the CLI's
-  ``--json`` path has one place to call.
 
 The ``meta.query_examples`` block — the cold-reader contract — is the
 fixed 12-entry list :func:`data_center.query_examples.build_query_examples`
 builds for the run's anchor year; :func:`build_output` places it at
-``meta.query_examples`` in every emitted :class:`ValuationOutput`.
+``meta.query_examples`` in every emitted :class:`SpaceModelOutput`.
 
 ``meta.validation_results`` is built by
 :func:`data_center.validation.build_validation_results` (every V-rule, the
@@ -39,32 +38,31 @@ from typing import Any, Final, Union, get_args, get_origin  # typing-acceptable:
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
-from common.meta import summarize_source_statuses
+from common.input_manifest import InputCell
+from common.meta import (
+    DataDictEntry,
+    FieldKind,
+    FormulaDefinition,
+    ValidationReport,
+    summarize_source_statuses,
+)
+from common.provenance import FORMULAS, FieldPath, ProvenanceCell, YearString
 from data_center.config import ValuationConfig, anchor_year
 from data_center.constants import USD_PER_MUSD
 from data_center.generations import GenerationSpec
-from data_center.input_manifest import (
-    InputCell,
-    build_input_manifest,
-    generation_source_status,
-)
+from data_center.input_manifest import build_input_manifest, generation_source_status
 from data_center.output import (
     SCHEMA_VERSION,
     ArtifactRole,
     BusinessBlock,
     BusinessYear,
-    DataDictEntry,
-    FormulaDefinition,
     GenerationSummary,
     MetaBlock,
     PhysicalBlock,
     PhysicalYear,
     RunMetadata,
     SpaceModelOutput,
-    ValidationReport,
-    ValuationOutput,
 )
-from data_center.provenance import FORMULAS, FieldPath, ProvenanceCell
 from data_center.query_examples import build_query_examples
 from data_center.validation import build_validation_results, compute_validation
 
@@ -150,27 +148,28 @@ def _wire_type(leaf_type: Any) -> str:
     return "string"
 
 
-def _source_class_for(path: str) -> str:
-    """Best-effort provenance class for one leaf path.
+def _source_class_for(path: str) -> FieldKind:
+    """Provenance class of one leaf path, from its top-level block.
 
-    The v8 ``data_dictionary`` tags every field with a provenance class:
-    fields under ``inputs.*`` are operator-set dials (``INPUT``); everything
-    in ``physical`` / ``business`` is engine-computed (``DERIVED``);
-    ``metadata`` fields are run-identity constants (``CONSTANT``).
+    The ``data_dictionary`` tags every field with a :class:`FieldKind`:
+    fields under ``inputs.*`` are scenario-set inputs (``input``);
+    ``metadata`` fields are run-identity constants (``constant``); everything
+    else (``physical``, ``business``, ``meta``, and the ground reference's
+    computed blocks) is model-derived (``derived``).
 
     Args:
         path: The leaf's dotted field path.
 
     Returns:
-        A provenance-class string: ``INPUT`` / ``DERIVED`` / ``CONSTANT``.
+        The field's :class:`FieldKind`.
     """
     head = path.split(".", 1)[0]
     head = head[:-2] if head.endswith("[]") else head
     if head == "inputs":
-        return "INPUT"
+        return FieldKind.INPUT
     if head == "metadata":
-        return "CONSTANT"
-    return "DERIVED"
+        return FieldKind.CONSTANT
+    return FieldKind.DERIVED
 
 
 # ---------------------------------------------------------------------------
@@ -373,23 +372,12 @@ def _model_version() -> str | None:
         return None
 
 
-# Formula-id prefixes owned by OTHER ventures that share the common FORMULAS
-# registry. FORMULAS moved to common.provenance (Phase 0 of the comms build) and
-# is shared; the communications model appends comms_-prefixed entries to it. The
-# data-center artifact documents only its OWN formulas, so foreign entries are
-# excluded here. Without this filter the promoted DC default JSON gains the comms
-# formulas on every regeneration, silently breaking its exactness (the parity gate
-# locks per-year values, not the meta.formula_definitions block).
-_FOREIGN_VENTURE_FORMULA_PREFIXES: Final[tuple[str, ...]] = ("comms_",)
-
-
 def _build_formula_definitions() -> list[FormulaDefinition]:
     """Build public formula metadata from the authoritative formula table.
 
-    Documents only data-center formulas: entries in the shared FORMULAS registry
-    that belong to another venture (see :data:`_FOREIGN_VENTURE_FORMULA_PREFIXES`)
-    are excluded, so the promoted DC artifact stays exact as the shared registry
-    grows.
+    One entry per :data:`common.provenance.FORMULAS` entry, sorted by formula
+    id: the space-model formulas and the ground-reference formulas the ground
+    artifact's cells cite.
     """
     return [
         FormulaDefinition(
@@ -402,12 +390,11 @@ def _build_formula_definitions() -> list[FormulaDefinition]:
             scenario_notes=None,
         )
         for formula_id, spec in sorted(FORMULAS.items())
-        if not formula_id.startswith(_FOREIGN_VENTURE_FORMULA_PREFIXES)
     ]
 
 
 # ---------------------------------------------------------------------------
-# v8 output assembly
+# Space artifact assembly
 # ---------------------------------------------------------------------------
 
 
@@ -415,18 +402,18 @@ def build_output(
     *,
     config: ValuationConfig,
     extended_gens: list[GenerationSpec],
-    physical_by_year: dict[str, PhysicalYear],
-    business_by_year: dict[str, BusinessYear],
+    physical_by_year: dict[YearString, PhysicalYear],
+    business_by_year: dict[YearString, BusinessYear],
     generated_at: str,
     source_scenario_path: str,
     artifact_role: ArtifactRole = ArtifactRole.DRAFT,
 ) -> SpaceModelOutput:
-    """Assemble the complete v8 :class:`SpaceModelOutput`.
+    """Assemble the complete space artifact, a :class:`SpaceModelOutput`.
 
     The engine computes the per-year ``physical`` / ``business`` maps and
-    calls this function to wrap them in the five-block v8 artifact —
-    building the ``metadata`` / ``inputs`` / ``meta`` blocks and running
-    the validation rules against the assembled output.
+    calls this function to wrap them in the five-block artifact, building
+    the ``metadata`` / ``inputs`` / ``meta`` blocks and running the
+    validation rules against the assembled output.
 
     Args:
         config: The validated :class:`ValuationConfig`.
@@ -440,8 +427,8 @@ def build_output(
         artifact_role: Artifact role to stamp in metadata.
 
     Returns:
-        A frozen v8 :class:`SpaceModelOutput` with the validation report
-        computed against the assembled artifact.
+        The frozen space artifact, with the validation report computed
+        against the assembled artifact.
     """
     md = config.metadata
     metadata = RunMetadata(
@@ -486,8 +473,11 @@ def build_output(
             cell.source_status for cell in inputs.assumption_index.values()
         ),
         schema_version_notes=(
-            "v8 space output with Phase-2 InputManifest, source-status summary, "
-            "formula definitions, validation_results, and query examples."
+            f"{SCHEMA_VERSION} space output: the typed input manifest, source-status "
+            "summary, formula definitions, validation_results, and query examples. "
+            "Since v8 the duplicate business.years[].kw_on_orbit and pf_on_orbit are "
+            "gone (read kw_living_fleet and pf_living_fleet) and the data dictionary's "
+            "source_class is lowercase."
         ),
     )
     pre_output = SpaceModelOutput(
@@ -508,19 +498,4 @@ def build_output(
     return output_with_rules.model_copy(update={"meta": meta})
 
 
-def render_json(output: ValuationOutput) -> str:
-    """Serialise a :class:`ValuationOutput` as indented JSON.
-
-    Wraps ``model_dump_json(indent=2)``. The returned string is what the
-    CLI's ``--json`` path emits.
-
-    Args:
-        output: The v8 valuation output to serialise.
-
-    Returns:
-        The artifact as an indented JSON string.
-    """
-    return output.model_dump_json(indent=2)
-
-
-__all__ = ["build_data_dictionary", "build_output", "render_json"]
+__all__ = ["build_data_dictionary", "build_output"]

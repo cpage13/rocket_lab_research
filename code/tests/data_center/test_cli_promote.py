@@ -19,7 +19,9 @@ These tests are the promotion contract:
    ``default`` in any spelling, and the default scenario only as ``default``
    (usage errors, ``EXIT_USAGE``); a mistyped scenario path is reported as a
    missing file;
-3. a failing validation check refuses the promotion and writes nothing;
+3. a failing validation check refuses the promotion and writes nothing, and
+   a default whose anchor-year cohort is empty (no ground reference can be
+   built) is one clean error, not a traceback;
 4. a write failure (a read-only ground directory, a failed second rename, a
    locked ground file) leaves both promoted artifacts exactly as they were,
    with no staged or backup file left behind, and the error line says so;
@@ -41,8 +43,11 @@ from pathlib import Path
 
 import pytest
 
+from common.cadence import CadenceDials
 from common.cli import EXIT_ERROR, EXIT_OK, EXIT_USAGE
 from data_center import cli
+from data_center.config import ValuationConfig
+from data_center.constants import ANCHOR_MODEL_YEAR
 from data_center.ground import GroundReferenceOutput
 from data_center.output import SpaceModelOutput
 
@@ -93,8 +98,8 @@ def _pair_is_untouched(space: Path, ground: Path) -> bool:
 def test_promote_writes_default_space_and_ground_artifacts(tmp_path: Path) -> None:
     """Objective: ``--promote`` publishes the default pair.
 
-    Expected: exit 0; ``space/default.json`` round-trips as a v8
-    ``promoted_default`` artifact of the default scenario and
+    Expected: exit 0; ``space/default.json`` round-trips as a
+    ``promoted_default`` space artifact of the default scenario and
     ``ground/default.json`` as a ``promoted_ground_default`` reference; both
     end in exactly one newline (clean git diffs); the models directory is
     created when absent.
@@ -107,7 +112,8 @@ def test_promote_writes_default_space_and_ground_artifacts(tmp_path: Path) -> No
     ground_text = (models_dir / "ground" / "default.json").read_text(encoding="utf-8")
     space = SpaceModelOutput.model_validate(json.loads(space_text))
     ground = GroundReferenceOutput.model_validate(json.loads(ground_text))
-    assert space.metadata.schema_version == "v8"
+    assert space.metadata.schema_version == "v9"
+    assert ground.metadata.schema_version == "ground-v2"
     assert space.metadata.artifact_role == "promoted_default"
     assert space.inputs.scenario.is_default
     assert ground.metadata.artifact_role == "promoted_ground_default"
@@ -246,6 +252,40 @@ def test_promote_refuses_a_scenario_with_a_failing_validation_check(
     assert len(errors) == 1
     assert "refusing to promote" in errors[0]
     assert "volume_fits_horizon" in errors[0]
+    assert not models_dir.exists()
+
+
+def test_an_empty_anchor_cohort_fails_promotion_with_one_clean_error(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Objective: a default that deploys nothing in its anchor year fails cleanly.
+
+    The original trigger: the default scenario with its first launch after the
+    anchor year (``cadence.first_launch_year: 11``) deploys no node in FY2036,
+    the ground reference's per-package cells came out None, and ``--promote``
+    ended in a TypeError traceback. Expected: exit 1 with exactly one error
+    record, ``could not promote code/scenarios/default.yaml:`` naming the empty
+    anchor cohort, no warning, and nothing written.
+    """
+    load_default = cli.load_config
+
+    def load_with_no_launch_in_the_window(path: str | Path) -> ValuationConfig:
+        config = load_default(path)
+        cadence = CadenceDials.model_validate(
+            {**config.cadence.model_dump(), "first_launch_year": ANCHOR_MODEL_YEAR + 1}
+        )
+        return config.model_copy(update={"cadence": cadence})
+
+    monkeypatch.setattr(cli, "load_config", load_with_no_launch_in_the_window)
+    models_dir = tmp_path / "models"
+
+    assert _promote(models_dir) == EXIT_ERROR
+
+    errors = _errors(caplog)
+    assert len(errors) == 1
+    assert errors[0].startswith("could not promote code/scenarios/default.yaml: ")
+    assert "anchor-year cohort (FY2036) is empty" in errors[0]
+    assert not [r for r in caplog.records if r.levelno == logging.WARNING]
     assert not models_dir.exists()
 
 

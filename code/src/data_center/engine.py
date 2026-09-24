@@ -1,10 +1,10 @@
-"""The GPU-first valuation engine — YAML config in, typed v8 artifact out.
+"""The GPU-first valuation engine: YAML config in, the typed space artifact out.
 
 This module is the deterministic computation. Given a
 :class:`data_center.config.ValuationConfig`, it picks a frontier generation
 for each fiscal year, applies the GPU-first formulas to derive per-year
-per-node economics, rolls the living fleet up by cohort, and returns a typed
-v8 :class:`data_center.output.ValuationOutput`.
+per-node economics, rolls the living fleet up by cohort, and returns the
+typed space artifact, a :class:`data_center.output.SpaceModelOutput`.
 
 The GPU-first per-node formulas (the heart of the model):
 
@@ -39,10 +39,10 @@ The fleet rollup vintages each calendar year's launches into a
 central / high, D18), so every revenue / gross-profit / margin figure
 surfaces as a three-way split.
 
-Cycle-2 v8 output: the artifact has five top-level keys
-(``metadata`` / ``inputs`` / ``physical`` / ``business`` / ``meta``); every
-leaf numeric is a :class:`data_center.provenance.ProvenanceCell`. The
-v8 assembly (metadata + inputs + meta + the final ``ValuationOutput``) is
+The space artifact has five top-level keys (``metadata`` / ``inputs`` /
+``physical`` / ``business`` / ``meta``, the cycle-2 layout); every leaf
+numeric is a :class:`common.provenance.ProvenanceCell`. The artifact's
+assembly (metadata + inputs + meta + the final ``SpaceModelOutput``) is
 delegated to :func:`data_center.json_output.build_output`.
 
 References:
@@ -59,7 +59,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final
 
-from .cadence import compute_launch_cost_musd, compute_launches_per_year
+from common.cadence import compute_launch_cost_musd, compute_launches_per_year
+from common.provenance import FieldPath, ProvenanceCell, YearString, as_float, as_int, cell
+
 from .config import GospelInputs, RBand, ValuationConfig
 from .constants import (
     GENERATION_EXTENSION_LOOKAHEAD_YEARS,
@@ -69,7 +71,6 @@ from .constants import (
 )
 from .fleet import (
     Cohort,
-    FleetYear,
     business_year_path,
     compute_fleet_year,
     physical_year_path,
@@ -86,9 +87,8 @@ from .output import (
     BusinessYear,
     CostBreakdownBlock,
     PhysicalYear,
-    ValuationOutput,
+    SpaceModelOutput,
 )
-from .provenance import FieldPath, ProvenanceCell, cell
 from .volume import (
     VolumeBreakdown,
     compute_binding_constraint,
@@ -183,50 +183,29 @@ def bus_cost_for_year(year_idx: int, gospel: GospelInputs) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Typed unwrap helpers
-# ---------------------------------------------------------------------------
-
-
-def _cell_float(c: ProvenanceCell) -> float:
-    """Unwrap a numeric :class:`ProvenanceCell` to a plain ``float``.
-
-    Args:
-        c: A ProvenanceCell whose ``value`` is numeric.
-
-    Returns:
-        The cell's value as a ``float``.
-
-    Raises:
-        TypeError: If the cell's value is not a real number.
-    """
-    if isinstance(c.value, bool) or not isinstance(c.value, (int, float)):
-        raise TypeError(f"ProvenanceCell {c.formula_name!r} is not numeric: {c.value!r}")
-    return float(c.value)
-
-
-def _cell_int(c: ProvenanceCell) -> int:
-    """Unwrap an integer :class:`ProvenanceCell` to a plain ``int``.
-
-    Args:
-        c: A ProvenanceCell whose ``value`` is an integer.
-
-    Returns:
-        The cell's value as an ``int``.
-
-    Raises:
-        TypeError: If the cell's value is not an integer.
-    """
-    if isinstance(c.value, bool) or not isinstance(c.value, int):
-        raise TypeError(f"ProvenanceCell {c.formula_name!r} is not an int: {c.value!r}")
-    return c.value
-
-
-# ---------------------------------------------------------------------------
-# Per-year cell-producing functions (cycle-2 provenance — plan § 0.9)
+# Per-year cell-producing functions (cycle-2 provenance, plan § 0.9)
 # ---------------------------------------------------------------------------
 #
 # Each function below produces one leaf value of the per-node trajectory as
 # a `ProvenanceCell`: value + unit + formula + uses + sources + description.
+
+
+@dataclass(frozen=True)
+class PackageMass:
+    """One package's effective flown mass and the inputs it is built from.
+
+    Not an output field: :func:`compute_year` sizes the node with the mass,
+    and the cells that consume it (``gpus_per_node`` and ``mass_per_node_t``)
+    cite its ``uses`` as their own.
+
+    Attributes:
+        mass_t: Per-package effective mass (generation mass plus apportioned
+            solar and radiator), tonnes.
+        uses: JSON paths of the inputs the mass is built from.
+    """
+
+    mass_t: float
+    uses: list[FieldPath]
 
 
 def compute_mass_per_pkg(
@@ -240,12 +219,13 @@ def compute_mass_per_pkg(
     solar_dial_path: FieldPath,
     radiator_dial_path: FieldPath,
     radiator_selector_path: FieldPath,
-) -> ProvenanceCell:
+) -> PackageMass:
     """Per-package effective mass including apportioned solar + radiator.
 
-    The cell is not emitted as its own output field: its ``uses`` (the
-    per-package mass inputs) are carried by the cells that consume the
-    per-package mass (``gpus_per_node`` and ``mass_per_node_t``).
+    ``gen_pkg_mass_t + kw_per_pkg x (solar_t_per_kw + radiator_t_per_kw_active)``.
+    Not an output cell: the formula text is carried by the cells that consume
+    the mass (``n_packages_from_mass_envelope`` and
+    ``mass_per_node_from_n_and_mass_per_pkg``), and its inputs by their ``uses``.
 
     Args:
         gen_pkg_mass_t: The generation's per-package mass, tonnes.
@@ -264,13 +244,11 @@ def compute_mass_per_pkg(
             radiator dial in force (``tjmax_lift_year``).
 
     Returns:
-        A :class:`ProvenanceCell` carrying the per-package mass in tonnes.
+        The :class:`PackageMass`: the per-package mass in tonnes and the
+        de-duplicated input paths behind it.
     """
-    value_t = gen_pkg_mass_t + kw_per_pkg * (solar_t_per_kw + radiator_t_per_kw_active)
-    return cell(
-        value=value_t,
-        unit="t",
-        formula_name="mass_per_pkg_from_gen_and_dials",
+    return PackageMass(
+        mass_t=gen_pkg_mass_t + kw_per_pkg * (solar_t_per_kw + radiator_t_per_kw_active),
         uses=_unique(
             [
                 *gen_mass_uses,
@@ -279,10 +257,6 @@ def compute_mass_per_pkg(
                 radiator_dial_path,
                 radiator_selector_path,
             ]
-        ),
-        sources=["cycle-1 engine formula"],
-        description=(
-            "Per-package effective mass (generation mass + apportioned solar + radiator), tonnes."
         ),
     )
 
@@ -397,7 +371,7 @@ def compute_mass_util(
 ) -> ProvenanceCell:
     """Mass utilisation — node mass as a percent of the mass envelope.
 
-    The v8 cell carries a **percent** (0-100); cycle-1 carried a 0-1
+    The cell carries a **percent** (0-100); cycle-1 carried a 0-1
     fraction. The conversion lives here so every consumer sees one
     convention.
 
@@ -605,11 +579,11 @@ def compute_node_total_cost(
         A :class:`ProvenanceCell` carrying the total per-node cost in $M.
     """
     total = (
-        _cell_float(breakdown.compute)
-        + _cell_float(breakdown.bus)
-        + _cell_float(breakdown.solar)
-        + _cell_float(breakdown.radiator)
-        + _cell_float(breakdown.launch)
+        as_float(breakdown.compute)
+        + as_float(breakdown.bus)
+        + as_float(breakdown.solar)
+        + as_float(breakdown.radiator)
+        + as_float(breakdown.launch)
     )
     return cell(
         value=total,
@@ -760,7 +734,7 @@ def compute_cadence_year(year_idx: int, config: ValuationConfig) -> CadenceYear:
         launches_at_year_10=cad.launches_at_year_10,
         first_launch_year=cad.first_launch_year,
     )
-    launches = _cell_float(launches_cell)
+    launches = as_float(launches_cell)
     launch_cost_cell = compute_launch_cost_musd(
         launches,
         low_cadence_cost_musd=lc.low_cadence_cost_musd,
@@ -818,14 +792,14 @@ def compute_volume_year(
         efficiency_path="inputs.config.volume.si_bol_efficiency",
     )
     volume_per_pkg_cell = compute_volume_per_pkg(
-        _cell_float(solar_area_cell),
+        as_float(solar_area_cell),
         vol.stowed_pitch_mm,
         solar_area_path=f"{fy_path}.solar_area_per_pkg_m2",
         pitch_path="inputs.config.volume.stowed_pitch_mm",
     )
     volume_per_node_cell = compute_volume_per_node(
         n_packages,
-        _cell_float(volume_per_pkg_cell),
+        as_float(volume_per_pkg_cell),
         vol.mounting_overhead_pct,
         config.gospel.node_volume_fixed_m3,
         n_path=f"{fy_path}.gpus_per_node",
@@ -834,14 +808,14 @@ def compute_volume_year(
         node_volume_fixed_path="inputs.config.physical.node_volume_fixed_m3",
     )
     volume_util_cell = compute_volume_utilization(
-        _cell_float(volume_per_node_cell),
+        as_float(volume_per_node_cell),
         vol.neutron_fairing_usable_volume_m3,
         node_volume_path=f"{fy_path}.volume_per_node_m3",
         fairing_volume_path="inputs.config.volume.neutron_fairing_usable_volume_m3",
     )
     binding_cell = compute_binding_constraint(
         mass_bound,
-        _cell_float(volume_util_cell),
+        as_float(volume_util_cell),
         mass_bound_uses=[
             f"{fy_path}.gpus_per_node",
             f"{fy_path}.mass_per_node_t",
@@ -870,7 +844,7 @@ class YearComputation:
     The engine's per-year intermediate: the frontier generation chosen for
     the year, the year's cadence, plus the per-node :class:`PhysicalYear` of
     provenance cells. This is not an output model: it is consumed by the
-    fleet rollup and by the v8 output assembly.
+    fleet rollup and by the output assembly.
 
     Attributes:
         year_idx: Zero-based model year index.
@@ -905,7 +879,7 @@ def compute_year(
     """Compute one fiscal year's GPU-first per-node economics.
 
     Implements the GPU-first formulas (see module docstring) against the
-    frontier generation for the year, then assembles the per-node v8
+    frontier generation for the year, then assembles the per-node
     :class:`PhysicalYear` of provenance cells.
 
     Args:
@@ -934,10 +908,10 @@ def compute_year(
         """Cite the frontier choice and the chosen generation's field."""
         return [frontier_path, *generation_field_uses(front_index, field, listed_count)]
 
-    # The radiator and mass terms (D11 Tjmax step). The per-package mass cell
-    # is not an output field; its inputs ride on the cells that consume it.
+    # The radiator and mass terms (D11 Tjmax step). The per-package mass is
+    # not an output field; its inputs ride on the cells that consume it.
     radiator_t_per_kw = radiator_t_per_kw_for_year(year_idx, gospel)
-    mass_per_pkg_cell = compute_mass_per_pkg(
+    package_mass = compute_mass_per_pkg(
         front.kg_per_pkg / KG_PER_T,
         front.kw_per_pkg,
         gospel.solar_mass_t_per_kw,
@@ -948,7 +922,7 @@ def compute_year(
         radiator_dial_path=radiator_dial_path_for_year(year_idx, gospel),
         radiator_selector_path=TJMAX_LIFT_YEAR_PATH,
     )
-    mass_per_pkg_t = _cell_float(mass_per_pkg_cell)
+    mass_per_pkg_t = package_mass.mass_t
     mass_budget_t = gospel.mass_envelope_t - gospel.node_mass_fixed_t
     n_cell = compute_n_packages(
         mass_budget_t,
@@ -957,9 +931,9 @@ def compute_year(
             "inputs.config.physical.mass_envelope_t",
             "inputs.config.physical.node_mass_fixed_t",
         ],
-        mass_per_pkg_uses=mass_per_pkg_cell.uses,
+        mass_per_pkg_uses=package_mass.uses,
     )
-    n = _cell_int(n_cell)
+    n = as_int(n_cell)
     # Mass binds when the budget left after N packages cannot take one more.
     mass_bound = (mass_budget_t - n * mass_per_pkg_t) < mass_per_pkg_t
 
@@ -970,16 +944,16 @@ def compute_year(
         n_packages_path=f"{fy_path}.gpus_per_node",
         kw_per_pkg_uses=spec_uses(GenerationField.KW_PER_PKG),
     )
-    node_kw = _cell_float(kw_cell)
+    node_kw = as_float(kw_cell)
     node_mass_cell = compute_mass_per_node(
         n,
         mass_per_pkg_t,
         gospel.node_mass_fixed_t,
         n_packages_path=f"{fy_path}.gpus_per_node",
-        mass_per_pkg_uses=mass_per_pkg_cell.uses,
+        mass_per_pkg_uses=package_mass.uses,
         node_mass_fixed_path="inputs.config.physical.node_mass_fixed_t",
     )
-    node_mass_t = _cell_float(node_mass_cell)
+    node_mass_t = as_float(node_mass_cell)
     mass_util_cell = compute_mass_util(
         node_mass_t,
         gospel.mass_envelope_t,
@@ -992,7 +966,7 @@ def compute_year(
         n_packages_path=f"{fy_path}.gpus_per_node",
         pf_per_pkg_uses=spec_uses(GenerationField.PF_PER_PKG),
     )
-    node_pf = _cell_float(pf_node_cell)
+    node_pf = as_float(pf_node_cell)
     pf_per_kw_cell = compute_pf_per_kw(
         node_pf,
         node_kw,
@@ -1012,7 +986,7 @@ def compute_year(
 
     # The cost decomposition — five build lines + total + annualized.
     cadence_year = compute_cadence_year(year_idx, config)
-    launch_musd = _cell_float(cadence_year.launch_cost_musd)
+    launch_musd = as_float(cadence_year.launch_cost_musd)
     breakdown = compute_cost_per_node_breakdown(
         n,
         front.usd_per_pkg,
@@ -1030,7 +1004,7 @@ def compute_year(
     node_total_cell = compute_node_total_cost(
         breakdown, cost_breakdown_path=f"{fy_path}.cost_breakdown"
     )
-    node_total_musd = _cell_float(node_total_cell)
+    node_total_musd = as_float(node_total_cell)
     service_life = config.fleet.service_life_years
     cost_annual_cell = compute_cost_annual_per_node(
         node_total_musd,
@@ -1038,7 +1012,7 @@ def compute_year(
         node_total_path=f"{fy_path}.cost_breakdown.node_total",
         service_life_path="inputs.config.fleet.service_life_years",
     )
-    cost_annual_musd = _cell_float(cost_annual_cell)
+    cost_annual_musd = as_float(cost_annual_cell)
 
     # The revenue economics — an R band (low / central / high) of per-node
     # annual revenue and gross profit.
@@ -1066,21 +1040,21 @@ def compute_year(
         r_band_path="inputs.config.revenue.high[]",
     )
     gp_central = compute_gross_profit_annual_per_node(
-        _cell_float(rev_central),
+        as_float(rev_central),
         cost_annual_musd,
         "central",
         revenue_path=f"{fy_path}.revenue_annual_per_node_musd_central",
         cost_annual_path=cost_annual_path,
     )
     gp_low = compute_gross_profit_annual_per_node(
-        _cell_float(rev_low),
+        as_float(rev_low),
         cost_annual_musd,
         "low",
         revenue_path=f"{fy_path}.revenue_annual_per_node_musd_low",
         cost_annual_path=cost_annual_path,
     )
     gp_high = compute_gross_profit_annual_per_node(
-        _cell_float(rev_high),
+        as_float(rev_high),
         cost_annual_musd,
         "high",
         revenue_path=f"{fy_path}.revenue_annual_per_node_musd_high",
@@ -1180,7 +1154,7 @@ def _year_to_cohort(
         nodes_deployed=nodes_deployed,
         frontier_generation=year.frontier.name,
         kw_per_node=year.node_kw,
-        pf_per_node=_cell_float(year.physical.pf_per_node),
+        pf_per_node=as_float(year.physical.pf_per_node),
         cost_annual_per_node_musd=cost_annual_per_node,
         rev_per_node_musd_central=cost_annual_per_node * r_central,
         rev_per_node_musd_low=cost_annual_per_node * r_low,
@@ -1191,7 +1165,7 @@ def _year_to_cohort(
 def compute_fleet_trajectory(
     config: ValuationConfig,
     years: list[YearComputation],
-) -> list[FleetYear]:
+) -> list[BusinessYear]:
     """Build the per-year fleet rollup parallel to the per-node trajectory.
 
     For each model year: reads the year's cadence (launches + launch cost,
@@ -1209,18 +1183,18 @@ def compute_fleet_trajectory(
         years: The per-node :class:`YearComputation` trajectory.
 
     Returns:
-        A list of :class:`FleetYear`, one per element of ``years``.
+        One :class:`data_center.output.BusinessYear` per element of ``years``.
     """
     r_band = config.r_band
     cohorts: list[Cohort] = []
-    fleet_years: list[FleetYear] = []
+    fleet_years: list[BusinessYear] = []
     cumul_central = 0.0
     cumul_low = 0.0
     cumul_high = 0.0
     prior_year: int | None = None
     for year in years:
-        launches = _cell_int(year.cadence.launches)
-        launch_cost = _cell_float(year.cadence.launch_cost_musd)
+        launches = as_int(year.cadence.launches)
+        launch_cost = as_float(year.cadence.launch_cost_musd)
         nodes_deployed = launches
         cohorts.append(_year_to_cohort(year, nodes_deployed, r_band))
         fleet_year = compute_fleet_year(
@@ -1236,51 +1210,10 @@ def compute_fleet_trajectory(
         )
         prior_year = year.fy
         fleet_years.append(fleet_year)
-        cumul_central = _cell_float(fleet_year.revenue_cumulative_musd_central)
-        cumul_low = _cell_float(fleet_year.revenue_cumulative_musd_low)
-        cumul_high = _cell_float(fleet_year.revenue_cumulative_musd_high)
+        cumul_central = as_float(fleet_year.revenue_cumulative_musd_central)
+        cumul_low = as_float(fleet_year.revenue_cumulative_musd_low)
+        cumul_high = as_float(fleet_year.revenue_cumulative_musd_high)
     return fleet_years
-
-
-def _fleet_year_to_business_year(fleet_year: FleetYear) -> BusinessYear:
-    """Map a :class:`data_center.fleet.FleetYear` to a v8 :class:`BusinessYear`.
-
-    Both carry the same 19 provenance-cell fields; this is a field-by-field
-    transcription so the engine-internal ``FleetYear`` dataclass and the
-    output ``BusinessYear`` Pydantic model stay decoupled.
-
-    Args:
-        fleet_year: The per-year fleet rollup from the fleet module.
-
-    Returns:
-        The equivalent v8 :class:`BusinessYear`.
-    """
-    return BusinessYear(
-        year=fleet_year.year,
-        launches=fleet_year.launches,
-        nodes_deployed_this_year=fleet_year.nodes_deployed_this_year,
-        living_fleet=fleet_year.living_fleet,
-        kw_deployed_this_year=fleet_year.kw_deployed_this_year,
-        kw_living_fleet=fleet_year.kw_living_fleet,
-        kw_on_orbit=fleet_year.kw_on_orbit,
-        pf_deployed_this_year=fleet_year.pf_deployed_this_year,
-        pf_living_fleet=fleet_year.pf_living_fleet,
-        pf_on_orbit=fleet_year.pf_on_orbit,
-        launch_cost_this_year_musd=fleet_year.launch_cost_this_year_musd,
-        cost_annual_fleet_musd=fleet_year.cost_annual_fleet_musd,
-        revenue_annual_fleet_musd_central=fleet_year.revenue_annual_fleet_musd_central,
-        revenue_annual_fleet_musd_low=fleet_year.revenue_annual_fleet_musd_low,
-        revenue_annual_fleet_musd_high=fleet_year.revenue_annual_fleet_musd_high,
-        revenue_cumulative_musd_central=fleet_year.revenue_cumulative_musd_central,
-        revenue_cumulative_musd_low=fleet_year.revenue_cumulative_musd_low,
-        revenue_cumulative_musd_high=fleet_year.revenue_cumulative_musd_high,
-        gross_profit_annual_fleet_musd_central=fleet_year.gross_profit_annual_fleet_musd_central,
-        gross_profit_annual_fleet_musd_low=fleet_year.gross_profit_annual_fleet_musd_low,
-        gross_profit_annual_fleet_musd_high=fleet_year.gross_profit_annual_fleet_musd_high,
-        margin_central_pct=fleet_year.margin_central_pct,
-        margin_low_pct=fleet_year.margin_low_pct,
-        margin_high_pct=fleet_year.margin_high_pct,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -1293,14 +1226,14 @@ def run_valuation(
     *,
     source_scenario_path: str = "unrecorded",
     artifact_role: ArtifactRole = ArtifactRole.DRAFT,
-) -> ValuationOutput:
-    """Run the GPU-first valuation model end-to-end and return the v8 artifact.
+) -> SpaceModelOutput:
+    """Run the GPU-first valuation model end-to-end and return the space artifact.
 
     Resolves the frontier-generation list (using ``config.generations`` if
     provided, else extending ``KNOWN_GENS`` with ``config.slopes``),
     computes one :class:`YearComputation` per fiscal year from year 0 to
     ``metadata.horizon_years``, rolls the living fleet up by cohort, and
-    delegates the v8 ``ValuationOutput`` assembly to
+    delegates the ``SpaceModelOutput`` assembly to
     :func:`data_center.json_output.build_output`.
 
     Args:
@@ -1309,7 +1242,7 @@ def run_valuation(
         artifact_role: Artifact role to stamp in output metadata.
 
     Returns:
-        A frozen v8 :class:`ValuationOutput`.
+        The frozen space artifact, a :class:`SpaceModelOutput`.
     """
     # Local import — json_output imports engine types, so the import is
     # deferred to call time to keep the module-load order acyclic.
@@ -1340,10 +1273,9 @@ def run_valuation(
     years = [compute_year(i, config, extended_gens) for i in range(horizon_years + 1)]
     fleet_years = compute_fleet_trajectory(config, years)
 
-    physical_by_year = {str(y.fy): y.physical for y in years}
-    business_by_year = {
-        str(y.fy): _fleet_year_to_business_year(fy)
-        for y, fy in zip(years, fleet_years, strict=True)
+    physical_by_year: dict[YearString, PhysicalYear] = {str(y.fy): y.physical for y in years}
+    business_by_year: dict[YearString, BusinessYear] = {
+        str(y.fy): by for y, by in zip(years, fleet_years, strict=True)
     }
 
     return build_output(
@@ -1360,6 +1292,7 @@ def run_valuation(
 __all__ = [
     "CadenceYear",
     "CostBreakdown",
+    "PackageMass",
     "YearComputation",
     "bus_cost_for_year",
     "compute_cadence_year",

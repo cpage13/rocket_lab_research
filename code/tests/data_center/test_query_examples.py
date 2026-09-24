@@ -1,6 +1,6 @@
 """Tests for the 12 mandatory ``query_examples`` (plan §5 T61).
 
-The ``meta.query_examples`` block is the v8 cold-reader contract: a cold
+The ``meta.query_examples`` block is the cold-reader contract: a cold
 agent runs these worked ``jq`` expressions to answer common questions
 about a valuation run. This test guards that contract — for every one of
 the 12 examples :func:`data_center.query_examples.build_query_examples`
@@ -16,7 +16,7 @@ fails here rather than silently shipping a broken cold-reader contract.
 
 The default-scenario JSON is the session's default run (``default_output``
 in ``conftest.py``) serialised with the production
-:func:`data_center.json_output.render_json` to a temp file, so the test never
+:func:`common.file_io.render_artifact_json` to a temp file, so the test never
 depends on a stale committed ``output/default.json``. Each example's ``jq``
 expression runs once per module (:func:`jq_outcomes`); the execution and shape
 tests read the same result.
@@ -31,8 +31,11 @@ from pathlib import Path
 
 import pytest
 
-from data_center.json_output import render_json
-from data_center.output import QueryExample, SpaceModelOutput
+from common.file_io import render_artifact_json
+from common.meta import QueryExample
+from data_center.config import config_from_dict
+from data_center.engine import run_valuation
+from data_center.output import SpaceModelOutput
 from data_center.query_examples import build_query_examples
 
 # Resolve `jq` once. The query_examples contract is jq-expressed, so the
@@ -41,6 +44,15 @@ _JQ: str | None = shutil.which("jq")
 
 # Number of mandatory query examples — fixed by strategy §3.3 / plan T58.
 _EXPECTED_COUNT = 12
+
+# An R band anchored 2030-2040, none of it at the 2026 base year (the default
+# band's values, re-anchored), for the revenue-trace example.
+_FIRST_REANCHORED_YEAR = 2030
+_LAST_REANCHORED_YEAR = 2040
+_REANCHORED_R_BAND = {
+    band: [{"fy": _FIRST_REANCHORED_YEAR, "r": r}, {"fy": _LAST_REANCHORED_YEAR, "r": r}]
+    for band, r in (("low", 1.2), ("central", 1.5), ("high", 1.8))
+}
 
 # The default window (base year 2026, ten-year horizon) anchors at FY2036;
 # the single-year examples address it and carry it in their names.
@@ -54,13 +66,13 @@ def default_json_path(
 ) -> Path:
     """Write the session's default run as JSON once for the module.
 
-    Serialises the default run with the production :func:`render_json` to a
+    Serialises the default run with the production :func:`render_artifact_json` to a
     temp file: the same content the CLI's ``--json`` path emits for
     ``scenarios/default.yaml`` (the ``output/default.json`` the plan's T61
     names), generated fresh so the test is hermetic.
     """
     path = tmp_path_factory.mktemp("query_examples") / "default.json"
-    path.write_text(render_json(default_output), encoding="utf-8")
+    path.write_text(render_artifact_json(default_output), encoding="utf-8")
     return path
 
 
@@ -76,7 +88,7 @@ def jq_outcomes(default_json_path: Path) -> dict[str, subprocess.CompletedProces
         pytest.skip("jq binary not installed")
     return {
         example.name: subprocess.run(  # noqa: S603 (_JQ is shutil.which output; args are static)
-            [_JQ, example.jq, str(default_json_path)],
+            [_JQ, example.jq_expression, str(default_json_path)],
             capture_output=True,
             text=True,
             check=False,
@@ -101,7 +113,7 @@ def _jq_stdout(outcomes: dict[str, subprocess.CompletedProcess[str]], example: Q
     """
     result = outcomes[example.name]
     assert result.returncode == 0, (
-        f"jq failed for expression {example.jq!r}: {result.stderr.strip()}"
+        f"jq failed for expression {example.jq_expression!r}: {result.stderr.strip()}"
     )
     return result.stdout.strip()
 
@@ -129,6 +141,31 @@ def test_query_examples_address_the_given_anchor_year() -> None:
     assert {"deployed_year_capacity_2050", "headline_2050_revenue_central"} <= names
     trace = next(e for e in examples if e.name == "trace_a_cell")
     assert trace.jq_expression == '.business.years."2050".revenue_annual_fleet_musd_central'
+
+
+@pytest.mark.skipif(_JQ is None, reason="jq binary not installed")
+def test_the_revenue_trace_follows_a_re_anchored_band(tmp_path: Path) -> None:
+    """Objective: the revenue-multiple trace works whatever years the band is anchored at.
+
+    The original trigger: the example selected the ``central.2026`` anchor by
+    path, so on a band anchored 2030-2040 it printed nothing (jq exit 0).
+    Expected: on that run the example returns the first central anchor cell,
+    ``inputs.config.revenue.central.2030``, with its R value.
+    """
+    assert _JQ is not None
+    output = run_valuation(config_from_dict({"r_band": _REANCHORED_R_BAND}))
+    path = tmp_path / "reanchored.json"
+    path.write_text(render_artifact_json(output), encoding="utf-8")
+    example = next(
+        e for e in output.meta.query_examples if e.name == "trace_revenue_multiple_assumption"
+    )
+    result = subprocess.run(  # noqa: S603 (_JQ is shutil.which output; args are static)
+        [_JQ, example.jq_expression, str(path)], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0
+    trace = json.loads(result.stdout)
+    assert trace["path"] == f"inputs.config.revenue.central.{_FIRST_REANCHORED_YEAR}"
+    assert trace["value"] == _REANCHORED_R_BAND["central"][0]["r"]
 
 
 def test_query_example_names_are_unique() -> None:

@@ -4,21 +4,23 @@ The cycle-2 v8 schema extends the GPU-first per-node dial set with the
 fleet / volume / cadence / R-band blocks:
 
 * :class:`ValuationConfig` carries:
-    * ``gospel: GospelInputs`` — the locked numeric anchors (mass envelope,
+    * ``gospel: GospelInputs``: the locked numeric anchors (mass envelope,
       bus dynamics, solar/radiator $/kW, radiator t/kW pre/post Tjmax lift,
       release cadence).
-    * ``slopes: GenerationSlopes`` — post-Feynman per-generation growth
+    * ``slopes: GenerationSlopes``: post-Feynman per-generation growth
       slopes used to extrapolate generations beyond ``KNOWN_GENS``.
-    * ``generations: list[GenerationSpec] | None`` — optional per-generation
+    * ``generations: list[GenerationSpec] | None``: optional per-generation
       override. ``None`` (the default) means use the bundled ``KNOWN_GENS``.
-    * ``scenario_name: str`` — human-readable label shown in the report.
-    * ``metadata: MetadataConfig`` — the three investor-locked enums plus
+    * ``scenario_name: str``: human-readable label shown in the report.
+    * ``metadata: MetadataConfig``: the three investor-locked enums plus
       base year + horizon.
-    * ``cadence: CadenceDials`` — launch-cadence logistic-ramp dials.
-    * ``fleet: FleetDials`` — fleet-rollup service-life cliff dial.
-    * ``volume: VolumeDials`` — stowed-volume-envelope dials.
-    * ``r_band: RBand`` — the three R trajectories (low/central/high).
-    * ``launch_cost: LaunchCostDials`` — cadence-indexed launch-cost dials.
+    * ``cadence: CadenceDials``: launch-cadence logistic-ramp dials (the
+      shared :class:`common.cadence.CadenceDials`).
+    * ``fleet: FleetDials``: fleet-rollup service-life cliff dial.
+    * ``volume: VolumeDials``: stowed-volume-envelope dials.
+    * ``r_band: RBand``: the three R trajectories (low/central/high).
+    * ``launch_cost: LaunchCostDials``: cadence-indexed launch-cost dials
+      (the shared :class:`common.cadence.LaunchCostDials`).
 
 Cycle-2 categorical enums (:class:`WorkloadType`, :class:`OperatorModel`,
 :class:`RadiatorArchitecture`, :class:`BindingConstraint`) are defined
@@ -32,8 +34,9 @@ a path to a generations YAML, resolved relative to the scenario file.
 
 Cross-field validators reject, at load, every combination the engine cannot
 run or would run into nonsense: cadence anchors outside
-``0 < launches_at_year_5 < launches_at_year_10 < cadence_ceiling``, reversed
-launch-cost cadence anchors, R bands out of ``low <= central <= high`` order
+``0 < launches_at_year_5 < launches_at_year_10 < cadence_ceiling`` and
+reversed launch-cost cadence anchors (the shared dial blocks' own
+validators, :mod:`common.cadence`), R bands out of ``low <= central <= high`` order
 or with duplicate anchor years, a fixed node mass at or above the mass
 envelope, a bus decline of -100% or steeper, an unordered generations list,
 a base year before the earliest listed generation is available, and a run
@@ -55,6 +58,7 @@ from typing import Any, Final  # typing-acceptable: Any types the dict deseriali
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from common.cadence import CadenceDials, LaunchCostDials
 from common.file_io import load_yaml_mapping
 from data_center.constants import (
     ANCHOR_MODEL_YEAR,
@@ -62,15 +66,7 @@ from data_center.constants import (
     BUS_FLATTEN_AFTER_YR,
     BUS_GROWTH_PRE,
     BUS_GROWTH_PRE_FLOOR,
-    CADENCE_CEILING_DEFAULT,
-    FIRST_LAUNCH_YEAR_DEFAULT,
     GENERATION_EXTENSION_LOOKAHEAD_YEARS,
-    HIGH_CADENCE_COST_MUSD_DEFAULT,
-    HIGH_CADENCE_LAUNCHES_DEFAULT,
-    LAUNCHES_AT_YEAR_5_DEFAULT,
-    LAUNCHES_AT_YEAR_10_DEFAULT,
-    LOW_CADENCE_COST_MUSD_DEFAULT,
-    LOW_CADENCE_LAUNCHES_DEFAULT,
     MASS_ENVELOPE_T,
     MAX_FY,
     MAX_HORIZON_YEARS,
@@ -96,7 +92,6 @@ from data_center.constants import (
 )
 from data_center.generations import (
     FRONTIER_YEAR_TOLERANCE,
-    GENERATIONS_YAML_KEY,
     KNOWN_GENS,
     GenerationSlopes,
     GenerationSpec,
@@ -185,67 +180,6 @@ class BindingConstraint(StrEnum):
 # ===========================================================================
 
 
-class CadenceDials(BaseModel):
-    """Launch-cadence dials feeding the logistic launches-per-year ramp.
-
-    Defaults are the v7-archaeology values (commit 8fdc210), but the
-    default is now explicitly a source-indexed scenario: ``launches_at_year_5``
-    and ``launches_at_year_10`` fit the logistic curve to integer mission
-    counts. ``first_launch_year`` only clamps earlier years to zero; it does
-    not move the year-5 or year-10 anchors. Consumed by
-    :func:`data_center.cadence.compute_launches_per_year`.
-
-    The logistic fit needs ``0 < launches_at_year_5 < launches_at_year_10 <
-    cadence_ceiling`` (the same condition :mod:`common.cadence` raises on);
-    :meth:`_anchors_inside_logistic_range` rejects any other combination at
-    load instead of letting the engine fail mid-run.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    cadence_ceiling: int = Field(
-        default=CADENCE_CEILING_DEFAULT,
-        gt=0,
-        description=(
-            "Carrying capacity of the logistic launch ramp, launches per year: a "
-            "horizon-scoped infrastructure parameter standing for the launch pads "
-            "and rocket production plausibly built within the modeled ten-year "
-            "window (RLDC-CADENCE-CEILING-150), not a cap on the system. Launches "
-            "are clamped to it inside the window; a longer-horizon run re-sets it."
-        ),
-    )
-    launches_at_year_5: int = Field(
-        default=LAUNCHES_AT_YEAR_5_DEFAULT,
-        ge=0,
-        description="Integer logistic anchor: launches per year at model year 5.",
-    )
-    launches_at_year_10: int = Field(
-        default=LAUNCHES_AT_YEAR_10_DEFAULT,
-        ge=0,
-        description="Integer logistic anchor: launches per year at model year 10.",
-    )
-    first_launch_year: int = Field(
-        default=FIRST_LAUNCH_YEAR_DEFAULT,
-        ge=0,
-        description="Model-year index before which launch count is clamped to zero.",
-    )
-
-    @model_validator(mode="after")
-    def _anchors_inside_logistic_range(self) -> CadenceDials:
-        """Require ``0 < launches_at_year_5 < launches_at_year_10 < cadence_ceiling``."""
-        y5 = self.launches_at_year_5
-        y10 = self.launches_at_year_10
-        ceiling = self.cadence_ceiling
-        if not 0 < y5 < y10 < ceiling:
-            raise ValueError(
-                "cadence anchors must satisfy 0 < launches_at_year_5 < "
-                "launches_at_year_10 < cadence_ceiling (the logistic ramp is fit "
-                f"through them); got launches_at_year_5={y5}, "
-                f"launches_at_year_10={y10}, cadence_ceiling={ceiling}"
-            )
-        return self
-
-
 class FleetDials(BaseModel):
     """Fleet-rollup dials governing the cohort-vintaging cliff.
 
@@ -300,53 +234,6 @@ class VolumeDials(BaseModel):
         gt=0,
         description="Neutron fairing usable payload volume, m3.",
     )
-
-
-class LaunchCostDials(BaseModel):
-    """Cadence-indexed launch-cost dials feeding the log-linear cost curve.
-
-    Defaults are the v7-archaeology values. Consumed by
-    :func:`data_center.cadence.compute_launch_cost_musd`. The low-cost anchor
-    must sit at a lower cadence than the high-cadence anchor
-    (:meth:`_cadence_anchors_ordered`): reversed anchors would flat-clamp every
-    year to the low-cadence cost and silently switch the cost-down off.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    low_cadence_cost_musd: float = Field(
-        default=LOW_CADENCE_COST_MUSD_DEFAULT,
-        gt=0,
-        description="Launch cost at the low-cadence anchor, $M.",
-    )
-    high_cadence_cost_musd: float = Field(
-        default=HIGH_CADENCE_COST_MUSD_DEFAULT,
-        gt=0,
-        description="Launch cost at the high-cadence anchor, $M.",
-    )
-    low_cadence_launches: float = Field(
-        default=LOW_CADENCE_LAUNCHES_DEFAULT,
-        gt=0,
-        description="Cadence (launches/yr) at the low-cost anchor.",
-    )
-    high_cadence_launches: float = Field(
-        default=HIGH_CADENCE_LAUNCHES_DEFAULT,
-        gt=0,
-        description="Cadence (launches/yr) at the high-cost anchor.",
-    )
-
-    @model_validator(mode="after")
-    def _cadence_anchors_ordered(self) -> LaunchCostDials:
-        """Require ``low_cadence_launches < high_cadence_launches``."""
-        if not self.low_cadence_launches < self.high_cadence_launches:
-            raise ValueError(
-                "launch-cost anchors must satisfy low_cadence_launches < "
-                "high_cadence_launches (the log-linear curve runs from the low "
-                f"to the high cadence); got low_cadence_launches="
-                f"{self.low_cadence_launches}, high_cadence_launches="
-                f"{self.high_cadence_launches}"
-            )
-        return self
 
 
 class GospelInputs(BaseModel):
@@ -865,15 +752,10 @@ def load_config(path: str | Path) -> ValuationConfig:
     return config_from_dict(data)
 
 
-# Re-export the public config surface so external callers (CLI, tests,
-# downstream modules) import from one place.
 __all__ = [
-    "GENERATIONS_YAML_KEY",
     "BindingConstraint",
-    "CadenceDials",
     "FleetDials",
     "GospelInputs",
-    "LaunchCostDials",
     "MetadataConfig",
     "OperatorModel",
     "RBand",

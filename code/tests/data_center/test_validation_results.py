@@ -21,11 +21,11 @@ from pathlib import Path
 
 import pytest
 
+from common.file_io import render_artifact_json
 from data_center.config import config_from_dict, load_config
 from data_center.engine import run_valuation
 from data_center.input_manifest import DEFAULT_SCENARIO_PATH
-from data_center.json_output import render_json
-from data_center.output import ValuationOutput
+from data_center.output import SpaceModelOutput
 from data_center.query_examples import build_query_examples
 from data_center.text_report import render_text
 
@@ -50,16 +50,16 @@ _EXPECTED_FAILURES: dict[str, set[str]] = {
 }
 
 
-type RunScenario = Callable[[str], ValuationOutput]
+type RunScenario = Callable[[str], SpaceModelOutput]
 """Run a shipped scenario by name (see :func:`run_scenario`)."""
 
 
 @pytest.fixture(scope="module")
 def run_scenario(scenarios_dir: Path) -> RunScenario:
     """Run shipped scenarios by name, each once per module, recording the path as the CLI does."""
-    runs: dict[str, ValuationOutput] = {}
+    runs: dict[str, SpaceModelOutput] = {}
 
-    def run(name: str) -> ValuationOutput:
+    def run(name: str) -> SpaceModelOutput:
         if name not in runs:
             runs[name] = run_valuation(
                 load_config(scenarios_dir / f"{name}.yaml"),
@@ -70,7 +70,7 @@ def run_scenario(scenarios_dir: Path) -> RunScenario:
     return run
 
 
-def _not_passing(output: ValuationOutput) -> set[str]:
+def _not_passing(output: SpaceModelOutput) -> set[str]:
     """Return the ids of every result that warns or fails."""
     return {r.validation_id for r in output.meta.validation_results if r.severity != "pass"}
 
@@ -176,7 +176,7 @@ def test_report_query_and_json_agree_on_the_ambitious_verdict(
     summary line counts the same list.
     """
     output = run_scenario("ambitious")
-    published = json.loads(render_json(output))
+    published = json.loads(render_artifact_json(output))
     expected = [r for r in published["meta"]["validation_results"] if r["severity"] != "pass"]
     assert expected == []
     report = render_text(output)
@@ -188,7 +188,7 @@ def test_report_query_and_json_agree_on_the_ambitious_verdict(
         q for q in build_query_examples(2036) if q.name == "validation_warnings"
     ).jq_expression
     path = tmp_path / "ambitious.json"
-    path.write_text(render_json(output), encoding="utf-8")
+    path.write_text(render_artifact_json(output), encoding="utf-8")
     raw = subprocess.run(  # noqa: S603 (_JQ is shutil.which output; the query is ours)
         [_JQ, "-c", query, str(path)], capture_output=True, text=True, check=True
     ).stdout

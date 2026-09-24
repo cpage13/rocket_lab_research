@@ -1,7 +1,7 @@
-"""Text rendering for a typed v8 :class:`ValuationOutput` — the human view.
+"""Text rendering for the space artifact (a typed :class:`SpaceModelOutput`): the human view.
 
 ``render_text(output) -> str`` is the single public entry. It walks a
-v8 :class:`data_center.output.ValuationOutput` and emits a fixed-width
+:class:`data_center.output.SpaceModelOutput` and emits a fixed-width
 monospaced report covering, in order:
 
   1. Metadata (run identity).
@@ -18,16 +18,18 @@ monospaced report covering, in order:
      canonical default), the same list the embedded ``validation_warnings``
      jq query reads, so the report and the JSON cannot disagree on a verdict.
 
-Every leaf value in the v8 output is a
-:class:`data_center.provenance.ProvenanceCell`; this renderer reads each
-cell's ``.value``. The provenance banner counts cells with
-:func:`data_center.validation.collect_provenance_cells`, the walker V13
-uses, so the two report the same totals. Every section is total: no
-``KeyError``, no exceptions, no empty section.
+Every leaf value in the space artifact is a
+:class:`common.provenance.ProvenanceCell`; this renderer reads each number
+through the strict :func:`common.provenance.as_float` /
+:func:`common.provenance.as_int`, so a cell holding a non-number where a number
+belongs raises ``TypeError`` instead of printing a made-up 0.0. The provenance
+banner counts cells with :func:`data_center.validation.collect_provenance_cells`,
+the walker V13 uses, so the two report the same totals. Every section is total
+over any artifact the engine builds: no ``KeyError``, no empty section.
 
-Cycle-2 Phase 6 (T80–T84) rewrote this module for the v8 fleet +
-R-band layout — adding the provenance-summary banner and the dedicated
-R-band trajectory block on top of the v8-typed tables.
+Cycle-2 Phase 6 (T80-T84) rewrote this module for the cycle-2 fleet and
+R-band layout, adding the provenance-summary banner and the dedicated R-band
+trajectory block on top of the typed tables.
 """
 
 from __future__ import annotations
@@ -35,12 +37,10 @@ from __future__ import annotations
 import logging
 from typing import Final
 
-from data_center.output import (
-    BusinessYear,
-    PhysicalYear,
-    ValidationSeverity,
-    ValuationOutput,
-)
+from common.meta import ValidationSeverity
+from common.provenance import FormulaName, as_float, as_int
+from data_center.input_manifest import revenue_anchors
+from data_center.output import BusinessYear, PhysicalYear, SpaceModelOutput
 from data_center.validation import collect_provenance_cells
 
 logger = logging.getLogger(__name__)
@@ -50,9 +50,9 @@ _WIDTH: Final[int] = 78
 
 # Key formula_name keys cited in the provenance-summary banner — the
 # load-bearing formulas a reader most wants to see traced. Each must exist
-# in `data_center.provenance.FORMULAS`; the banner falls back gracefully if
+# in `common.provenance.FORMULAS`; the banner falls back gracefully if
 # one is absent (e.g. a future schema rename).
-_KEY_FORMULA_NAMES: tuple[str, ...] = (
+_KEY_FORMULA_NAMES: Final[tuple[FormulaName, ...]] = (
     "n_packages_from_mass_envelope",
     "kw_per_node_from_n_and_kw_per_pkg",
     "cost_annual_per_node_from_breakdown",
@@ -72,26 +72,12 @@ def _section_header(title: str) -> list[str]:
     return ["", _rule(), f"  {title}", _rule()]
 
 
-def _num(value: float | int | str | bool | None) -> float:
-    """Unwrap a numeric :class:`ProvenanceCell` value to a ``float``.
-
-    Args:
-        value: A ProvenanceCell ``value`` field.
-
-    Returns:
-        The value as a ``float`` (``0.0`` for a non-numeric value).
-    """
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return 0.0
-    return float(value)
-
-
-def _sorted_physical(output: ValuationOutput) -> list[tuple[int, PhysicalYear]]:
+def _sorted_physical(output: SpaceModelOutput) -> list[tuple[int, PhysicalYear]]:
     """Return the ``physical.years`` map as a fy-sorted list of pairs."""
     return sorted(((int(fy), py) for fy, py in output.physical.years.items()), key=lambda kv: kv[0])
 
 
-def _sorted_business(output: ValuationOutput) -> list[tuple[int, BusinessYear]]:
+def _sorted_business(output: SpaceModelOutput) -> list[tuple[int, BusinessYear]]:
     """Return the ``business.years`` map as a fy-sorted list of pairs."""
     return sorted(((int(fy), by) for fy, by in output.business.years.items()), key=lambda kv: kv[0])
 
@@ -101,7 +87,7 @@ def _sorted_business(output: ValuationOutput) -> list[tuple[int, BusinessYear]]:
 # ---------------------------------------------------------------------------
 
 
-def _render_header(output: ValuationOutput) -> list[str]:
+def _render_header(output: SpaceModelOutput) -> list[str]:
     """The opening identity block."""
     md = output.metadata
     phys = _sorted_physical(output)
@@ -109,7 +95,8 @@ def _render_header(output: ValuationOutput) -> list[str]:
     fyh = phys[-1][0] if phys else md.base_year
     return [
         _rule(),
-        "  ROCKET LAB ORBITAL DATA-CENTER VENTURE - STANDALONE VALUATION (GPU-FIRST v8)",
+        "  ROCKET LAB ORBITAL DATA-CENTER VENTURE - STANDALONE VALUATION "
+        f"(GPU-FIRST {md.schema_version})",
         f"  schema:          {md.schema_version}",
         f"  horizon:         year 0 (FY{fy0}) .. year {md.horizon_years} (FY{fyh})",
         f"  workload:        {md.workload_type.value}",
@@ -127,10 +114,10 @@ def _render_header(output: ValuationOutput) -> list[str]:
     ]
 
 
-def _render_provenance_summary(output: ValuationOutput) -> list[str]:
+def _render_provenance_summary(output: SpaceModelOutput) -> list[str]:
     """Top-of-report provenance banner — cell coverage + key formula citations.
 
-    Surfaces, before any table, that every leaf number in the v8
+    Surfaces, before any table, that every leaf number in the space
     artifact is a typed :class:`ProvenanceCell` (value + unit + formula
     + upstream paths + sources): how many cells the run produced, how
     many distinct formulas back them, and the human-readable text of
@@ -138,7 +125,7 @@ def _render_provenance_summary(output: ValuationOutput) -> list[str]:
     cost, per-node revenue, fleet revenue, the living-fleet cliff).
 
     Args:
-        output: The v8 valuation output.
+        output: The space artifact.
 
     Returns:
         The provenance-summary section as a list of report lines.
@@ -165,7 +152,7 @@ def _render_provenance_summary(output: ValuationOutput) -> list[str]:
     return lines
 
 
-def _render_rband(output: ValuationOutput) -> list[str]:
+def _render_rband(output: SpaceModelOutput) -> list[str]:
     """The low / central / high R-band revenue trajectory.
 
     R is the revenue-to-cost multiplier (``revenue = R x cost``);
@@ -177,7 +164,7 @@ def _render_rband(output: ValuationOutput) -> list[str]:
     base-year-to-horizon revenue band.
 
     Args:
-        output: The v8 valuation output.
+        output: The space artifact.
 
     Returns:
         The R-band section as a list of report lines.
@@ -190,9 +177,13 @@ def _render_rband(output: ValuationOutput) -> list[str]:
     lines.append("")
 
     # Input R anchors — the source-of-truth dials.
-    rb = output.inputs.r_band
-    for label, anchors in (("low", rb.low), ("central", rb.central), ("high", rb.high)):
-        anchor_str = "  ".join(f"FY{a.fy}:{a.r:.2f}" for a in anchors)
+    revenue = output.inputs.config.revenue
+    for label, cells in (
+        ("low", revenue.low),
+        ("central", revenue.central),
+        ("high", revenue.high),
+    ):
+        anchor_str = "  ".join(f"FY{a.fy}:{a.r:.2f}" for a in revenue_anchors(cells))
         lines.append(f"  R anchors ({label:>7}): {anchor_str}")
     lines.append("")
 
@@ -206,10 +197,10 @@ def _render_rband(output: ValuationOutput) -> list[str]:
         f"  {'-' * 4} {'-' * 10} {'-' * 7} {'-' * 7} {'-' * 7} {'-' * 11} {'-' * 11} {'-' * 11}"
     )
     for fy, by in _sorted_business(output):
-        cost = _num(by.cost_annual_fleet_musd.value)
-        rev_low = _num(by.revenue_annual_fleet_musd_low.value)
-        rev_ctr = _num(by.revenue_annual_fleet_musd_central.value)
-        rev_high = _num(by.revenue_annual_fleet_musd_high.value)
+        cost = as_float(by.cost_annual_fleet_musd)
+        rev_low = as_float(by.revenue_annual_fleet_musd_low)
+        rev_ctr = as_float(by.revenue_annual_fleet_musd_central)
+        rev_high = as_float(by.revenue_annual_fleet_musd_high)
         # Implied R = fleet revenue / fleet cost (0.0 in a no-fleet year).
         r_low = rev_low / cost if cost else 0.0
         r_ctr = rev_ctr / cost if cost else 0.0
@@ -227,14 +218,14 @@ def _render_rband(output: ValuationOutput) -> list[str]:
         lines.append("")
         lines.append(
             f"  Cumulative fleet revenue, base year -> FY{biz[-1][0]} ($M): "
-            f"low {_num(last.revenue_cumulative_musd_low.value):,.0f}  "
-            f"central {_num(last.revenue_cumulative_musd_central.value):,.0f}  "
-            f"high {_num(last.revenue_cumulative_musd_high.value):,.0f}"
+            f"low {as_float(last.revenue_cumulative_musd_low):,.0f}  "
+            f"central {as_float(last.revenue_cumulative_musd_central):,.0f}  "
+            f"high {as_float(last.revenue_cumulative_musd_high):,.0f}"
         )
     return lines
 
 
-def _render_generations(output: ValuationOutput) -> list[str]:
+def _render_generations(output: SpaceModelOutput) -> list[str]:
     """The per-generation reference table — what the model thinks each gen is."""
     lines: list[str] = []
     lines += _section_header("PER-GENERATION REFERENCE TABLE")
@@ -246,12 +237,12 @@ def _render_generations(output: ValuationOutput) -> list[str]:
     lines.append(
         f"  {'-' * 18} {'-' * 6} {'-' * 9} {'-' * 7} {'-' * 7} {'-' * 7} {'-' * 5} {'-' * 12}"
     )
-    for g in output.inputs.generations:
+    for g in output.inputs.config.generations:
         lines.append(
-            f"  {str(g['name']):<18} {float(g['year_available']):6.1f} "
-            f"{int(g['usd_per_pkg']):9,d} {float(g['kw_per_pkg']):7.2f} "
-            f"{float(g['kg_per_pkg']):7.2f} {float(g['pf_per_pkg']):7.1f} "
-            f"{int(g['die_count']):5d} {str(g['source_class']):<12}"
+            f"  {str(g.name.value):<18} {as_float(g.year_available):6.1f} "
+            f"{as_int(g.usd_per_pkg):9,d} {as_float(g.kw_per_pkg):7.2f} "
+            f"{as_float(g.kg_per_pkg):7.2f} {as_float(g.pf_per_pkg):7.1f} "
+            f"{as_int(g.die_count):5d} {g.name.source_status.value:<12}"
         )
     lines.append("")
     lines.append("  All per-package values are ALL-IN (incl. networking, cooling, NVLink fabric;")
@@ -259,7 +250,7 @@ def _render_generations(output: ValuationOutput) -> list[str]:
     return lines
 
 
-def _render_year_physical(output: ValuationOutput) -> list[str]:
+def _render_year_physical(output: SpaceModelOutput) -> list[str]:
     """Per-year system metrics — frontier gen, mass + volume, N, power, PFLOPS.
 
     One row per fiscal year. Carries the frontier generation, the
@@ -285,20 +276,20 @@ def _render_year_physical(output: ValuationOutput) -> list[str]:
     for fy, py in _sorted_physical(output):
         lines.append(
             f"  {fy:4d} {str(py.frontier_generation.value):<14} "
-            f"{int(_num(py.gpus_per_node.value)):4d} "
-            f"{_num(py.mass_per_node_t.value):7.2f} "
-            f"{_num(py.mass_utilization_pct.value):7.1f}% "
-            f"{_num(py.volume_per_node_m3.value):8.2f} "
-            f"{_num(py.volume_utilization_pct.value):6.1f}% "
-            f"{_num(py.kw_per_node.value):8.1f} "
-            f"{_num(py.pf_per_node.value):9.1f} "
-            f"{_num(py.pf_per_kw.value):7.2f} "
+            f"{as_int(py.gpus_per_node):4d} "
+            f"{as_float(py.mass_per_node_t):7.2f} "
+            f"{as_float(py.mass_utilization_pct):7.1f}% "
+            f"{as_float(py.volume_per_node_m3):8.2f} "
+            f"{as_float(py.volume_utilization_pct):6.1f}% "
+            f"{as_float(py.kw_per_node):8.1f} "
+            f"{as_float(py.pf_per_node):9.1f} "
+            f"{as_float(py.pf_per_kw):7.2f} "
             f"{str(py.binding_constraint.value):>9}"
         )
     return lines
 
 
-def _render_year_economics(output: ValuationOutput) -> list[str]:
+def _render_year_economics(output: SpaceModelOutput) -> list[str]:
     """Per-year per-node economics — annual cost + revenue band + margin band."""
     lines: list[str] = []
     lines += _section_header("PER-YEAR PER-NODE ECONOMICS (annualized, $M/yr)")
@@ -310,16 +301,16 @@ def _render_year_economics(output: ValuationOutput) -> list[str]:
     for fy, py in _sorted_physical(output):
         lines.append(
             f"  {fy:4d} "
-            f"{_num(py.cost_annual_per_node_musd.value):8.2f} "
-            f"{_num(py.revenue_annual_per_node_musd_low.value):9.2f} "
-            f"{_num(py.revenue_annual_per_node_musd_central.value):9.2f} "
-            f"{_num(py.revenue_annual_per_node_musd_high.value):9.2f} "
-            f"{_num(py.gross_profit_annual_per_node_musd_central.value):11.2f}"
+            f"{as_float(py.cost_annual_per_node_musd):8.2f} "
+            f"{as_float(py.revenue_annual_per_node_musd_low):9.2f} "
+            f"{as_float(py.revenue_annual_per_node_musd_central):9.2f} "
+            f"{as_float(py.revenue_annual_per_node_musd_high):9.2f} "
+            f"{as_float(py.gross_profit_annual_per_node_musd_central):11.2f}"
         )
     return lines
 
 
-def _render_fleet(output: ValuationOutput) -> list[str]:
+def _render_fleet(output: SpaceModelOutput) -> list[str]:
     """Per-year fleet rollup — launches, nodes, living fleet, kW, revenue band, margin band.
 
     The fleet table is the headline operational view: one row per
@@ -341,25 +332,25 @@ def _render_fleet(output: ValuationOutput) -> list[str]:
     )
     for fy, by in _sorted_business(output):
         margin_band = (
-            f"{_num(by.margin_low_pct.value):.0f}/"
-            f"{_num(by.margin_central_pct.value):.0f}/"
-            f"{_num(by.margin_high_pct.value):.0f}"
+            f"{as_float(by.margin_low_pct):.0f}/"
+            f"{as_float(by.margin_central_pct):.0f}/"
+            f"{as_float(by.margin_high_pct):.0f}"
         )
         lines.append(
             f"  {fy:4d} "
-            f"{int(_num(by.launches.value)):7d} "
-            f"{int(_num(by.nodes_deployed_this_year.value)):6d} "
-            f"{int(_num(by.living_fleet.value)):7d} "
-            f"{_num(by.kw_on_orbit.value):10.0f} "
-            f"{_num(by.revenue_annual_fleet_musd_low.value):10.1f} "
-            f"{_num(by.revenue_annual_fleet_musd_central.value):10.1f} "
-            f"{_num(by.revenue_annual_fleet_musd_high.value):10.1f} "
+            f"{as_int(by.launches):7d} "
+            f"{as_int(by.nodes_deployed_this_year):6d} "
+            f"{as_int(by.living_fleet):7d} "
+            f"{as_float(by.kw_living_fleet):10.0f} "
+            f"{as_float(by.revenue_annual_fleet_musd_low):10.1f} "
+            f"{as_float(by.revenue_annual_fleet_musd_central):10.1f} "
+            f"{as_float(by.revenue_annual_fleet_musd_high):10.1f} "
             f"{margin_band:>16}"
         )
     return lines
 
 
-def _render_validation(output: ValuationOutput) -> list[str]:
+def _render_validation(output: SpaceModelOutput) -> list[str]:
     """Render every ``meta.validation_results`` entry with its verdict.
 
     Reads the public verdict list (not ``meta.validation.rules`` alone), so
@@ -387,21 +378,26 @@ def _render_validation(output: ValuationOutput) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def render_text(output: ValuationOutput) -> str:
-    """Render the full text report for one v8 :class:`ValuationOutput`.
+def render_text(output: SpaceModelOutput) -> str:
+    """Render the full text report for one space artifact.
 
     Produces a fixed-width monospaced string covering, in order: the
     metadata header, the provenance-summary banner, the per-generation
     reference table, per-year system metrics, per-year per-node
     economics, the per-year fleet rollup, the R-band revenue
-    trajectory, and the validation block. No exceptions, no
-    ``KeyError``, no empty sections.
+    trajectory, and the validation block. Over any artifact the engine
+    builds: no ``KeyError``, no empty sections.
 
     Args:
-        output: The v8 valuation output to render.
+        output: The space artifact to render.
 
     Returns:
         The full text report as a single string.
+
+    Raises:
+        TypeError: If a cell the report reads as a number holds a non-number
+            (a hand-edited artifact; the strict unwrap never prints a made-up
+            0.0).
     """
     lines: list[str] = []
     lines += _render_header(output)
@@ -416,7 +412,7 @@ def render_text(output: ValuationOutput) -> str:
     return "\n".join(lines)
 
 
-def render_headline(output: ValuationOutput) -> str:
+def render_headline(output: SpaceModelOutput) -> str:
     """Render a one-line GPU-first headline for the ``--brief`` CLI mode.
 
     Reports the operational trajectory a reader scans: the package-count
@@ -424,7 +420,7 @@ def render_headline(output: ValuationOutput) -> str:
     revenue + margin at the horizon year.
 
     Args:
-        output: The v8 valuation output.
+        output: The space artifact.
 
     Returns:
         A one-line headline string.
@@ -436,11 +432,11 @@ def render_headline(output: ValuationOutput) -> str:
     fy0, py0 = phys[0]
     fyh, pyh = phys[-1]
     _, byh = biz[-1]
-    n0 = int(_num(py0.gpus_per_node.value))
-    nh = int(_num(pyh.gpus_per_node.value))
-    living = int(_num(byh.living_fleet.value))
-    rev = _num(byh.revenue_annual_fleet_musd_central.value)
-    margin = _num(byh.margin_central_pct.value)
+    n0 = as_int(py0.gpus_per_node)
+    nh = as_int(pyh.gpus_per_node)
+    living = as_int(byh.living_fleet)
+    rev = as_float(byh.revenue_annual_fleet_musd_central)
+    margin = as_float(byh.margin_central_pct)
     return (
         f"GPU-first trajectory @ FY{fyh}: "
         f"N {n0} -> {nh} packages/node; "

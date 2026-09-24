@@ -6,11 +6,14 @@ The contract every loader and both promotion commands rely on:
    reference safe loader does, reads an empty file as ``{}``, and turns every
    failure (missing file, non-UTF-8 text, malformed YAML, a non-mapping root)
    into one ``ModelFileError`` naming the file;
-2. :func:`write_files_with_rollback` writes every artifact, or puts every
-   destination back byte for byte and says so truthfully: a failed stage or
-   a failed rename (injected, or a locked file) leaves no destination changed
-   and no staged or backup file behind, and a rollback that itself fails is
-   reported with where the previous content is kept;
+2. :func:`write_files_with_rollback` writes every artifact, or restores the
+   destinations it already replaced byte for byte and says so truthfully: a
+   failed stage or a failed rename (injected, or a locked file) leaves no
+   destination changed and no staged or backup file behind, and a rollback
+   that itself fails is reported with where the previous content is kept; its
+   staged and backup files never land on, or remove, a file the call did not
+   create (a random name that collides is skipped); and a symbolic link or
+   other non-regular destination is refused before anything is written;
 3. :func:`locate_source_checkout` finds the checkout from a module under
    ``code/src/`` and refuses a module installed anywhere else.
 """
@@ -302,6 +305,142 @@ def test_a_locked_second_destination_leaves_both_untouched(tmp_path: Path) -> No
     assert first.read_bytes() == b"previous first\n"
     assert second.read_bytes() == b"previous second\n"
     assert _only_the_destinations_remain(first, second)
+
+
+# --------------------------------------------------------------------------
+# Staged and backup names never land on a file the call did not create
+# --------------------------------------------------------------------------
+
+_BYSTANDER_TEXT = "not the writer's\n"
+"""Content of an unrelated file that already holds a name the writer draws."""
+
+
+def _draw_tokens(monkeypatch: pytest.MonkeyPatch, *tokens: str) -> None:
+    """Make the writer draw these random name tokens, in this order."""
+    queue = list(tokens)
+    monkeypatch.setattr(file_io, "_random_token", lambda: queue.pop(0))
+
+
+def _bystander(destination: Path, token: str, suffix: str) -> Path:
+    """Create an unrelated file at the hidden name the writer builds from ``token``."""
+    path = destination.with_name(f".{destination.name}.{token}{suffix}")
+    path.write_text(_BYSTANDER_TEXT, encoding="utf-8")
+    return path
+
+
+def test_a_staged_name_collision_leaves_the_existing_file_untouched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Objective: the writer never removes a file it did not create.
+
+    The original trigger: when the staged file's random name was already
+    taken, the exclusive open failed and the error path deleted that
+    unrelated file. Expected: the first name is skipped, the write succeeds
+    under a fresh one, and the unrelated file keeps its content; nothing else
+    is left beside the destination.
+    """
+    destination = tmp_path / "default.json"
+    destination.write_text("previous\n", encoding="utf-8")
+    bystander = _bystander(destination, "taken", ".tmp")
+    _draw_tokens(monkeypatch, "taken", "staged", "backup")
+
+    write_files_with_rollback([PendingWrite(destination, "new\n")])
+
+    assert destination.read_text(encoding="utf-8") == "new\n"
+    assert bystander.read_text(encoding="utf-8") == _BYSTANDER_TEXT
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted([bystander.name, destination.name])
+
+
+@pytest.mark.parametrize("hard_links_refused", [False, True], ids=["hard_link", "copy_fallback"])
+def test_a_backup_name_collision_leaves_the_existing_file_untouched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, hard_links_refused: bool
+) -> None:
+    """Objective: the backup never overwrites a file it did not create.
+
+    The original trigger: when the backup's random name was taken, the
+    hard link failed, the fallback copy overwrote the unrelated file, and a
+    successful write then deleted it. Expected, with hard links allowed and
+    with them refused (the copy path): the taken name is skipped, the write
+    succeeds, and the unrelated file keeps its content.
+    """
+    destination = tmp_path / "default.json"
+    destination.write_text("previous\n", encoding="utf-8")
+    bystander = _bystander(destination, "taken", ".bak")
+    _draw_tokens(monkeypatch, "staged", "taken", "backup")
+    if hard_links_refused:
+
+        def refuse_link(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
+            raise OSError(errno.EPERM, "hard links refused")
+
+        monkeypatch.setattr(os, "link", refuse_link)
+
+    write_files_with_rollback([PendingWrite(destination, "new\n")])
+
+    assert destination.read_text(encoding="utf-8") == "new\n"
+    assert bystander.read_text(encoding="utf-8") == _BYSTANDER_TEXT
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted([bystander.name, destination.name])
+
+
+def test_when_every_name_is_taken_the_write_fails_and_removes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Objective: giving up on names is a clean failure, not a deletion.
+
+    Every name the writer draws is already taken. Expected: ``ModelFileError``
+    saying no free name was found and no destination changed; the destination
+    and the unrelated file keep their content.
+    """
+    destination = tmp_path / "default.json"
+    destination.write_text("previous\n", encoding="utf-8")
+    bystander = _bystander(destination, "taken", ".tmp")
+    monkeypatch.setattr(file_io, "_random_token", lambda: "taken")
+
+    with pytest.raises(ModelFileError) as excinfo:
+        write_files_with_rollback([PendingWrite(destination, "new\n")])
+
+    assert "no free name" in str(excinfo.value)
+    assert str(excinfo.value).endswith("no destination was changed")
+    assert destination.read_text(encoding="utf-8") == "previous\n"
+    assert bystander.read_text(encoding="utf-8") == _BYSTANDER_TEXT
+
+
+@pytest.mark.parametrize("kind", ["symbolic_link", "directory"])
+def test_a_non_regular_destination_is_refused_before_anything_is_written(
+    tmp_path: Path, kind: str
+) -> None:
+    """Objective: a promoted artifact only ever replaces a regular file.
+
+    Renaming over a symbolic link would replace the link itself and leave
+    its target stale. Expected: ``ModelFileError`` naming the destination,
+    raised before any write of the call (the first, valid destination is not
+    created); the link and its target, or the directory, are unchanged, and no
+    staged or backup file appears.
+    """
+    first = tmp_path / "space.json"
+    target = tmp_path / "real.json"
+    target.write_text("previous\n", encoding="utf-8")
+    destination = tmp_path / "ground.json"
+    if kind == "symbolic_link":
+        destination.symlink_to(target)
+    else:
+        destination.mkdir()
+    reason = "is a symbolic link" if kind == "symbolic_link" else "is not a regular file"
+
+    with pytest.raises(ModelFileError, match=reason) as excinfo:
+        write_files_with_rollback(
+            [PendingWrite(first, "new first\n"), PendingWrite(destination, "x")]
+        )
+
+    assert str(excinfo.value).startswith(f"{destination}: ")
+    assert str(excinfo.value).endswith("no destination was changed")
+    assert not first.exists()
+    assert target.read_text(encoding="utf-8") == "previous\n"
+    if kind == "symbolic_link":
+        assert destination.is_symlink()
+        assert destination.resolve() == target.resolve()
+    else:
+        assert destination.is_dir()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["ground.json", "real.json"]
 
 
 # --------------------------------------------------------------------------

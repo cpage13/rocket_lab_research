@@ -64,6 +64,13 @@ BASELINE_TARGET = 10_000_000
 SCENARIO_50M_TARGET = 50_000_000
 SCENARIO_100M_TARGET = 100_000_000
 
+# Targets at and past the saturation cap on the cellular defaults (75,000 per
+# satellite, 2,000-satellite cap): 150M needs exactly the 2,000 satellites (the
+# boundary: the cap binds, and its capacity still carries the whole target, so
+# it is served in full); 200M needs 2,667, so the capped fleet serves only 150M.
+AT_CAP_TARGET = 150_000_000
+ABOVE_CAP_TARGET = 200_000_000
+
 # The spec's worked fleet targets at the defaults (75,000/sat, 340 floor, 2,000 cap):
 # 10M -> ceil(133.3)=134 -> max(340,134)=340; 50M -> 667; 100M -> 1,334.
 EXPECTED_FLEET_TARGET_10M = 340
@@ -437,7 +444,7 @@ def test_saturated_regime_serves_at_most_the_fleet_capacity() -> None:
 
 @pytest.mark.parametrize(
     "subscriber_target",
-    [BASELINE_TARGET, SCENARIO_50M_TARGET, SCENARIO_100M_TARGET, 150_000_000, 200_000_000],
+    [BASELINE_TARGET, SCENARIO_50M_TARGET, SCENARIO_100M_TARGET, AT_CAP_TARGET, ABOVE_CAP_TARGET],
 )
 def test_served_below_target_only_in_the_saturated_regime(subscriber_target: int) -> None:
     """The regime label and the served count agree: only saturation serves below target.

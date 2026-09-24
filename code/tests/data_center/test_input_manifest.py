@@ -23,26 +23,27 @@ from pathlib import Path
 
 import pytest
 
+from common.input_manifest import InputCell
 from data_center.config import ValuationConfig, load_config
 from data_center.engine import run_valuation
-from data_center.input_manifest import InputCell, collect_input_cells
-from data_center.output import ValuationOutput
+from data_center.input_manifest import collect_input_cells
+from data_center.output import SpaceModelOutput
 
 # Default cell count: 101 scalar and generation cells plus the 18 R-band
 # anchor cells (three bands of six anchors).
 _DEFAULT_INDEX_SIZE = 119
 
 
-type RunScenario = Callable[[str], ValuationOutput]
+type RunScenario = Callable[[str], SpaceModelOutput]
 """Run a shipped scenario by name (see :func:`run_scenario`)."""
 
 
 @pytest.fixture(scope="module")
 def run_scenario(scenarios_dir: Path) -> RunScenario:
     """Run shipped scenarios by name, each once per module, recording the path as the CLI does."""
-    runs: dict[str, ValuationOutput] = {}
+    runs: dict[str, SpaceModelOutput] = {}
 
-    def run(name: str) -> ValuationOutput:
+    def run(name: str) -> SpaceModelOutput:
         if name not in runs:
             runs[name] = run_valuation(
                 load_config(scenarios_dir / f"{name}.yaml"),

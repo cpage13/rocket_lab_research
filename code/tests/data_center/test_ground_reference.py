@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
 import yaml
 from pydantic import ValidationError
 
+from common.file_io import render_artifact_json
 from data_center import cli
 from data_center.config import config_from_dict, load_config
+from data_center.constants import ANCHOR_MODEL_YEAR
 from data_center.engine import run_valuation
 from data_center.ground import (
     DEFAULT_GROUND_SCENARIO_PATH,
@@ -20,7 +23,6 @@ from data_center.ground import (
     build_ground_reference_output,
     ground_config_from_dict,
     load_ground_config,
-    render_ground_json,
 )
 from data_center.output import ArtifactRole, SpaceModelOutput
 
@@ -103,7 +105,7 @@ def test_ground_reference_contract_is_complete(
     default_ground_output: GroundReferenceOutput,
 ) -> None:
     """The ground artifact carries inputs, components, costs, warnings, and queries."""
-    dumped = json.loads(render_ground_json(default_ground_output))
+    dumped = json.loads(render_artifact_json(default_ground_output))
     rebuilt = GroundReferenceOutput.model_validate(dumped)
 
     assert set(dumped) == {
@@ -116,8 +118,8 @@ def test_ground_reference_contract_is_complete(
         "meta",
     }
     assert set(rebuilt.inputs.assumption_index) == REQUIRED_GROUND_INPUTS
-    assert rebuilt.ground.total_five_year_cost.value is not None
-    assert rebuilt.orbital_reference.five_year_cost_view.value is not None
+    assert rebuilt.ground.total_service_life_cost.value is not None
+    assert rebuilt.orbital_reference.total_build_and_launch_cost.value is not None
     assert rebuilt.comparison.ground_to_orbit_ratio.value is not None
     assert rebuilt.ground.included_components
     assert rebuilt.ground.excluded_components
@@ -193,10 +195,10 @@ def test_default_ground_reproduces_the_recorded_invariant(
     five-year service life, labeled same_order_of_magnitude.
     """
     comparison = default_ground_output.comparison
-    assert comparison.ground_total_five_year_cost.value == pytest.approx(
+    assert comparison.ground_total_service_life_cost.value == pytest.approx(
         DEFAULT_GROUND_TOTAL_MUSD, rel=1e-12
     )
-    assert comparison.orbital_total_five_year_cost.value == pytest.approx(
+    assert comparison.orbital_total_service_life_cost.value == pytest.approx(
         DEFAULT_ORBITAL_TOTAL_MUSD, rel=1e-12
     )
     assert comparison.orbit_to_ground_ratio.value == pytest.approx(
@@ -244,6 +246,25 @@ def test_comparison_period_follows_the_anchor_service_life(
     )
     assert "anchor.service_life_years" in costs["energy"].uses
     assert "anchor.service_life_years" in costs["operations_maintenance_labor"].uses
+
+
+def test_an_empty_anchor_cohort_is_refused_before_any_cost(
+    default_ground_config: GroundReferenceConfig, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Objective: a space run that deploys nothing in its anchor year has no ground reference.
+
+    The original trigger: with the first launch after the anchor year, the
+    FY2036 cohort held zero nodes, the per-package and per-MW cost cells came
+    out None, and reading them raised a TypeError traceback through
+    ``rklb-value --promote``. Expected: ``build_ground_reference_output``
+    raises ``ValueError`` naming the empty FY2036 cohort, before any cost is
+    computed (so no zero-denominator warning is logged).
+    """
+    no_launch_in_window = {"cadence": {"first_launch_year": ANCHOR_MODEL_YEAR + 1}}
+    space = run_valuation(config_from_dict(no_launch_in_window))
+    with pytest.raises(ValueError, match=r"anchor-year cohort \(FY2036\) is empty: 0 nodes"):
+        _ground_for(space, default_ground_config)
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
 
 def test_ground_comparison_period_dial_is_gone() -> None:
@@ -360,8 +381,8 @@ def test_ground_data_dictionary_is_generated_from_the_artifact(
     assert entries["anchor.nodes"].type == "integer"
     assert entries["anchor.kw"].type == "number"
     assert entries["anchor.service_life_years"].unit == "years"
-    assert entries["ground.total_five_year_cost"].unit == (
-        default_ground_output.ground.total_five_year_cost.unit
+    assert entries["ground.total_service_life_cost"].unit == (
+        default_ground_output.ground.total_service_life_cost.unit
     )
     assert entries["comparison.ground_to_orbit_ratio"].unit == "ratio"
     assert entries["inputs.config.utilization"].unit == "fraction"

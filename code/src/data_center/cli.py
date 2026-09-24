@@ -49,7 +49,8 @@ Promotion rules (``--promote``):
   the artifacts already replaced are restored from their backups, and the
   error line says which files were restored and which, if any, still hold new
   content. Each rename is atomic; the pair is restored on failure, not
-  written in one indivisible step.
+  written in one indivisible step. A destination that is a symbolic link or
+  not a regular file is refused before anything is written.
 
 Output locations, by design (see ``code/README.md``, "Promote Public
 Artifacts"):
@@ -87,16 +88,16 @@ from common.cli import (
 )
 from common.file_io import (
     ModelFileError,
-    PendingWrite,
     SourceCheckout,
+    artifact_write,
     locate_source_checkout,
+    render_artifact_json,
     write_files_with_rollback,
 )
 from common.meta import ValidationResult, ValidationSeverity
 from data_center.config import ValuationConfig, load_config
 from data_center.engine import run_valuation
 from data_center.input_manifest import DEFAULT_SCENARIO_PATH, is_default_scenario
-from data_center.json_output import render_json
 from data_center.output import ArtifactRole
 from data_center.text_report import render_headline, render_text
 
@@ -293,7 +294,7 @@ def _report(config: ValuationConfig, scenario_ref: str, *, brief: bool, as_json:
     if brief:
         print(render_headline(output))
     elif as_json:
-        print(render_json(output))
+        print(render_artifact_json(output))
     else:
         print(render_text(output))
     return EXIT_OK
@@ -337,7 +338,6 @@ def _promote(
         DEFAULT_GROUND_SCENARIO_PATH,
         build_ground_reference_output,
         load_ground_config,
-        render_ground_json,
     )
 
     is_default = is_default_scenario(scenario_ref)
@@ -345,7 +345,7 @@ def _promote(
     space_path = models_dir / SPACE_MODELS_SUBDIR / f"{output_name}.json"
     try:
         output = run_valuation(config, source_scenario_path=scenario_ref, artifact_role=role)
-        writes = [PendingWrite(space_path, render_json(output) + "\n")]
+        writes = [artifact_write(space_path, output)]
         failed = _failed_checks(output.meta.validation_results)
         if is_default:
             ground_scenario = checkout.repo_dir / DEFAULT_GROUND_SCENARIO_PATH
@@ -356,7 +356,7 @@ def _promote(
                 ground_scenario_path=checkout.repo_relative(ground_scenario),
             )
             ground_path = models_dir / GROUND_MODELS_SUBDIR / f"{output_name}.json"
-            writes.append(PendingWrite(ground_path, render_ground_json(ground) + "\n"))
+            writes.append(artifact_write(ground_path, ground))
             failed.extend(_failed_checks(ground.meta.validation_results))
     except (ModelFileError, ValueError) as exc:
         logger.error("could not promote %s: %s", scenario_ref, describe_failure(exc))

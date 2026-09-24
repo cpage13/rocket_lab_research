@@ -7,8 +7,9 @@ physics block (the :class:`~communications.engine.IridiumResult` fields), and
 the stated-assumptions lines from
 :func:`~communications.engine.iridium_assumptions`. It mirrors the data-center
 promotion pattern (``data_center.json_output`` + the ``rklb-value --promote``
-path): a typed Pydantic artifact serialized with ``model_dump_json(indent=2)``,
-written into the repo-root ``communications/models/`` workstream.
+path): a typed Pydantic artifact serialized by the shared
+:func:`common.file_io.render_artifact_json`, written into the repo-root
+``communications/models/`` workstream.
 
 Command-line usage, from the repo root::
 
@@ -29,7 +30,8 @@ line and exit status 1, never a traceback; a usage error exits with status 2.
 The one artifact is written through
 :func:`common.file_io.write_files_with_rollback`: staged in full beside its
 destination, then renamed over it in one atomic rename, so a failure leaves
-the promoted file as it was. It runs from a source checkout only
+the promoted file as it was (a destination that is a symbolic link or not a
+regular file is refused). It runs from a source checkout only
 (:func:`common.file_io.locate_source_checkout`).
 """
 
@@ -51,10 +53,11 @@ from common.cli import (
 )
 from common.file_io import (
     ModelFileError,
-    PendingWrite,
+    artifact_write,
     locate_source_checkout,
     write_files_with_rollback,
 )
+from common.input_manifest import SourceStatus
 from communications.config import CommsConfig, load_comms_config
 from communications.constants import (
     ORBIT_ALTITUDE_KM_SCENARIO,
@@ -65,13 +68,14 @@ from communications.constants import (
     DeviceClass,
 )
 from communications.engine import (
-    MUSD_TO_USD,
     CommsTrajectory,
     IridiumArpuBucket,
     IridiumArpuResult,
     arpu_stated_assumptions,
     iridium_assumptions,
+    margin_pct,
     run_comms_model,
+    usd_per_person,
 )
 
 logger = logging.getLogger(__name__)
@@ -110,20 +114,6 @@ convention), and ``iridium-v2`` (2026-07-09) removed the two inherited
 placeholder ARPU fields and added the published four-bucket
 ``revenue_arpu_buckets`` block with the published ARPU margin against the
 fleet's steady-state annual cost."""
-
-JSON_INDENT: Final[int] = 2
-"""Indentation for the emitted JSON (the house ``model_dump_json`` convention)."""
-
-ARPU_MARGIN_PERCENT_SCALE: Final[float] = 100.0
-"""Percent scale for the published ARPU margin: ``(revenue - cost) / revenue`` times
-this yields a percentage (e.g. 0.982 -> 98.2), mirroring the model's fleet-margin
-convention so every margin in the workstream reads in the same unit."""
-
-ARPU_MARGIN_UNDEFINED_PCT: Final[float] = 0.0
-"""The ARPU margin when revenue is non-positive (an empty pool): undefined, so it
-reports 0.0 rather than dividing by zero. The block only exists on a populated pool
-(revenue strictly positive), so this guard is defensive, mirroring the engine's
-zero-revenue margin guard."""
 
 
 class IridiumProvenance(BaseModel):
@@ -359,7 +349,7 @@ class OrbitScenarioBlock(BaseModel):
     inclination_deg: float = Field(
         description="The published fleet inclination, degrees (a stated scenario, not derived)."
     )
-    source_status: str = Field(
+    source_status: SourceStatus = Field(
         description="The assumptions-ledger source status for the orbit: 'scenario'."
     )
     basis: str = Field(
@@ -464,29 +454,6 @@ class IridiumModelArtifact(BaseModel):
     )
 
 
-def _cost_per_subscriber_annualized_usd(
-    steady_state_annual_cost_musd: float, subscribers_served: int
-) -> float | None:
-    """The annualized per-person cost basis, USD per person per year.
-
-    The final year's annualized fleet cost (converted from $M to USD via the
-    engine's :data:`~communications.engine.MUSD_TO_USD`) over the served-people
-    base: the honest annualized headline, published beside the lumpy final-year
-    cash figure so the two bases can never be confused.
-
-    Args:
-        steady_state_annual_cost_musd: The final year's annualized fleet cost, $M/yr.
-        subscribers_served: The served-people base at the final year's buildout.
-
-    Returns:
-        The annualized cost per person, or ``None`` when nobody is served (the
-        figure is undefined, so no 0.0 is published as if it were a real cost).
-    """
-    if subscribers_served <= 0:
-        return None
-    return steady_state_annual_cost_musd * MUSD_TO_USD / subscribers_served
-
-
 def _cumulative_launches_to_completion(trajectory: CommsTrajectory) -> int | None:
     """Cumulative launches flown through the first full-coverage year.
 
@@ -520,36 +487,6 @@ def _arpu_bucket_block(bucket: IridiumArpuBucket) -> ArpuBucketBlock:
     )
 
 
-def _arpu_margin_vs_steady_state_cost_pct(
-    arpu_revenue_total_musd: float, built_fleet_annual_cost_musd: float
-) -> float:
-    """The published ARPU margin against the built fleet's annualized cost.
-
-    ``(revenue - cost) / revenue x 100``. The revenue case is computed at the built
-    fleet (the fleet target), so the cost basis is the built fleet's full
-    build-launch-replacement cost annualized over the satellite life; operations is
-    the explicit zero and corporate overhead is excluded, so this is an
-    operating-style margin, not a gross margin and not a net margin. Mirrors the
-    engine's zero-revenue guard.
-
-    Args:
-        arpu_revenue_total_musd: The summed four-bucket ARPU revenue, $M/yr.
-        built_fleet_annual_cost_musd: The built fleet's annualized cost, $M/yr
-            (:attr:`~communications.engine.CommsTrajectory.built_fleet_annual_cost_musd`).
-
-    Returns:
-        The margin in percent, or :data:`ARPU_MARGIN_UNDEFINED_PCT` when revenue is
-        not positive.
-    """
-    if arpu_revenue_total_musd <= 0.0:
-        return ARPU_MARGIN_UNDEFINED_PCT
-    return (
-        (arpu_revenue_total_musd - built_fleet_annual_cost_musd)
-        / arpu_revenue_total_musd
-        * ARPU_MARGIN_PERCENT_SCALE
-    )
-
-
 def _build_arpu_buckets_block(
     result: IridiumArpuResult,
     built_fleet_annual_cost_musd: float,
@@ -574,7 +511,7 @@ def _build_arpu_buckets_block(
         government=_arpu_bucket_block(result.government),
         total_connections=result.total_connections,
         arpu_revenue_total_musd=result.arpu_revenue_total_musd_yr,
-        arpu_margin_vs_steady_state_cost_pct=_arpu_margin_vs_steady_state_cost_pct(
+        arpu_margin_vs_steady_state_cost_pct=margin_pct(
             result.arpu_revenue_total_musd_yr, built_fleet_annual_cost_musd
         ),
         stated_assumptions=stated_assumptions,
@@ -631,7 +568,7 @@ def build_iridium_artifact(
         subscribers_served=trajectory.subscribers_served,
         steady_state_annual_cost_musd=trajectory.steady_state_annual_cost_musd,
         built_fleet_annual_cost_musd=trajectory.built_fleet_annual_cost_musd,
-        cost_per_subscriber_annualized_usd=_cost_per_subscriber_annualized_usd(
+        cost_per_subscriber_annualized_usd=usd_per_person(
             trajectory.steady_state_annual_cost_musd, trajectory.subscribers_served
         ),
         final_year_replacement_cost_musd=trajectory.final_year_replacement_cost_musd,
@@ -700,18 +637,6 @@ def build_iridium_artifact(
     )
 
 
-def render_json(artifact: IridiumModelArtifact) -> str:
-    """Serialize the promoted artifact as indented JSON (the house convention).
-
-    Args:
-        artifact: The assembled promoted artifact.
-
-    Returns:
-        The artifact as an indented JSON string.
-    """
-    return artifact.model_dump_json(indent=JSON_INDENT)
-
-
 def export_iridium_json(
     scenario_path: str | Path,
     output_path: str | Path,
@@ -722,13 +647,13 @@ def export_iridium_json(
     Loads the scenario, runs :func:`~communications.engine.run_comms_model`,
     assembles the artifact, and writes it through
     :func:`common.file_io.write_files_with_rollback` (staged in full, then one
-    atomic rename, so a failed write leaves any existing file as it was). A
-    relative
-    ``output_path`` is anchored to the REPO ROOT of the source checkout (the
-    promoted ``communications/models/`` workstream lives there, never under
-    ``code/``); an absolute path is used as-is. The ``scenario_path``
-    resolves against the working directory as usual and is recorded
-    repository-relative in the provenance header.
+    atomic rename, so a failed write leaves any existing file as it was; an
+    output path that is a symbolic link or not a regular file is refused). A
+    relative ``output_path`` is anchored to the REPO ROOT of the source
+    checkout (the promoted ``communications/models/`` workstream lives there,
+    never under ``code/``); an absolute path is used as-is. The
+    ``scenario_path`` resolves against the working directory as usual and is
+    recorded repository-relative in the provenance header.
 
     Args:
         scenario_path: The scenario YAML to run (must select the Iridium model).
@@ -762,7 +687,7 @@ def export_iridium_json(
     out = Path(output_path)
     if not out.is_absolute():
         out = checkout.repo_dir / out
-    write_files_with_rollback([PendingWrite(out, render_json(artifact) + "\n")])
+    write_files_with_rollback([artifact_write(out, artifact)])
     logger.info("promoted Iridium model artifact written to %s", out)
     return out
 

@@ -25,9 +25,8 @@ import math
 
 import pytest
 
-from common.cadence import ROUND_TO_NEAREST_OFFSET
+from common.cadence import ROUND_TO_NEAREST_OFFSET, CadenceDials
 from communications.config import (
-    CadenceDials,
     CommsCadenceDials,
     CommsConfig,
     CoverageDials,
@@ -35,7 +34,12 @@ from communications.config import (
     SubscriberDials,
 )
 from communications.constants import MONTHS_PER_YEAR
-from communications.engine import CommsTrajectory, run_comms_model
+from communications.engine import (
+    MARGIN_PERCENT_SCALE,
+    MUSD_TO_USD,
+    CommsTrajectory,
+    run_comms_model,
+)
 
 # The default-config horizon is 10 years after the base year, so the trajectory
 # spans FY2026..FY2036 inclusive (11 model years).
@@ -44,13 +48,6 @@ EXPECTED_DEFAULT_YEAR_COUNT = 11
 # A tight relative tolerance for the one cost-sum identity check (floats sum in a
 # different association order than the engine's running accumulation).
 COST_SUM_REL_TOL = 1e-9
-
-# The $M -> USD conversion the engine uses for the ARPU revenue (ARPU is in USD/mo,
-# revenue is reported in $M). Mirrors the engine's ``MUSD_TO_USD``.
-MUSD_TO_USD = 1_000_000.0
-
-# The percent scale for a gross margin (the engine's ``MARGIN_PERCENT_SCALE``).
-MARGIN_PERCENT_SCALE = 100.0
 
 # A tiny subscriber target whose capacity need (ceil(target / 75,000) == 1) is below
 # any coverage floor these tests set, so the fleet target equals the coverage floor.
@@ -64,11 +61,12 @@ _FLOOR_BINDING_SUBSCRIBERS = SubscriberDials(
 
 def test_run_returns_trajectory_with_full_horizon() -> None:
     """The default run returns a CommsTrajectory spanning FY2026..FY2036 (11 years)."""
-    traj = run_comms_model(CommsConfig())
+    config = CommsConfig()
+    traj = run_comms_model(config)
     assert isinstance(traj, CommsTrajectory)
     assert len(traj.years) == EXPECTED_DEFAULT_YEAR_COUNT
-    assert traj.years[0].year == 2026
-    assert traj.years[-1].year == 2036
+    assert traj.years[0].year == config.metadata.base_year
+    assert traj.years[-1].year == config.metadata.base_year + config.metadata.horizon_years
 
 
 def test_satellites_deployed_equals_launches_times_per_launch() -> None:
@@ -491,9 +489,13 @@ def test_comms_share_exact_half_rounds_up() -> None:
     )
     traj = run_comms_model(config)
     final = traj.years[-1]
-    assert final.year == 2036
-    assert final.fleet_launches_this_year == 90
-    assert final.fleet_launches_this_year * share < expected_fy2036_launches - 0.5
+    # The default window's final year is the year-10 cadence anchor (FY2036), where
+    # the whole-fleet ramp flies exactly the year-10 dial (90 launches).
+    assert final.year == config.metadata.base_year + config.metadata.horizon_years
+    assert final.fleet_launches_this_year == config.cadence.launches_at_year_10
+    assert (
+        final.fleet_launches_this_year * share < expected_fy2036_launches - ROUND_TO_NEAREST_OFFSET
+    )
     assert final.comms_launches_flown_this_year == expected_fy2036_launches
 
 

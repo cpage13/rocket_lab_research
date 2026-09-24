@@ -25,49 +25,38 @@ from pydantic import BaseModel, ConfigDict, Field
 from common.input_manifest import (
     AssumptionRole,
     CellSpec,
+    ConfigFieldName,
     InputCell,
     InputPath,
-    InputScalar,
     InputValue,
     SourceRef,
     SourceRefType,
     SourceStatus,
     _cell,
     _field_description,
-    _first_research_ref,
-    _float_value,
-    _int_value,
-    _number_value,
     _research_ref,
     _source_index_ref,
     _spec_cell,
-    _str_value,
 )
-from common.provenance import FieldPath
-from data_center.config import (
-    CadenceDials,
-    FleetDials,
-    LaunchCostDials,
-    RBand,
-    ValuationConfig,
-    VolumeDials,
-    YearRValue,
-)
+from common.provenance import FieldPath, as_float
+from data_center.config import ValuationConfig, YearRValue
 from data_center.generations import GenerationSpec, SourcingClass
 
 logger = logging.getLogger(__name__)
 
-ASSUMPTION_INDEX_PREFIX: Final[str] = "inputs.assumption_index"
 DEFAULT_SCENARIO_PATH: Final[str] = "code/scenarios/default.yaml"
 """Repository-relative path of the canonical default scenario (see :func:`is_default_scenario`)."""
 MARKET_REFERENCE_CAPACITY_GW: Final[float] = 100.0
-PATH_SUFFIX_SPLITS: Final[int] = 1
 
 CENTRAL_R_CLAIM_ID: Final[str] = "RLDC-REVENUE-MULTIPLE-1_5X"
 """SOURCE_INDEX claim describing the default central R band."""
 
 SENSITIVITY_R_CLAIM_ID: Final[str] = "REV-008"
 """SOURCE_INDEX claim describing the default low and high R sensitivity bands."""
+
+REVENUE_PATH_PREFIX: Final[FieldPath] = "inputs.config.revenue"
+"""Public path of the R-band input tree; each anchor cell sits at
+``<prefix>.<band>.<fiscal year>`` (:func:`revenue_anchor_path`)."""
 
 RELEASE_CADENCE_PATH: Final[FieldPath] = "inputs.config.physical.release_cadence_yr"
 """Public path of the generation release cadence, which dates extrapolated generations."""
@@ -302,112 +291,48 @@ class InputManifest(BaseModel):
         description="Flat path-indexed lookup for all input cells.",
     )
 
-    @property
-    def gospel(self) -> dict[str, float | int]:
-        """Return legacy physical-input values for internal validation helpers."""
-        physical = self.config.physical
-        return {
-            "mass_envelope_t": _number_value(physical.mass_envelope_t),
-            "node_mass_fixed_t": _number_value(physical.node_mass_fixed_t),
-            "node_volume_fixed_m3": _number_value(physical.node_volume_fixed_m3),
-            "tjmax_lift_year": _number_value(physical.tjmax_lift_year),
-            "radiator_t_per_kw_pre": _number_value(physical.radiator_t_per_kw_pre),
-            "radiator_t_per_kw_post": _number_value(physical.radiator_t_per_kw_post),
-            "solar_mass_t_per_kw": _number_value(physical.solar_mass_t_per_kw),
-            "bus_base_musd": _number_value(physical.bus_base_musd),
-            "bus_flatten_after_yr": _number_value(physical.bus_flatten_after_yr),
-            "bus_growth_pre": _number_value(physical.bus_growth_pre),
-            "solar_cost_musd_per_kw": _number_value(physical.solar_cost_musd_per_kw),
-            "radiator_cost_musd_per_kw": _number_value(physical.radiator_cost_musd_per_kw),
-            "release_cadence_yr": _number_value(physical.release_cadence_yr),
-        }
 
-    @property
-    def slopes(self) -> dict[str, float | int]:
-        """Return legacy generation-slope values for internal renderers."""
-        slopes = self.config.generation_slopes
-        return {
-            "usd_growth_per_gen": _number_value(slopes.usd_growth_per_gen),
-            "kw_growth_per_gen": _number_value(slopes.kw_growth_per_gen),
-            "kg_growth_per_gen": _number_value(slopes.kg_growth_per_gen),
-            "pf_growth_per_gen": _number_value(slopes.pf_growth_per_gen),
-        }
+def revenue_anchor_path(band_name: str, fy: int) -> InputPath:
+    """Return the public path of one R-band anchor cell.
 
-    @property
-    def cadence(self) -> CadenceDials:
-        """Return the cadence config model represented by the manifest."""
-        cadence = self.config.cadence
-        return CadenceDials(
-            cadence_ceiling=_int_value(cadence.cadence_ceiling),
-            launches_at_year_5=_int_value(cadence.launches_at_year_5),
-            launches_at_year_10=_int_value(cadence.launches_at_year_10),
-            first_launch_year=_int_value(cadence.first_launch_year),
-        )
+    The one definition of the anchor-path format,
+    ``inputs.config.revenue.<band>.<fiscal year>``: the manifest builds each
+    anchor cell's path here and :func:`revenue_anchors` reads the year back
+    from it.
 
-    @property
-    def fleet(self) -> FleetDials:
-        """Return the fleet config model represented by the manifest."""
-        return FleetDials(service_life_years=_int_value(self.config.fleet.service_life_years))
+    Args:
+        band_name: ``central``, ``low``, or ``high``.
+        fy: The anchor's fiscal year.
 
-    @property
-    def volume(self) -> VolumeDials:
-        """Return the volume config model represented by the manifest."""
-        volume = self.config.volume
-        return VolumeDials(
-            si_bol_efficiency=_float_value(volume.si_bol_efficiency),
-            stowed_pitch_mm=_float_value(volume.stowed_pitch_mm),
-            mounting_overhead_pct=_float_value(volume.mounting_overhead_pct),
-            neutron_fairing_usable_volume_m3=_float_value(volume.neutron_fairing_usable_volume_m3),
-        )
-
-    @property
-    def launch_cost(self) -> LaunchCostDials:
-        """Return the launch-cost config model represented by the manifest."""
-        launch = self.config.launch
-        return LaunchCostDials(
-            low_cadence_cost_musd=_float_value(launch.low_cadence_cost_musd),
-            high_cadence_cost_musd=_float_value(launch.high_cadence_cost_musd),
-            low_cadence_launches=_float_value(launch.low_cadence_launches),
-            high_cadence_launches=_float_value(launch.high_cadence_launches),
-        )
-
-    @property
-    def r_band(self) -> RBand:
-        """Return the R-band config model represented by the manifest."""
-        revenue = self.config.revenue
-        return RBand(
-            central=_anchor_values(revenue.central),
-            low=_anchor_values(revenue.low),
-            high=_anchor_values(revenue.high),
-        )
-
-    @property
-    def generations(self) -> list[dict[str, str | float | int]]:
-        """Return flattened generation values for existing text/report helpers."""
-        rows: list[dict[str, str | float | int]] = []
-        for generation in self.config.generations:
-            rows.append(
-                {
-                    "name": _str_value(generation.name),
-                    "year_available": _number_value(generation.year_available),
-                    "usd_per_pkg": _number_value(generation.usd_per_pkg),
-                    "kw_per_pkg": _number_value(generation.kw_per_pkg),
-                    "kg_per_pkg": _number_value(generation.kg_per_pkg),
-                    "pf_per_pkg": _number_value(generation.pf_per_pkg),
-                    "die_count": _number_value(generation.die_count),
-                    "source_class": generation.name.source_status.value,
-                    "source_doc_path": _first_research_ref(generation.name),
-                }
-            )
-        return rows
+    Returns:
+        The anchor cell's stable public path.
+    """
+    return InputPath(f"{REVENUE_PATH_PREFIX}.{band_name}.{fy}")
 
 
-def _anchor_values(cells: list[InputCell]) -> list[YearRValue]:
-    """Convert revenue input cells back into R-band anchor models."""
+def revenue_anchors(cells: list[InputCell]) -> list[YearRValue]:
+    """Return one R band's anchors from its input cells, in cell order.
+
+    The R value is the cell's value; the fiscal year is the final segment of
+    the cell's path (:func:`revenue_anchor_path`), the only place the typed
+    input tree records it.
+
+    Args:
+        cells: One band of ``inputs.config.revenue`` (``central``, ``low``,
+            or ``high``).
+
+    Returns:
+        The band's :class:`~data_center.config.YearRValue` anchors.
+
+    Raises:
+        ValueError: If a cell's path is not an R-band anchor path.
+    """
     anchors: list[YearRValue] = []
-    for cell in cells:
-        fy = int(cell.path.rsplit(".", PATH_SUFFIX_SPLITS)[-1])
-        anchors.append(YearRValue(fy=fy, r=_float_value(cell)))
+    for anchor_cell in cells:
+        prefix, _, fy_text = anchor_cell.path.rpartition(".")
+        if not prefix.startswith(f"{REVENUE_PATH_PREFIX}.") or not fy_text.isdigit():
+            raise ValueError(f"{anchor_cell.path} is not an R-band anchor path")
+        anchors.append(YearRValue(fy=int(fy_text), r=as_float(anchor_cell)))
     return anchors
 
 
@@ -526,7 +451,7 @@ def _generation_cell(
     )
 
 
-CADENCE_SPECS: Final[dict[str, CellSpec]] = {
+CADENCE_SPECS: Final[dict[ConfigFieldName, CellSpec]] = {
     "cadence_ceiling": CellSpec(
         label="Cadence ceiling",
         unit="launches/year",
@@ -576,7 +501,7 @@ CADENCE_SPECS: Final[dict[str, CellSpec]] = {
     ),
 }
 
-FLEET_SPECS: Final[dict[str, CellSpec]] = {
+FLEET_SPECS: Final[dict[ConfigFieldName, CellSpec]] = {
     "service_life_years": CellSpec(
         label="Service life",
         unit="years",
@@ -588,7 +513,7 @@ FLEET_SPECS: Final[dict[str, CellSpec]] = {
     )
 }
 
-LAUNCH_SPECS: Final[dict[str, CellSpec]] = {
+LAUNCH_SPECS: Final[dict[ConfigFieldName, CellSpec]] = {
     "low_cadence_cost_musd": CellSpec(
         label="Low-cadence launch cost",
         unit="MUSD/launch",
@@ -627,7 +552,7 @@ LAUNCH_SPECS: Final[dict[str, CellSpec]] = {
     ),
 }
 
-PHYSICAL_SPECS: Final[dict[str, CellSpec]] = {
+PHYSICAL_SPECS: Final[dict[ConfigFieldName, CellSpec]] = {
     "mass_envelope_t": CellSpec(
         label="Reusable SSO mass envelope",
         unit="t",
@@ -771,7 +696,7 @@ PHYSICAL_SPECS: Final[dict[str, CellSpec]] = {
     ),
 }
 
-VOLUME_SPECS: Final[dict[str, CellSpec]] = {
+VOLUME_SPECS: Final[dict[ConfigFieldName, CellSpec]] = {
     "si_bol_efficiency": CellSpec(
         label="Solar-array BOL efficiency",
         unit="fraction",
@@ -810,7 +735,7 @@ VOLUME_SPECS: Final[dict[str, CellSpec]] = {
     ),
 }
 
-SLOPE_SPECS: Final[dict[str, CellSpec]] = {
+SLOPE_SPECS: Final[dict[ConfigFieldName, CellSpec]] = {
     "usd_growth_per_gen": CellSpec(
         label="Package cost growth per generation",
         unit="fraction/generation",
@@ -855,9 +780,9 @@ def _block_cells(
     prefix: str,
     block: BaseModel,
     default_block: BaseModel,
-    specs: dict[str, CellSpec],
+    specs: dict[ConfigFieldName, CellSpec],
     scenario_path: str,
-) -> dict[str, InputCell]:
+) -> dict[ConfigFieldName, InputCell]:
     """Build one config block's input cells, marking changed values as overrides.
 
     Each cell's description is the config field's own description; a value
@@ -929,7 +854,7 @@ def _revenue_cells(
         )
         cells.append(
             _spec_cell(
-                f"inputs.config.revenue.{band_name}.{anchor.fy}",
+                revenue_anchor_path(band_name, anchor.fy),
                 anchor.r,
                 default_by_year.get(anchor.fy),
                 "Revenue-to-cost multiple anchor for one fiscal year.",
@@ -1113,8 +1038,11 @@ def build_input_manifest(
     listed_count = len(config.listed_generations())
 
     def block(
-        prefix: str, run_block: BaseModel, default_block: BaseModel, specs: dict[str, CellSpec]
-    ) -> dict[str, InputCell]:
+        prefix: str,
+        run_block: BaseModel,
+        default_block: BaseModel,
+        specs: dict[ConfigFieldName, CellSpec],
+    ) -> dict[ConfigFieldName, InputCell]:
         """Build one block's cells against its default block."""
         return _block_cells(
             prefix=prefix,
@@ -1167,18 +1095,9 @@ def build_input_manifest(
 
 
 __all__ = [
-    "ASSUMPTION_INDEX_PREFIX",
     "DEFAULT_SCENARIO_PATH",
-    "AssumptionRole",
-    "InputCell",
     "InputManifest",
-    "InputPath",
-    "InputScalar",
-    "InputValue",
     "ScenarioIdentity",
-    "SourceRef",
-    "SourceRefType",
-    "SourceStatus",
     "TypedInputTree",
     "build_input_manifest",
     "GenerationField",
@@ -1188,4 +1107,6 @@ __all__ = [
     "generation_path",
     "generation_source_status",
     "is_default_scenario",
+    "revenue_anchor_path",
+    "revenue_anchors",
 ]

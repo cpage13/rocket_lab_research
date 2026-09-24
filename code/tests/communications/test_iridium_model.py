@@ -41,6 +41,7 @@ import pytest
 from pydantic import ValidationError
 
 from common.cli import EXIT_ERROR
+from common.file_io import render_artifact_json
 from communications.config import CommsConfig, IridiumArpuDials, IridiumDials, load_comms_config
 from communications.constants import (
     APERTURE_FOLD_CAVEAT_NOTE,
@@ -76,7 +77,6 @@ from communications.json_output import (
     build_iridium_artifact,
     export_iridium_json,
     main,
-    render_json,
 )
 
 # ---------------------------------------------------------------------------
@@ -896,7 +896,7 @@ def test_arpu_none_path_omits_block_and_keeps_iot_passthrough() -> None:
     )
     assert artifact.revenue_arpu_buckets is None
     assert artifact.iridium_physics.iot_devices == EXPECTED_IOT_DEVICES
-    payload = json.loads(render_json(artifact))
+    payload = json.loads(render_artifact_json(artifact))
     assert payload.get("revenue_arpu_buckets") is None
 
 
