@@ -2,7 +2,7 @@
 
 Two test families per rule:
 
-1. **Passing case** — the default-scenario engine output trips no rule.
+1. **Passing case**: the default-scenario engine output trips no rule.
 2. **Tripping case**: a copy-mutated space artifact triggers the rule.
 
 Also locks the aggregator contract: :func:`compute_validation` returns
@@ -20,7 +20,7 @@ the cycle-2 output structure (``physical.years`` / ``business.years`` /
 ``inputs.config.generations``). V5 (was ``monotonic_compute_share``) and V10 (was
 ``decisions_populated``) lost their cycle-1 subject when the cycle-2 schema
 dropped the ``compute_share`` and ``decisions`` blocks, so they are
-re-targeted — V5 to PF/kW monotonicity, V10 to the data-dictionary block.
+re-targeted: V5 to PF/kW monotonicity, V10 to the data-dictionary block.
 
 **Cycle-2 new rules (V12-V17).** Six cross-check rules: V12 operator/R
 consistency, V13 provenance formula keys, V14 cadence monotonicity, V15
@@ -28,7 +28,7 @@ volume fits horizon, V16 fleet-cliff consistency, V17
 radiator-dial-matches-architecture (strategy § 5.1).
 
 The tripping fixtures use Pydantic's ``model_copy(update=...)`` to build a
-ProvenanceCell with an out-of-band value and re-key the per-year map —
+ProvenanceCell with an out-of-band value and re-key the per-year map,
 exactly the kind of bad state the V-rules are designed to catch.
 """
 
@@ -166,8 +166,8 @@ def _mutate_physical_cell_attr(
     """Return a new output with one physical-year cell's ``attr`` replaced.
 
     Unlike :func:`_mutate_physical` (which replaces a cell's ``value``),
-    this replaces an arbitrary ProvenanceCell attribute — used by the V13
-    test to inject a bad ``formula_name``.
+    this replaces an arbitrary ProvenanceCell attribute (used by the V13
+    test to inject a bad ``formula_name``).
     """
     py = output.physical.years[fy]
     cell = getattr(py, field)
@@ -180,7 +180,7 @@ def _mutate_physical_cell_attr(
 
 
 # ---------------------------------------------------------------------------
-# compute_validation — the aggregator
+# compute_validation: the aggregator
 # ---------------------------------------------------------------------------
 
 
@@ -248,7 +248,7 @@ def test_severity_classifications(default_output: SpaceModelOutput) -> None:
 
 
 # ---------------------------------------------------------------------------
-# V1 — mass_utilization_in_band
+# V1: mass_utilization_in_band
 # ---------------------------------------------------------------------------
 
 
@@ -325,7 +325,7 @@ def test_v1_band_constants() -> None:
 
 
 # ---------------------------------------------------------------------------
-# V2 — no_trillion_dollar_pkg
+# V2: no_trillion_dollar_pkg
 # ---------------------------------------------------------------------------
 
 
@@ -368,7 +368,7 @@ def test_v2_usd_per_pkg_max_constant() -> None:
 
 
 # ---------------------------------------------------------------------------
-# V3 — positive_margin_floor
+# V3: positive_margin_floor
 # ---------------------------------------------------------------------------
 
 
@@ -386,7 +386,7 @@ def test_v3_trips_when_margin_negative(default_output: SpaceModelOutput) -> None
 
 
 # ---------------------------------------------------------------------------
-# V4 — gpu_count_positive
+# V4: gpu_count_positive
 # ---------------------------------------------------------------------------
 
 
@@ -404,7 +404,7 @@ def test_v4_trips_when_no_packages_fit() -> None:
 
 
 # ---------------------------------------------------------------------------
-# V5 — monotonic_pf_per_kw (re-targeted from compute_share)
+# V5: monotonic_pf_per_kw (re-targeted from compute_share)
 # ---------------------------------------------------------------------------
 
 
@@ -423,7 +423,7 @@ def test_v5_trips_when_pf_per_kw_drops_sharply(default_output: SpaceModelOutput)
 
 
 # ---------------------------------------------------------------------------
-# V6 — pf_per_kw_in_band
+# V6: pf_per_kw_in_band
 # ---------------------------------------------------------------------------
 
 
@@ -474,7 +474,7 @@ def test_v6_band_constants() -> None:
 
 
 # ---------------------------------------------------------------------------
-# V7 — launch_cost_non_increasing
+# V7: launch_cost_non_increasing
 # ---------------------------------------------------------------------------
 
 
@@ -493,7 +493,7 @@ def test_v7_trips_when_launch_cost_jumps_up(default_output: SpaceModelOutput) ->
 
 
 # ---------------------------------------------------------------------------
-# V8 — revenue_above_cost_per_node (re-pathed from per-pkg)
+# V8: revenue_above_cost_per_node (re-pathed from per-pkg)
 # ---------------------------------------------------------------------------
 
 
@@ -553,7 +553,7 @@ def test_v9_verdict_does_not_depend_on_service_life(service_life_years: int) -> 
 
 
 # ---------------------------------------------------------------------------
-# V10 — data_dictionary_populated (re-targeted from decisions_populated)
+# V10: data_dictionary_populated (re-targeted from decisions_populated)
 # ---------------------------------------------------------------------------
 
 
@@ -572,12 +572,12 @@ def test_v10_trips_when_data_dictionary_empty(default_output: SpaceModelOutput) 
 
 
 # ---------------------------------------------------------------------------
-# V12 — operator_r_consistency
+# V12: operator_r_consistency
 # ---------------------------------------------------------------------------
 
 
 def test_v12_default_scenario_passes(default_output: SpaceModelOutput) -> None:
-    """The default B2B run starts central R at 1.50 — above the 1.40 floor."""
+    """The default B2B run starts central R at 1.50, above the 1.40 floor."""
     check = check_operator_r_consistency(default_output)
     assert check.pass_check
     assert check.severity == Severity.MAJOR
@@ -618,7 +618,7 @@ def test_v12_passes_when_b2b_central_r_exactly_at_floor() -> None:
 
 
 # ---------------------------------------------------------------------------
-# V13 — provenance_formula_keys
+# V13: provenance_formula_keys
 # ---------------------------------------------------------------------------
 
 
@@ -650,7 +650,7 @@ def test_v13_counts_every_cell(default_output: SpaceModelOutput) -> None:
 
 
 # ---------------------------------------------------------------------------
-# V14 — cadence_monotonicity
+# V14: cadence_monotonicity
 # ---------------------------------------------------------------------------
 
 
@@ -729,7 +729,7 @@ def test_a_fractional_launch_count_is_a_v14_failure_not_a_crash(
 
 
 # ---------------------------------------------------------------------------
-# V15 — volume_fits_horizon
+# V15: volume_fits_horizon
 # ---------------------------------------------------------------------------
 
 
@@ -781,7 +781,7 @@ def test_v15_fails_on_the_volume_stress_fixture(scenarios_dir: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# V16 — fleet_cliff_consistency
+# V16: fleet_cliff_consistency
 # ---------------------------------------------------------------------------
 
 
@@ -823,7 +823,7 @@ def test_v16_follows_the_configured_service_life(
 
 
 # ---------------------------------------------------------------------------
-# V17 — radiator_dial_matches_architecture
+# V17: radiator_dial_matches_architecture
 # ---------------------------------------------------------------------------
 
 
@@ -895,7 +895,7 @@ def test_v17_trips_when_only_the_pre_lift_dial_is_below_floor() -> None:
 def test_aggregator_surfaces_multiple_concurrent_failures(
     default_output: SpaceModelOutput,
 ) -> None:
-    """Trip V1 and V9 simultaneously — both surface in the aggregated list."""
+    """Trip V1 and V9 simultaneously: both surface in the aggregated list."""
     once = _mutate_physical(default_output, "2028", "mass_utilization_pct", 10.0)
     twice = _mutate_node_total(once, "2028", 500.0)
     failing = {c.name for c in compute_validation(twice) if not c.pass_check}
@@ -911,7 +911,7 @@ def test_aggregator_surfaces_multiple_concurrent_failures(
 def test_every_check_emits_non_empty_computed_string(
     default_output: SpaceModelOutput,
 ) -> None:
-    """`computed` is a reader-facing string — no rule may leave it blank."""
+    """`computed` is a reader-facing string: no rule may leave it blank."""
     blanks = [c.name for c in compute_validation(default_output) if not c.computed.strip()]
     assert not blanks, f"checks with empty 'computed': {blanks}"
 

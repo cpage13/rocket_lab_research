@@ -20,12 +20,12 @@ exactly five keys (D21):
   data dictionary, the per-generation summary, and the ``query_examples``
   block (the cold-reader contract).
 
-Every BaseModel here is ``model_config = ConfigDict(frozen=True)`` — the
+Every BaseModel here is ``model_config = ConfigDict(frozen=True)``: the
 output is immutable once built; downstream renderers and serializers may
 read but not mutate.
 
 Per-year data is keyed by a JSON-string year (``YearString``, e.g.
-``"2036"``) in ``PhysicalBlock.years`` / ``BusinessBlock.years`` — this is
+``"2036"``) in ``PhysicalBlock.years`` / ``BusinessBlock.years``. This is
 what a cold agent's ``jq`` queries address (``.physical.years."2036"``).
 
 ``ValidationCheck`` / ``Severity`` are the cycle-1 types, reused verbatim
@@ -112,7 +112,7 @@ class ArtifactRole(StrEnum):
 
 
 class RunMetadata(BaseModel):
-    """The ``metadata`` block — the run's identity.
+    """The ``metadata`` block: the run's identity.
 
     Carries the artifact's schema version, the base year + horizon, the three
     investor-locked enums (workload / operator / radiator architecture),
@@ -194,12 +194,12 @@ class RunMetadata(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Per-year blocks — physical (per-node) and business (fleet)
+# Per-year blocks: physical (per-node) and business (fleet)
 # ---------------------------------------------------------------------------
 
 
 class CostBreakdownBlock(BaseModel):
-    """The per-node cost decomposition — the five build/launch lines + total.
+    """The per-node cost decomposition: the five build/launch lines + total.
 
     Surfaces the cost intermediates the engine's
     :class:`data_center.engine.CostBreakdown` computes, so a cold agent can
@@ -238,12 +238,12 @@ class CostBreakdownBlock(BaseModel):
 class PhysicalYear(BaseModel):
     """One model year's per-node physical + per-node economics state.
 
-    Every field is a :class:`ProvenanceCell` — value plus the formula,
-    units, upstream paths, and sources that produced it — except
+    Every field is a :class:`ProvenanceCell` (value plus the formula,
+    units, upstream paths, and sources that produced it) except
     ``cost_breakdown``, which is a :class:`CostBreakdownBlock` of six cells.
     The per-node revenue / gross-profit lines are split into explicit
-    ``_central`` / ``_low`` / ``_high`` fields (one per R-band trajectory)
-    — the cycle-1 ``annual_rev_per_node_musd`` field (which conflated
+    ``_central`` / ``_low`` / ``_high`` fields (one per R-band trajectory).
+    The cycle-1 ``annual_rev_per_node_musd`` field (which conflated
     revenue and profit) is gone (D25).
     """
 
@@ -342,7 +342,7 @@ class BusinessYear(BaseModel):
     Every field is a :class:`ProvenanceCell`. The fleet revenue / gross
     profit / margin lines are split into explicit ``_central`` / ``_low``
     / ``_high`` fields (one per R-band trajectory). This block carries
-    what the cycle-1 ``summary`` block used to surface — but per-year,
+    what the cycle-1 ``summary`` block used to surface, but per-year,
     where it belongs.
     """
 
@@ -440,7 +440,7 @@ class BusinessYear(BaseModel):
 
 
 class PhysicalBlock(BaseModel):
-    """The ``physical`` block — the per-year per-node trajectory.
+    """The ``physical`` block: the per-year per-node trajectory.
 
     ``years`` is keyed by JSON-string year (``"2026"`` .. ``"2036"``);
     a cold agent addresses one year as ``.physical.years."2036"``.
@@ -455,7 +455,7 @@ class PhysicalBlock(BaseModel):
 
 
 class BusinessBlock(BaseModel):
-    """The ``business`` block — the per-year living-fleet rollup.
+    """The ``business`` block: the per-year living-fleet rollup.
 
     ``years`` is keyed by JSON-string year; a cold agent addresses one
     year as ``.business.years."2036"``.
@@ -470,12 +470,12 @@ class BusinessBlock(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Meta block — validation, data dictionary, generation summary, query examples
+# Meta block: validation, data dictionary, generation summary, query examples
 # ---------------------------------------------------------------------------
 
 
 class GenerationSummary(BaseModel):
-    """One entry of the ``meta.generations_dictionary`` — a compact gen view.
+    """One entry of the ``meta.generations_dictionary``: a compact gen view.
 
     A flattened, render-friendly view of one GPU generation: the headline
     per-package physical + cost numbers a reader scans without walking the
@@ -526,7 +526,7 @@ class GenerationSummary(BaseModel):
 
 
 class MetaBlock(BaseModel):
-    """The ``meta`` block — validation, data dictionary, generation summary,
+    """The ``meta`` block: validation, data dictionary, generation summary,
     and the ``query_examples`` cold-reader contract.
     """
 
@@ -586,7 +586,7 @@ class MetaBlock(BaseModel):
 class SpaceModelOutput(BaseModel):
     """The complete output of one valuation run: the space artifact.
 
-    Top-level shape, in strategy § 3.1 order (D21 — two data sections plus
+    Top-level shape, in strategy § 3.1 order (D21: two data sections plus
     meta, no cycle-1 ``summary``):
 
     1. ``metadata``: the run's identity (schema version, base year,
@@ -598,7 +598,7 @@ class SpaceModelOutput(BaseModel):
     5. ``meta``: validation report, data dictionary, generation summary,
        query_examples.
 
-    Frozen — once built the artifact is immutable. Serialize via
+    Frozen: once built the artifact is immutable. Serialize via
     :func:`common.file_io.render_artifact_json`.
     """
 

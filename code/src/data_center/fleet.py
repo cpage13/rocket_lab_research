@@ -322,6 +322,7 @@ def compute_fleet_year(
                 "inputs.config.launch.high_cadence_launches",
             ],
             sources=[
+                "research/SOURCE_INDEX.md#RLDC-LAUNCH-COST-2036",
                 "research/SOURCE_INDEX.md#NTR-009",
                 "inputs.config.launch dials",
             ],

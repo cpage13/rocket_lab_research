@@ -19,3 +19,13 @@ not anchor to living-fleet capacity or market share.
 The comparison is narrower and easier to audit. It answers whether the same
 annual cohort is in the same rough cost scale on the ground, while leaving
 fleet-wide and market-share questions out of scope.
+
+## Amendment (2026-09-23)
+
+The anchor year is now derived from the configuration instead of hardcoded:
+the base year plus ten (the year the year-10 cadence dial pins), or the final
+window year when the horizon is shorter, which is 2036 at the default. The
+ground comparison window follows the anchor cohort's service life (five years
+at the default); the separate comparison-period dial was removed. The decision
+itself is unchanged: the ground reference anchors to the deployed-year cohort,
+never to the living fleet or market share.

@@ -13,7 +13,7 @@ Two responsibilities (the artifact is serialized by the shared
   dictionary is *generated*, not hand-maintained: a cell's unit is read
   from the cell itself, a non-cell field's unit from its declaration.
 
-The ``meta.query_examples`` block — the cold-reader contract — is the
+The ``meta.query_examples`` block (the cold-reader contract) is the
 fixed 12-entry list :func:`data_center.query_examples.build_query_examples`
 builds for the run's anchor year; :func:`build_output` places it at
 ``meta.query_examples`` in every emitted :class:`SpaceModelOutput`.

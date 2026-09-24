@@ -336,12 +336,12 @@ def test_compute_node_total_cost_sums_the_breakdown() -> None:
     total = compute_node_total_cost(bd, cost_breakdown_path="x")
     assert total.value == pytest.approx(7.0 + 8.0 + 12.0 + 12.0 + 20.0)
     # node_total cites the five component cells under the cost_breakdown
-    # sub-object — never the bare sub-object, never itself.
+    # sub-object, never the bare sub-object, never itself.
     assert total.uses == [f"x.{line}" for line in ("compute", "bus", "solar", "radiator", "launch")]
 
 
 # ---------------------------------------------------------------------------
-# compute_year — the per-year computation
+# compute_year: the per-year computation
 # ---------------------------------------------------------------------------
 
 
@@ -400,7 +400,7 @@ def test_compute_year_cost_annual_is_total_over_service_life() -> None:
 
 
 def test_compute_year_revenue_band_is_cost_times_r() -> None:
-    """Per-node revenue at each band = cost_annual x R(band) — central > low."""
+    """Per-node revenue at each band = cost_annual x R(band), central > low."""
     yc = compute_year(0, ValuationConfig(), _default_gens())
     py = yc.physical
     rev_c = as_float(py.revenue_annual_per_node_musd_central)
@@ -425,7 +425,7 @@ def test_compute_year_tjmax_lift_changes_radiator_dial() -> None:
     """The radiator dial used at year 5+ is the post-Tjmax 0.012 (D17)."""
     gens = _default_gens()
     cfg = ValuationConfig()
-    # Year 0-4 use 0.013, year 5+ uses 0.012 — N at year 5+ is correspondingly
+    # Year 0-4 use 0.013, year 5+ uses 0.012. N at year 5+ is correspondingly
     # smaller than it would be at 0.013. We check the dial via mass: a heavier
     # radiator means a heavier per-package mass, so check N drops over the
     # horizon as the heavier dial bites.
@@ -485,7 +485,7 @@ def test_compute_volume_year_returns_breakdown() -> None:
     assert isinstance(vb, VolumeBreakdown)
     assert isinstance(vb.volume_per_node_m3, ProvenanceCell)
     assert isinstance(vb.binding_constraint, ProvenanceCell)
-    # The volume cells' uses resolve to real cells — the year is concrete,
+    # The volume cells' uses resolve to real cells: the year is concrete,
     # never the literal "FY" placeholder.
     for path in vb.volume_per_node_m3.uses + vb.binding_constraint.uses:
         assert '"FY"' not in path

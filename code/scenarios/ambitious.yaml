@@ -1,5 +1,5 @@
 # =============================================================================
-# rklb-value — AMBITIOUS scenario (v8 cycle-2, favourable dial set)
+# rklb-value: AMBITIOUS scenario (v8 cycle-2, favourable dial set)
 # =============================================================================
 #
 # The optimistic-but-bounded read of the venture. v8 rewrite of the cycle-1
@@ -13,7 +13,7 @@
 # To run:   uv run rklb-value scenarios/ambitious.yaml
 # =============================================================================
 
-scenario_name: "Ambitious ('go for it') — 13t SSO, high R band, max cadence"
+scenario_name: "Ambitious ('go for it'): 13t SSO, high R band, max cadence"
 
 metadata:
   workload_type: inference
@@ -24,7 +24,7 @@ metadata:
   horizon_years: 10
 
 cadence:
-  # Max launch cadence — the favourable read of program build-up.
+  # Max launch cadence: the favourable read of program build-up.
   cadence_ceiling: 150            # max ceiling
   launches_at_year_5: 14
   launches_at_year_10: 120        # faster than default 90 (ambitious)
@@ -40,7 +40,7 @@ volume:
   neutron_fairing_usable_volume_m3: 80.0
 
 r_band:
-  # Ambitious R band — high trajectory above the model default, encoding
+  # Ambitious R band: high trajectory above the model default, encoding
   # the high-end revenue anchor + orbital premium. central / low fall to
   # the model defaults.
   high:
@@ -73,11 +73,11 @@ gospel:
 
 slopes:
   usd_growth_per_gen: 0.30
-  # 0.20 — per-package power growth/gen; corrected from 0.30
+  # 0.20: per-package power growth/gen; corrected from 0.30
   # (assembly-rate misapplied) per validation V-A, sourcing_audit_05_21.md.
   kw_growth_per_gen: 0.20
   kg_growth_per_gen: -0.10
   pf_growth_per_gen: 0.625
 
 # slopes: the ambitious scenario does not bet on a faster technology
-# trajectory — it bets on a generous envelope, richer margin, lighter node.
+# trajectory: it bets on a generous envelope, richer margin, lighter node.

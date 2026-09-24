@@ -18,7 +18,7 @@ conclusion.
   families.
 - The test suite is green: the frozen Iridium suite, the High-Bandwidth
   Cellular Pure Play suites, the cross-import guard, and the data-center
-  parity gate (554 whole-tree tests as of 2026-07-14; mypy strict and ruff
+  parity gate (779 whole-tree tests as of 2026-09-24; mypy strict and ruff
   clean).
 - The evidence library lives in `research/` under the `COMM-*` claim ledger.
 
@@ -36,10 +36,11 @@ FY2036 (the 29-launch 2031 build plus one full five-year fleet replacement)
 and a 145.0 million dollar steady-state annual cost. The model publishes the four-bucket ARPU case (Sheet
 A, investor-set 2026-07-09): about 8,250.8 million
 dollars per year at the baseline under full sell-through on capacity, about a
-98.2 percent margin against the steady-state fleet cost (operating-style:
-measured against the fleet's full build, launch, and replacement cost, with
-operations the explicit zero and corporate overhead excluded; the promoted
-artifact carries the metric). Treat those as traceable model outputs from
+98.2 percent margin against the built fleet's annualized cost (operating-style:
+measured against the built fleet's full build, launch, and replacement cost
+spread over the satellite life, 145.0 million dollars a year at the baseline,
+with operations the explicit zero and corporate overhead excluded; the
+promoted artifact carries the metric). Treat those as traceable model outputs from
 `communications/models/iridium/default.json`, not a final recommendation. A
 two-round traceability audit (converged 2026-07-08) verified 91 numbers with
 zero numeric discrepancies and four citation ids corrected in code (one of
@@ -60,7 +61,10 @@ consolidated unit-cost trajectory row).
   large 2031 cohort, 250.0 million dollars). As of schema iridium-v4 the
   promoted artifact names both bases directly (the final-year cash pair plus
   the 14.50-dollar annualized line) and exposes the fleet, launch, and
-  capacity denominators and the labeled orbit scenario block.
+  capacity denominators and the labeled orbit scenario block. Schema
+  iridium-v5 (2026-09-23, the current promoted schema) adds the built fleet's
+  annualized cost (the margin's basis) and whether the build completes inside
+  the horizon, with the published values unchanged.
 - The old pre-rewrite communications tree (the former CLI, output, comparison,
   and validation layers and their tests) was retired 2026-07-07. The live tree
   is the five-module engine plus its per-family tests.

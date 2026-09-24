@@ -97,11 +97,12 @@ choice of horizon, not because anything flattens: extend the same default
 dials to 2040 (one dial, the model window, nothing else changes) and the
 fleet reads **591 living nodes**, about 448 MW, about **$17.7B a year of
 revenue and $5.9B of profit** at the same margin, with cadence at 139
-launches a year and still rising. Those four years lean on extrapolated
-silicon generations, so they illustrate the curve's direction rather than
-extend the promoted output (`RLDC-FORWARD-WINDOW-2040`). For scale, the 2036
-fleet's $7.4B a year is about 12 times Rocket Lab's entire FY2025 revenue of
-$602M, and the 2040 illustration is about 29 times.
+launches a year and still rising. The 2036 node already flies an extrapolated
+silicon generation (the model's Gen+4), and those four years lean further on
+extrapolated ones, so they illustrate the curve's direction rather than extend
+the promoted output (`RLDC-FORWARD-WINDOW-2040`). For scale, the 2036 fleet's
+$7.4B a year is about 12 times Rocket Lab's entire FY2025 revenue of $602M, and
+the 2040 illustration is about 29 times.
 
 If you add up every cohort still alive, you get the installed fleet, which the
 Fleet Snapshot at the end tracks. That aggregate is a side effect of the cohort
@@ -157,8 +158,8 @@ The full counted-versus-uncounted inventory is in
 | 90 launches/year target by 2036 | Scenario input, not Rocket Lab guidance | `RLDC-CADENCE-90` |
 | 12.5 t SSO block-upgrade mass envelope | Scenario input, not a published payload guarantee | `RLDC-PAYLOAD-SSO-UPGRADE` |
 | Five-year service life | Scenario input | `RLDC-SERVICE-LIFE-5Y` |
-| Roughly 750 kW node simplification | Derived model scale | `RLDC-NODE-POWER-400KW` |
-| High-cadence launch cost around $13M | Scenario input | `RLDC-LAUNCH-COST-2036` |
+| Roughly 750 kW node simplification (about 753 kW in 2036) | Derived model scale | `RLDC-NODE-POWER-400KW` (the ID's 400 kW is its historical pre-rebase name) |
+| High-cadence launch cost around $13.9M in 2036 | Scenario input | `RLDC-LAUNCH-COST-2036` |
 | AI-1-class radiator: deployed double-sided, 1.65 kg/kW | Investor-set scenario (2026-07-14) | `RLDC-SOLAR-RADIATOR-MASS` |
 | Solar and radiator cost $20k/kW each | Investor-set scenario (2026-07-14) | `RLDC-SOLAR-RADIATOR-COST` |
 | Revenue multiple flat at 1.5x cost, no taper | Scenario input | `RLDC-REVENUE-MULTIPLE-1_5X` |

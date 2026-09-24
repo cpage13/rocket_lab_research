@@ -13,7 +13,8 @@ reviewed conclusion.
 - The promoted space model is `data_center/models/space/default.json`.
 - The promoted ground reference is `data_center/models/ground/default.json`.
 - The default assumptions live in `code/scenarios/default.yaml`.
-- The active model code lives in `code/src/data_center/`.
+- The active model code lives in `code/src/data_center/`, with the pieces
+  both models share (cadence, provenance cells, file I/O) in `code/src/common/`.
 - The evidence library lives in `research/`.
 
 ## Current Read

@@ -1,4 +1,4 @@
-"""Tests for the provenance module — ProvenanceCell + FORMULAS + cell() factory.
+"""Tests for the provenance module: ProvenanceCell + FORMULAS + cell() factory.
 
 Locks the Phase 2 provenance infrastructure: the frozen ProvenanceCell /
 FormulaSpec models, the FORMULAS lookup table, and the cell() factory's
@@ -62,7 +62,7 @@ def test_cell_resolves_formula_text_from_formulas_table() -> None:
 
 
 def test_provenance_cell_is_frozen() -> None:
-    """ProvenanceCell is immutable — assigning a field raises."""
+    """ProvenanceCell is immutable: assigning a field raises."""
     c = cell(
         value=1.0,
         unit="-",
@@ -103,7 +103,7 @@ def test_cell_serializes_to_json() -> None:
 
 
 def test_field_path_is_alias_for_str() -> None:
-    """FieldPath is a str alias — a concrete path is a real str."""
+    """FieldPath is a str alias: a concrete path is a real str."""
     p: FieldPath = 'physical.years."2036".kw_per_node'
     assert isinstance(p, str)
 

@@ -1,4 +1,4 @@
-"""Tests for ``data_center.generations`` — the typed per-generation input layer.
+"""Tests for ``data_center.generations``: the typed per-generation input layer.
 
 Coverage:
     - KNOWN_GENS parity: every field of every entry matches plan § 0's table.
@@ -49,7 +49,7 @@ from data_center.generations import (
     load_generations_yaml,
 )
 
-# Plan § 0 KNOWN_GENS table — replicated here to assert parity. Any change
+# Plan § 0 KNOWN_GENS table, replicated here to assert parity. Any change
 # to the gospel must update both the production list and this fixture.
 EXPECTED_KNOWN_GENS: Final[list[dict[str, object]]] = [
     {

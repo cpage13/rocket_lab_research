@@ -46,9 +46,9 @@ assembly (metadata + inputs + meta + the final ``SpaceModelOutput``) is
 delegated to :func:`data_center.json_output.build_output`.
 
 References:
-    plan_05_20_cycle2.md § 5 — Phase 4A (v8 output + JSON emit).
-    strategy_05_20_cycle2.md § 3 — the v8 schema.
-    tests/test_parity.py — the frozen-trajectory parity test.
+    plan_05_20_cycle2.md § 5: Phase 4A (v8 output + JSON emit).
+    strategy_05_20_cycle2.md § 3: the v8 schema.
+    tests/test_parity.py: the frozen-trajectory parity test.
 """
 
 from __future__ import annotations
@@ -369,7 +369,7 @@ def compute_mass_util(
     node_mass_path: FieldPath,
     mass_envelope_path: FieldPath,
 ) -> ProvenanceCell:
-    """Mass utilisation — node mass as a percent of the mass envelope.
+    """Mass utilisation: node mass as a percent of the mass envelope.
 
     The cell carries a **percent** (0-100); cycle-1 carried a 0-1
     fraction. The conversion lives here so every consumer sees one
@@ -403,7 +403,7 @@ def compute_pf_per_node(
     n_packages_path: FieldPath,
     pf_per_pkg_uses: list[FieldPath],
 ) -> ProvenanceCell:
-    """Total node compute — N x PFLOPS/pkg.
+    """Total node compute: N x PFLOPS/pkg.
 
     Args:
         n_packages: Packages per node.
@@ -431,7 +431,7 @@ def compute_pf_per_kw(
     pf_node_path: FieldPath,
     node_kw_path: FieldPath,
 ) -> ProvenanceCell:
-    """Compute density — PFLOPS per node kW.
+    """Compute density: PFLOPS per node kW.
 
     Args:
         pf_node: Total node compute, PFLOPS.
@@ -495,6 +495,12 @@ def compute_cost_per_node_breakdown(
     function wraps each line (plus the compute line, derived from N x $/pkg)
     in a :class:`ProvenanceCell`.
 
+    Each dial-set line cites first the SOURCE_INDEX claim of the cost dial
+    that sets it (a claim about that cost, never a mass or power claim), then
+    any supporting cost evidence. The compute line cites no claim: no ledger
+    row describes the node compute cost, and its package prices are the
+    generation inputs, which carry their own citations.
+
     Args:
         n_packages: Packages per node.
         usd_per_pkg: The generation's per-package price, $.
@@ -532,7 +538,7 @@ def compute_cost_per_node_breakdown(
                 "inputs.config.physical.bus_growth_pre",
                 "inputs.config.physical.bus_flatten_after_yr",
             ],
-            sources=["cycle-1 cost dial", "research/SOURCE_INDEX.md#THR-011"],
+            sources=["research/SOURCE_INDEX.md#RLDC-BUS-COST", "cycle-1 cost dial"],
             description="Per-node bus build cost (declines then flattens).",
         ),
         solar=cell(
@@ -540,7 +546,10 @@ def compute_cost_per_node_breakdown(
             unit="MUSD",
             formula_name="solar_cost_from_kw_and_dial",
             uses=[kw_per_node_path, solar_cost_dial_path],
-            sources=["cycle-1 cost dial", "research/SOURCE_INDEX.md#THR-006"],
+            sources=[
+                "research/SOURCE_INDEX.md#RLDC-SOLAR-RADIATOR-COST",
+                "research/SOURCE_INDEX.md#THR-013",
+            ],
             description="Per-node solar-array build cost.",
         ),
         radiator=cell(
@@ -548,7 +557,10 @@ def compute_cost_per_node_breakdown(
             unit="MUSD",
             formula_name="radiator_cost_from_kw_and_dial",
             uses=[kw_per_node_path, radiator_cost_dial_path],
-            sources=["cycle-1 cost dial", "research/SOURCE_INDEX.md#THR-003"],
+            sources=[
+                "research/SOURCE_INDEX.md#RLDC-SOLAR-RADIATOR-COST",
+                "research/SOURCE_INDEX.md#THR-016",
+            ],
             description="Per-node radiator build cost.",
         ),
         launch=cell(
@@ -556,7 +568,10 @@ def compute_cost_per_node_breakdown(
             unit="MUSD",
             formula_name="launch_cost_musd_from_cadence_log_linear",
             uses=[launch_cost_path],
-            sources=["research/SOURCE_INDEX.md#NTR-009"],
+            sources=[
+                "research/SOURCE_INDEX.md#RLDC-LAUNCH-COST-2036",
+                "research/SOURCE_INDEX.md#NTR-009",
+            ],
             description="Per-node launch cost (cadence-indexed log-linear curve).",
         ),
     )
@@ -567,12 +582,12 @@ def compute_node_total_cost(
     *,
     cost_breakdown_path: FieldPath,
 ) -> ProvenanceCell:
-    """Total per-node build + launch cost — the sum of the five lines.
+    """Total per-node build + launch cost: the sum of the five lines.
 
     Args:
         breakdown: The five-line :class:`CostBreakdown`.
         cost_breakdown_path: JSON path of this year's ``cost_breakdown``
-            sub-object — the five component cells it sums are addressed
+            sub-object. The five component cells it sums are addressed
             under it (``{cost_breakdown_path}.compute`` etc.).
 
     Returns:
@@ -608,7 +623,7 @@ def compute_cost_annual_per_node(
     node_total_path: FieldPath,
     service_life_path: FieldPath,
 ) -> ProvenanceCell:
-    """Annualized per-node cost — total node cost spread over the service life.
+    """Annualized per-node cost: total node cost spread over the service life.
 
     Args:
         node_total_musd: Total per-node build + launch cost, $M.
@@ -700,7 +715,7 @@ def compute_gross_profit_annual_per_node(
 
 @dataclass(frozen=True)
 class CadenceYear:
-    """One model year's cadence outputs — launches and per-launch cost.
+    """One model year's cadence outputs: launches and per-launch cost.
 
     Attributes:
         launches: Launches in this model year (logistic ramp), a cell.
@@ -833,7 +848,7 @@ def compute_volume_year(
 
 
 # ---------------------------------------------------------------------------
-# Per-year computation — the GPU-first formulas in one place
+# Per-year computation: the GPU-first formulas in one place
 # ---------------------------------------------------------------------------
 
 
@@ -937,7 +952,7 @@ def compute_year(
     # Mass binds when the budget left after N packages cannot take one more.
     mass_bound = (mass_budget_t - n * mass_per_pkg_t) < mass_per_pkg_t
 
-    # The physical state — N, derived node power, derived mass, PFLOPS.
+    # The physical state: N, derived node power, derived mass, PFLOPS.
     kw_cell = compute_kw_per_node(
         n,
         front.kw_per_pkg,
@@ -974,7 +989,7 @@ def compute_year(
         node_kw_path=f"{fy_path}.kw_per_node",
     )
 
-    # The volume model (transparency — does not gate N, D6).
+    # The volume model (transparency: does not gate N, D6).
     volume = compute_volume_year(
         n,
         mass_bound,
@@ -984,7 +999,7 @@ def compute_year(
         kw_per_pkg_uses=spec_uses(GenerationField.KW_PER_PKG),
     )
 
-    # The cost decomposition — five build lines + total + annualized.
+    # The cost decomposition: five build lines + total + annualized.
     cadence_year = compute_cadence_year(year_idx, config)
     launch_musd = as_float(cadence_year.launch_cost_musd)
     breakdown = compute_cost_per_node_breakdown(
@@ -1014,7 +1029,7 @@ def compute_year(
     )
     cost_annual_musd = as_float(cost_annual_cell)
 
-    # The revenue economics — an R band (low / central / high) of per-node
+    # The revenue economics: an R band (low / central / high) of per-node
     # annual revenue and gross profit.
     r_central, r_low, r_high = r_at_year(config.r_band, fy_calendar)
     cost_annual_path = f"{fy_path}.cost_annual_per_node_musd"
@@ -1244,7 +1259,7 @@ def run_valuation(
     Returns:
         The frozen space artifact, a :class:`SpaceModelOutput`.
     """
-    # Local import — json_output imports engine types, so the import is
+    # Local import: json_output imports engine types, so the import is
     # deferred to call time to keep the module-load order acyclic.
     from .json_output import build_output
 

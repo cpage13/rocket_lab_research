@@ -1,4 +1,4 @@
-"""Per-generation GPU package specification — the typed input layer.
+"""Per-generation GPU package specification: the typed input layer.
 
 This module defines :class:`GenerationSpec`, the typed Pydantic model for one
 GPU package generation (NVIDIA's "as sold" unit at a point in time), the
@@ -7,10 +7,10 @@ GPU package generation (NVIDIA's "as sold" unit at a point in time), the
 the list to a target year (:func:`extend_generations`) and to pick the
 frontier generation at a given fiscal year (:func:`frontier_at`).
 
-The package is the only modelling unit — the rack abstraction was removed
+The package is the only modelling unit: the rack abstraction was removed
 entirely in the cycle-1 GPU-first rework (D8 GPU = package; D13 kill rack
 abstraction). Per-package values (``kw_per_pkg``, ``kg_per_pkg``,
-``pf_per_pkg``) are **all-in** — the package's full share of system
+``pf_per_pkg``) are **all-in**: the package's full share of system
 electrical and mass including networking, cooling, sled, NVLink fabric.
 
 Per-generation source values are grounded in the durable research corpus,
@@ -108,9 +108,9 @@ class Source(BaseModel):
 
 
 class GenerationSpec(BaseModel):
-    """One GPU package generation — NVIDIA's 'as sold' unit at a point in time.
+    """One GPU package generation: NVIDIA's 'as sold' unit at a point in time.
 
-    All per-package physical values are **all-in / full-system** — the
+    All per-package physical values are **all-in / full-system**: the
     package's share of system electrical and mass including networking,
     cooling, sled, NVLink fabric (not bare die TDP). ``year_available`` is
     bounded by the same fiscal-year limits as the run window
@@ -351,7 +351,7 @@ def extend_generations(
     it.
 
     The extrapolated generations inherit the last known generation's
-    ``die_count`` (held constant — die-stacking projections beyond Feynman
+    ``die_count`` (held constant: die-stacking projections beyond Feynman
     are not part of the research and would over-extrapolate). Their
     ``source.sourcing`` is :class:`SourcingClass.EXTRAPOLATION`.
 
@@ -364,7 +364,7 @@ def extend_generations(
         target_yr: Latest fiscal year that needs coverage.
 
     Returns:
-        A new list — the known generations followed by zero or more
+        A new list: the known generations followed by zero or more
         extrapolated generations. The input ``known`` list is not mutated.
 
     Raises:

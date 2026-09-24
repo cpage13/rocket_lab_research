@@ -8,16 +8,16 @@ values of the default-scenario trajectory.
 the pre-correction radiator dial ``radiator_t_per_kw_post = 0.007``;
 cycle-2's radiator correction (D17) lifts the post-Tjmax dial to 0.012.
 The trajectory below is therefore re-recorded from the cycle-2 engine at the
-corrected dial — years 0-4 are unchanged (the dial does not bite until
+corrected dial: years 0-4 are unchanged (the dial does not bite until
 the Tjmax-lift year 5), years 5-10 carry a smaller package count (the
 heavier radiator leaves less mass budget). "Parity" means the engine
 reproduces these recorded numbers; a future change that drifts from them
-means the engine's behaviour has changed — intentionally (re-record below
+means the engine's behaviour has changed: intentionally (re-record below
 + commit the rationale) or by regression (debug the engine, not the test).
 
 **Cycle-2 re-freeze (validation V-A, kw_growth_per_gen 0.30 -> 0.20).**
 The per-package power-growth slope was corrected from 0.30 to 0.20 (the
-0.30 figure was an assembly-level rate misapplied per package — see
+0.30 figure was an assembly-level rate misapplied per package, see
 ``sourcing_audit_05_21.md``). The slower kW slope only bites on the
 extrapolated generations, so years 0-4 (FY2026-FY2030) are unchanged;
 years 5-10 (FY2031-FY2036) carry lighter packages, so each node now
@@ -47,7 +47,7 @@ The space artifact is keyed by JSON-string fiscal year in
 cell's ``.value``.
 
 Tolerances:
-* **integer parity** on ``gpus_per_node`` — same N every year;
+* **integer parity** on ``gpus_per_node``: same N every year;
 * **±0.5%** on every numeric reference value.
 """
 
@@ -101,7 +101,7 @@ REFERENCE_FRONTIER_NAMES: tuple[str, ...] = (
     "Gen+4(extrap)",
 )
 
-# Per-year per-node physical reference — (year_idx → field → value).
+# Per-year per-node physical reference (year_idx → field → value).
 REFERENCE_PHYSICAL: tuple[dict[str, float], ...] = (
     {"kw_per_node": 457.150, "mass_per_node_t": 12.4976, "pf_per_node": 3345.0},
     {"kw_per_node": 462.800, "mass_per_node_t": 12.4484, "pf_per_node": 6052.0},
@@ -221,7 +221,7 @@ def test_fleet_rollup_matches_reference(default_output: SpaceModelOutput) -> Non
     """Fleet rollup: living-fleet count + central-R fleet revenue within 0.5%."""
     for fy, ref in zip(REFERENCE_YEARS, REFERENCE_FLEET, strict=True):
         by = default_output.business.years[fy]
-        # living_fleet is an integer count — exact match.
+        # living_fleet is an integer count: exact match.
         assert as_int(by.living_fleet) == int(ref["living_fleet"]), (
             f"FY{fy} living_fleet: engine {by.living_fleet.value} vs reference "
             f"{ref['living_fleet']}"

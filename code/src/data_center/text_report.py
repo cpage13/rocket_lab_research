@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 # Fixed monospaced report width, in characters.
 _WIDTH: Final[int] = 78
 
-# Key formula_name keys cited in the provenance-summary banner — the
+# Key formula_name keys cited in the provenance-summary banner: the
 # load-bearing formulas a reader most wants to see traced. Each must exist
 # in `common.provenance.FORMULAS`; the banner falls back gracefully if
 # one is absent (e.g. a future schema rename).
@@ -115,7 +115,7 @@ def _render_header(output: SpaceModelOutput) -> list[str]:
 
 
 def _render_provenance_summary(output: SpaceModelOutput) -> list[str]:
-    """Top-of-report provenance banner — cell coverage + key formula citations.
+    """Top-of-report provenance banner: cell coverage + key formula citations.
 
     Surfaces, before any table, that every leaf number in the space
     artifact is a typed :class:`ProvenanceCell` (value + unit + formula
@@ -176,7 +176,7 @@ def _render_rband(output: SpaceModelOutput) -> list[str]:
     lines.append("  models R as a band; revenue tracks the three trajectories below.")
     lines.append("")
 
-    # Input R anchors — the source-of-truth dials.
+    # Input R anchors: the source-of-truth dials.
     revenue = output.inputs.config.revenue
     for label, cells in (
         ("low", revenue.low),
@@ -226,7 +226,7 @@ def _render_rband(output: SpaceModelOutput) -> list[str]:
 
 
 def _render_generations(output: SpaceModelOutput) -> list[str]:
-    """The per-generation reference table — what the model thinks each gen is."""
+    """The per-generation reference table: what the model thinks each gen is."""
     lines: list[str] = []
     lines += _section_header("PER-GENERATION REFERENCE TABLE")
     lines.append("")
@@ -251,12 +251,12 @@ def _render_generations(output: SpaceModelOutput) -> list[str]:
 
 
 def _render_year_physical(output: SpaceModelOutput) -> list[str]:
-    """Per-year system metrics — frontier gen, mass + volume, N, power, PFLOPS.
+    """Per-year system metrics: frontier gen, mass + volume, N, power, PFLOPS.
 
     One row per fiscal year. Carries the frontier generation, the
     mass-bound package count N, per-node mass and stowed volume, the
     mass- and volume-utilization percentages (mass-util packs the
-    Neutron envelope tight; volume-util stays low — D6 mass-only
+    Neutron envelope tight; volume-util stays low: D6 mass-only
     binding), the per-node kW and PFLOPS, compute density, and the
     binding constraint.
     """
@@ -290,7 +290,7 @@ def _render_year_physical(output: SpaceModelOutput) -> list[str]:
 
 
 def _render_year_economics(output: SpaceModelOutput) -> list[str]:
-    """Per-year per-node economics — annual cost + revenue band + margin band."""
+    """Per-year per-node economics: annual cost + revenue band + margin band."""
     lines: list[str] = []
     lines += _section_header("PER-YEAR PER-NODE ECONOMICS (annualized, $M/yr)")
     lines.append("")
@@ -311,7 +311,7 @@ def _render_year_economics(output: SpaceModelOutput) -> list[str]:
 
 
 def _render_fleet(output: SpaceModelOutput) -> list[str]:
-    """Per-year fleet rollup — launches, nodes, living fleet, kW, revenue band, margin band.
+    """Per-year fleet rollup: launches, nodes, living fleet, kW, revenue band, margin band.
 
     The fleet table is the headline operational view: one row per
     fiscal year carrying the launch cadence, nodes deployed, the living

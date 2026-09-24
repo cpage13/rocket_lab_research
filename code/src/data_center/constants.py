@@ -136,11 +136,11 @@ name `node_mass_fixed_t`."""
 
 NODE_VOLUME_FIXED_M3: Final[float] = 5.0
 """ESTIMATE. Fixed node stowed volume (bus + structure). NEW field
-for the cycle-2 volume model — cycle-1 had no volume term.
+for the cycle-2 volume model. Cycle-1 had no volume term.
 Sensitivity: +/-2 m3."""
 
 # ============================================================
-# Cycle-1 cost dials (kept verbatim — engine cost-breakdown reads
+# Cycle-1 cost dials (kept verbatim: engine cost-breakdown reads
 # these; peer-review blocker 3: dropping them breaks the cost math)
 # ============================================================
 
@@ -193,9 +193,10 @@ $20k upside / $30-40k central / $60-100k stress)."""
 # ============================================================
 
 SOLAR_MASS_T_PER_KW: Final[float] = 0.011
-"""SOURCED/ESTIMATE (THR-006, THR-007). Solar specific mass planning
-dial. Range 0.010-0.012 t/kW; central 0.011. Cycle-1 field name
-`solar_mass_t_per_kw`."""
+"""SOURCED/ESTIMATE (RLDC-SOLAR-RADIATOR-MASS, ledger status scenario;
+supporting THR-006, THR-007). Solar specific mass planning dial, not a
+Rocket Lab array specification. Range 0.010-0.012 t/kW; central 0.011.
+Cycle-1 field name `solar_mass_t_per_kw`."""
 
 RADIATOR_T_PER_KW_PRE: Final[float] = 0.00165
 """INVESTOR_SET (2026-07-14). Radiator specific mass, held flat with the
@@ -274,8 +275,11 @@ MOUNTING_OVERHEAD_PCT: Final[float] = 0.30
 yokes, motors."""
 
 NEUTRON_FAIRING_USABLE_VOLUME_M3: Final[float] = 80.0
-"""ESTIMATE (R1 from wiki). Neutron fairing usable payload
-volume. NOT RKLB-published; needs follow-up source."""
+"""ESTIMATE (RLDC-FAIRING-VOLUME-80M3, ledger status scenario). Neutron
+fairing usable payload volume for the volume transparency check. NOT
+RKLB-published: the low end of the project's about 80 to 95 m3
+practical-envelope estimate (research/node_design/node_mass_model.md
+Section 7)."""
 
 # ============================================================
 # R-band defaults (scenario revenue-to-cost trajectories)

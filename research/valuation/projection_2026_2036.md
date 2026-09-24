@@ -1,4 +1,4 @@
-# Orbital Data-Center Venture — Fleet Projection, 2026–2036
+# Orbital Data-Center Venture: Fleet Projection, 2026–2036
 
 > **Stale generated-output note (2026-05-28).** This file is retained only as
 > historical research context for an older calculator cycle. It is not the
@@ -6,6 +6,12 @@
 > public claim source. Current promoted model outputs live under
 > `data_center/models/`, and current reviewed prose lives under
 > `data_center/conclusion.md`.
+
+> **Contract note (2026-09-23).** The model contract this file describes has
+> since changed: 16 V-rules now run (V11 `no_legacy_r_scalar` was removed),
+> the central R band is flat at 1.5x, and the radiator and cost dials were
+> rebased 2026-07-14; read `docs/agent-guide.md` and `code/README.md` for the
+> current contract.
 
 > **Path note (2026-05-25).** This projection was first drafted against an
 > earlier calculator location. The current Python generator lives under `code/`,
@@ -30,7 +36,7 @@ the retired path as current navigation.
 
 ## What this projects (read this first)
 
-Cycle 1's calculator answered a deliberately narrow question — the
+Cycle 1's calculator answered a deliberately narrow question: the
 unit economics of **one node**, year by year. It did not model fleet size,
 launch cadence, or cohorts.
 
@@ -38,34 +44,34 @@ Cycle 2 rebuilds the fleet layer on the GPU-first chassis. The calculator
 now answers:
 
 > *What is the year-by-year economic trajectory of the orbital inference
-> fleet — per-node physical sizing, and per-year fleet revenue, profit, and
-> margin — over a 10-year horizon?*
+> fleet (per-node physical sizing, and per-year fleet revenue, profit, and
+> margin) over a 10-year horizon?*
 
 It does this by vintaging each calendar year's launches into a **cohort**
 with a fixed launch-year gen-mix, rolling the **living fleet** up under a
-5-year service-life cliff (D1), and pricing revenue as an **R band** — three
+5-year service-life cliff (D1), and pricing revenue as an **R band**: three
 trajectories (low / central / high) rather than a single ratio (D18).
 
 What it still does **not** compute (D23): DCF, enterprise value, present
 value, terminal value, free cash flow, depreciation, R&D ramp, or peak
 capital draw. Those higher-order valuation layers sit above this one. The
-calculator produces the fleet's *operating economics* — revenue, cost,
-profit, margin — as a deterministic, typed, self-validating artifact. It is
+calculator produces the fleet's *operating economics* (revenue, cost,
+profit, margin) as a deterministic, typed, self-validating artifact. It is
 not a venture valuation.
 
 ---
 
-## THE NUMBERS — central case (default scenario)
+## THE NUMBERS: central case (default scenario)
 
 The default scenario locks the gospel constants at the cycle-2 strategy's
 central values: 12.5 t SSO mass envelope, 2.5 t fixed node mass, 5-year
 service life, the v7-archaeology launch-cadence ramp, bus base $8M
 flattening at year 5, and the Tjmax lift (radiator t/kW: 0.013 → **0.012**
-at year 5 — cycle-2 D17 lifted the post-lift dial from 0.007). The R band's
+at year 5; cycle-2 D17 lifted the post-lift dial from 0.007). The R band's
 central trajectory runs **1.50 (2026) → 1.30 (2036)** over six anchors; the
 low band runs 1.20 → 1.15 and the high band 1.80 → 1.65.
 
-### Per-year — frontier generation and per-node physical sizing
+### Per-year: frontier generation and per-node physical sizing
 
 | FY | Frontier generation | N | Node kW | Mass util | PFLOPS/node | Vol util |
 |---:|---|---:|---:|---:|---:|---:|
@@ -83,8 +89,8 @@ low band runs 1.20 → 1.15 and the high band 1.80 → 1.65.
 
 **Reading.** N falls (146 → 27) as the frontier package gets heavier; node
 power climbs to ~424 kW because per-package compute outruns per-package
-power. Mass utilization sits at ~99% every year — N is mass-bound by
-construction (D6). Volume utilization stays near 6% — the stowed solar +
+power. Mass utilization sits at ~99% every year: N is mass-bound by
+construction (D6). Volume utilization stays near 6%: the stowed solar +
 radiator volume never approaches the Neutron fairing, so volume never binds.
 PFLOPS per node grows ~8.6× across the horizon.
 
@@ -92,10 +98,10 @@ PFLOPS per node grows ~8.6× across the horizon.
 > 534 kW. The cycle-2 radiator-dial correction (0.007 → 0.012 t/kW
 > post-Tjmax, D17) makes radiators heavier from year 5 on, so fewer
 > packages fit: 2036 N drops to 27 and node kW to ~424. This is an
-> intentional, founder-accepted correction grounded in R1 radiator
-> research — not a regression.
+> intentional, investor-accepted correction grounded in R1 radiator
+> research, not a regression.
 
-### Per-year — per-node economics ($M, central R band)
+### Per-year: per-node economics ($M, central R band)
 
 | FY | Annual cost/node | Annual revenue/node | Annual profit/node |
 |---:|---:|---:|---:|
@@ -112,12 +118,12 @@ PFLOPS per node grows ~8.6× across the horizon.
 | 2036 | 14.38 | 18.70 | 4.31 |
 
 Annual cost per node is `node_total / service_life` and stays in a tight
-$13–16M band — the GPU-first model predicts roughly *constant* node
+$13–16M band: the GPU-first model predicts roughly *constant* node
 capital because the mass envelope is fixed. Per-node revenue rides cost at
 the central R band; per-node profit *compresses* over the horizon because
 the central R band itself decays 1.50 → 1.30.
 
-### Per-year — living-fleet rollup (central R band)
+### Per-year: living-fleet rollup (central R band)
 
 | FY | Launches | Living fleet | Fleet revenue $M | Fleet profit $M | Margin % |
 |---:|---:|---:|---:|---:|---:|
@@ -141,7 +147,7 @@ the living fleet is the sum of cohorts in the trailing 5-year window. By
 the central R band decays 1.50 → 1.30; the fleet's profit still grows in
 absolute terms (6 → 1,272 $M) as the living fleet expands.
 
-### The R band — 2036 fleet revenue spread
+### The R band: 2036 fleet revenue spread
 
 Revenue is `R × cost`, and R is a band. At 2036 the fleet's annual revenue
 spans:
@@ -159,11 +165,11 @@ upside.
 
 ---
 
-## The five scenarios — headline trajectories
+## The five scenarios: headline trajectories
 
 Each row is the 2036 fleet headline for one shipped scenario (see
 `calculator/scenarios/`). All five share the same physics, the same
-generation trajectory, and the same mass-bound N — the dials that move the
+generation trajectory, and the same mass-bound N: the dials that move the
 fleet headline are the **mass envelope**, the **R band**, and the **service
 life**.
 
@@ -176,14 +182,14 @@ life**.
 | `upside_7yr` | 12.5 t SSO, central R band, 7-yr service life | 3,790 | 23.9 | 11,599 |
 
 **Reading.** `conservative` has the *highest* fleet revenue despite the
-lowest margin — its 11 t envelope and lower-R band cut per-node profit, but
+lowest margin: its 11 t envelope and lower-R band cut per-node profit, but
 the same cadence still vintages a 275-node living fleet, and a thinner
 margin on a similar cost base produces a larger gross revenue figure. The
 margin column is the truer read of how each scenario's R band differs:
 `with_premium`'s premium R lands a 34.2% margin; `conservative`'s low band
 compresses to 15.5%. `upside_7yr` lengthens the amortisation window, which
 lowers the per-year fleet revenue rate. None of these scenarios claims an
-enterprise value — by design.
+enterprise value, by design.
 
 ---
 
@@ -201,7 +207,7 @@ $ jq '[.meta.validation.rules[] | .pass_check] | unique' output/default.json
 [true]
 
 $ jq '.meta.validation.rules[] | select(.pass_check == false)' output/default.json
-# (nothing — every rule passes)
+# (nothing: every rule passes)
 ```
 
 V1–V10 are the cycle-1 checks re-pointed at the v8 structure (two were
@@ -210,12 +216,12 @@ cycle-1 subject). V11–V17 are cycle-2 additions: `no_legacy_r_scalar`
 (R is a band, not a scalar), `operator_r_consistency` (B2B operator floors
 the central base-year R at 1.40), `provenance_formula_keys` (every cell's
 `formula_name` exists in the `FORMULAS` table), `cadence_monotonicity`,
-`volume_fits_horizon` (no year is *volume-only* bound — D6), `fleet_cliff_
+`volume_fits_horizon` (no year is *volume-only* bound, D6), `fleet_cliff_
 consistency` (the living fleet equals the cohort-cliff sum), and
 `radiator_dial_matches_architecture`.
 
 All five normal scenarios pass all 17 rules. The `volume_stress.yaml`
-fixture is engineered to fail `volume_fits_horizon` on purpose — it shrinks
+fixture is engineered to fail `volume_fits_horizon` on purpose: it shrinks
 the Neutron fairing to 5.0 m³ and the mass envelope to 11.0 t so a few
 years become volume-only bound. It is an artificial V15-trigger fixture,
 never a real projection.
@@ -224,34 +230,34 @@ never a real projection.
 
 ## Estimates vs sourced facts
 
-The load-bearing inputs are genuinely uncertain — sweep them:
+The load-bearing inputs are genuinely uncertain, so sweep them:
 
 * **Per-generation package values (`$/pkg`, `kW/pkg`, `kg/pkg`, `PF/pkg`,
-  `die_count`)** — B200/B300/Rubin/Rubin Ultra are *sourced* from public
+  `die_count`)**: B200/B300/Rubin/Rubin Ultra are *sourced* from public
   NVIDIA datasheets and `ai_hardware/` research; Feynman is an *estimate*;
   Gen+1..Gen+5 are *extrapolations* on the `GenerationSlopes`. Each
   generation's `source` field tags its sourcing class.
-* **The R band** — the central trajectory (1.50 → 1.30) is the planning
+* **The R band**: the central trajectory (1.50 → 1.30) is the planning
   case; the low (1.20 → 1.15) and high (1.80 → 1.65) bands are the judged
   downside / upside. The "what is the right R?" question is genuinely open
   and the highest-sensitivity dial. R > 1 is non-negotiable; the
   `operator_r_consistency` rule additionally floors the B2B central
   base-year R at 1.40.
-* **5-year service life** — a founder directive (D1), a hard cliff.
+* **5-year service life**: an investor directive (D1), a hard cliff.
   `upside_7yr.yaml` sweeps it to 7.
-* **Mass envelope (12.5 t SSO)** — Neutron block-upgrade payload, *sourced*
+* **Mass envelope (12.5 t SSO)**: Neutron block-upgrade payload, *sourced*
   from `rocket_lab/`. The 11 t (`conservative`) and 13 t (`ambitious`)
   variants bracket it.
-* **Launch cadence and launch cost** — the logistic ramp and the
+* **Launch cadence and launch cost**: the logistic ramp and the
   cadence-indexed log-linear cost curve are *v7 archaeology* (commit
   `8fdc210`), an *estimate*, not Rocket Lab-published. Predicting cadence
   five-plus years out is the cadence-equivalent of the rack-prediction
   problem; the cadence dials sweep it.
-* **Radiator dial — 0.012 t/kW post-Tjmax** (D17) — *sourced estimate*,
+* **Radiator dial, 0.012 t/kW post-Tjmax** (D17): *sourced estimate*,
   the central of R1's 0.010–0.014 band. Cycle 2 lifted it from cycle-1's
   0.007. The Tjmax-lift step at year 5 (D11) is an *assumed engineering
   milestone*; if it slips, every year past 5 carries the heavier radiator.
-* **Post-Feynman growth slopes** — *extrapolation*. Each slope is defended
+* **Post-Feynman growth slopes**: *extrapolation*. Each slope is defended
   individually in the research wiki; the *compound* extrapolation past
   Gen+3 is the most uncertain part of the model.
 
@@ -287,5 +293,5 @@ All six scenarios regenerate at exit 0; mypy --strict src/ and ruff are
 clean. The artifact carries a `meta.data_dictionary` block built by Pydantic
 introspection (no parallel glossary), a `meta.validation` block with the
 17 V-rule results, and a `meta.query_examples` block of 12 worked `jq`
-queries — the cold-reader contract that lets an agent answer the common
+queries: the cold-reader contract that lets an agent answer the common
 questions straight off the artifact.

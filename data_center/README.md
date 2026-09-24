@@ -57,13 +57,17 @@ From the repository root:
 
 ```sh
 cd code
-uv run rklb-value scenarios/default.yaml --json 2>&1 | tee /tmp/rklb_model_output.json
+uv run rklb-value scenarios/default.yaml --json | tee /tmp/rklb_model_output.json
 uv run rklb-value --promote 2>&1 | tee /tmp/rklb_promote.txt
 ```
 
+Pipe only stdout when saving the JSON; status and errors go to stderr.
 `--promote` refreshes `models/space/default.json` and
-`models/ground/default.json`. It does not rewrite [conclusion.md](conclusion.md);
-after a scenario change, review the JSON and update the conclusion deliberately.
+`models/ground/default.json`, and refuses, writing nothing, if any validation
+check fails. The name `default` belongs to `scenarios/default.yaml`; any other
+scenario is promoted only under its own lowercase `--output-name`. Promotion
+does not rewrite [conclusion.md](conclusion.md); after a scenario change,
+review the JSON and update the conclusion deliberately.
 
 ## Querying The JSON
 

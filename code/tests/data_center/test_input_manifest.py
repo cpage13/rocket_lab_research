@@ -9,6 +9,9 @@ and assert the contract a cold reader relies on:
 * the source metadata of the dials the 2026-07-14 rebase changed describes
   the current investor-set posture, and the cadence ceiling is described as
   the horizon-scoped parameter it is;
+* the fairing-volume and solar-mass dials cite the ``RLDC-*`` rows that
+  describe them, and every input citing an ``RLDC-*`` claim carries that
+  claim's status in the ``research/SOURCE_INDEX.md`` ledger;
 * a value a scenario changed from the default is published as a scenario
   override, never under the default's claim, rationale, or role, and labels
   are config-derived rather than tied to one calendar year;
@@ -23,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from common.input_manifest import InputCell
+from common.input_manifest import InputCell, SourceRefType, SourceStatus
 from data_center.config import ValuationConfig, load_config
 from data_center.engine import run_valuation
 from data_center.input_manifest import collect_input_cells
@@ -57,6 +60,14 @@ def run_scenario(scenarios_dir: Path) -> RunScenario:
 def _claims(cell: InputCell) -> set[str]:
     """Return every claim ID a cell cites."""
     return {ref.claim_id for ref in cell.source_refs if ref.claim_id is not None}
+
+
+def _primary_rldc_claim(cell: InputCell) -> str | None:
+    """Return the cell's primary claim ID when it is an RLDC SOURCE_INDEX claim, else None."""
+    primary = cell.source_refs[0]
+    if primary.ref_type is not SourceRefType.SOURCE_INDEX or primary.claim_id is None:
+        return None
+    return primary.claim_id if primary.claim_id.startswith("RLDC-") else None
 
 
 @pytest.mark.parametrize("name", ["default", "conservative", "ambitious"])
@@ -114,6 +125,68 @@ def test_cadence_ceiling_is_the_horizon_scoped_parameter(run_scenario: RunScenar
     assert "not a cap on the system" in ceiling.description
     assert "Hard cap" not in ceiling.description
     assert "re-set" in ceiling.rationale
+
+
+def test_fairing_volume_and_solar_mass_dials_cite_their_rldc_claims(
+    run_scenario: RunScenario,
+) -> None:
+    """Objective: the two dials cite the ledger rows that describe them.
+
+    The original trigger: the fairing-volume cell cited NTR-004 (a payload
+    mass claim, no volume evidence) as ``sourced_estimate``, and the
+    solar-mass cell cited THR-006 alone, while ``RLDC-FAIRING-VOLUME-80M3``
+    and ``RLDC-SOLAR-RADIATOR-MASS`` (both ``scenario``) describe the two
+    dials. Expected: each cell cites its RLDC claim first with status
+    ``scenario``; the fairing cell drops NTR-004 and cites the research note
+    behind its envelope estimate; the solar cell keeps THR-006 as a
+    supporting SOURCE_INDEX reference; the scenario YAML stays the last
+    reference of both.
+    """
+    config = run_scenario("default").inputs.config
+    fairing = config.volume.neutron_fairing_usable_volume_m3
+    solar = config.physical.solar_mass_t_per_kw
+    assert fairing.source_status == SourceStatus.SCENARIO
+    assert solar.source_status == SourceStatus.SCENARIO
+    assert [(ref.ref_type, ref.ref) for ref in fairing.source_refs] == [
+        (SourceRefType.SOURCE_INDEX, "research/SOURCE_INDEX.md#RLDC-FAIRING-VOLUME-80M3"),
+        (SourceRefType.RESEARCH_DOC, "research/node_design/node_mass_model.md"),
+        (SourceRefType.RESEARCH_DOC, "code/scenarios/default.yaml"),
+    ]
+    assert "NTR-004" not in _claims(fairing)
+    assert [(ref.ref_type, ref.claim_id) for ref in solar.source_refs] == [
+        (SourceRefType.SOURCE_INDEX, "RLDC-SOLAR-RADIATOR-MASS"),
+        (SourceRefType.SOURCE_INDEX, "THR-006"),
+        (SourceRefType.RESEARCH_DOC, None),
+    ]
+
+
+def test_rldc_cited_inputs_carry_the_ledger_source_status(
+    run_scenario: RunScenario, ledger_statuses: dict[str, SourceStatus]
+) -> None:
+    """Objective: an input's status agrees with the RLDC row it cites.
+
+    The ``RLDC-*`` rows of ``research/SOURCE_INDEX.md`` describe the default
+    model inputs, so a default cell whose primary claim is an RLDC claim must
+    publish that row's status. Expected: every such cell's primary claim has
+    a ledger row, and the cell's ``source_status`` equals the row's status
+    (the fairing-volume, solar-mass, and bus cost dials included).
+    """
+    ledger = ledger_statuses
+    cells = run_scenario("default").inputs.assumption_index.values()
+    cited = {
+        cell.path: (claim, cell.source_status)
+        for cell in cells
+        if (claim := _primary_rldc_claim(cell)) is not None
+    }
+    assert "inputs.config.volume.neutron_fairing_usable_volume_m3" in cited
+    assert "inputs.config.physical.solar_mass_t_per_kw" in cited
+    assert cited["inputs.config.physical.bus_base_musd"][0] == "RLDC-BUS-COST"
+    mismatched = {
+        path: (claim, status, ledger.get(claim))
+        for path, (claim, status) in cited.items()
+        if ledger.get(claim) != status
+    }
+    assert mismatched == {}
 
 
 def test_default_scenario_publishes_no_override_and_no_calendar_labels(

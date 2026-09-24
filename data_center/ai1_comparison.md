@@ -50,7 +50,7 @@ AI-1 carries today's silicon (about one GB300 NVL72 rack), so the AI-1-spec node
 | 2032 | 729 kW / 24,294 PF | 902 kW / 6,600 PF | 0.3x |
 | 2036 | 753 kW / 46,021 PF | 902 kW / 6,600 PF | 0.1x |
 
-The pinned rack buys a 2x head start; advancing silicon takes over within three years. Keep AI-1's remaining mass dials AND the advancing roadmap and a node mass-fills toward the megawatt class, where Neutron's fairing volume, not mass, becomes the binding question (crossover near 1 to 2 MW). Flagged as a modeling frontier, not resolved.
+The pinned rack buys a 2x head start; advancing silicon takes over within three years. Keep AI-1's remaining mass dials AND the advancing roadmap and a node mass-fills toward the megawatt class, where Neutron's fairing volume, not mass, becomes the binding question: that node reaches about 2.4 MW by 2036, where its stowed volume fills about 94 percent of the model's 80 m3 fairing dial (`RLDC-AI1-ADVANCING-VOLUME-2036`). Flagged as a modeling frontier, not resolved.
 
 ## What AI-1 Is
 

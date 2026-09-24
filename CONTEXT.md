@@ -22,9 +22,10 @@ tracks.
 capacity, cost, revenue, and margin under default or scenario assumptions.
 Avoid: "the calculator" when the public artifact or model contract is meant.
 
-**ground reference model** - A comparison model estimating the five-year cost of
-an equivalent ground data-center cohort. Avoid: "ground truth"; this is a
-reference model, not a factual baseline.
+**ground reference model** - A comparison model estimating the cost of an
+equivalent ground data-center cohort over the anchor cohort's service life
+(five years at the default). Avoid: "ground truth"; this is a reference model,
+not a factual baseline.
 
 **deployed-year cohort** - The new capacity deployed in a single year, used as
 the anchor for the ground comparison. Do not confuse this with the living fleet

@@ -182,7 +182,7 @@ def test_fleet_year_cumulative_revenue_central() -> None:
 
 
 def test_fleet_year_cumulative_revenue_low_and_high() -> None:
-    """F5 regression — cumulative low/high computed, not just central."""
+    """F5 regression: cumulative low/high computed, not just central."""
     cohorts = [_make_cohort(2026, nodes=10)]
     fy = compute_fleet_year(
         2027,

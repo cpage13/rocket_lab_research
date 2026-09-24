@@ -87,7 +87,7 @@ def _str_cell(value: str) -> ProvenanceCell:
 
 
 def _make_cost_breakdown() -> CostBreakdownBlock:
-    """A minimal :class:`CostBreakdownBlock` — every line a ProvenanceCell."""
+    """A minimal :class:`CostBreakdownBlock`, every line a ProvenanceCell."""
     return CostBreakdownBlock(
         compute=_num_cell(40.0, "MUSD"),
         bus=_num_cell(8.0, "MUSD"),
@@ -99,7 +99,7 @@ def _make_cost_breakdown() -> CostBreakdownBlock:
 
 
 def _make_physical_year() -> PhysicalYear:
-    """A minimal :class:`PhysicalYear` — every leaf a ProvenanceCell."""
+    """A minimal :class:`PhysicalYear`, every leaf a ProvenanceCell."""
     return PhysicalYear(
         year=2026,
         frontier_generation=_str_cell("B300/GB300"),
@@ -126,7 +126,7 @@ def _make_physical_year() -> PhysicalYear:
 
 
 def _make_business_year() -> BusinessYear:
-    """A minimal :class:`BusinessYear` — every field a ProvenanceCell."""
+    """A minimal :class:`BusinessYear`, every field a ProvenanceCell."""
     return BusinessYear(
         year=2026,
         launches=_num_cell(14.0, "count"),
@@ -253,7 +253,7 @@ def test_physical_year_has_twenty_leaf_fields() -> None:
 
     The cycle-2 provenance-wiring fix added three leaves to the original
     17: ``solar_area_per_pkg_m2`` and ``volume_per_pkg_m3`` (the volume
-    intermediates a cell's ``uses`` cite), plus ``cost_breakdown`` — a
+    intermediates a cell's ``uses`` cite), plus ``cost_breakdown``, a
     :class:`CostBreakdownBlock` of the six cost-decomposition cells.
     """
     assert len(PHYSICAL_YEAR_FIELDS) == 21
@@ -293,7 +293,7 @@ def test_business_year_has_twenty_one_cell_fields() -> None:
 
 
 def test_revenue_fields_are_band_split_central_low_high() -> None:
-    """Revenue / profit fields are explicit central/low/high — no `annual_rev_per_node_musd`."""
+    """Revenue / profit fields are explicit central/low/high, no `annual_rev_per_node_musd`."""
     # The cycle-1 misleading field name (D25) does not exist on either block.
     assert "annual_rev_per_node_musd" not in PHYSICAL_YEAR_FIELDS
     for band in ("central", "low", "high"):
@@ -376,7 +376,7 @@ def test_schema_introspection_produces_a_json_schema() -> None:
 
 
 def test_enums_are_string_typed() -> None:
-    """FieldKind and Severity are StrEnums — their values are strings."""
+    """FieldKind and Severity are StrEnums: their values are strings."""
     assert FieldKind.INPUT == "input"
     assert Severity.CRITICAL == "critical"
     assert Severity.MINOR == "minor"
@@ -599,14 +599,14 @@ def test_engine_output_roundtrips_via_model_validate(default_output: SpaceModelO
 
 
 # ---------------------------------------------------------------------------
-# Schema introspection — every leaf field has a description
+# Schema introspection: every leaf field has a description
 # ---------------------------------------------------------------------------
 
 
 def _walk_fields(model_cls: type[BaseModel]) -> list[tuple[str, str | None]]:
     """Return (path, description) pairs for every leaf field in a model tree.
 
-    A ProvenanceCell is treated as a leaf — it is the model's output field.
+    A ProvenanceCell is treated as a leaf: it is the model's output field.
     """
     out: list[tuple[str, str | None]] = []
 

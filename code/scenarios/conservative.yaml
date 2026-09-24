@@ -1,5 +1,5 @@
 # =============================================================================
-# rklb-value — CONSERVATIVE scenario (v8 cycle-2, hostile dial set)
+# rklb-value: CONSERVATIVE scenario (v8 cycle-2, hostile dial set)
 # =============================================================================
 #
 # The pessimistic-but-defensible read of the venture. v8 rewrite of the
@@ -14,7 +14,7 @@
 # To run:   uv run rklb-value scenarios/conservative.yaml
 # =============================================================================
 
-scenario_name: "Conservative — 11t SSO, 3yr life, low R band, slow cadence"
+scenario_name: "Conservative: 11t SSO, 3yr life, low R band, slow cadence"
 
 metadata:
   workload_type: inference
@@ -25,7 +25,7 @@ metadata:
   horizon_years: 10
 
 cadence:
-  # Slower launch ramp — the hostile read of program build-up.
+  # Slower launch ramp: the hostile read of program build-up.
   cadence_ceiling: 150
   launches_at_year_5: 14
   launches_at_year_10: 50         # slower than default 90 (conservative)
@@ -41,7 +41,7 @@ volume:
   neutron_fairing_usable_volume_m3: 80.0
 
 r_band:
-  # Conservative R band — central below the default at every anchor,
+  # Conservative R band: central below the default at every anchor,
   # encoding a thinner industry margin. The base-year anchor is 1.40 (the
   # B2B-premium floor, V12 / strategy § 5.1): a B2B dedicated-optical/RF
   # operator cannot price below ~neocloud + premium even in the hostile
@@ -78,11 +78,11 @@ gospel:
 
 slopes:
   usd_growth_per_gen: 0.30
-  # 0.20 — per-package power growth/gen; corrected from 0.30
+  # 0.20: per-package power growth/gen; corrected from 0.30
   # (assembly-rate misapplied) per validation V-A, sourcing_audit_05_21.md.
   kw_growth_per_gen: 0.20
   kg_growth_per_gen: -0.10
   pf_growth_per_gen: 0.625
 
 # slopes: the conservative scenario does not bet on a slower technology
-# trajectory — it bets on a hostile envelope, thinner margin, shorter life.
+# trajectory: it bets on a hostile envelope, thinner margin, shorter life.

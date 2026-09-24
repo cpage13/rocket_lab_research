@@ -1,24 +1,28 @@
 # =============================================================================
-# rklb-value — WITH-PREMIUM scenario (v8 cycle-2, premium R band)
+# rklb-value: WITH-PREMIUM scenario (v8 cycle-2, premium R band)
 # =============================================================================
 #
-# The v8 default dial set with an elevated central R band — encoding the
-# orbital-premium uplift (sovereignty + schedule + isolation premium) on
-# top of the cost-coupled rate. The model has no separate premium dial;
-# the premium folds into the R band.
+# The default dial set (scenarios/default.yaml) with an elevated central R
+# band, encoding the orbital-premium uplift (sovereignty + schedule +
+# isolation premium) on top of the cost-coupled rate. The model has no
+# separate premium dial; the premium folds into the R band.
 #
 # With-premium intent: central R band lifted above the default (premium
-# capture); everything else identical to the default scenario.
+# capture); everything else identical to the default scenario. Rebased
+# 2026-09-23 onto the current default dials, including the 2026-07-14
+# AI-1-class rebase (the deployed double-sided radiator at 0.00165 t/kW and
+# the 0.02 $M/kW solar and radiator cost dials); the central R band is the
+# one change.
 #
 # To run:   uv run rklb-value scenarios/with_premium.yaml
 # =============================================================================
 
-scenario_name: "With premium — v8 default dials, premium-uplifted central R band"
+scenario_name: "With premium: v8 default dials, premium-uplifted central R band"
 
 metadata:
   workload_type: inference
   operator_model: b2b_dedicated_optical_rf
-  radiator_architecture: single_face_co_mounted
+  radiator_architecture: deployed_double_sided   # the default's architecture (investor decision 2026-07-14)
   deployment_philosophy: ground_validated_before_launch
   base_year: 2026
   horizon_years: 10
@@ -39,8 +43,11 @@ volume:
   neutron_fairing_usable_volume_m3: 80.0
 
 r_band:
-  # Premium-uplifted central R band — above the default (premium capture).
-  # low / high fall to the model defaults.
+  # The one change from the default: a premium-uplifted central R band,
+  # 1.65 at FY2026 falling linearly to the default 1.50 at FY2036 (above the
+  # default in every earlier year: premium capture). Each cohort keeps its
+  # launch-year R for life. low / high fall to the model defaults, the same
+  # flat 1.20 / 1.80 as the default scenario.
   central:
     - { fy: 2026, r: 1.65 }
     - { fy: 2036, r: 1.50 }
@@ -52,23 +59,24 @@ launch_cost:
   high_cadence_launches: 100.0
 
 gospel:
+  # The default gospel, including the 2026-07-14 investor-set rebase.
   mass_envelope_t: 12.5
   node_mass_fixed_t: 2.5
   node_volume_fixed_m3: 5.0
-  tjmax_lift_year: 5
-  radiator_t_per_kw_pre: 0.013
-  radiator_t_per_kw_post: 0.012   # D17 (v8)
+  tjmax_lift_year: 5               # inert: pre == post below
+  radiator_t_per_kw_pre: 0.00165   # the default's AI-1-class light radiator (investor-set 2026-07-14)
+  radiator_t_per_kw_post: 0.00165  # held flat, as in the default
   solar_mass_t_per_kw: 0.011
   bus_base_musd: 8.0
   bus_flatten_after_yr: 5
   bus_growth_pre: -0.03
-  solar_cost_musd_per_kw: 0.04
-  radiator_cost_musd_per_kw: 0.04
+  solar_cost_musd_per_kw: 0.02     # the default (investor-set 2026-07-14)
+  radiator_cost_musd_per_kw: 0.02  # the default (investor-set 2026-07-14)
   release_cadence_yr: 1.5
 
 slopes:
   usd_growth_per_gen: 0.30
-  # 0.20 — per-package power growth/gen; corrected from 0.30
+  # 0.20: per-package power growth/gen; corrected from 0.30
   # (assembly-rate misapplied) per validation V-A, sourcing_audit_05_21.md.
   kw_growth_per_gen: 0.20
   kg_growth_per_gen: -0.10

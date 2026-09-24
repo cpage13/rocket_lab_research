@@ -88,8 +88,8 @@ rain, clouds, and foliage, so it carries a decent, reliable link everywhere
 IoT devices) rather than video-grade broadband. The model asks what that
 spectrum could do on a modern Neutron-launched fleet: 25 square meter flat
 panels with laser crosslinks, about 12 per launch, replacing the 66-satellite
-1990s fleet that moves about 174 Mbps today, less than one home internet
-connection.
+Iridium NEXT fleet (launched 2017 to 2019) that moves about 174 Mbps today,
+less than one home internet connection.
 
 The highlights, all under the same all-in deployment scenario the data-center
 model uses (a modeling posture, stated as one):
@@ -133,12 +133,16 @@ rklb_space_data_center/
 ```sh
 cd code
 uv sync 2>&1 | tee /tmp/rklb_uv_sync.txt
-uv run rklb-value scenarios/default.yaml --json 2>&1 | tee /tmp/rklb_model_output.json
+uv run rklb-value scenarios/default.yaml --json | tee /tmp/rklb_model_output.json
 uv run rklb-value --promote 2>&1 | tee /tmp/rklb_promote.txt
 ```
 
-`--promote` refreshes the JSON under `data_center/models/`. It does not rewrite
-the [conclusion](data_center/conclusion.md); after a model change, review the
+Pipe only stdout when saving the JSON; status and errors go to stderr.
+`--promote` refreshes the JSON under `data_center/models/` and refuses, writing
+nothing, if any validation check fails; the name `default` belongs to
+`code/scenarios/default.yaml`, and any other scenario needs its own lowercase
+`--output-name`. Promotion does not rewrite the
+[conclusion](data_center/conclusion.md); after a model change, review the
 artifacts and update the conclusion deliberately.
 
 ## Disclaimer

@@ -17,15 +17,18 @@
 #
 # CAVEAT: AI1's figures are optimistic, unflown, IPO-timed vendor claims, flagged
 # ~2-6x more aggressive than our conservative central dials. This is the
-# AGGRESSIVE UPPER BRACKET, not a replacement for the default. Running it trips
-# three validation flags: the two INTENDED brackets (pinned silicon; radiator
-# dial below the co-mounted floor), the model labeling its own AI1 bet, plus
-# the default-calibration deployed-capacity check, which fires on any
-# non-default scenario. See
+# AGGRESSIVE UPPER BRACKET, not a replacement for the default. Running it fails
+# exactly one validation check, the INTENDED bracket pf_per_kw_in_band: the
+# pinned B300/GB300 silicon reads about 7.3 PF/kW at FY2036, below the 20-80
+# band, the model labeling its own AI1 bet. The co-mounted radiator-floor
+# check (V17) cannot fire, because this scenario selects
+# deployed_double_sided, and the default deployed-capacity guard is emitted
+# only for the canonical default scenario. See
 # data_center/ai1_comparison.md and the RLDC-AI1-EQUIVALENT ledger row.
 #
 # To run: uv run rklb-value scenarios/ai1_equivalent.yaml --json
-# (never --promote a what-if; the default JSON is the only promoted artifact)
+# (never --promote a what-if; the default JSON is the only promoted artifact,
+# and promotion refuses this scenario anyway, since one check fails)
 # =============================================================================
 
 scenario_name: "AI1-equivalent scenario (SpaceX AI1 mass/thermal specs, B300 silicon)"

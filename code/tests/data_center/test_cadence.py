@@ -1,4 +1,4 @@
-"""Tests for cadence module — launches per year + cadence-indexed launch cost.
+"""Tests for cadence module: launches per year + cadence-indexed launch cost.
 
 Cycle-2 Phase 2: the two public functions return a ``ProvenanceCell``; the
 assertions unwrap ``.value``. ``_log_interp`` stays a bare-float helper.

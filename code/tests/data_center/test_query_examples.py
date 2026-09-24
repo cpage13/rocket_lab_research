@@ -2,7 +2,7 @@
 
 The ``meta.query_examples`` block is the cold-reader contract: a cold
 agent runs these worked ``jq`` expressions to answer common questions
-about a valuation run. This test guards that contract — for every one of
+about a valuation run. This test guards that contract. For every one of
 the 12 examples :func:`data_center.query_examples.build_query_examples`
 builds for the default window's anchor year (FY2036) it:
 
@@ -42,7 +42,7 @@ from data_center.query_examples import build_query_examples
 # test needs the jq binary; skip cleanly (not fail) if it is absent.
 _JQ: str | None = shutil.which("jq")
 
-# Number of mandatory query examples — fixed by strategy §3.3 / plan T58.
+# Number of mandatory query examples, fixed by strategy §3.3 / plan T58.
 _EXPECTED_COUNT = 12
 
 # An R band anchored 2030-2040, none of it at the 2026 base year (the default
@@ -119,7 +119,7 @@ def _jq_stdout(outcomes: dict[str, subprocess.CompletedProcess[str]], example: Q
 
 
 # --------------------------------------------------------------------------
-# Block-level checks — the list itself
+# Block-level checks: the list itself
 # --------------------------------------------------------------------------
 
 
@@ -183,7 +183,7 @@ def test_meta_block_carries_all_twelve_examples(default_json_path: Path) -> None
 
 
 # --------------------------------------------------------------------------
-# Per-example execution — every jq expression runs and returns non-null
+# Per-example execution: every jq expression runs and returns non-null
 # --------------------------------------------------------------------------
 
 _SKIP_NO_JQ = pytest.mark.skipif(_JQ is None, reason="jq binary not installed")
@@ -198,7 +198,7 @@ def test_query_example_jq_runs_and_is_non_null(
 
     ``jq`` returns the literal ``null`` for a missing path; a broken
     schema path would surface here. (An empty list ``[]`` is a valid
-    non-null result — e.g. ``volume_binding_check`` is empty by D6.)
+    non-null result, e.g. ``volume_binding_check`` is empty by D6.)
     """
     raw = _jq_stdout(jq_outcomes, example)
     assert raw != "", f"{example.name}: jq produced empty output"
@@ -214,10 +214,10 @@ def test_query_example_result_matches_expected_shape(
 
     The 12 examples fall into four shape families, keyed by ``name``:
 
-    * scalar number — a single MUSD figure;
-    * object ``{central, low, high}`` — the margin band;
-    * list — a per-year trajectory or a list of FYs;
-    * provenance cell — the ``trace_a_cell`` template, a dict with the
+    * scalar number: a single MUSD figure;
+    * object ``{central, low, high}``: the margin band;
+    * list: a per-year trajectory or a list of FYs;
+    * provenance cell: the ``trace_a_cell`` template, a dict with the
       seven ProvenanceCell keys.
     """
     name = example.name

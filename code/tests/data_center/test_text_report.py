@@ -13,7 +13,7 @@ the validation block.
 These tests guard that layout:
 
 1. every section header is present, in order;
-2. the renderer is total — no exception, no ``KeyError``, no empty
+2. the renderer is total: no exception, no ``KeyError``, no empty
    section, on the real default-scenario output;
 3. the cycle-2 content lands: the provenance banner cites
    formulas, the physical table shows volume-util, the fleet table
@@ -88,7 +88,7 @@ def test_provenance_summary_precedes_generation_table(default_report: str) -> No
 
 
 # ---------------------------------------------------------------------------
-# Renderer is total — no exception, no empty section
+# Renderer is total: no exception, no empty section
 # ---------------------------------------------------------------------------
 
 
@@ -152,7 +152,7 @@ def test_provenance_summary_cites_key_formulas(default_report: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Per-year physical table (T82) — volume-util column
+# Per-year physical table (T82): volume-util column
 # ---------------------------------------------------------------------------
 
 
@@ -174,7 +174,7 @@ def test_physical_table_renders_every_year(
 
 
 # ---------------------------------------------------------------------------
-# Per-year fleet rollup (T81) — revenue + margin band
+# Per-year fleet rollup (T81): revenue + margin band
 # ---------------------------------------------------------------------------
 
 

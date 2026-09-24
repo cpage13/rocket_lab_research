@@ -115,7 +115,7 @@ class WorkloadType(StrEnum):
     """The compute workload the data centre serves.
 
     Locked to ``INFERENCE`` by D14 (investor decision). No ``TRAINING``
-    member — the venture does not model a training-workload framing.
+    member: the venture does not model a training-workload framing.
     """
 
     INFERENCE = "inference"
@@ -124,7 +124,7 @@ class WorkloadType(StrEnum):
 class OperatorModel(StrEnum):
     """The commercial operating model for the data centre.
 
-    Locked to ``B2B_DEDICATED_OPTICAL_RF`` by D15 — business-to-business
+    Locked to ``B2B_DEDICATED_OPTICAL_RF`` by D15: business-to-business
     with a dedicated optical/RF uplink (the premium-driver narrative).
     Further operator models may be added in later cycles.
     """
@@ -137,10 +137,10 @@ class RadiatorArchitecture(StrEnum):
 
     Two members, each a real flown-or-revealed architecture class:
 
-    * ``SINGLE_FACE_CO_MOUNTED`` — solar on one side, radiator on the other
+    * ``SINGLE_FACE_CO_MOUNTED``: solar on one side, radiator on the other
       side of the same panel (the D16 lock, 2026-06; one radiating face,
       cold operation, the conservative 0.010-0.014 t/kW band, V17's floor).
-    * ``DEPLOYED_DOUBLE_SIDED`` — a dedicated deployed radiator wing, edge-on
+    * ``DEPLOYED_DOUBLE_SIDED``: a dedicated deployed radiator wing, edge-on
       to the sun, radiating from both faces and run hot (the AI-1 class;
       investor decision 2026-07-14 superseding the D16 lock for the default:
       the model semi-copies the AI-1 architecture because a radiator backed
@@ -237,7 +237,7 @@ class VolumeDials(BaseModel):
 
 
 class GospelInputs(BaseModel):
-    """The locked numeric anchors — gospel constants from plan § 0.
+    """The locked numeric anchors: gospel constants from plan § 0.
 
     The v8 gospel block is the cycle-1 gospel verbatim **minus the six
     fields that moved to dedicated v8 blocks** (D18/D24): ``r_revenue_cost``
@@ -248,7 +248,7 @@ class GospelInputs(BaseModel):
     volume envelopes, the Tjmax-lift state, the solar / radiator t/kW, the
     bus + solar + radiator cost dials, and the generation release cadence.
 
-    Defaults reproduce plan § 0's central case exactly — so a config
+    Defaults reproduce plan § 0's central case exactly, so a config
     constructed with no arguments, or a YAML omitting the ``gospel`` block,
     is fully valid. :meth:`_fixed_mass_inside_envelope` rejects a fixed node
     mass at or above the mass envelope (no mass would be left for packages,
@@ -467,10 +467,12 @@ class RBand(BaseModel):
 
 
 class MetadataConfig(BaseModel):
-    """The run metadata block: the three enum locks + base year + horizon.
+    """The run metadata block: the three enums + base year + horizon.
 
-    The three enums (workload, operator, radiator architecture) are
-    investor-locked (D14-D16); their defaults are the only valid members.
+    Workload and operator are investor-locked (D14, D15) to their single
+    members. The radiator architecture (D16) has two members: deployed
+    double-sided is the default since 2026-07-14, and single-face
+    co-mounted remains selectable as the labeled conservative exception.
     ``base_year`` and ``horizon_years`` move here from the cycle-1 gospel
     block in the v8 schema. The window end plus the generation lookahead
     (:data:`~data_center.constants.GENERATION_EXTENSION_LOOKAHEAD_YEARS`)
@@ -545,7 +547,7 @@ class ValuationConfig(BaseModel):
     :func:`data_center.engine.run_valuation`.
 
     Each block defaults via Pydantic's ``default_factory`` so a config
-    constructed with no arguments — or a YAML omitting a block — gets a
+    constructed with no arguments, or a YAML omitting a block, gets a
     fully valid all-default block.
     """
 
@@ -586,7 +588,7 @@ class ValuationConfig(BaseModel):
         default="Default (central case)",
         description=(
             "Human-readable scenario label, surfaced in the report header "
-            "and in the JSON output's manifest.scenario field."
+            "and in the JSON output's inputs.scenario.name field."
         ),
     )
 
@@ -684,9 +686,10 @@ def _default_metadata() -> MetadataConfig:
 
     A named builder is required because :class:`MetadataConfig` has two
     required fields (``base_year``, ``horizon_years``) with no defaults,
-    so ``default_factory=MetadataConfig`` would fail. The three enum
-    locks fall to their (only) members; base year / horizon reproduce
-    the cycle-1 central case.
+    so ``default_factory=MetadataConfig`` would fail. Workload and
+    operator fall to their single members and the radiator architecture
+    to its default; base year / horizon reproduce the cycle-1 central
+    case.
     """
     return MetadataConfig(base_year=2026, horizon_years=10)
 

@@ -1,4 +1,4 @@
-"""rklb-value — a YAML-driven valuation calculator for Rocket Lab's orbital
+"""rklb-value: a YAML-driven valuation calculator for Rocket Lab's orbital
 AI-inference data-center venture, valued **standalone** (the data-center play
 on its own, NOT Rocket Lab the whole company).
 

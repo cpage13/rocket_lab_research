@@ -98,6 +98,19 @@ class InputCell(BaseModel):
 
 
 @dataclass(frozen=True)
+class SupportingClaim:
+    """A SOURCE_INDEX claim that adds evidence beside an input's primary claim.
+
+    Attributes:
+        claim_id: SOURCE_INDEX claim ID (for example ``THR-006``).
+        note: What the claim adds to the default value's evidence.
+    """
+
+    claim_id: str
+    note: str
+
+
+@dataclass(frozen=True)
 class CellSpec:
     """Source metadata describing one input's default value.
 
@@ -105,13 +118,17 @@ class CellSpec:
         label: Short human-readable input label.
         unit: Unit string, or ``None`` for a unitless value.
         role: How the model uses the input.
-        source_status: Evidence classification of the default value.
-        claim_id: SOURCE_INDEX claim supporting the default value.
+        source_status: Evidence classification of the default value (the
+            primary claim's ledger status).
+        claim_id: SOURCE_INDEX claim describing the default value (the
+            primary claim, always cited first).
         source_note: What the claim supports.
         rationale: Why the default is used.
         notes: Caveats that hold for any value of the input.
+        supporting_claims: Further SOURCE_INDEX claims that add evidence for
+            the default value, cited after the primary claim.
         research_path: Optional research note backing the claim, cited
-            beside the SOURCE_INDEX entry.
+            beside the SOURCE_INDEX entries.
         research_note: What the research note supports.
     """
 
@@ -123,6 +140,7 @@ class CellSpec:
     source_note: str
     rationale: str
     notes: str | None = None
+    supporting_claims: tuple[SupportingClaim, ...] = ()
     research_path: str | None = None
     research_note: str | None = None
 
@@ -153,10 +171,12 @@ def _field_description(model_cls: type[BaseModel], field_name: str) -> str:
 def _cell(path: str, value: InputValue, description: str, spec: CellSpec) -> InputCell:
     """Construct one source-linked input cell from its default-value metadata.
 
-    The cell cites ``spec``'s SOURCE_INDEX claim and, when ``spec`` names
-    one, the research note behind it.
+    The cell cites ``spec``'s primary SOURCE_INDEX claim first, then its
+    supporting claims in order, then, when ``spec`` names one, the research
+    note behind the primary claim.
     """
     refs = [_source_index_ref(spec.claim_id, spec.source_note)]
+    refs.extend(_source_index_ref(claim.claim_id, claim.note) for claim in spec.supporting_claims)
     if spec.research_path is not None:
         refs.append(_research_ref(spec.research_path, spec.research_note, spec.claim_id))
     return InputCell(
@@ -284,4 +304,5 @@ __all__ = [
     "SourceRef",
     "SourceRefType",
     "SourceStatus",
+    "SupportingClaim",
 ]

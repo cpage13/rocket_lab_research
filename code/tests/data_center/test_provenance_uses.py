@@ -2,7 +2,7 @@
 
 The space artifact is meant to be *traceable*: a cold agent starting at
 any cell can follow ``uses[]`` back to the input dials. That only works if
-every ``uses`` path resolves to a *real* upstream — a specific
+every ``uses`` path resolves to a *real* upstream: a specific
 :class:`common.provenance.ProvenanceCell` or an ``inputs.*`` dial,
 never to a placeholder, never to itself, never to a bare year-container.
 
@@ -11,10 +11,10 @@ serialises it, extracts every ``uses[]`` entry across every cell, and
 resolves each one against the JSON. It asserts the three defects the
 ``json_audit_05_21.md`` audit found are gone and stay gone:
 
-* zero **dangling** pointers — every path exists (no ``"FY"`` placeholder,
+* zero **dangling** pointers: every path exists (no ``"FY"`` placeholder,
   no reference to a field that was never emitted);
-* zero **self-referential** pointers — no cell cites its own path;
-* zero **bare year-container** pointers — every path lands on a leaf cell
+* zero **self-referential** pointers: no cell cites its own path;
+* zero **bare year-container** pointers: every path lands on a leaf cell
   or an input, never on a ``physical.years."YYYY"`` / ``business.years``
   object.
 
@@ -26,13 +26,20 @@ entry resolves, either inside the ground artifact (``anchor.*``,
 ``inputs.config.*``, ``ground.component_costs[i].cost``) or, when prefixed
 ``space:``, inside the space artifact the ground reference was built from.
 
-Finally, perturbation checks prove the ``uses`` graph is sufficient, not
-only resolvable: moving a dial may change only cells whose transitive ``uses``
+Perturbation checks prove the ``uses`` graph is sufficient, not only
+resolvable: moving a dial may change only cells whose transitive ``uses``
 closure reaches that dial. A focused set names the dials the Phase 2 review
 found unreachable; a full sweep perturbs every numeric settable dial of the
 space and ground artifacts (the generation roadmap included) and follows
 ``space:`` pointers across artifacts, so a new cell that forgets a dependency
 fails here.
+
+Finally, the citation-kind checks hold every cited ledger claim to the
+quantity it describes, using the artifacts' own ``uses`` graph and units
+rather than claim prose: a cost line cites the claim of a cost dial it uses,
+a currency cell never cites a claim only mass dials cite (and a mass cell
+never one only currency dials cite), and the ground reference re-cites the
+space cost lines it copies.
 """
 
 from __future__ import annotations
@@ -41,6 +48,7 @@ import copy
 import json
 import re
 from collections import defaultdict
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +57,7 @@ import yaml
 from pydantic import ValidationError
 
 from common.file_io import render_artifact_json
+from common.input_manifest import SourceStatus
 from data_center.config import config_from_dict, load_config
 from data_center.engine import run_valuation
 from data_center.generations import KNOWN_GENS
@@ -158,7 +167,7 @@ def _walk_cells(node: Any, path: str = "") -> list[tuple[str, dict[str, Any]]]:
     """Collect ``(concrete_path, cell)`` for every cell in the artifact.
 
     Year maps (``physical.years`` / ``business.years``) key by a JSON-string
-    year, so a child of a ``*.years`` node gets a quoted path segment — the
+    year, so a child of a ``*.years`` node gets a quoted path segment, the
     exact form a ``uses`` self-reference would take.
 
     Args:
@@ -302,8 +311,8 @@ def test_2036_fleet_revenue_provenance_walk_terminates(
         else:
             dials_seen += 1
 
-    assert cells_seen >= 3, f"walk reached only {cells_seen} cells — too shallow"
-    assert dials_seen >= 1, "walk never reached an input dial — does not terminate"
+    assert cells_seen >= 3, f"walk reached only {cells_seen} cells (too shallow)"
+    assert dials_seen >= 1, "walk never reached an input dial (does not terminate)"
 
 
 # --------------------------------------------------------------------------
@@ -736,3 +745,244 @@ def test_every_dial_moves_only_cells_that_cite_it_across_both_artifacts(
     assert moved_total > 0
     assert not unreached, {dial: nodes[:3] for dial, nodes in unreached.items()}
     assert inert == set(_EXPECTED_INERT_DIALS), sorted(inert ^ set(_EXPECTED_INERT_DIALS))
+
+
+# --------------------------------------------------------------------------
+# Citation kind: a cost cell cites a cost claim, a mass cell a mass claim
+# --------------------------------------------------------------------------
+
+_SOURCE_INDEX_PREFIX = "research/SOURCE_INDEX.md#"
+"""How a space cell cites a ledger claim (a ground cell names the bare claim ID)."""
+
+_COST_LINES = ("compute", "bus", "solar", "radiator", "launch")
+"""The per-node cost lines under ``physical.years.*.cost_breakdown``."""
+
+_CLAIM_CITING_COST_LINES = frozenset({"bus", "solar", "radiator", "launch"})
+"""The cost lines a ledger claim describes through their cost dials. No row
+describes the node compute cost, so the compute line cites no claim."""
+
+_ORBITAL_COPY_FORMULA = "orbital_component_cost_from_space_node_component"
+"""The formula of a ground cell that copies one space cost line (named first in its ``uses``)."""
+
+_CURRENCY_UNITS = frozenset({"USD", "MUSD"})
+"""Unit numerators of an amount of money (``MUSD/kW`` is a price, still money)."""
+
+_MASS_UNITS = frozenset({"t", "kg"})
+"""Unit numerators of a mass (``t/kW`` is a specific mass, still mass)."""
+
+
+class _Dimension(StrEnum):
+    """The two dimensions whose citations must never be swapped."""
+
+    CURRENCY = "currency"
+    MASS = "mass"
+
+
+def _dimension(unit: str | None) -> _Dimension | None:
+    """Classify a unit by its numerator: money, mass, or neither."""
+    numerator = (unit or "").split("/", 1)[0]
+    if numerator in _CURRENCY_UNITS:
+        return _Dimension.CURRENCY
+    if numerator in _MASS_UNITS:
+        return _Dimension.MASS
+    return None
+
+
+def _cited_claims(sources: list[str], ledger: dict[str, SourceStatus]) -> list[str]:
+    """Return the ledger claims a ``sources`` list cites, in order.
+
+    A ``research/SOURCE_INDEX.md#`` entry is a claim citation whether or not
+    its ID exists, so a typo surfaces as a missing claim; a bare entry counts
+    only when it is a ledger claim ID (the ground artifact's form).
+    """
+    return [
+        source.removeprefix(_SOURCE_INDEX_PREFIX)
+        for source in sources
+        if source.startswith(_SOURCE_INDEX_PREFIX) or source in ledger
+    ]
+
+
+def _claims_cited_only_by(docs: list[dict[str, Any]], dimension: _Dimension) -> set[str]:
+    """Return the claims that input dials of ``dimension`` cite first and no dial of the other.
+
+    A claim a mass dial cites first describes a mass; if no currency dial
+    also cites it, citing it on a currency cell swaps the two (and the
+    reverse). A claim cited first by both kinds (a generation's single
+    sourcing claim covers its price and its mass) stays unclassified.
+    """
+    dimensions: dict[str, set[_Dimension | None]] = defaultdict(set)
+    for doc in docs:
+        for dial in doc["inputs"]["assumption_index"].values():
+            primary = dial["source_refs"][0]
+            if primary["ref_type"] == "source_index":
+                dimensions[primary["claim_id"]].add(_dimension(dial["unit"]))
+    other = _Dimension.MASS if dimension is _Dimension.CURRENCY else _Dimension.CURRENCY
+    return {claim for claim, dims in dimensions.items() if dimension in dims and other not in dims}
+
+
+def _currency_dial_claims(doc: dict[str, Any], cell_path: str) -> set[str]:
+    """Return the claims the currency-unit input dials in a cell's ``uses`` closure cite first."""
+    claims: set[str] = set()
+    for path in _closure(doc, cell_path):
+        dial = _resolve(doc, path)
+        if (
+            isinstance(dial, dict)
+            and "source_refs" in dial
+            and _dimension(dial["unit"]) is _Dimension.CURRENCY
+            and dial["source_refs"][0]["ref_type"] == "source_index"
+        ):
+            claims.add(dial["source_refs"][0]["claim_id"])
+    return claims
+
+
+def _cost_line_paths(space_doc: dict[str, Any]) -> list[str]:
+    """Return every year's cost lines and launch-cost curve cell (the cells a cost dial sets)."""
+    paths = []
+    for year in space_doc["physical"]["years"]:
+        paths.extend(f'physical.years."{year}".cost_breakdown.{line}' for line in _COST_LINES)
+        paths.append(f'business.years."{year}".launch_cost_this_year_musd')
+    return paths
+
+
+def _citation_kind_violations(
+    space_doc: dict[str, Any], ground_doc: dict[str, Any], ledger: dict[str, SourceStatus]
+) -> list[str]:
+    """Return every citation that names a claim about the wrong kind of quantity.
+
+    The rules read the artifacts' own structure (paths, ``uses``, units) and
+    the ledger's claim IDs, never claim prose:
+
+    1. every claim a cell of either artifact cites is a ledger claim;
+    2. a cost line (a ``cost_breakdown`` line or the launch-cost curve cell)
+       that cites a claim cites first the claim of a currency-unit dial in
+       its ``uses`` closure, the claim describing the cost that sets it;
+    3. a currency cell never cites first a claim that only mass dials cite,
+       and a mass cell never one that only currency dials cite;
+    4. each ground cell that copies a space cost line (an orbital reference
+       component, or its copy in a comparison delta) re-cites that line.
+
+    Args:
+        space_doc: The serialised space artifact.
+        ground_doc: The serialised ground artifact built from it.
+        ledger: Every ledger claim's source status.
+
+    Returns:
+        One message per violation, naming the cell's path; empty when clean.
+    """
+    violations: list[str] = []
+    for artifact, doc in ((_SPACE, space_doc), (_GROUND, ground_doc)):
+        for path, cell in _artifact_cells(doc):
+            missing = [c for c in _cited_claims(cell["sources"], ledger) if c not in ledger]
+            if missing:
+                violations.append(f"{artifact} {path}: cites {missing}, not ledger claims")
+    for path in _cost_line_paths(space_doc):
+        claims = _cited_claims(_resolve(space_doc, path)["sources"], ledger)
+        allowed = _currency_dial_claims(space_doc, path)
+        if claims and claims[0] not in allowed:
+            violations.append(f"{path}: cites {claims[0]}, not a cost dial claim {sorted(allowed)}")
+    docs = [space_doc, ground_doc]
+    only = {dim: _claims_cited_only_by(docs, dim) for dim in _Dimension}
+    swapped = {_Dimension.CURRENCY: _Dimension.MASS, _Dimension.MASS: _Dimension.CURRENCY}
+    for artifact, doc in ((_SPACE, space_doc), (_GROUND, ground_doc)):
+        for path, cell in _artifact_cells(doc):
+            dimension = _dimension(cell["unit"])
+            claims = _cited_claims(cell["sources"], ledger)
+            if dimension is not None and claims and claims[0] in only[swapped[dimension]]:
+                violations.append(
+                    f"{artifact} {path}: a {dimension} cell cites {claims[0]}, "
+                    f"a {swapped[dimension]} claim"
+                )
+    for path, cell in _artifact_cells(ground_doc):
+        if cell["formula_name"] == _ORBITAL_COPY_FORMULA:
+            line = _resolve(space_doc, cell["uses"][0].removeprefix(SPACE_PATH_PREFIX))
+            if cell["sources"] != line["sources"]:
+                violations.append(f"ground {path}: sources differ from {cell['uses'][0]}")
+    return violations
+
+
+def test_cost_cells_cite_cost_claims_and_mass_cells_mass_claims(
+    default_space_and_ground_docs: tuple[dict[str, Any], dict[str, Any]],
+    ledger_statuses: dict[str, SourceStatus],
+) -> None:
+    """Objective: no cost cell cites a mass or power claim, and no mass cell a cost claim.
+
+    The original trigger: the solar cost line cited THR-006 (solar-array
+    mass), the radiator line THR-003 (hot-loop radiator area and mass), and
+    the bus line THR-011 (node power), and the ground reference re-cited all
+    three. Expected: the default artifacts break none of the rules of
+    :func:`_citation_kind_violations`, the ground's copies cover all five
+    anchor-year cost lines (so the re-citation rule is never vacuous), and
+    exactly the bus, solar, radiator, and launch lines cite a claim in every
+    year.
+    """
+    space_doc, ground_doc = default_space_and_ground_docs
+    assert _citation_kind_violations(space_doc, ground_doc, ledger_statuses) == []
+    copied = {
+        cell["uses"][0]
+        for _path, cell in _artifact_cells(ground_doc)
+        if cell["formula_name"] == _ORBITAL_COPY_FORMULA
+    }
+    year = ground_doc["anchor"]["year"]
+    anchor_lines = f'{SPACE_PATH_PREFIX}physical.years."{year}".cost_breakdown'
+    assert copied == {f"{anchor_lines}.{line}" for line in _COST_LINES}
+    for year, physical in space_doc["physical"]["years"].items():
+        citing = {
+            line
+            for line in _COST_LINES
+            if _cited_claims(physical["cost_breakdown"][line]["sources"], ledger_statuses)
+        }
+        assert citing == _CLAIM_CITING_COST_LINES, year
+
+
+@pytest.mark.parametrize(
+    ("cell_path", "sources"),
+    [
+        pytest.param(
+            'physical.years."2036".cost_breakdown.solar',
+            ["cycle-1 cost dial", "research/SOURCE_INDEX.md#THR-006"],
+            id="solar-cost-cites-solar-mass",
+        ),
+        pytest.param(
+            'physical.years."2036".cost_breakdown.bus',
+            ["cycle-1 cost dial", "research/SOURCE_INDEX.md#THR-011"],
+            id="bus-cost-cites-node-power",
+        ),
+        pytest.param(
+            'physical.years."2036".cost_breakdown.bus',
+            ["research/SOURCE_INDEX.md#RLDC-SOLAR-RADIATOR-MASS"],
+            id="bus-cost-cites-a-mass-claim",
+        ),
+        pytest.param(
+            'physical.years."2036".mass_per_node_t',
+            ["research/SOURCE_INDEX.md#RLDC-SOLAR-RADIATOR-COST"],
+            id="node-mass-cites-a-cost-claim",
+        ),
+        pytest.param(
+            'physical.years."2036".cost_breakdown.launch',
+            ["research/SOURCE_INDEX.md#RLDC-LAUNCH-COST-2063"],
+            id="launch-cost-cites-a-missing-claim",
+        ),
+    ],
+)
+def test_a_wrong_kind_citation_is_caught(
+    cell_path: str,
+    sources: list[str],
+    default_space_and_ground_docs: tuple[dict[str, Any], dict[str, Any]],
+    ledger_statuses: dict[str, SourceStatus],
+) -> None:
+    """Objective: the citation-kind rules fire on the errors they exist to catch.
+
+    Each case plants one wrong citation in a copy of the default space
+    artifact: the original triggers (the solar cost line citing the solar
+    mass claim THR-006, the bus cost line citing the node-power claim
+    THR-011), a cost line citing a mass claim, the reverse (the node-mass
+    cell citing a cost claim), and a mistyped claim ID. Expected: a
+    violation names the planted cell.
+    """
+    space_doc, ground_doc = default_space_and_ground_docs
+    planted = copy.deepcopy(space_doc)
+    target = _resolve(planted, cell_path)
+    assert _is_cell(target)
+    target["sources"] = sources
+    violations = _citation_kind_violations(planted, ground_doc, ledger_statuses)
+    assert any(cell_path in violation for violation in violations), violations

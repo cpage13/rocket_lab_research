@@ -32,6 +32,7 @@ from common.input_manifest import (
     SourceRef,
     SourceRefType,
     SourceStatus,
+    SupportingClaim,
     _cell,
     _field_description,
     _research_ref,
@@ -635,27 +636,45 @@ PHYSICAL_SPECS: Final[dict[ConfigFieldName, CellSpec]] = {
         label="Solar mass per kW",
         unit="t/kW",
         role=AssumptionRole.DEFAULT,
-        source_status=SourceStatus.SOURCED_ESTIMATE,
-        claim_id="THR-006",
-        source_note="Supports deployable solar-array mass assumptions.",
-        rationale="Solar mass is apportioned per package through node power.",
+        source_status=SourceStatus.SCENARIO,
+        claim_id="RLDC-SOLAR-RADIATOR-MASS",
+        source_note=(
+            "Public claim for the solar-array mass dial (the row covers the radiator "
+            "and solar mass dials together)."
+        ),
+        rationale=(
+            "A planning dial inside the deployable-array mass range, not a Rocket Lab "
+            "array specification. Solar mass is apportioned per package through node "
+            "power; beside the light radiator it is most of the node's dead-weight "
+            "support mass, so this dial is a binding feasibility lever."
+        ),
+        supporting_claims=(
+            SupportingClaim(
+                claim_id="THR-006",
+                note="Supports the deployable solar-array specific-mass range.",
+            ),
+        ),
     ),
     "bus_base_musd": CellSpec(
         label="Base bus cost",
         unit="MUSD",
         role=AssumptionRole.DEFAULT,
-        source_status=SourceStatus.DERIVED_ESTIMATE,
-        claim_id="THR-011",
-        source_note="Supports bus/platform scale assumptions.",
-        rationale="The bus cost dial gives every node a platform-cost base.",
+        source_status=SourceStatus.SCENARIO,
+        claim_id="RLDC-BUS-COST",
+        source_note="Public claim for the bus cost dial.",
+        rationale=(
+            "The bus cost dial gives every node a platform-cost base (vehicle, "
+            "avionics, and propulsion; solar and radiator are priced on their own "
+            "dials). A cycle-1 estimate with no quote behind it."
+        ),
     ),
     "bus_flatten_after_yr": CellSpec(
         label="Bus cost flattening year",
         unit="model year",
         role=AssumptionRole.DEFAULT,
         source_status=SourceStatus.SCENARIO,
-        claim_id="THR-011",
-        source_note="Supports platform-cost modeling assumptions.",
+        claim_id="RLDC-BUS-COST",
+        source_note="Public claim for the bus cost curve.",
         rationale="The model stops compounding bus-cost decline after the flattening year.",
     ),
     "bus_growth_pre": CellSpec(
@@ -663,8 +682,8 @@ PHYSICAL_SPECS: Final[dict[ConfigFieldName, CellSpec]] = {
         unit="fraction/year",
         role=AssumptionRole.DEFAULT,
         source_status=SourceStatus.SCENARIO,
-        claim_id="THR-011",
-        source_note="Supports platform-cost modeling assumptions.",
+        claim_id="RLDC-BUS-COST",
+        source_note="Public claim for the bus cost curve.",
         rationale="This dial applies modest real cost decline before the flattening year.",
     ),
     "solar_cost_musd_per_kw": CellSpec(
@@ -728,10 +747,20 @@ VOLUME_SPECS: Final[dict[ConfigFieldName, CellSpec]] = {
         label="Neutron usable fairing volume",
         unit="m3",
         role=AssumptionRole.DEFAULT,
-        source_status=SourceStatus.SOURCED_ESTIMATE,
-        claim_id="NTR-004",
-        source_note="Supports Neutron payload-envelope context.",
-        rationale="The volume check compares stowed node volume with usable fairing volume.",
+        source_status=SourceStatus.SCENARIO,
+        claim_id="RLDC-FAIRING-VOLUME-80M3",
+        source_note="Public claim for the usable fairing-volume transparency check.",
+        rationale=(
+            "The volume check compares stowed node volume with usable fairing volume; "
+            "volume does not gate node sizing (mass binds). Rocket Lab publishes no "
+            "usable fairing volume, so the dial is the low end of the project's "
+            "practical-envelope estimate."
+        ),
+        research_path="research/node_design/node_mass_model.md",
+        research_note=(
+            "Section 7: the about 80 to 95 m3 practical usable envelope this dial "
+            "takes the low end of."
+        ),
     ),
 }
 

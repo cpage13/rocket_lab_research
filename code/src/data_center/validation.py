@@ -53,13 +53,13 @@ differing from the default by design.
 
 Severity tiers (see :class:`common.meta.Severity`):
 
-* ``CRITICAL`` — model is invalid; do not quote.
-* ``MAJOR`` — substantive defect that affects the headline.
-* ``MINOR`` — soft check (range warning, secondary metric).
+* ``CRITICAL``: model is invalid; do not quote.
+* ``MAJOR``: substantive defect that affects the headline.
+* ``MINOR``: soft check (range warning, secondary metric).
 
 References:
-    plan_05_20_cycle2.md § 5 — Phase 4A (v8 output re-pathing).
-    strategy_05_20_cycle2.md § 5 — the validation strategy.
+    plan_05_20_cycle2.md § 5: Phase 4A (v8 output re-pathing).
+    strategy_05_20_cycle2.md § 5: the validation strategy.
 """
 
 from __future__ import annotations
@@ -98,7 +98,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Numeric constants used by the rules.
 #
-# These thresholds and bands are the rule definitions themselves — they
+# These thresholds and bands are the rule definitions themselves: they
 # encode "what counts as a passing run". Surface them as named module-level
 # constants (per CLAUDE.md, no bare numeric literals) so a reader can find
 # every threshold in one place.
@@ -127,17 +127,17 @@ MASS_UTIL_FIT_SLACK_PCT: Final[float] = (
     / (1.0 - PACKAGE_FIT_TOLERANCE)
 )
 
-# V2 — sane $/pkg (NVIDIA's largest 'as sold' Blackwell rack is ~$3.5M;
+# V2: sane $/pkg (NVIDIA's largest 'as sold' Blackwell rack is ~$3.5M;
 # anything above $5M is fictional / a data-entry mistake).
 USD_PER_PKG_MAX: Final[int] = 5_000_000
 
-# V3 — active-fleet gross-margin floor. The default five-year operating plan
+# V3: active-fleet gross-margin floor. The default five-year operating plan
 # should not decay from the 1.50 cost multiple into a low-margin tail; active
 # years must stay at or above this floor. The artifact carries margin as a
 # PERCENT (0-100). No-fleet years are ignored because revenue is zero.
 MARGIN_PCT_MIN: Final[float] = 25.0
 
-# V4 — at least one package on the node (a zero-N year means the mass
+# V4: at least one package on the node (a zero-N year means the mass
 # envelope is too small to carry even one frontier-generation GPU).
 N_PACKAGES_MIN: Final[int] = 1
 
@@ -165,21 +165,21 @@ NODE_TOTAL_MAX_MUSD: Final[float] = 200.0
 # dictionary is populated; this is the minimum entry count expected.
 DATA_DICT_MIN_ENTRIES: Final[int] = 30
 
-# V12 — the B2B-premium R floor. The B2B dedicated-optical/RF operator model
+# V12: the B2B-premium R floor. The B2B dedicated-optical/RF operator model
 # (D15) carries a premium over neocloud pricing (~1.16-1.19); the central R
 # trajectory must start at or above this floor at the base year. The floor is
-# 1.40 (not R4's 1.50) — strategy § 5.1 relaxes it to leave ~0.10 headroom
+# 1.40 (not R4's 1.50): strategy § 5.1 relaxes it to leave ~0.10 headroom
 # for conservative B2B sensitivity scenarios while keeping the premium
 # meaningfully above neocloud.
 B2B_R_CENTRAL_FLOOR: Final[float] = 1.40
 
-# V14 — launches per year must be integer, non-decreasing, equal to deployed
+# V14: launches per year must be integer, non-decreasing, equal to deployed
 # nodes, and never exceed the cadence ceiling. The ceiling is read per-run from
 # `inputs.config.cadence.cadence_ceiling`; this is the numeric slack tolerated when
 # comparing the launch count against it.
 CADENCE_CEILING_EPSILON: Final[float] = 1e-6
 
-# V17 — the radiator t/kW lower bound for the single-face co-mounted
+# V17: the radiator t/kW lower bound for the single-face co-mounted
 # architecture (D16). R1's sourced band is 0.010-0.014 t/kW; a pre- or
 # post-Tjmax dial below 0.010 would mean a two-face dedicated-radiator value
 # was used with a co-mounted architecture lock: the cycle-1 mistake. (The
@@ -202,7 +202,7 @@ RULE_REMEDIATION_HINT: Final[str] = "Review model inputs and formulas."
 
 
 # ---------------------------------------------------------------------------
-# V1 — mass_utilization_in_band (critical)
+# V1: mass_utilization_in_band (critical)
 # ---------------------------------------------------------------------------
 
 
@@ -243,7 +243,7 @@ def check_mass_utilization_in_band(output: SpaceModelOutput) -> ValidationCheck:
 
 
 # ---------------------------------------------------------------------------
-# V2 — no_trillion_dollar_pkg (critical)
+# V2: no_trillion_dollar_pkg (critical)
 # ---------------------------------------------------------------------------
 
 
@@ -275,7 +275,7 @@ def check_no_trillion_dollar_pkg(output: SpaceModelOutput) -> ValidationCheck:
 
 
 # ---------------------------------------------------------------------------
-# V3 — positive_margin_floor (critical)
+# V3: positive_margin_floor (critical)
 # ---------------------------------------------------------------------------
 
 
@@ -318,7 +318,7 @@ def check_positive_margin_floor(output: SpaceModelOutput) -> ValidationCheck:
 
 
 # ---------------------------------------------------------------------------
-# V4 — gpu_count_positive (critical)
+# V4: gpu_count_positive (critical)
 # ---------------------------------------------------------------------------
 
 
@@ -326,7 +326,7 @@ def check_gpu_count_positive(output: SpaceModelOutput) -> ValidationCheck:
     """Every year's ``physical.years[].gpus_per_node`` must be >= 1.
 
     A zero-N year means the chosen frontier generation does not fit on
-    the mass envelope at all — either the envelope was misconfigured
+    the mass envelope at all: either the envelope was misconfigured
     (too small) or the generation's per-package mass is absurd.
     """
     years = output.physical.years
@@ -350,7 +350,7 @@ def check_gpu_count_positive(output: SpaceModelOutput) -> ValidationCheck:
 
 
 # ---------------------------------------------------------------------------
-# V5 — monotonic_pf_per_kw (major)
+# V5: monotonic_pf_per_kw (major)
 # ---------------------------------------------------------------------------
 
 
@@ -393,7 +393,7 @@ def check_monotonic_pf_per_kw(output: SpaceModelOutput) -> ValidationCheck:
 
 
 # ---------------------------------------------------------------------------
-# V6 — pf_per_kw_in_band (major)
+# V6: pf_per_kw_in_band (major)
 # ---------------------------------------------------------------------------
 
 
@@ -436,7 +436,7 @@ def check_pf_per_kw_in_band(output: SpaceModelOutput) -> ValidationCheck:
 
 
 # ---------------------------------------------------------------------------
-# V7 — launch_cost_non_increasing (minor)
+# V7: launch_cost_non_increasing (minor)
 # ---------------------------------------------------------------------------
 
 
@@ -477,7 +477,7 @@ def check_launch_cost_non_increasing(output: SpaceModelOutput) -> ValidationChec
 
 
 # ---------------------------------------------------------------------------
-# V8 — revenue_above_cost_per_node (critical)
+# V8: revenue_above_cost_per_node (critical)
 # ---------------------------------------------------------------------------
 
 
@@ -566,7 +566,7 @@ def check_node_total_in_band(output: SpaceModelOutput) -> ValidationCheck:
 
 
 # ---------------------------------------------------------------------------
-# V10 — data_dictionary_populated (major)
+# V10: data_dictionary_populated (major)
 # ---------------------------------------------------------------------------
 
 
@@ -596,7 +596,7 @@ def check_data_dictionary_populated(output: SpaceModelOutput) -> ValidationCheck
 
 
 # ---------------------------------------------------------------------------
-# V12 — operator_r_consistency (major)
+# V12: operator_r_consistency (major)
 # ---------------------------------------------------------------------------
 
 
@@ -609,7 +609,7 @@ def check_operator_r_consistency(output: SpaceModelOutput) -> ValidationCheck:
     year. A central-R below the floor means either the model is
     underselling the B2B premium or the operator-model lock is wrong.
 
-    The floor is 1.40, not the R4-recommended 1.50 — strategy § 5.1
+    The floor is 1.40, not the R4-recommended 1.50: strategy § 5.1
     relaxes it to leave headroom for conservative B2B sensitivity
     scenarios while keeping the premium meaningfully above neocloud.
 
@@ -654,7 +654,7 @@ def check_operator_r_consistency(output: SpaceModelOutput) -> ValidationCheck:
 
 
 # ---------------------------------------------------------------------------
-# V13 — provenance_formula_keys (major)
+# V13: provenance_formula_keys (major)
 # ---------------------------------------------------------------------------
 
 
@@ -715,7 +715,7 @@ def check_provenance_formula_keys(output: SpaceModelOutput) -> ValidationCheck:
 
     Every leaf numeric value in the space artifact is a
     :class:`common.provenance.ProvenanceCell` carrying a
-    ``formula_name`` — a stable key into the :data:`FORMULAS` lookup table.
+    ``formula_name``, a stable key into the :data:`FORMULAS` lookup table.
     V13 walks every cell and fails if any ``formula_name`` is absent from
     :data:`FORMULAS`. This catches a silent typo in a formula-name string
     (which would otherwise ship an un-resolvable provenance reference) and
@@ -753,7 +753,7 @@ def check_provenance_formula_keys(output: SpaceModelOutput) -> ValidationCheck:
 
 
 # ---------------------------------------------------------------------------
-# V14 — cadence_monotonicity (major)
+# V14: cadence_monotonicity (major)
 # ---------------------------------------------------------------------------
 
 
@@ -853,7 +853,7 @@ def check_cadence_monotonicity(output: SpaceModelOutput) -> ValidationCheck:
 
 
 # ---------------------------------------------------------------------------
-# V15 — volume_fits_horizon (major)
+# V15: volume_fits_horizon (major)
 # ---------------------------------------------------------------------------
 
 
@@ -904,7 +904,7 @@ def check_volume_fits_horizon(output: SpaceModelOutput) -> ValidationCheck:
 
 
 # ---------------------------------------------------------------------------
-# V16 — fleet_cliff_consistency (major)
+# V16: fleet_cliff_consistency (major)
 # ---------------------------------------------------------------------------
 
 
@@ -920,7 +920,7 @@ def check_fleet_cliff_consistency(output: SpaceModelOutput) -> ValidationCheck:
     launches over the living cohort years and fails on any mismatch with the
     emitted ``business.years[].living_fleet``.
 
-    The cohort-year window is intersected with the emitted trajectory —
+    The cohort-year window is intersected with the emitted trajectory:
     cohorts before the first model year do not exist, exactly as the
     engine's fleet rollup treats them.
 
@@ -972,7 +972,7 @@ def check_fleet_cliff_consistency(output: SpaceModelOutput) -> ValidationCheck:
 
 
 # ---------------------------------------------------------------------------
-# V17 — radiator_dial_matches_architecture (major)
+# V17: radiator_dial_matches_architecture (major)
 # ---------------------------------------------------------------------------
 
 

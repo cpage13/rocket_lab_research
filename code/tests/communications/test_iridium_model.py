@@ -1141,14 +1141,6 @@ def test_the_two_scenarios_differ_only_in_target_and_label(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "the committed communications/models/iridium/default.json predates schema "
-        "iridium-v5; re-promote it from scenarios/iridium.yaml and delete this marker"
-    ),
-)
 def test_regenerated_default_artifact_matches_committed(
     tmp_path: Path, iridium_yaml: Path, promoted_iridium_artifact: Path
 ) -> None:
