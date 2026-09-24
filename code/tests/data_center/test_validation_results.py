@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -28,7 +29,6 @@ from data_center.output import ValuationOutput
 from data_center.query_examples import build_query_examples
 from data_center.text_report import render_text
 
-_SCENARIOS = Path(__file__).resolve().parents[2] / "scenarios"
 _JQ: str | None = shutil.which("jq")
 
 # The default guards, emitted only for the canonical default scenario.
@@ -50,12 +50,24 @@ _EXPECTED_FAILURES: dict[str, set[str]] = {
 }
 
 
-def _run(name: str) -> ValuationOutput:
-    """Run one shipped scenario, recording its repository path as the CLI does."""
-    return run_valuation(
-        load_config(_SCENARIOS / f"{name}.yaml"),
-        source_scenario_path=f"code/scenarios/{name}.yaml",
-    )
+type RunScenario = Callable[[str], ValuationOutput]
+"""Run a shipped scenario by name (see :func:`run_scenario`)."""
+
+
+@pytest.fixture(scope="module")
+def run_scenario(scenarios_dir: Path) -> RunScenario:
+    """Run shipped scenarios by name, each once per module, recording the path as the CLI does."""
+    runs: dict[str, ValuationOutput] = {}
+
+    def run(name: str) -> ValuationOutput:
+        if name not in runs:
+            runs[name] = run_valuation(
+                load_config(scenarios_dir / f"{name}.yaml"),
+                source_scenario_path=f"code/scenarios/{name}.yaml",
+            )
+        return runs[name]
+
+    return run
 
 
 def _not_passing(output: ValuationOutput) -> set[str]:
@@ -63,14 +75,16 @@ def _not_passing(output: ValuationOutput) -> set[str]:
     return {r.validation_id for r in output.meta.validation_results if r.severity != "pass"}
 
 
-def test_default_scenario_passes_every_check_including_the_default_guards() -> None:
+def test_default_scenario_passes_every_check_including_the_default_guards(
+    run_scenario: RunScenario,
+) -> None:
     """Objective: the canonical default passes all 22 published checks.
 
     Expected: 16 mirrored V-rules, the three model invariants (year-10
     cadence, living fleet distinct from the deployed cohort, no placeholder
     or stale input), and the three default guards, every one ``pass``.
     """
-    output = _run("default")
+    output = run_scenario("default")
     assert output.inputs.scenario.path == DEFAULT_SCENARIO_PATH
     ids = [r.validation_id for r in output.meta.validation_results]
     assert len(ids) == 22
@@ -84,7 +98,9 @@ def test_default_scenario_passes_every_check_including_the_default_guards() -> N
 
 
 @pytest.mark.parametrize("name", sorted(_EXPECTED_FAILURES))
-def test_shipped_scenarios_carry_no_default_pinned_check(name: str) -> None:
+def test_shipped_scenarios_carry_no_default_pinned_check(
+    name: str, run_scenario: RunScenario
+) -> None:
     """Objective: a scenario is never failed for differing from the default.
 
     Expected: no default guard is emitted for a non-default scenario, the
@@ -93,7 +109,7 @@ def test_shipped_scenarios_carry_no_default_pinned_check(name: str) -> None:
     overfills the fairing; ai1_equivalent's pinned silicon sits below the
     PF/kW band).
     """
-    output = _run(name)
+    output = run_scenario(name)
     ids = {r.validation_id for r in output.meta.validation_results}
     assert not [vid for vid in ids if vid.startswith("default_")]
     assert _not_passing(output) == _EXPECTED_FAILURES[name]
@@ -148,7 +164,9 @@ def test_year_10_cadence_invariant_catches_a_ramp_that_misses_its_dial() -> None
     assert check.observed_result == "0 launches in FY2036"
 
 
-def test_report_query_and_json_agree_on_the_ambitious_verdict(tmp_path: Path) -> None:
+def test_report_query_and_json_agree_on_the_ambitious_verdict(
+    tmp_path: Path, run_scenario: RunScenario
+) -> None:
     """Objective: one verdict source (the original ambitious trigger).
 
     Before the fix the text report showed 16 of 16 rules passing while the
@@ -157,7 +175,7 @@ def test_report_query_and_json_agree_on_the_ambitious_verdict(tmp_path: Path) ->
     of ``meta.validation_results`` (empty for ambitious), and the report's
     summary line counts the same list.
     """
-    output = _run("ambitious")
+    output = run_scenario("ambitious")
     published = json.loads(render_json(output))
     expected = [r for r in published["meta"]["validation_results"] if r["severity"] != "pass"]
     assert expected == []

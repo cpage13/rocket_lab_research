@@ -2,137 +2,365 @@
 
 The calculator has two output locations by design:
 
-* ``code/outputs/data_center/runs/`` — git-ignored scratch; ``--json`` is
+* ``code/outputs/data_center/runs/``: git-ignored scratch; ``--json`` is
   redirected there and rerun freely, each run carrying its own
   ``generated_at`` timestamp.
-* ``data_center/models/space/`` — reviewed public space-model JSON artifacts.
-* ``data_center/conclusion.md`` — reviewed static prose, not overwritten by
-  promotion.
+* ``data_center/models/space/`` and ``data_center/models/ground/``: the
+  reviewed public artifacts, written only by ``--promote``.
+* ``data_center/conclusion.md``: reviewed static prose, never overwritten.
 
-``--promote`` is the only command that writes the public artifacts. These
-tests guard that contract:
+These tests are the promotion contract:
 
-1. ``--promote`` returns exit code 0 and creates the JSON artifact
-   (including the parent directory if absent);
-2. the written file is the same valid v8 artifact the ``--json`` path
-   emits for ``scenarios/default.yaml`` — it round-trips through
-   :class:`data_center.output.ValuationOutput`; and
-3. promotion leaves the static conclusion untouched; and
-4. the JSON file ends with exactly one trailing newline (clean git diffs).
+1. the default promotion writes the space and ground artifacts (roles
+   ``promoted_default`` / ``promoted_ground_default``), each ending in exactly
+   one newline, and leaves the static conclusion alone;
+2. a non-default scenario is promoted only under its own lowercase
+   ``--output-name`` (role ``promoted_named``, no ground artifact), never as
+   ``default`` in any spelling, and the default scenario only as ``default``
+   (usage errors, ``EXIT_USAGE``); a mistyped scenario path is reported as a
+   missing file;
+3. a failing validation check refuses the promotion and writes nothing;
+4. a write failure (a read-only ground directory, a failed second rename, a
+   locked ground file) leaves both promoted artifacts exactly as they were,
+   with no staged or backup file left behind, and the error line says so;
+5. status lines are log records; stdout stays empty.
 
-Every test monkeypatches :data:`data_center.cli._PROMOTED_MODEL_DIR` to a
-temp path, so the suite never touches the committed artifacts on disk.
+Every test passes ``models_dir`` (a temporary directory) to
+:func:`data_center.cli.main`, so the suite never touches the committed
+artifacts.
 """
 
 from __future__ import annotations
 
+import errno
 import json
+import logging
+import os
+import stat
 from pathlib import Path
 
 import pytest
 
+from common.cli import EXIT_ERROR, EXIT_OK, EXIT_USAGE
 from data_center import cli
-from data_center.output import ValuationOutput
+from data_center.ground import GroundReferenceOutput
+from data_center.output import SpaceModelOutput
+
+_READ_ONLY_DIR_MODE = stat.S_IRUSR | stat.S_IXUSR
+"""A directory the owner can list and enter but not write into."""
+
+_ROOT_IGNORES_PERMISSIONS = os.geteuid() == 0
+"""Root bypasses directory permissions and file flags, so those tests skip under root."""
+
+_PREVIOUS_SPACE = b"previous space\n"
+"""The bytes a pre-existing promoted space artifact holds before a failed promotion."""
+
+_PREVIOUS_GROUND = b"previous ground\n"
+"""The bytes a pre-existing promoted ground artifact holds before a failed promotion."""
 
 
-def test_promote_writes_default_space_model(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """``--promote`` returns 0 and writes a valid default space artifact.
+def _promote(models_dir: Path, *args: str) -> int:
+    """Run ``rklb-value <args> --promote`` against a temporary models directory."""
+    return cli.main([*args, "--promote"], models_dir=models_dir)
 
-    Redirects the promoted-artifact directory into a temp directory that
-    does not yet exist, proving ``--promote`` creates the parent directory
-    and writes the default scenario as a round-trippable v8 output.
+
+def _errors(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """Return the messages of the captured ERROR (and worse) records."""
+    return [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def _existing_default_pair(models_dir: Path) -> tuple[Path, Path]:
+    """Create a promoted default pair with known previous content; return its paths."""
+    space = models_dir / "space" / "default.json"
+    ground = models_dir / "ground" / "default.json"
+    space.parent.mkdir(parents=True)
+    ground.parent.mkdir()
+    space.write_bytes(_PREVIOUS_SPACE)
+    ground.write_bytes(_PREVIOUS_GROUND)
+    return space, ground
+
+
+def _pair_is_untouched(space: Path, ground: Path) -> bool:
+    """Whether both artifacts hold their previous bytes and nothing else sits beside them."""
+    return (
+        space.read_bytes() == _PREVIOUS_SPACE
+        and ground.read_bytes() == _PREVIOUS_GROUND
+        and [p.name for p in space.parent.iterdir()] == ["default.json"]
+        and [p.name for p in ground.parent.iterdir()] == ["default.json"]
+    )
+
+
+def test_promote_writes_default_space_and_ground_artifacts(tmp_path: Path) -> None:
+    """Objective: ``--promote`` publishes the default pair.
+
+    Expected: exit 0; ``space/default.json`` round-trips as a v8
+    ``promoted_default`` artifact of the default scenario and
+    ``ground/default.json`` as a ``promoted_ground_default`` reference; both
+    end in exactly one newline (clean git diffs); the models directory is
+    created when absent.
     """
-    model_dir = tmp_path / "models"
-    monkeypatch.setattr(cli, "_PROMOTED_MODEL_DIR", model_dir)
+    models_dir = tmp_path / "models"
 
-    exit_code = cli.main(["--promote"])
+    assert _promote(models_dir) == EXIT_OK
 
-    assert exit_code == 0
-    model_path = model_dir / "default.json"
-    conclusion_path = tmp_path / "conclusion.md"
-    assert model_path.is_file()
-    assert not conclusion_path.exists()
-    rebuilt = ValuationOutput.model_validate(json.loads(model_path.read_text()))
-    assert rebuilt.metadata.schema_version == "v8"
-    assert rebuilt.metadata.artifact_role == "promoted_default"
+    space_text = (models_dir / "space" / "default.json").read_text(encoding="utf-8")
+    ground_text = (models_dir / "ground" / "default.json").read_text(encoding="utf-8")
+    space = SpaceModelOutput.model_validate(json.loads(space_text))
+    ground = GroundReferenceOutput.model_validate(json.loads(ground_text))
+    assert space.metadata.schema_version == "v8"
+    assert space.metadata.artifact_role == "promoted_default"
+    assert space.inputs.scenario.is_default
+    assert ground.metadata.artifact_role == "promoted_ground_default"
+    for text in (space_text, ground_text):
+        assert text.endswith("\n")
+        assert not text.endswith("\n\n")
 
 
-def test_promoted_files_end_with_single_newline(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The promoted files end with exactly one trailing newline.
+def test_promote_does_not_overwrite_static_conclusion(tmp_path: Path) -> None:
+    """Objective: promotion writes JSON artifacts and leaves reviewed prose alone.
 
-    A single trailing newline keeps the git-tracked artifacts' diffs clean;
-    a missing or doubled newline would churn the diff.
+    Expected: with the models directory laid out as in the repository, the
+    conclusion beside it is byte-for-byte unchanged after a promotion.
     """
-    model_dir = tmp_path / "models"
-    monkeypatch.setattr(cli, "_PROMOTED_MODEL_DIR", model_dir)
-
-    cli.main(["--promote"])
-
-    text = (model_dir / "default.json").read_text()
-    assert text.endswith("\n")
-    assert not text.endswith("\n\n")
-
-
-def test_promote_does_not_overwrite_static_conclusion(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """``--promote`` writes JSON artifacts and leaves reviewed prose alone."""
-    project_dir = tmp_path / "project"
-    conclusion_path = project_dir / "data_center" / "conclusion.md"
+    data_center_dir = tmp_path / "data_center"
+    conclusion_path = data_center_dir / "conclusion.md"
     conclusion_path.parent.mkdir(parents=True)
     original_text = "# Static conclusion\n\nReviewed prose stays put.\n"
     conclusion_path.write_text(original_text, encoding="utf-8")
 
-    monkeypatch.setattr(cli, "_PROJECT_DIR", project_dir)
-    monkeypatch.setattr(
-        cli,
-        "_PROMOTED_MODEL_DIR",
-        project_dir / "data_center" / "models" / "space",
-    )
+    assert _promote(data_center_dir / "models") == EXIT_OK
 
-    exit_code = cli.main(["--promote"])
-
-    assert exit_code == 0
-    assert (project_dir / "data_center" / "models" / "space" / "default.json").is_file()
-    assert (project_dir / "data_center" / "models" / "ground" / "default.json").is_file()
+    assert (data_center_dir / "models" / "space" / "default.json").is_file()
+    assert (data_center_dir / "models" / "ground" / "default.json").is_file()
     assert conclusion_path.read_text(encoding="utf-8") == original_text
 
 
-def test_promote_uses_custom_config_and_output_name(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """``--promote`` can publish a named scenario artifact.
+def test_promote_publishes_a_named_scenario_under_its_output_name(tmp_path: Path) -> None:
+    """Objective: a non-default scenario promotes under its own stem.
 
-    The default promotion publishes ``models/space/default.json``. A custom
-    output name publishes ``models/space/<name>.json`` and leaves static docs
-    alone.
+    Expected: ``less_mass.yaml --promote --output-name less_mass`` exits 0,
+    writes ``space/less_mass.json`` with role ``promoted_named`` (the role
+    follows the scenario, not the name), and writes no ground artifact.
     """
-    model_dir = tmp_path / "models"
+    models_dir = tmp_path / "models"
     scenario = tmp_path / "less_mass.yaml"
     scenario.write_text('scenario_name: "Less mass"\n', encoding="utf-8")
-    monkeypatch.setattr(cli, "_PROMOTED_MODEL_DIR", model_dir)
 
-    exit_code = cli.main([str(scenario), "--promote", "--output-name", "less_mass"])
+    assert _promote(models_dir, str(scenario), "--output-name", "less_mass") == EXIT_OK
 
-    assert exit_code == 0
-    model_path = model_dir / "less_mass.json"
-    assert model_path.is_file()
-    assert not (tmp_path / "conclusion_less_mass.md").exists()
-    rebuilt = ValuationOutput.model_validate(json.loads(model_path.read_text()))
+    rebuilt = SpaceModelOutput.model_validate(
+        json.loads((models_dir / "space" / "less_mass.json").read_text(encoding="utf-8"))
+    )
     assert rebuilt.metadata.scenario_name == "Less mass"
     assert rebuilt.metadata.artifact_role == "promoted_named"
+    assert not rebuilt.inputs.scenario.is_default
+    assert not (models_dir / "ground").exists()
 
 
-def test_promote_rejects_unsafe_output_name(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("scenario_name", "extra_args", "message"),
+    [
+        ("conservative", [], "is not the default scenario: pass --output-name"),
+        ("conservative", ["--output-name", "default"], "the output name 'default' is reserved"),
+        ("conservative", ["--output-name", "DEFAULT"], "'DEFAULT' is not a valid output name"),
+        ("conservative", ["--output-name", "Default"], "'Default' is not a valid output name"),
+        ("conservative", ["--output-name", "Less_Mass"], "'Less_Mass' is not a valid output name"),
+        ("default", ["--output-name", "copy"], "the default scenario is promoted only as"),
+        (None, ["--output-name", "../bad"], "'../bad' is not a valid output name"),
+    ],
+    ids=[
+        "non_default_unnamed",
+        "non_default_as_default",
+        "non_default_as_upper_default",
+        "non_default_as_title_default",
+        "mixed_case_name",
+        "default_renamed",
+        "path_like_name",
+    ],
+)
+def test_promote_rejects_a_name_that_misstates_the_scenario(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    scenarios_dir: Path,
+    scenario_name: str | None,
+    extra_args: list[str],
+    message: str,
 ) -> None:
-    """``--output-name`` is a file stem, not a path."""
-    monkeypatch.setattr(cli, "_PROMOTED_MODEL_DIR", tmp_path / "models")
+    """Objective: ``default.json`` is written only for the default scenario.
 
-    exit_code = cli.main(["--promote", "--output-name", "../bad"])
+    The original triggers: ``conservative.yaml --promote`` exited 0 and
+    overwrote both default artifacts with the conservative run; then, on a
+    case-insensitive file system (APFS), ``--output-name DEFAULT`` reached
+    ``default.json`` past the case-sensitive reserved-name check. Expected:
+    an unnamed non-default scenario, the name ``default`` in any spelling,
+    any uppercase or path-like name, and the default scenario under another
+    name are usage errors (``EXIT_USAGE``) naming the problem; an existing
+    default pair keeps its exact content and nothing else is written.
+    """
+    models_dir = tmp_path / "models"
+    space, ground = _existing_default_pair(models_dir)
+    scenario_args = [] if scenario_name is None else [str(scenarios_dir / f"{scenario_name}.yaml")]
 
-    assert exit_code == 1
+    with pytest.raises(SystemExit) as excinfo:
+        _promote(models_dir, *scenario_args, *extra_args)
+
+    assert excinfo.value.code == EXIT_USAGE
+    assert message in capsys.readouterr().err
+    assert _pair_is_untouched(space, ground)
+
+
+def test_promote_reports_a_mistyped_scenario_path_as_missing(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, scenarios_dir: Path
+) -> None:
+    """Objective: a typo is reported as the missing file it is.
+
+    Expected: ``scenarios/defualt.yaml --promote`` exits 1 with one error
+    record saying the file was not found (not a usage error about the output
+    name), naming the path once, and writes nothing.
+    """
+    models_dir = tmp_path / "models"
+    typo = scenarios_dir / "defualt.yaml"
+
+    assert _promote(models_dir, str(typo)) == EXIT_ERROR
+
+    assert _errors(caplog) == ["could not load code/scenarios/defualt.yaml: file not found"]
+    assert not models_dir.exists()
+
+
+def test_promote_refuses_a_scenario_with_a_failing_validation_check(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, scenarios_dir: Path
+) -> None:
+    """Objective: a failing validation check blocks promotion.
+
+    ``volume_stress.yaml`` fails the major ``volume_fits_horizon`` rule by
+    design. Expected: promoting it exits 1 with one error record naming the
+    failing check, and writes nothing.
+    """
+    models_dir = tmp_path / "models"
+    scenario = str(scenarios_dir / "volume_stress.yaml")
+
+    exit_code = _promote(models_dir, scenario, "--output-name", "volume_stress")
+
+    assert exit_code == EXIT_ERROR
+    errors = _errors(caplog)
+    assert len(errors) == 1
+    assert "refusing to promote" in errors[0]
+    assert "volume_fits_horizon" in errors[0]
+    assert not models_dir.exists()
+
+
+@pytest.mark.skipif(_ROOT_IGNORES_PERMISSIONS, reason="root ignores directory permissions")
+def test_a_read_only_ground_directory_leaves_both_artifacts_untouched(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Objective: a staging failure changes neither artifact.
+
+    The original trigger: with a read-only ground directory, the space
+    artifact was overwritten, then the ground write raised a PermissionError
+    traceback. Expected: exit 1 with one error record naming the ground path
+    and saying no destination was changed; both artifacts keep their exact
+    content and no staged or backup file is left in either directory.
+    """
+    models_dir = tmp_path / "models"
+    space, ground = _existing_default_pair(models_dir)
+    ground.parent.chmod(_READ_ONLY_DIR_MODE)
+    try:
+        exit_code = _promote(models_dir)
+    finally:
+        ground.parent.chmod(stat.S_IRWXU)
+
+    assert exit_code == EXIT_ERROR
+    errors = _errors(caplog)
+    assert len(errors) == 1
+    assert f"{ground}: could not write (" in errors[0]
+    assert errors[0].endswith("no destination was changed")
+    assert _pair_is_untouched(space, ground)
+
+
+def test_a_failed_ground_rename_restores_the_space_artifact(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Objective: the pair is promoted or put back, and the message is true.
+
+    The original trigger: when the ground rename failed after the space
+    rename succeeded, the space artifact stayed replaced while the log said
+    "no promoted artifact was changed". Expected: with the ground rename
+    failing (injected EIO), exit 1 with one error record that names the
+    ground path, says the space artifact was restored and no destination
+    remains changed; both artifacts are byte-identical to their previous
+    content and no staged or backup file remains.
+    """
+    models_dir = tmp_path / "models"
+    space, ground = _existing_default_pair(models_dir)
+    real_replace = os.replace
+
+    def replace(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
+        if Path(dst) == ground and Path(src).suffix == ".tmp":
+            raise OSError(errno.EIO, "injected failure")
+        real_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", replace)
+
+    assert _promote(models_dir) == EXIT_ERROR
+
+    errors = _errors(caplog)
+    assert len(errors) == 1
+    assert f"{ground}: could not replace the file (injected failure)" in errors[0]
+    assert errors[0].endswith(
+        f"restored the previous state of {space}; no destination remains changed"
+    )
+    assert "no promoted artifact was changed" not in errors[0]
+    assert _pair_is_untouched(space, ground)
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "chflags") or _ROOT_IGNORES_PERMISSIONS,
+    reason="needs BSD file flags (macOS) and a non-root user",
+)
+def test_a_locked_ground_artifact_leaves_both_artifacts_untouched(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Objective: the natural macOS trigger (``chflags uchg``) rolls back cleanly.
+
+    Expected: with the ground artifact immutable, exit 1 with one error
+    record naming it and saying the space artifact was restored; both
+    artifacts are byte-identical to their previous content and no staged or
+    backup file remains.
+    """
+    models_dir = tmp_path / "models"
+    space, ground = _existing_default_pair(models_dir)
+    os.chflags(ground, stat.UF_IMMUTABLE)
+    try:
+        exit_code = _promote(models_dir)
+    finally:
+        os.chflags(ground, 0)
+
+    assert exit_code == EXIT_ERROR
+    errors = _errors(caplog)
+    assert len(errors) == 1
+    assert f"{ground}: could not replace the file (" in errors[0]
+    assert errors[0].endswith(
+        f"restored the previous state of {space}; no destination remains changed"
+    )
+    assert _pair_is_untouched(space, ground)
+
+
+def test_promotion_status_goes_to_the_log_not_stdout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+) -> None:
+    """Objective: stdout carries only product output; promotion prints none.
+
+    Expected: a successful promotion leaves stdout empty and logs one INFO
+    record per written artifact, naming its path.
+    """
+    models_dir = tmp_path / "models"
+    caplog.set_level(logging.INFO, logger="data_center.cli")
+
+    assert _promote(models_dir) == EXIT_OK
+
+    assert capsys.readouterr().out == ""
+    status = [r.getMessage() for r in caplog.records if r.name == "data_center.cli"]
+    assert status == [
+        f"promoted {models_dir / 'space' / 'default.json'}",
+        f"promoted {models_dir / 'ground' / 'default.json'}",
+    ]

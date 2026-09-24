@@ -66,7 +66,9 @@ ignore = ["ANN401"]  # Allow Any in narrow places with comment
 testpaths = ["tests"]
 pythonpath = ["src"]
 # importlib import mode lets the data-center and communications test packages
-# carry same-basename modules (test_validation.py, test_cli_promote.py,
-# test_text_report.py exist in both) without an __init__.py in either test
-# directory. The default "prepend" mode would collide on the shared basenames.
+# carry same-basename modules (conftest.py, test_config.py, and test_engine.py
+# exist in both) without an __init__.py in either test directory. The default
+# "prepend" mode would collide on the shared basenames. Tests anchor every path
+# to their own file, so the suite also runs from the repository root:
+# `uv run --project code pytest code/tests`.
 addopts = "-ra --strict-markers --import-mode=importlib"

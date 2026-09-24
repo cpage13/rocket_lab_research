@@ -24,16 +24,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 import pytest
 
-from data_center.config import load_config
-from data_center.engine import run_valuation
-
-# The packaged default scenario, resolved relative to this test file.
-_DEFAULT_YAML = Path(__file__).resolve().parents[2] / "scenarios" / "default.yaml"
+from data_center.output import SpaceModelOutput
 
 # The cycle-1 misnamed field — must not exist anywhere in v8 output.
 _BANNED_FIELD = "annual_rev_per_node_musd"
@@ -51,14 +46,13 @@ _REL_TOL = 1e-9
 
 
 @pytest.fixture(scope="module")
-def default_output_json() -> dict[str, Any]:
-    """The default scenario, run through the engine and dumped to a dict.
+def default_output_json(default_output: SpaceModelOutput) -> dict[str, Any]:
+    """The session's default run (``conftest.py``), dumped to a dict.
 
     The JSON-shaped dict (via ``model_dump_json`` → ``json.loads``) is
     what the CLI's ``--json`` path emits; the naming checks walk it.
     """
-    output = run_valuation(load_config(str(_DEFAULT_YAML)))
-    parsed: dict[str, Any] = json.loads(output.model_dump_json())
+    parsed: dict[str, Any] = json.loads(default_output.model_dump_json())
     return parsed
 
 

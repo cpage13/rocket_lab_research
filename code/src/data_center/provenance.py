@@ -8,6 +8,8 @@ change. It is the data-center venture's stable view onto the shared spine.
 
 from __future__ import annotations
 
+import logging
+
 from common.provenance import (
     FORMULAS,
     FieldPath,
@@ -18,6 +20,8 @@ from common.provenance import (
     YearString,
     cell,
 )
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "FORMULAS",

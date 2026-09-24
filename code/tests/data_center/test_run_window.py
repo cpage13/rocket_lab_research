@@ -30,8 +30,6 @@ from data_center.ground import (
     load_ground_config,
 )
 
-_GROUND_SCENARIO = Path(__file__).resolve().parents[2] / "scenarios" / "ground_default.yaml"
-
 
 @pytest.mark.parametrize(
     ("base_year", "horizon_years", "expected"),
@@ -110,7 +108,7 @@ def test_shifted_windows_run_through_every_cli_mode(
     ids=["horizon_5", "base_year_2040"],
 )
 def test_ground_reference_anchors_to_the_runs_anchor_year(
-    base_year: int, horizon_years: int, anchor_fy: int
+    base_year: int, horizon_years: int, anchor_fy: int, scenarios_dir: Path
 ) -> None:
     """Objective: the ground reference builds for shifted windows (ADR-003).
 
@@ -123,7 +121,7 @@ def test_ground_reference_anchors_to_the_runs_anchor_year(
     )
     ground = build_ground_reference_output(
         space,
-        load_ground_config(_GROUND_SCENARIO),
+        load_ground_config(scenarios_dir / "ground_default.yaml"),
         space_model_path="scratch/space.json",
         ground_scenario_path=DEFAULT_GROUND_SCENARIO_PATH,
     )

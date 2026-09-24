@@ -63,6 +63,7 @@ References:
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Final
 
@@ -88,6 +89,8 @@ from .output import (
 )
 from .provenance import FORMULAS, ProvenanceCell
 from .volume import FAIRING_FULL_UTILIZATION_PCT
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Numeric constants used by the rules.

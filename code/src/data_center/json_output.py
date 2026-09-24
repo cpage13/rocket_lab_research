@@ -29,6 +29,7 @@ its anchor-year checks read the run's anchor year
 from __future__ import annotations
 
 import inspect
+import logging
 import types
 from collections.abc import Iterable
 from enum import Enum
@@ -66,6 +67,8 @@ from data_center.output import (
 from data_center.provenance import FORMULAS, FieldPath, ProvenanceCell
 from data_center.query_examples import build_query_examples
 from data_center.validation import build_validation_results, compute_validation
+
+logger = logging.getLogger(__name__)
 
 MODEL_PACKAGE_NAME: Final[str] = "rklb-value"
 

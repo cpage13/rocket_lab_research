@@ -70,10 +70,6 @@ EXPECTED_FLEET_TARGET_10M = 340
 EXPECTED_FLEET_TARGET_50M = 667
 EXPECTED_FLEET_TARGET_100M = 1_334
 
-# The comms src directory (anchored from this test file: tests/communications ->
-# code -> src/communications), scanned by the forbidden-token guard below.
-_COMMS_SRC = Path(__file__).resolve().parents[2] / "src" / "communications"
-_COMMS_SRC_FILES = sorted(_COMMS_SRC.glob("*.py"))
 
 # The same forbidden config-time / demand-lever tokens the architecture guard
 # locks out (kept in sync with tests/communications/test_no_venture_cross_import.py),
@@ -494,8 +490,10 @@ def test_override_above_capacity_is_capped_and_warned(caplog: pytest.LogCaptureF
 
 
 @pytest.mark.parametrize("token", _FORBIDDEN_TOKENS)
-def test_no_forbidden_token_in_comms_src(token: str) -> None:
+def test_no_forbidden_token_in_comms_src(token: str, code_dir: Path) -> None:
     """No forbidden demand-lever / market token appears in any comms src file."""
     pattern = re.compile(token, re.IGNORECASE)
-    for src_file in _COMMS_SRC_FILES:
+    src_files = sorted((code_dir / "src" / "communications").glob("*.py"))
+    assert src_files, "no comms src file found"
+    for src_file in src_files:
         assert not pattern.search(src_file.read_text()), f"{token} found in {src_file.name}"

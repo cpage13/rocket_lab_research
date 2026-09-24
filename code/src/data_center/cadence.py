@@ -8,11 +8,15 @@ tests import from ``data_center.cadence``: the two public functions plus the
 
 from __future__ import annotations
 
+import logging
+
 from common.cadence import (
     _log_interp,
     compute_launch_cost_musd,
     compute_launches_per_year,
 )
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "_log_interp",

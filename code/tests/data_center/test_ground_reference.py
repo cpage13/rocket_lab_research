@@ -15,6 +15,7 @@ from data_center.engine import run_valuation
 from data_center.ground import (
     DEFAULT_GROUND_SCENARIO_PATH,
     HOURS_PER_YEAR,
+    GroundReferenceConfig,
     GroundReferenceOutput,
     build_ground_reference_output,
     ground_config_from_dict,
@@ -26,8 +27,6 @@ from data_center.output import ArtifactRole, SpaceModelOutput
 # The default window (base year 2026, ten-year horizon) anchors at FY2036.
 ANCHOR_YEAR = 2036
 ANCHOR_YEAR_KEY = str(ANCHOR_YEAR)
-DEFAULT_SCENARIO = Path("scenarios/default.yaml")
-GROUND_SCENARIO = Path("scenarios/ground_default.yaml")
 SPACE_MODEL_PATH = "data_center/models/space/default.json"
 
 # The recorded default ground invariant (plan invariant table, 2026-09-23).
@@ -47,21 +46,29 @@ REQUIRED_GROUND_INPUTS = {
 
 
 @pytest.fixture(scope="module")
-def default_space_output() -> SpaceModelOutput:
+def default_ground_config(scenarios_dir: Path) -> GroundReferenceConfig:
+    """The default ground assumptions, ``scenarios/ground_default.yaml``."""
+    return load_ground_config(scenarios_dir / "ground_default.yaml")
+
+
+@pytest.fixture(scope="module")
+def default_space_output(scenarios_dir: Path) -> SpaceModelOutput:
     """Run the default space model once for ground-reference tests."""
     return run_valuation(
-        load_config(DEFAULT_SCENARIO),
+        load_config(scenarios_dir / "default.yaml"),
         source_scenario_path="code/scenarios/default.yaml",
         artifact_role="promoted_default",
     )
 
 
 @pytest.fixture(scope="module")
-def default_ground_output(default_space_output: SpaceModelOutput) -> GroundReferenceOutput:
+def default_ground_output(
+    default_space_output: SpaceModelOutput, default_ground_config: GroundReferenceConfig
+) -> GroundReferenceOutput:
     """Build the default ground reference output once for the module."""
     return build_ground_reference_output(
         default_space_output,
-        load_ground_config(GROUND_SCENARIO),
+        default_ground_config,
         space_model_path=SPACE_MODEL_PATH,
         ground_scenario_path=DEFAULT_GROUND_SCENARIO_PATH,
     )
@@ -128,17 +135,14 @@ def test_ground_reference_contract_is_complete(
     assert any(query.applies_to == "ground" for query in rebuilt.meta.query_examples)
 
 
-def test_promote_writes_ground_reference_json(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_promote_writes_ground_reference_json(tmp_path: Path) -> None:
     """Default promotion writes a round-trippable ground reference artifact."""
-    model_dir = tmp_path / "models"
-    monkeypatch.setattr(cli, "_PROMOTED_MODEL_DIR", model_dir)
+    models_dir = tmp_path / "models"
 
-    exit_code = cli.main(["--promote"])
+    exit_code = cli.main(["--promote"], models_dir=models_dir)
 
     assert exit_code == 0
-    ground_path = tmp_path / "ground" / "default.json"
+    ground_path = models_dir / "ground" / "default.json"
     assert ground_path.is_file()
     rebuilt = GroundReferenceOutput.model_validate(json.loads(ground_path.read_text()))
     assert rebuilt.anchor.year == ANCHOR_YEAR
@@ -167,11 +171,13 @@ def test_ground_utilization_above_one_fails_at_load() -> None:
     assert ground_config_from_dict({"utilization": 1.0}).utilization == 1.0
 
 
-def _ground_for(space: SpaceModelOutput) -> GroundReferenceOutput:
+def _ground_for(
+    space: SpaceModelOutput, ground_config: GroundReferenceConfig
+) -> GroundReferenceOutput:
     """Build the default-assumption ground reference for one space output."""
     return build_ground_reference_output(
         space,
-        load_ground_config(GROUND_SCENARIO),
+        ground_config,
         space_model_path=SPACE_MODEL_PATH,
         ground_scenario_path=DEFAULT_GROUND_SCENARIO_PATH,
     )
@@ -201,7 +207,9 @@ def test_default_ground_reproduces_the_recorded_invariant(
 
 
 @pytest.mark.parametrize("service_life_years", [3, 7])
-def test_comparison_period_follows_the_anchor_service_life(service_life_years: int) -> None:
+def test_comparison_period_follows_the_anchor_service_life(
+    service_life_years: int, default_ground_config: GroundReferenceConfig
+) -> None:
     """Objective: the ground window is the anchor cohort's service life.
 
     With default dials and a 3- or 7-year service life, the ground energy
@@ -212,9 +220,9 @@ def test_comparison_period_follows_the_anchor_service_life(service_life_years: i
     ``anchor.service_life_years``.
     """
     space = run_valuation(config_from_dict({"fleet": {"service_life_years": service_life_years}}))
-    ground = _ground_for(space)
+    ground = _ground_for(space, default_ground_config)
     assert ground.anchor.service_life_years == service_life_years
-    cfg = load_ground_config(GROUND_SCENARIO)
+    cfg = default_ground_config
     costs = {c.name: c.cost for c in ground.ground.component_costs}
     expected_energy = (
         ground.anchor.kw
@@ -248,7 +256,9 @@ def test_ground_comparison_period_dial_is_gone() -> None:
         ground_config_from_dict({"comparison_period_years": 5})
 
 
-def test_ground_metadata_reflects_the_scenario_actually_loaded(tmp_path: Path) -> None:
+def test_ground_metadata_reflects_the_scenario_actually_loaded(
+    tmp_path: Path, scenarios_dir: Path
+) -> None:
     """Objective: a non-default ground YAML is recorded as itself.
 
     A copy of the default ground assumptions with PUE 1.4, loaded from a
@@ -257,11 +267,11 @@ def test_ground_metadata_reflects_the_scenario_actually_loaded(tmp_path: Path) -
     scenario override citing only the scenario YAML, and an unchanged cell
     keeps its default claim.
     """
-    data = yaml.safe_load(GROUND_SCENARIO.read_text())
+    data = yaml.safe_load((scenarios_dir / "ground_default.yaml").read_text(encoding="utf-8"))
     data["pue"] = 1.4
     path = tmp_path / "ground_pue.yaml"
     path.write_text(yaml.safe_dump(data), encoding="utf-8")
-    space = run_valuation(load_config(DEFAULT_SCENARIO))
+    space = run_valuation(load_config(scenarios_dir / "default.yaml"))
     ground = build_ground_reference_output(
         space,
         load_ground_config(path),
@@ -289,26 +299,30 @@ def test_ground_metadata_reflects_the_scenario_actually_loaded(tmp_path: Path) -
     ],
 )
 def test_ground_artifact_role_follows_the_space_role(
-    space_role: ArtifactRole, ground_role: ArtifactRole
+    space_role: ArtifactRole,
+    ground_role: ArtifactRole,
+    scenarios_dir: Path,
+    default_ground_config: GroundReferenceConfig,
 ) -> None:
     """Objective: one role vocabulary maps a space role to its ground role.
 
     Expected: a draft space run yields a draft ground reference (never a
     promoted label), and each promoted space role its promoted ground role.
     """
-    space = run_valuation(load_config(DEFAULT_SCENARIO), artifact_role=space_role)
-    assert _ground_for(space).metadata.artifact_role is ground_role
+    space = run_valuation(load_config(scenarios_dir / "default.yaml"), artifact_role=space_role)
+    assert _ground_for(space, default_ground_config).metadata.artifact_role is ground_role
 
 
 def test_anchor_check_compares_against_the_space_output(
-    default_space_output: SpaceModelOutput,
+    default_space_output: SpaceModelOutput, default_ground_config: GroundReferenceConfig
 ) -> None:
     """Objective: the anchor check is a real comparison, not a constant pass.
 
     Expected: the default passes; a space output whose anchor-year deployed
     kW cell disagrees with nodes x kW per node fails the check.
     """
-    assert _ground_for(default_space_output).meta.validation_results[0].severity == "pass"
+    ground = _ground_for(default_space_output, default_ground_config)
+    assert ground.meta.validation_results[0].severity == "pass"
     year = default_space_output.business.years[ANCHOR_YEAR_KEY]
     tampered_year = year.model_copy(
         update={
@@ -327,7 +341,7 @@ def test_anchor_check_compares_against_the_space_output(
             )
         }
     )
-    result = _ground_for(tampered).meta.validation_results[0]
+    result = _ground_for(tampered, default_ground_config).meta.validation_results[0]
     assert result.validation_id == f"ground_anchor_{ANCHOR_YEAR}_deployed_year"
     assert result.severity == "fail"
 

@@ -18,13 +18,14 @@ Coverage:
 from __future__ import annotations
 
 import math
-from pathlib import Path
+import re
 from typing import Final
 
 import pytest
 import yaml
 from pydantic import ValidationError
 
+from common.file_io import ModelFileError
 from data_center.config import ValuationConfig, config_from_dict
 from data_center.constants import (
     KG_GROWTH_PER_GEN_DEFAULT,
@@ -237,32 +238,36 @@ def test_yaml_round_trip_via_disk(tmp_path):
     assert reloaded == list(KNOWN_GENS)
 
 
-def test_bundled_generations_yaml_matches_known_gens():
+def test_bundled_generations_yaml_matches_known_gens(scenarios_dir):
     """The committed ``scenarios/generations.yaml`` must equal KNOWN_GENS."""
-    bundled = Path(__file__).parent.parent.parent / "scenarios" / "generations.yaml"
+    bundled = scenarios_dir / "generations.yaml"
     assert bundled.exists(), f"missing bundled file: {bundled}"
     loaded = load_generations_yaml(bundled)
     assert loaded == list(KNOWN_GENS)
 
 
-def test_load_generations_yaml_rejects_non_mapping_root(tmp_path):
-    path = tmp_path / "list_root.yaml"
-    path.write_text("- not a mapping\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="must be a mapping"):
-        load_generations_yaml(path)
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        ("- not a mapping\n", "the YAML root must be a mapping, got list"),
+        ("other_key: []\n", "missing top-level key 'generations'"),
+        ("generations: not-a-list\n", "'generations' must be a list, got str"),
+        ("generations:\n  - name: [B200\n", "malformed YAML"),
+        ("", "missing top-level key 'generations'"),
+    ],
+    ids=["list_root", "missing_key", "scalar_value", "malformed", "empty"],
+)
+def test_load_generations_yaml_rejects_a_misshapen_file(tmp_path, text, reason):
+    """Objective: a generations file of the wrong shape fails through the shared loader.
 
-
-def test_load_generations_yaml_rejects_missing_top_key(tmp_path):
-    path = tmp_path / "no_key.yaml"
-    path.write_text("other_key: []\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="missing top-level key"):
-        load_generations_yaml(path)
-
-
-def test_load_generations_yaml_rejects_non_list_value(tmp_path):
-    path = tmp_path / "scalar_value.yaml"
-    path.write_text("generations: not-a-list\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="must be a list"):
+    The original trigger: malformed YAML here raised a raw PyYAML
+    ``ParserError`` traceback, unlike the other loaders. Expected: every
+    misshapen file raises the one file-boundary error, ``ModelFileError``,
+    naming the file and the problem.
+    """
+    path = tmp_path / "generations.yaml"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(ModelFileError, match=f"generations.yaml: {re.escape(reason)}"):
         load_generations_yaml(path)
 
 
@@ -549,3 +554,17 @@ def test_slope_defaults_have_one_source():
     assert slopes.kg_growth_per_gen == KG_GROWTH_PER_GEN_DEFAULT
     assert slopes.pf_growth_per_gen == PF_GROWTH_PER_GEN_DEFAULT
     assert ValuationConfig().slopes == slopes
+
+
+def test_extend_generations_reports_an_overflowing_extension():
+    """Objective: a release cadence too short to extrapolate is a clean error.
+
+    The original trigger: ``release_cadence_yr`` 0.001 needs about 8,000
+    extrapolated generations to cover the default window; compounding the
+    slopes overflowed to infinity and ``int(inf)`` crashed with an
+    ``OverflowError`` traceback. Expected: a ValueError that names the
+    overflow and the dial to change, raised before any infinite value enters
+    the list.
+    """
+    with pytest.raises(ValueError, match=r"generation extension overflows.*release_cadence_yr"):
+        extend_generations(list(KNOWN_GENS), GenerationSlopes(), 0.001, 2037.0)

@@ -21,9 +21,9 @@ These tests guard that layout:
    trajectories;
 4. ``render_headline`` produces the one-line ``--brief`` view.
 
-The fixture runs the default scenario through the real engine, so the
-tests exercise the renderer against a genuine v8 artifact rather than a
-hand-built stub.
+The report is rendered from the session's default run (``default_output``
+in ``conftest.py``), the real engine's output, so the tests exercise the
+renderer against a genuine v8 artifact rather than a hand-built stub.
 """
 
 from __future__ import annotations
@@ -38,9 +38,6 @@ from data_center.engine import run_valuation
 from data_center.output import ValuationOutput
 from data_center.text_report import render_headline, render_text
 
-# The shipped scenarios, anchored on this file so the suite runs from any cwd.
-_SCENARIOS = Path(__file__).resolve().parents[2] / "scenarios"
-
 # The eight v8 section headers, in render order (T80 section ordering).
 _SECTION_HEADERS: tuple[str, ...] = (
     "ROCKET LAB ORBITAL DATA-CENTER VENTURE",
@@ -52,12 +49,6 @@ _SECTION_HEADERS: tuple[str, ...] = (
     "R-BAND REVENUE TRAJECTORY",
     "VALIDATION CHECKS",
 )
-
-
-@pytest.fixture(scope="module")
-def default_output() -> ValuationOutput:
-    """Run the default scenario through the v8 engine once for the module."""
-    return run_valuation(load_config("scenarios/default.yaml"))
 
 
 @pytest.fixture(scope="module")
@@ -237,7 +228,9 @@ def test_validation_block_marks_passing_rules(default_report: str) -> None:
     assert "FAIL" not in validation
 
 
-def test_validation_block_agrees_with_the_json_on_a_non_default_scenario() -> None:
+def test_validation_block_agrees_with_the_json_on_a_non_default_scenario(
+    scenarios_dir: Path,
+) -> None:
     """Objective: one verdict source for the report and the JSON (ambitious).
 
     The ambitious scenario differs from the default by design. Expected: the
@@ -245,7 +238,7 @@ def test_validation_block_agrees_with_the_json_on_a_non_default_scenario() -> No
     ``meta.validation_results``, it shows every non-passing id the JSON
     shows, and no default-pinned check appears at all.
     """
-    out = run_valuation(load_config(_SCENARIOS / "ambitious.yaml"))
+    out = run_valuation(load_config(scenarios_dir / "ambitious.yaml"))
     report = render_text(out).split("VALIDATION CHECKS", 1)[1]
     results = out.meta.validation_results
     passing = [r for r in results if r.severity == "pass"]

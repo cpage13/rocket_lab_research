@@ -34,6 +34,13 @@ with no taper, so each cohort earns a constant 33.3% gross margin across its
 five-year life. The central-revenue reference values below are recorded from
 the flat default.
 
+**One default (2026-09-23).** The trajectory is checked on the canonical
+default run (``default_output`` in ``conftest.py``: ``scenarios/default.yaml``),
+and :func:`test_code_defaults_equal_the_default_scenario_file` pins the code
+defaults (``ValuationConfig()``, the base of every ``config_from_dict``
+variant in the suite) to that file, so the two definitions of "default" cannot
+drift apart.
+
 The v8 output is keyed by JSON-string fiscal year in
 ``physical.years`` / ``business.years``; every leaf is a
 :class:`data_center.provenance.ProvenanceCell`, so the test reads each
@@ -46,11 +53,10 @@ Tolerances:
 
 from __future__ import annotations
 
-import pytest
+from pathlib import Path
 
-from data_center.config import ValuationConfig
-from data_center.engine import run_valuation
-from data_center.output import ValuationOutput
+from data_center.config import ValuationConfig, load_config
+from data_center.output import SpaceModelOutput
 
 # Tolerance for numeric reference (±0.5%).
 TOLERANCE: float = 0.005
@@ -152,14 +158,23 @@ def _num(value: float | int | str | bool | None) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# One default: the code defaults are the default scenario file
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
-def engine_output() -> ValuationOutput:
-    """Run the v8 GPU-first engine with default config (once per session)."""
-    return run_valuation(ValuationConfig())
+def test_code_defaults_equal_the_default_scenario_file(scenarios_dir: Path) -> None:
+    """Objective: the code defaults and ``scenarios/default.yaml`` are one default.
+
+    The reference trajectory is frozen on the default scenario file, while
+    much of the suite builds variants from the code defaults
+    (``ValuationConfig()`` and ``config_from_dict``). Expected: the two
+    configs are equal field for field except ``scenario_name``, the file's
+    own label.
+    """
+    from_file = load_config(scenarios_dir / "default.yaml").model_dump()
+    from_code = ValuationConfig().model_dump()
+    assert from_file.pop("scenario_name") != from_code.pop("scenario_name")
+    assert from_file == from_code
 
 
 # ---------------------------------------------------------------------------
@@ -167,28 +182,28 @@ def engine_output() -> ValuationOutput:
 # ---------------------------------------------------------------------------
 
 
-def test_n_integer_matches_reference_every_year(engine_output: ValuationOutput) -> None:
+def test_n_integer_matches_reference_every_year(default_output: SpaceModelOutput) -> None:
     """Integer reference: N (gpus_per_node) matches the locked v8 trajectory."""
     actual = tuple(
-        int(_num(engine_output.physical.years[fy].gpus_per_node.value)) for fy in REFERENCE_YEARS
+        int(_num(default_output.physical.years[fy].gpus_per_node.value)) for fy in REFERENCE_YEARS
     )
     assert actual == REFERENCE_N_BY_YEAR, f"engine N {actual} != reference {REFERENCE_N_BY_YEAR}"
 
 
-def test_frontier_generations_match_reference(engine_output: ValuationOutput) -> None:
+def test_frontier_generations_match_reference(default_output: SpaceModelOutput) -> None:
     """Every year picks the same frontier-generation name as the reference."""
     actual = tuple(
-        engine_output.physical.years[fy].frontier_generation.value for fy in REFERENCE_YEARS
+        default_output.physical.years[fy].frontier_generation.value for fy in REFERENCE_YEARS
     )
     assert actual == REFERENCE_FRONTIER_NAMES, (
         f"engine frontier {actual} != reference {REFERENCE_FRONTIER_NAMES}"
     )
 
 
-def test_physical_block_matches_reference(engine_output: ValuationOutput) -> None:
+def test_physical_block_matches_reference(default_output: SpaceModelOutput) -> None:
     """Physical block: kw_per_node, mass_per_node_t, pf_per_node within 0.5%."""
     for fy, ref in zip(REFERENCE_YEARS, REFERENCE_PHYSICAL, strict=True):
-        py = engine_output.physical.years[fy]
+        py = default_output.physical.years[fy]
         for field, ref_val in ref.items():
             actual = _num(getattr(py, field).value)
             assert _within_tolerance(actual, ref_val), (
@@ -196,10 +211,10 @@ def test_physical_block_matches_reference(engine_output: ValuationOutput) -> Non
             )
 
 
-def test_node_economics_match_reference(engine_output: ValuationOutput) -> None:
+def test_node_economics_match_reference(default_output: SpaceModelOutput) -> None:
     """Per-node economics: annualized cost + central revenue within 0.5%."""
     for fy, ref in zip(REFERENCE_YEARS, REFERENCE_NODE_ECONOMICS, strict=True):
-        py = engine_output.physical.years[fy]
+        py = default_output.physical.years[fy]
         for field, ref_val in ref.items():
             actual = _num(getattr(py, field).value)
             assert _within_tolerance(actual, ref_val), (
@@ -207,10 +222,10 @@ def test_node_economics_match_reference(engine_output: ValuationOutput) -> None:
             )
 
 
-def test_fleet_rollup_matches_reference(engine_output: ValuationOutput) -> None:
+def test_fleet_rollup_matches_reference(default_output: SpaceModelOutput) -> None:
     """Fleet rollup: living-fleet count + central-R fleet revenue within 0.5%."""
     for fy, ref in zip(REFERENCE_YEARS, REFERENCE_FLEET, strict=True):
-        by = engine_output.business.years[fy]
+        by = default_output.business.years[fy]
         # living_fleet is an integer count — exact match.
         assert int(_num(by.living_fleet.value)) == int(ref["living_fleet"]), (
             f"FY{fy} living_fleet: engine {by.living_fleet.value} vs reference "
@@ -228,17 +243,17 @@ def test_fleet_rollup_matches_reference(engine_output: ValuationOutput) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_year_zero_n_is_223(engine_output: ValuationOutput) -> None:
+def test_year_zero_n_is_223(default_output: SpaceModelOutput) -> None:
     """Year 0 (FY2026) -> N = 223 (AI-1-class radiator dial, flat from day one)."""
-    assert int(_num(engine_output.physical.years["2026"].gpus_per_node.value)) == 223
+    assert int(_num(default_output.physical.years["2026"].gpus_per_node.value)) == 223
 
 
-def test_year_ten_n_is_66(engine_output: ValuationOutput) -> None:
+def test_year_ten_n_is_66(default_output: SpaceModelOutput) -> None:
     """Year 10 (FY2036) -> N = 66 (2026-07-14 radiator rebase; was 37 at 0.012)."""
-    assert int(_num(engine_output.physical.years["2036"].gpus_per_node.value)) == 66
+    assert int(_num(default_output.physical.years["2036"].gpus_per_node.value)) == 66
 
 
-def test_year_ten_node_kw_in_rebased_band(engine_output: ValuationOutput) -> None:
+def test_year_ten_node_kw_in_rebased_band(default_output: SpaceModelOutput) -> None:
     """Year 10 node_kw ~753 kW under the 2026-07-14 light-radiator rebase."""
-    kw = _num(engine_output.physical.years["2036"].kw_per_node.value)
+    kw = _num(default_output.physical.years["2036"].kw_per_node.value)
     assert 748.0 <= kw <= 757.0, f"FY2036 node_kw {kw} outside the rebased band"

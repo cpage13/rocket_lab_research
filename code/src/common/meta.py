@@ -8,6 +8,7 @@ artifacts' ``meta`` blocks.
 
 from __future__ import annotations
 
+import logging
 from collections import Counter
 from collections.abc import Iterable
 from enum import StrEnum
@@ -17,6 +18,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from common.input_manifest import SourceStatus
 from common.provenance import FieldPath
+
+logger = logging.getLogger(__name__)
 
 COUNT_UNIT: Final[str] = "count"
 """Declared data-dictionary unit for a whole-number count field."""

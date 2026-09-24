@@ -36,9 +36,13 @@ first-flight year).
 
 from __future__ import annotations
 
+import logging
+
 from .config import ValuationConfig, load_config
 from .engine import run_valuation
 from .output import SpaceModelOutput, ValuationOutput
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "SpaceModelOutput",

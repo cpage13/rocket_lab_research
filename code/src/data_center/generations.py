@@ -34,11 +34,13 @@ D-decisions this module rests on:
     D13: the rack abstraction was killed in the cycle-1 rework.
 
 Sources: brainstorm Part VIII (§42–49), Part X (§50–60). The extend /
-frontier helpers' behaviour is pinned by ``tests/test_generations.py``.
+frontier helpers' behaviour is pinned by ``tests/data_center/test_generations.py``.
 """
 
 from __future__ import annotations
 
+import logging
+import math
 from collections.abc import Sequence
 from enum import StrEnum
 from pathlib import Path
@@ -47,6 +49,7 @@ from typing import Any, Final  # typing-acceptable: Any is the YAML deserializat
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, PositiveInt
 
+from common.file_io import ModelFileError, load_yaml_mapping
 from data_center.constants import (
     GENERATION_SLOPE_MAX,
     GENERATION_SLOPE_MIN,
@@ -57,6 +60,8 @@ from data_center.constants import (
     PF_GROWTH_PER_GEN_DEFAULT,
     USD_GROWTH_PER_GEN_DEFAULT,
 )
+
+logger = logging.getLogger(__name__)
 
 FRONTIER_YEAR_TOLERANCE: Final[float] = 1e-9
 """Slack, in years, when comparing a generation's ``year_available`` with a
@@ -331,7 +336,18 @@ def extend_generations(
     year rather than accumulated step by step, so float error does not grow
     with k; the due test uses :data:`FRONTIER_YEAR_TOLERANCE`. Each step
     applies the multiplicative :class:`GenerationSlopes` to the previous
-    generation's values.
+    generation's values: kW, kg, and PF compound to
+    ``latest x (1 + slope) ** k`` up to float rounding, while the USD price
+    is truncated to a whole dollar at every step, so the k-th price can sit a
+    few dollars below ``latest x (1 + slope) ** k``.
+
+    A very short release cadence needs many extrapolated generations to reach
+    ``target_yr``, and compounding the slopes that many times can exceed the
+    largest representable float (``release_cadence_yr`` 0.001 needs thousands
+    of generations to cover the default window). The extension stops at the
+    first value that is no longer finite and raises a ``ValueError`` saying
+    so, instead of carrying an infinite value into the model or crashing on
+    it.
 
     The extrapolated generations inherit the last known generation's
     ``die_count`` (held constant — die-stacking projections beyond Feynman
@@ -351,8 +367,10 @@ def extend_generations(
         extrapolated generations. The input ``known`` list is not mutated.
 
     Raises:
-        ValueError: If ``known`` is empty (no anchor to extend from) or is not
-            strictly ascending by ``year_available``.
+        ValueError: If ``known`` is empty (no anchor to extend from), is not
+            strictly ascending by ``year_available``, or the extension
+            compounds a per-package value past the largest representable
+            float.
     """
     if not known:
         raise ValueError("extend_generations requires at least one known generation")
@@ -363,14 +381,27 @@ def extend_generations(
     i = 1
     while latest_year + i * cadence_yr <= target_yr + FRONTIER_YEAR_TOLERANCE:
         last = out[-1]
+        usd = last.usd_per_pkg * (1 + slopes.usd_growth_per_gen)
+        kw = last.kw_per_pkg * (1 + slopes.kw_growth_per_gen)
+        kg = last.kg_per_pkg * (1 + slopes.kg_growth_per_gen)
+        pf = last.pf_per_pkg * (1 + slopes.pf_growth_per_gen)
+        if not all(math.isfinite(value) for value in (usd, kw, kg, pf)):
+            needed = math.floor((target_yr + FRONTIER_YEAR_TOLERANCE - latest_year) / cadence_yr)
+            raise ValueError(
+                f"the generation extension overflows: a release cadence of {cadence_yr:g} "
+                f"years needs about {needed} extrapolated generations to reach FY"
+                f"{target_yr:g}, and compounding the growth slopes {i} times already "
+                "exceeds the largest representable number; lengthen "
+                "gospel.release_cadence_yr or reduce the generation slopes"
+            )
         out.append(
             GenerationSpec(
                 name=f"Gen+{i}(extrap)",
                 year_available=latest_year + i * cadence_yr,
-                usd_per_pkg=int(last.usd_per_pkg * (1 + slopes.usd_growth_per_gen)),
-                kw_per_pkg=last.kw_per_pkg * (1 + slopes.kw_growth_per_gen),
-                kg_per_pkg=last.kg_per_pkg * (1 + slopes.kg_growth_per_gen),
-                pf_per_pkg=last.pf_per_pkg * (1 + slopes.pf_growth_per_gen),
+                usd_per_pkg=int(usd),
+                kw_per_pkg=kw,
+                kg_per_pkg=kg,
+                pf_per_pkg=pf,
                 die_count=last.die_count,
                 source=Source(
                     doc_path=DEFAULT_GENERATIONS_DOC,
@@ -411,8 +442,9 @@ def load_generations_yaml(path: Path) -> list[GenerationSpec]:
 
     Expects the file to contain a top-level mapping with key
     ``GENERATIONS_YAML_KEY`` (``"generations"``) and a value that is a
-    list of generation-spec dicts. Each entry is validated via Pydantic;
-    validation errors surface as :class:`pydantic.ValidationError`.
+    list of generation-spec mappings, read through the shared
+    :func:`common.file_io.load_yaml_mapping`. Each entry is validated via
+    Pydantic.
 
     Args:
         path: Input file path.
@@ -421,21 +453,20 @@ def load_generations_yaml(path: Path) -> list[GenerationSpec]:
         The list of validated :class:`GenerationSpec` instances.
 
     Raises:
-        FileNotFoundError: If ``path`` does not exist.
-        ValueError: If the YAML root is not a mapping, or the top-level
-            key is missing, or the value is not a list.
+        common.file_io.ModelFileError: If the file is missing, unreadable,
+            or malformed, its root is not a mapping, the top-level key is
+            missing, or its value is not a list.
+        pydantic.ValidationError: If an entry is not a valid generation spec.
     """
-    with path.open("r", encoding="utf-8") as fh:
-        loaded: Any = yaml.safe_load(fh)
-    if not isinstance(loaded, dict):
-        raise ValueError(f"{path}: top-level YAML must be a mapping, got {type(loaded).__name__}")
+    loaded = load_yaml_mapping(path)
     if GENERATIONS_YAML_KEY not in loaded:
-        raise ValueError(f"{path}: missing top-level key '{GENERATIONS_YAML_KEY}'")
+        raise ModelFileError(path, f"missing top-level key '{GENERATIONS_YAML_KEY}'")
     entries: Any = loaded[GENERATIONS_YAML_KEY]
     if not isinstance(entries, list):
-        raise ValueError(
-            f"{path}: '{GENERATIONS_YAML_KEY}' must be a list, got {type(entries).__name__}"
+        raise ModelFileError(
+            path, f"'{GENERATIONS_YAML_KEY}' must be a list, got {type(entries).__name__}"
         )
+    logger.debug("loaded %d generation entries from %s", len(entries), path)
     return [GenerationSpec.model_validate(entry) for entry in entries]
 
 

@@ -53,6 +53,7 @@ References:
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -97,6 +98,8 @@ from .volume import (
     compute_volume_utilization,
 )
 
+logger = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
 # Per-year helpers
 # ---------------------------------------------------------------------------
@@ -111,8 +114,9 @@ RADIATOR_POST_DIAL_PATH: Final[FieldPath] = "inputs.config.physical.radiator_t_p
 TJMAX_LIFT_YEAR_PATH: Final[FieldPath] = "inputs.config.physical.tjmax_lift_year"
 """Public path of the dial that decides which radiator mass dial is in force."""
 
-GEN_YEAR_AVAILABLE_PATHS: Final[FieldPath] = "inputs.config.generations[].year_available"
-"""Public path of every generation's availability year (the frontier rule reads them all)."""
+GEN_YEAR_AVAILABLE_PATH: Final[FieldPath] = "inputs.config.generations[].year_available"
+"""Public list-form path of the generations' availability years (the frontier rule reads
+every entry, so one ``[]`` path cites them all)."""
 
 
 def _unique(paths: list[FieldPath]) -> list[FieldPath]:
@@ -1090,7 +1094,7 @@ def compute_year(
         value=front.name,
         unit="-",
         formula_name="frontier_generation_from_cadence",
-        uses=[GEN_YEAR_AVAILABLE_PATHS, RELEASE_CADENCE_PATH],
+        uses=[GEN_YEAR_AVAILABLE_PATH, RELEASE_CADENCE_PATH],
         sources=["research/SOURCE_INDEX.md#GPU-001", "research/SOURCE_INDEX.md#GPU-012"],
         description=(
             f"Frontier generation for FY{fy_calendar} "
@@ -1322,6 +1326,15 @@ def run_valuation(
     )
     extended_gens = extend_generations(
         base_gens, config.slopes, config.gospel.release_cadence_yr, target_yr
+    )
+    logger.debug(
+        "running %r (%s): FY%d plus %d years, %d listed and %d extrapolated generations",
+        config.scenario_name,
+        source_scenario_path,
+        config.metadata.base_year,
+        horizon_years,
+        len(base_gens),
+        len(extended_gens) - len(base_gens),
     )
 
     years = [compute_year(i, config, extended_gens) for i in range(horizon_years + 1)]

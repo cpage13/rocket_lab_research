@@ -13,9 +13,12 @@ refer to `research/SOURCE_INDEX.md`.
 
 from __future__ import annotations
 
+import logging
 from typing import Final
 
 from common.cadence import YEAR_10_ANCHOR_IDX
+
+logger = logging.getLogger(__name__)
 
 # ============================================================
 # Year-bound constants

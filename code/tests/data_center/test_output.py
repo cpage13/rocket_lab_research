@@ -380,24 +380,16 @@ def test_enums_are_string_typed() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _run_default() -> ValuationOutput:
-    """Run the default scenario through the v8 engine."""
-    from data_center.config import load_config
-    from data_center.engine import run_valuation
-
-    return run_valuation(load_config("scenarios/default.yaml"))
-
-
-def test_engine_produces_v8_top_level_structure() -> None:
+def test_engine_produces_v8_top_level_structure(default_output: ValuationOutput) -> None:
     """The engine's run_valuation emits the v8 five-block artifact."""
-    out = _run_default()
+    out = default_output
     parsed = json.loads(out.model_dump_json())
     assert set(parsed.keys()) == V8_TOP_LEVEL_KEYS
 
 
-def test_engine_emits_eleven_physical_and_business_years() -> None:
+def test_engine_emits_eleven_physical_and_business_years(default_output: ValuationOutput) -> None:
     """The default scenario (horizon 10) emits 11 physical + 11 business years."""
-    out = _run_default()
+    out = default_output
     assert len(out.physical.years) == 11
     assert len(out.business.years) == 11
     assert "2026" in out.physical.years
@@ -406,17 +398,17 @@ def test_engine_emits_eleven_physical_and_business_years() -> None:
     assert "2036" in out.business.years
 
 
-def test_engine_metadata_schema_version_is_v8() -> None:
+def test_engine_metadata_schema_version_is_v8(default_output: ValuationOutput) -> None:
     """The engine stamps the artifact schema_version as 'v8'."""
-    out = _run_default()
+    out = default_output
     assert out.metadata.schema_version == "v8"
     assert out.metadata.base_year == 2026
     assert out.metadata.horizon_years == 10
 
 
-def test_engine_per_year_cells_carry_values_and_provenance() -> None:
+def test_engine_per_year_cells_carry_values_and_provenance(default_output: ValuationOutput) -> None:
     """Every physical-year leaf is a ProvenanceCell with a value + formula_name."""
-    out = _run_default()
+    out = default_output
     py = out.physical.years["2030"]
     for name in PHYSICAL_YEAR_FIELDS:
         field = getattr(py, name)
@@ -430,9 +422,9 @@ def test_engine_per_year_cells_carry_values_and_provenance() -> None:
             assert cell.formula_name, f"{name} has no formula_name"
 
 
-def test_engine_business_year_cells_carry_values() -> None:
+def test_engine_business_year_cells_carry_values(default_output: ValuationOutput) -> None:
     """Every business-year leaf is a ProvenanceCell with a value."""
-    out = _run_default()
+    out = default_output
     by = out.business.years["2032"]
     for name in BUSINESS_YEAR_FIELDS:
         cell = getattr(by, name)
@@ -443,9 +435,9 @@ def test_engine_business_year_cells_carry_values() -> None:
         assert cell.value is not None, f"{name} has a None value"
 
 
-def test_engine_emits_populated_data_dictionary() -> None:
+def test_engine_emits_populated_data_dictionary(default_output: ValuationOutput) -> None:
     """run_valuation populates meta.data_dictionary with described entries."""
-    out = _run_default()
+    out = default_output
     dd = out.meta.data_dictionary
     assert len(dd) > 30
     for entry in dd:
@@ -455,9 +447,11 @@ def test_engine_emits_populated_data_dictionary() -> None:
         assert entry.source_class, f"empty source_class for {entry.path}"
 
 
-def test_data_dictionary_describes_per_year_cells_as_leaves() -> None:
+def test_data_dictionary_describes_per_year_cells_as_leaves(
+    default_output: ValuationOutput,
+) -> None:
     """The data dictionary treats a ProvenanceCell as a leaf (one entry per field)."""
-    out = _run_default()
+    out = default_output
     dd = {entry.path: entry for entry in out.meta.data_dictionary}
     # The cell field gets one entry typed `cell`; its machinery is not walked.
     assert dd["physical.years[].kw_per_node"].type == "cell"
@@ -488,7 +482,9 @@ def _dictionary_path_nodes(doc: Any, path: str) -> list[Any]:
     return nodes
 
 
-def test_every_data_dictionary_cell_unit_is_the_cells_own_unit() -> None:
+def test_every_data_dictionary_cell_unit_is_the_cells_own_unit(
+    default_output: ValuationOutput,
+) -> None:
     """Objective: the dictionary's units come from the cells, not name suffixes.
 
     The original trigger: 15 money fields read unit "-" and
@@ -500,7 +496,7 @@ def test_every_data_dictionary_cell_unit_is_the_cells_own_unit() -> None:
     """
     from data_center.json_output import PER_CELL_UNIT
 
-    out = _run_default()
+    out = default_output
     doc = json.loads(out.model_dump_json())
     checked = 0
     for entry in out.meta.data_dictionary:
@@ -521,9 +517,9 @@ def test_every_data_dictionary_cell_unit_is_the_cells_own_unit() -> None:
     assert units_by_path["inputs.config.volume.mounting_overhead_pct"] == "fraction"
 
 
-def test_engine_inputs_block_carries_v8_dial_blocks() -> None:
+def test_engine_inputs_block_carries_v8_dial_blocks(default_output: ValuationOutput) -> None:
     """inputs carries gospel + slopes + the five v8 dial blocks + generations."""
-    out = _run_default()
+    out = default_output
     inp = out.inputs
     assert "inputs.config.physical.mass_envelope_t" in inp.assumption_index
     assert "pf_growth_per_gen" in inp.slopes
@@ -535,9 +531,11 @@ def test_engine_inputs_block_carries_v8_dial_blocks() -> None:
     assert len(inp.generations) >= 5
 
 
-def test_engine_generations_dictionary_summarises_each_generation() -> None:
+def test_engine_generations_dictionary_summarises_each_generation(
+    default_output: ValuationOutput,
+) -> None:
     """meta.generations_dictionary has one compact summary per generation."""
-    out = _run_default()
+    out = default_output
     gd = out.meta.generations_dictionary
     assert len(gd) == len(out.inputs.generations)
     first = gd[0]
@@ -547,17 +545,17 @@ def test_engine_generations_dictionary_summarises_each_generation() -> None:
     assert first.source_doc_path.startswith("research/")
 
 
-def test_engine_validation_report_has_sixteen_rules() -> None:
+def test_engine_validation_report_has_sixteen_rules(default_output: ValuationOutput) -> None:
     """meta.validation.rules carries the 16 wired checks (V1..V10, V12..V17)."""
-    out = _run_default()
+    out = default_output
     rules = out.meta.validation.rules
     assert len(rules) == 16
     assert all(isinstance(r, ValidationCheck) for r in rules)
 
 
-def test_engine_output_roundtrips_via_model_validate() -> None:
+def test_engine_output_roundtrips_via_model_validate(default_output: ValuationOutput) -> None:
     """The engine's v8 output round-trips through JSON."""
-    out = _run_default()
+    out = default_output
     rebuilt = ValuationOutput.model_validate(json.loads(out.model_dump_json()))
     assert rebuilt.metadata.schema_version == "v8"
     assert len(rebuilt.physical.years) == 11

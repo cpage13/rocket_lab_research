@@ -54,8 +54,9 @@ cost-coupled multiple or a price applied to a sized base. The blocks:
 This model imports only from ``common.*`` and ``communications.*`` (never
 ``data_center``, per the cross-import guard) and uses none of the forbidden
 demand-side tokens. YAML loading: scenario files are YAML mappings whose top-level
-keys are the block names above, all optional (omitted = defaults). ``extra="forbid"``
-means a typo in a scenario file fails loudly.
+keys are the block names above, all optional (omitted = defaults), read through the
+shared :func:`common.file_io.load_yaml_mapping`. ``extra="forbid"`` means a typo in a
+scenario file fails loudly.
 """
 
 from __future__ import annotations
@@ -63,9 +64,9 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from common.file_io import load_yaml_mapping
 from communications.constants import (
     ACTIVE_USER_RATE_MBPS_DEFAULT,
     APERTURE_REFERENCE_M2,
@@ -916,26 +917,22 @@ def comms_config_from_dict(data: dict[str, object]) -> CommsConfig:
 def load_comms_config(path: str | Path) -> CommsConfig:
     """Load and validate a :class:`CommsConfig` from a YAML file.
 
-    Raises :class:`FileNotFoundError` if the path does not exist and
-    :class:`ValueError` (a :class:`pydantic.ValidationError` for schema problems)
-    on any malformed or invalid content. An empty file yields an all-defaults
-    :class:`CommsConfig`.
+    The file is read through the shared
+    :func:`common.file_io.load_yaml_mapping`; an empty file yields an
+    all-defaults :class:`CommsConfig`.
+
+    Args:
+        path: The scenario YAML file.
+
+    Returns:
+        The validated config.
+
+    Raises:
+        common.file_io.ModelFileError: If the file is missing, unreadable,
+            malformed, or not a YAML mapping.
+        pydantic.ValidationError: If the content is not a valid config.
     """
-    p = Path(path)
-    if not p.is_file():
-        raise FileNotFoundError(f"comms config file not found: {p}")
-    try:
-        data = yaml.safe_load(p.read_text())
-    except yaml.YAMLError as exc:
-        raise ValueError(f"could not parse YAML comms config {p}: {exc}") from exc
-    if data is None:
-        # An empty scenario file = all defaults.
-        return CommsConfig()
-    if not isinstance(data, dict):
-        raise ValueError(
-            f"comms config file {p} must contain a YAML mapping (got {type(data).__name__})"
-        )
-    return comms_config_from_dict(data)
+    return comms_config_from_dict(load_yaml_mapping(Path(path)))
 
 
 # Re-export the public config surface so external callers (engine, ground, output,

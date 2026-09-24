@@ -43,6 +43,7 @@ from common.cadence import (
 from common.cadence import (
     LOW_CADENCE_LAUNCHES_DEFAULT as COMMON_LOW_CADENCE_LAUNCHES_DEFAULT,
 )
+from common.file_io import ModelFileError
 from communications.config import (
     CadenceDials,
     CommsCadenceDials,
@@ -372,14 +373,28 @@ def test_load_comms_config_empty_file_is_all_defaults(tmp_path: Path) -> None:
 
 
 def test_load_comms_config_missing_file_raises(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError):
+    """A missing scenario file is the shared file-boundary error, naming the path."""
+    with pytest.raises(ModelFileError, match="does_not_exist.yaml: file not found"):
         load_comms_config(tmp_path / "does_not_exist.yaml")
 
 
 def test_load_comms_config_non_mapping_root_raises(tmp_path: Path) -> None:
+    """A YAML list at the root is the shared file-boundary error, not a mapping."""
     bad = tmp_path / "bad.yaml"
     bad.write_text("- just\n- a\n- list\n")
-    with pytest.raises(ValueError, match="must contain a YAML mapping"):
+    with pytest.raises(ModelFileError, match="the YAML root must be a mapping, got list"):
+        load_comms_config(bad)
+
+
+def test_load_comms_config_malformed_yaml_raises(tmp_path: Path) -> None:
+    """Objective: malformed YAML fails through the shared loader, with its position.
+
+    Expected: a ModelFileError naming the file and the line of the problem,
+    not a raw PyYAML parser traceback.
+    """
+    bad = tmp_path / "malformed.yaml"
+    bad.write_text("iridium:\n  aperture_m2: [1.0\n", encoding="utf-8")
+    with pytest.raises(ModelFileError, match=r"malformed\.yaml: malformed YAML \(.* at line \d+"):
         load_comms_config(bad)
 
 

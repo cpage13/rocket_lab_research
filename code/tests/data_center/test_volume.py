@@ -14,20 +14,17 @@ the calculator.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from pydantic import ValidationError
 
 from data_center.config import (
     BindingConstraint,
-    ValuationConfig,
     VolumeDials,
     config_from_dict,
-    load_config,
 )
 from data_center.constants import SOLAR_CONSTANT_W_M2
 from data_center.engine import run_valuation
+from data_center.output import SpaceModelOutput
 from data_center.volume import (
     FAIRING_FULL_UTILIZATION_PCT,
     compute_binding_constraint,
@@ -36,8 +33,6 @@ from data_center.volume import (
     compute_volume_per_pkg,
     compute_volume_utilization,
 )
-
-_SCENARIOS = Path(__file__).resolve().parents[2] / "scenarios"
 
 
 def _num(value: float | int | str | bool | None) -> float:
@@ -179,27 +174,29 @@ def test_volume_sanity_600kw_node_stows_about_22_m3() -> None:
     assert _num(util.value) == pytest.approx(27.74, abs=0.01)
 
 
-def test_default_fy2036_node_stows_about_26_6_m3() -> None:
+def test_default_fy2036_node_stows_about_26_6_m3(default_output: SpaceModelOutput) -> None:
     """Objective: the default FY2036 node volume follows the stowed-stack physics.
 
     66 packages x 41.9 m2 x 6 mm = 16.6 m3 of array, x 1.3 mounting overhead
     + 5 m3 bus = 26.6 m3, about 33% of the 80 m3 fairing. Expected: FY2036
     volume per node 26.6 m3, utilization 33.2%, and the node mass-bound.
     """
-    py = run_valuation(ValuationConfig()).physical.years["2036"]
+    py = default_output.physical.years["2036"]
     assert _num(py.gpus_per_node.value) == 66
     assert _num(py.volume_per_node_m3.value) == pytest.approx(26.57, abs=0.01)
     assert _num(py.volume_utilization_pct.value) == pytest.approx(33.21, abs=0.01)
     assert py.binding_constraint.value == "mass"
 
 
-def test_node_volume_fixed_dial_moves_the_reported_node_volume() -> None:
+def test_node_volume_fixed_dial_moves_the_reported_node_volume(
+    default_output: SpaceModelOutput,
+) -> None:
     """Objective: ``gospel.node_volume_fixed_m3`` is not shadowed by a constant.
 
     Expected: a scenario that sets it to 50 m3 reports FY2036 node volume
     45 m3 above the default's, and nothing but the volume cells moves.
     """
-    default = run_valuation(load_config(_SCENARIOS / "default.yaml")).physical.years["2036"]
+    default = default_output.physical.years["2036"]
     cfg = config_from_dict({"gospel": {"node_volume_fixed_m3": 50.0}})
     bumped = run_valuation(cfg).physical.years["2036"]
     delta = _num(bumped.volume_per_node_m3.value) - _num(default.volume_per_node_m3.value)

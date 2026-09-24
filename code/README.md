@@ -29,14 +29,32 @@ dependencies from `pyproject.toml` and `uv.lock`.
 ```sh
 uv run rklb-value scenarios/default.yaml 2>&1 | tee /tmp/rklb_text_report.txt
 uv run rklb-value scenarios/default.yaml --brief 2>&1 | tee /tmp/rklb_brief.txt
-uv run rklb-value scenarios/default.yaml --json 2>&1 | tee outputs/data_center/runs/default.json
-uv run rklb-value --default --json 2>&1 | tee outputs/data_center/runs/default_packaged.json
-uv run rklb-value --input-schema 2>&1 | tee /tmp/rklb_input_schema.json
+uv run rklb-value scenarios/default.yaml --json | tee outputs/data_center/runs/default.json
+uv run rklb-value --default --json | tee outputs/data_center/runs/default_from_flag.json
+uv run rklb-value --input-schema | tee /tmp/rklb_input_schema.json
 ```
 
 Scratch run outputs belong under `outputs/data_center/runs/`, which is ignored
 by Git. The promoted public JSON lives outside the Python package under
 `../data_center/models/`.
+
+Output streams: stdout carries only the command's product (the report, the
+headline, the JSON artifact, the schema). Status and errors are log lines on
+stderr (`INFO: ...`, `ERROR: ...`), so pipe stdout alone when saving JSON, as
+above. A successful run writes nothing to stderr. A scenario that cannot be
+loaded (missing, malformed, or invalid, including a broken generations file it
+names) is one `ERROR: could not load <scenario>: <reason>` line and exit
+status 1, never a traceback; one the model cannot run is `ERROR: could not run
+<scenario>: <reason>`. Usage errors exit with status 2: conflicting flags (a
+config path with `--default`, `--brief` with `--json`, `--output-name`
+without `--promote`, `--brief` or `--json` with `--promote`, `--input-schema`
+with anything else), a malformed `--output-name`, and an output name that
+misstates the scenario (see the promotion rules below).
+
+The commands run from this source checkout only: the scenarios and the
+promoted artifacts are repository files the installed wheel does not ship, so
+a copy of the package installed elsewhere fails with a clear error instead of
+reading or writing inside its virtual environment.
 
 ## Promote Public Artifacts
 
@@ -51,6 +69,36 @@ Default promotion writes:
 ../data_center/models/ground/default.json
 ```
 
+Promotion rules:
+
+- The scenario is loaded first, so a mistyped path is reported as a missing
+  file (exit status 1).
+- The output name `default` belongs to `scenarios/default.yaml` alone. Any
+  other scenario needs `--output-name <stem>`, and the default scenario is
+  promoted only as `default`; a name that breaks either rule is a usage error
+  (exit status 2). Stems are lowercase letters, digits, underscores, and
+  hyphens only, because macOS file systems are usually case-insensitive and
+  `DEFAULT.json` would be `default.json`. The artifact role
+  (`promoted_default` or `promoted_named`) follows the scenario, never the
+  name.
+- Promotion refuses, and writes nothing, when any validation check fails: a
+  `fail` in the space artifact's `meta.validation_results` (a critical or
+  major rule, a model invariant, or a default guard) or in the ground
+  reference's. The `ERROR:` line names the failing checks.
+- Both artifacts are built in memory first. Each is then staged in full to a
+  hidden temporary file beside its destination, the current files are kept
+  as hidden backups, and the staged files are renamed into place one at a
+  time. Each rename is atomic, but the pair is not: if the second rename
+  fails (a locked file, for example), the first artifact is restored from its
+  backup, and the `ERROR:` line says which files were restored and which, if
+  any, still hold new content (with the backup path that keeps their
+  previous content). A failure before any rename (a read-only directory, a
+  full disk) changes neither file. Backups and staged files are removed once
+  the write completes or is rolled back; if the process is killed between
+  the two renames, the hidden `.bak` files beside the artifacts hold the
+  previous content.
+- Status lines (`INFO: promoted <path>`) go to stderr; stdout stays empty.
+
 Promotion does not rewrite `../data_center/conclusion.md`. That file is static
 reviewed prose tied to the promoted defaults. If the default scenario changes,
 promote the JSON, inspect the diffs, and update the static conclusion
@@ -62,8 +110,16 @@ Named space artifacts are supported for local comparison:
 uv run rklb-value scenarios/conservative.yaml --promote --output-name conservative 2>&1 | tee /tmp/rklb_promote_conservative.txt
 ```
 
-That writes `../data_center/models/space/conservative.json`. The default ground
-reference is written only for the default promoted output.
+That writes `../data_center/models/space/conservative.json` with role
+`promoted_named`. The ground reference is written only by the default
+promotion. Named artifacts stay local: `.gitignore` tracks only the two
+`default.json` files under `../data_center/models/`.
+
+The Iridium promotion command (`python -m communications.json_output`) follows
+the same conventions: one `ERROR:` line and exit status 1 on a bad scenario or
+a failed write, exit status 2 on a usage error, and its status line on stderr.
+It writes one artifact through the same writer, so its single atomic rename
+leaves the existing artifact untouched when the write fails.
 
 ## Edit Scenarios
 
@@ -72,7 +128,7 @@ to a new YAML file, edit the dials, and run the copy into the scratch directory:
 
 ```sh
 cp scenarios/default.yaml scenarios/local_experiment.yaml
-uv run rklb-value scenarios/local_experiment.yaml --json 2>&1 | tee outputs/data_center/runs/local_experiment.json
+uv run rklb-value scenarios/local_experiment.yaml --json | tee outputs/data_center/runs/local_experiment.json
 ```
 
 Do not treat code-level defaults as a second public contract. If a default
@@ -180,11 +236,13 @@ jq '.meta.validation_results[]? | select(.severity=="fail")' ../data_center/mode
 ## Validation Warnings
 
 Space validation failures live at `meta.validation.rules[]` with
-`pass_check == false`. Promoted defaults should not have failures.
+`pass_check == false`; the complete verdict list, rules plus model invariants
+and default guards, is `meta.validation_results`. `--promote` refuses any
+scenario with a `fail` there.
 
 Ground validation should preserve the deployed-year anchor and the parity
 boundary. Warnings are acceptable when they describe scope limits, such as the
-orbital reference mirroring build-and-launch cost only. Failures should block
+orbital reference mirroring build-and-launch cost only. A ground `fail` blocks
 promotion until fixed.
 
 ## Package Layout

@@ -42,6 +42,7 @@ ceil(subscriber_target / subscribers_per_satellite)))``.
 
 from __future__ import annotations
 
+import logging
 from enum import StrEnum
 from typing import Final
 
@@ -60,6 +61,8 @@ from common.cadence import (
     LOW_CADENCE_LAUNCHES_DEFAULT,
     ROUND_TO_NEAREST_OFFSET,
 )
+
+logger = logging.getLogger(__name__)
 
 # ===========================================================================
 # Density-regime enum (the two-regime ground interface, Phase 4)

@@ -21,19 +21,40 @@ while a relative SCENARIO path resolves against the working directory as usual,
 so the documented command works verbatim from ``code/``. The version stamp is
 whatever string the caller passes (``--version-stamp``, e.g. a git-describe
 output); it defaults to today's ISO date.
+
+The command follows the shared CLI conventions (:mod:`common.cli`): the status
+line and any error are log records on stderr; an unreadable or invalid
+scenario, a scenario the model cannot run, or a failed write is one ``ERROR:``
+line and exit status 1, never a traceback; a usage error exits with status 2.
+The one artifact is written through
+:func:`common.file_io.write_files_with_rollback`: staged in full beside its
+destination, then renamed over it in one atomic rename, so a failure leaves
+the promoted file as it was. It runs from a source checkout only
+(:func:`common.file_io.locate_source_checkout`).
 """
 
 from __future__ import annotations
 
-import argparse
 import logging
-import sys
 from datetime import date
 from pathlib import Path
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from common.cli import (
+    EXIT_ERROR,
+    EXIT_OK,
+    CliArgumentParser,
+    configure_cli_logging,
+    describe_failure,
+)
+from common.file_io import (
+    ModelFileError,
+    PendingWrite,
+    locate_source_checkout,
+    write_files_with_rollback,
+)
 from communications.config import CommsConfig, load_comms_config
 from communications.constants import (
     ORBIT_ALTITUDE_KM_SCENARIO,
@@ -103,15 +124,6 @@ ARPU_MARGIN_UNDEFINED_PCT: Final[float] = 0.0
 reports 0.0 rather than dividing by zero. The block only exists on a populated pool
 (revenue strictly positive), so this guard is defensive, mirroring the engine's
 zero-revenue margin guard."""
-
-EXIT_OK: Final[int] = 0
-"""Process exit code for a successful promotion."""
-
-EXIT_ERROR: Final[int] = 1
-"""Process exit code when the scenario fails to load or run."""
-
-# The repo root, anchored from this file: src/communications -> src -> code -> root.
-_REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[3]
 
 
 class IridiumProvenance(BaseModel):
@@ -452,21 +464,6 @@ class IridiumModelArtifact(BaseModel):
     )
 
 
-def _repo_relative(path: Path) -> str:
-    """Return a repo-relative POSIX path when under the repo root, else as-posix.
-
-    Args:
-        path: The resolved filesystem path to describe.
-
-    Returns:
-        The provenance-friendly path string.
-    """
-    try:
-        return path.relative_to(_REPO_ROOT).as_posix()
-    except ValueError:
-        return path.as_posix()
-
-
 def _cost_per_subscriber_annualized_usd(
     steady_state_annual_cost_musd: float, subscribers_served: int
 ) -> float | None:
@@ -723,11 +720,15 @@ def export_iridium_json(
     """Run an Iridium scenario and write the promoted JSON artifact.
 
     Loads the scenario, runs :func:`~communications.engine.run_comms_model`,
-    assembles the artifact, and writes it. A relative ``output_path`` is
-    anchored to the REPO ROOT (the promoted ``communications/models/``
-    workstream lives there, never under ``code/``); an absolute path is used
-    as-is. The ``scenario_path`` resolves against the working directory as
-    usual.
+    assembles the artifact, and writes it through
+    :func:`common.file_io.write_files_with_rollback` (staged in full, then one
+    atomic rename, so a failed write leaves any existing file as it was). A
+    relative
+    ``output_path`` is anchored to the REPO ROOT of the source checkout (the
+    promoted ``communications/models/`` workstream lives there, never under
+    ``code/``); an absolute path is used as-is. The ``scenario_path``
+    resolves against the working directory as usual and is recorded
+    repository-relative in the provenance header.
 
     Args:
         scenario_path: The scenario YAML to run (must select the Iridium model).
@@ -740,9 +741,14 @@ def export_iridium_json(
         The resolved path the artifact was written to.
 
     Raises:
-        FileNotFoundError: If the scenario YAML does not exist.
-        ValueError: If the YAML is invalid or does not select the Iridium model.
+        common.file_io.ModelFileError: If the module is not running from a
+            source checkout, the scenario YAML is missing, unreadable, or
+            malformed, or the artifact cannot be written.
+        ValueError: If the scenario is invalid (a
+            :class:`pydantic.ValidationError`), does not select the Iridium
+            model, or cannot be run.
     """
+    checkout = locate_source_checkout(__file__)
     scenario = Path(scenario_path)
     config = load_comms_config(scenario)
     trajectory = run_comms_model(config)
@@ -750,21 +756,20 @@ def export_iridium_json(
     artifact = build_iridium_artifact(
         config=config,
         trajectory=trajectory,
-        source_scenario_path=_repo_relative(scenario.resolve()),
+        source_scenario_path=checkout.repo_relative(scenario),
         version_stamp=stamp,
     )
     out = Path(output_path)
     if not out.is_absolute():
-        out = _REPO_ROOT / out
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(render_json(artifact) + "\n", encoding="utf-8")
+        out = checkout.repo_dir / out
+    write_files_with_rollback([PendingWrite(out, render_json(artifact) + "\n")])
     logger.info("promoted Iridium model artifact written to %s", out)
     return out
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    """Build the module's command-line parser."""
-    parser = argparse.ArgumentParser(
+def _build_parser() -> CliArgumentParser:
+    """Build the module's command-line parser (usage errors exit with EXIT_USAGE)."""
+    parser = CliArgumentParser(
         prog="python -m communications.json_output",
         description=(
             "Run the Iridium model (formerly Model B) from a scenario YAML and write "
@@ -798,16 +803,21 @@ def main(argv: list[str] | None = None) -> int:
         argv: Argument list (defaults to ``sys.argv[1:]``).
 
     Returns:
-        ``EXIT_OK`` on success, ``EXIT_ERROR`` if the scenario fails to load
-        or does not select the Iridium model.
+        :data:`~common.cli.EXIT_OK` on success; :data:`~common.cli.EXIT_ERROR`
+        (after one ``ERROR:`` log line, no traceback) when the scenario cannot
+        be read, is invalid, does not select the Iridium model, cannot be run,
+        or the artifact cannot be written. Usage errors exit through
+        :class:`~common.cli.CliArgumentParser` with
+        :data:`~common.cli.EXIT_USAGE`.
     """
+    configure_cli_logging()
     args = _build_parser().parse_args(argv)
     try:
-        written = export_iridium_json(args.scenario, args.output, args.version_stamp)
-    except (FileNotFoundError, ValueError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        export_iridium_json(args.scenario, args.output, args.version_stamp)
+    except (ModelFileError, ValueError) as exc:
+        scenario = Path(args.scenario)
+        logger.error("could not promote %s: %s", scenario, describe_failure(exc, scenario))
         return EXIT_ERROR
-    print(f"promoted model -> {written}", file=sys.stderr)
     return EXIT_OK
 
 

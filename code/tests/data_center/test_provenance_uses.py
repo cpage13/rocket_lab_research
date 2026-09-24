@@ -60,8 +60,8 @@ from data_center.ground import (
     render_ground_json,
 )
 from data_center.json_output import render_json
+from data_center.output import SpaceModelOutput
 
-_SCENARIOS = Path(__file__).resolve().parents[2] / "scenarios"
 _SCENARIO_NAMES = (
     "default",
     "conservative",
@@ -214,10 +214,10 @@ def _classify(doc: dict[str, Any], cell_path: str, use_path: str) -> str:
 
 
 @pytest.fixture(scope="module", params=_SCENARIO_NAMES)
-def scenario_doc(request: pytest.FixtureRequest) -> dict[str, Any]:
+def scenario_doc(request: pytest.FixtureRequest, scenarios_dir: Path) -> dict[str, Any]:
     """Build + serialise one scenario's v8 artifact, parametrised over every scenario."""
     name: str = request.param
-    config = load_config(_SCENARIOS / f"{name}.yaml")
+    config = load_config(scenarios_dir / f"{name}.yaml")
     return json.loads(render_json(run_valuation(config)))  # type: ignore[no-any-return]
 
 
@@ -313,12 +313,14 @@ def test_2036_fleet_revenue_provenance_walk_terminates(
 
 
 @pytest.fixture(scope="module")
-def default_space_and_ground_docs() -> tuple[dict[str, Any], dict[str, Any]]:
-    """Serialise the default space artifact and the ground reference built from it."""
-    space = run_valuation(load_config(_SCENARIOS / "default.yaml"))
+def default_space_and_ground_docs(
+    default_output: SpaceModelOutput, scenarios_dir: Path
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Serialise the session's default run and the ground reference built from it."""
+    space = default_output
     ground = build_ground_reference_output(
         space,
-        load_ground_config(_SCENARIOS / "ground_default.yaml"),
+        load_ground_config(scenarios_dir / "ground_default.yaml"),
         space_model_path="data_center/models/space/default.json",
         ground_scenario_path=DEFAULT_GROUND_SCENARIO_PATH,
     )
@@ -360,6 +362,13 @@ def test_every_ground_uses_pointer_resolves(
 # --------------------------------------------------------------------------
 
 _HEAVY_PRE_LIFT_RADIATOR: dict[str, Any] = {"gospel": {"radiator_t_per_kw_pre": 0.003}}
+
+# A cadence ceiling far enough from the default 150 to move launches. The
+# logistic ramp is fit through the year-5 and year-10 anchors, so a unit move
+# of the ceiling shifts every other year's fitted rate by well under half a
+# launch and integer rounding absorbs it; 200 reshapes the ramp enough to move
+# whole launches.
+_MOVING_CADENCE_CEILING = 200
 
 # (dial path, base config mapping, perturbed config mapping). The Tjmax case
 # starts from a heavier pre-lift dial, since the default holds pre == post
@@ -409,6 +418,11 @@ _PERTURBATIONS: tuple[tuple[str, dict[str, Any], dict[str, Any]], ...] = (
         "inputs.config.fleet.service_life_years",
         {},
         {"fleet": {"service_life_years": 6}},
+    ),
+    (
+        "inputs.config.cadence.cadence_ceiling",
+        {},
+        {"cadence": {"cadence_ceiling": _MOVING_CADENCE_CEILING}},
     ),
 )
 
@@ -495,7 +509,6 @@ _REVENUE_ANCHOR = re.compile(r"^(inputs\.config\.revenue\.(?:central|low|high))\
 # Anything else that moves nothing fails the sweep (a silent perturbation
 # would make the closure check vacuous).
 _EXPECTED_INERT_DIALS: dict[str, str] = {
-    "inputs.config.cadence.cadence_ceiling": "a unit move is absorbed by launch rounding",
     "inputs.config.physical.tjmax_lift_year": "the default holds pre == post radiator mass",
     "inputs.config.generations[0].year_available": "B200 is never the frontier",
     "inputs.config.generations[0].usd_per_pkg": "B200 is never the frontier",
@@ -509,15 +522,15 @@ _EXPECTED_INERT_DIALS: dict[str, str] = {
 }
 
 
-def _default_mappings() -> tuple[dict[str, Any], dict[str, Any]]:
+def _default_mappings(scenarios_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     """Return the default space and ground scenario mappings.
 
     The space mapping lists the bundled generations explicitly so the
     sweep can move a generation's field; the roadmap is unchanged.
     """
-    space = yaml.safe_load((_SCENARIOS / "default.yaml").read_text(encoding="utf-8"))
+    space = yaml.safe_load((scenarios_dir / "default.yaml").read_text(encoding="utf-8"))
     space["generations"] = [g.model_dump(mode="json") for g in KNOWN_GENS]
-    ground = yaml.safe_load((_SCENARIOS / "ground_default.yaml").read_text(encoding="utf-8"))
+    ground = yaml.safe_load((scenarios_dir / "ground_default.yaml").read_text(encoding="utf-8"))
     return space, ground
 
 
@@ -614,8 +627,17 @@ def _space_dials(doc: dict[str, Any]) -> list[str]:
     return dials
 
 
+# Dials whose generic unit or relative move is absorbed by rounding, with the
+# move that exercises them instead.
+_DIAL_CANDIDATES: dict[str, tuple[int | float, ...]] = {
+    "inputs.config.cadence.cadence_ceiling": (_MOVING_CADENCE_CEILING,),
+}
+
+
 def _candidate_values(dial: str, value: int | float) -> list[int | float]:
     """Return the perturbed values to try for one dial, in order."""
+    if dial in _DIAL_CANDIDATES:
+        return list(_DIAL_CANDIDATES[dial])
     if dial.endswith(".year_available"):
         return [value + _YEAR_SHIFT, value - _YEAR_SHIFT]
     if isinstance(value, int):
@@ -666,7 +688,9 @@ def _moved_and_unreached(
     return moved, [node for node in moved if node not in reaching]
 
 
-def test_every_dial_moves_only_cells_that_cite_it_across_both_artifacts() -> None:
+def test_every_dial_moves_only_cells_that_cite_it_across_both_artifacts(
+    scenarios_dir: Path,
+) -> None:
     """Objective: the ``uses`` graph is sufficient for every settable dial.
 
     Perturbs every numeric dial of the default space scenario (cadence,
@@ -677,7 +701,7 @@ def test_every_dial_moves_only_cells_that_cite_it_across_both_artifacts() -> Non
     cites the dial directly or transitively (zero closure misses), and the
     only dials that move nothing are the documented inert ones.
     """
-    space, ground = _default_mappings()
+    space, ground = _default_mappings(scenarios_dir)
     base_docs = _build_docs(space, ground)
     base = _cell_values(base_docs)
     unreached: dict[str, list[_Node]] = {}

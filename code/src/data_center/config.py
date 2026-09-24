@@ -25,8 +25,10 @@ Cycle-2 categorical enums (:class:`WorkloadType`, :class:`OperatorModel`,
 here too.
 
 YAML loading: scenario files are YAML mappings whose top-level keys are
-the block names above — all optional (omitted = defaults). ``extra="forbid"``
-means a typo in a scenario file fails loudly.
+the block names above, all optional (omitted = defaults), read through the
+shared :func:`common.file_io.load_yaml_mapping`. ``extra="forbid"`` means a
+typo in a scenario file fails loudly. A scenario may give ``generations`` as
+a path to a generations YAML, resolved relative to the scenario file.
 
 Cross-field validators reject, at load, every combination the engine cannot
 run or would run into nonsense: cadence anchors outside
@@ -34,7 +36,8 @@ run or would run into nonsense: cadence anchors outside
 launch-cost cadence anchors, R bands out of ``low <= central <= high`` order
 or with duplicate anchor years, a fixed node mass at or above the mass
 envelope, a bus decline of -100% or steeper, an unordered generations list,
-and a run window whose generation extension would pass
+a base year before the earliest listed generation is available, and a run
+window whose generation extension would pass
 :data:`~data_center.constants.MAX_FY`.
 
 :func:`anchor_year` is the one helper that resolves a run's anchor year (the
@@ -44,13 +47,15 @@ validation checks, the ground reference, and the query examples all read it.
 
 from __future__ import annotations
 
+import logging
+import math
 from enum import StrEnum
 from pathlib import Path
-from typing import Any  # typing-acceptable: Any types the dict deserialization boundary
+from typing import Any, Final  # typing-acceptable: Any types the dict deserialization boundary
 
-import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from common.file_io import load_yaml_mapping
 from data_center.constants import (
     ANCHOR_MODEL_YEAR,
     BUS_BASE_MUSD,
@@ -90,13 +95,21 @@ from data_center.constants import (
     TJMAX_LIFT_YEAR,
 )
 from data_center.generations import (
+    FRONTIER_YEAR_TOLERANCE,
     GENERATIONS_YAML_KEY,
     KNOWN_GENS,
     GenerationSlopes,
     GenerationSpec,
+    NoFrontierAvailableError,
+    frontier_at,
     load_generations_yaml,
     validate_generation_order,
 )
+
+logger = logging.getLogger(__name__)
+
+GENERATIONS_FIELD: Final[str] = "generations"
+"""The scenario key holding the generation roadmap: a list, or a path to a generations YAML."""
 
 # ===========================================================================
 # 0. Cycle-2 v8 categorical enums
@@ -733,6 +746,32 @@ class ValuationConfig(BaseModel):
             validate_generation_order(v)
         return v
 
+    @model_validator(mode="after")
+    def _frontier_available_at_base_year(self) -> ValuationConfig:
+        """Require a listed generation to be available by the base year.
+
+        Every window year picks its frontier generation
+        (:func:`~data_center.generations.frontier_at`); the base year is the
+        earliest, so if a generation is available then, every later year has
+        one too. A base year before the earliest listed generation (2020 to
+        2024 against the bundled roadmap, whose first entry is dated 2024.5)
+        would otherwise fail mid-run.
+        """
+        base_year = self.metadata.base_year
+        listed = self.listed_generations()
+        try:
+            frontier_at(base_year, listed)
+        except NoFrontierAvailableError as exc:
+            earliest = listed[0]
+            first_valid = math.ceil(earliest.year_available - FRONTIER_YEAR_TOLERANCE)
+            raise ValueError(
+                f"metadata.base_year {base_year} precedes every listed generation: the "
+                f"earliest, {earliest.name}, is available in {earliest.year_available:g}, "
+                f"so the base year must be {first_valid} or later (or list an earlier "
+                "generation)"
+            ) from exc
+        return self
+
     def listed_generations(self) -> list[GenerationSpec]:
         """Return the run's listed generation roadmap, before extrapolation.
 
@@ -771,51 +810,58 @@ def _default_metadata() -> MetadataConfig:
 
 
 def config_from_dict(data: dict[str, Any]) -> ValuationConfig:
-    """Build a :class:`ValuationConfig` from an already-parsed YAML mapping.
+    """Build a :class:`ValuationConfig` from an already-parsed mapping.
 
-    Top-level keys are the v8 block names — ``gospel``, ``slopes``,
+    Top-level keys are the v8 block names: ``gospel``, ``slopes``,
     ``generations``, ``scenario_name``, ``metadata``, ``cadence``,
-    ``fleet``, ``volume``, ``r_band``, ``launch_cost`` — all optional.
-    ``generations`` may be a list of per-generation specs (each validated
-    against `GenerationSpec`) or a string path to a YAML file containing a
-    top-level ``generations: [...]`` mapping.
+    ``fleet``, ``volume``, ``r_band``, ``launch_cost``, all optional.
+    ``generations`` is a list of per-generation specs (each validated
+    against `GenerationSpec`); a path to a generations file is a scenario
+    file feature that :func:`load_config` resolves before calling this.
 
     Validation is Pydantic's: an unknown key, a wrong type, an
     out-of-bounds value, or a missing required field raises
     :class:`pydantic.ValidationError` with a precise location.
+
+    Raises:
+        ValueError: If ``data`` is not a mapping.
+        pydantic.ValidationError: If the mapping is not a valid config.
     """
     if not isinstance(data, dict):
         raise ValueError("config root must be a mapping (a YAML object)")
-    # If `generations` is a string, treat it as a path to a generations YAML
-    # file and load it. Lets a scenario point at the bundled
-    # `scenarios/generations.yaml` (or a custom file) instead of inlining the
-    # whole list.
-    gens_raw = data.get("generations")
-    if isinstance(gens_raw, str):
-        data = dict(data)  # don't mutate the caller's dict
-        data["generations"] = load_generations_yaml(Path(gens_raw))
     return ValuationConfig.model_validate(data)
 
 
 def load_config(path: str | Path) -> ValuationConfig:
-    """Load and validate a :class:`ValuationConfig` from a YAML file.
+    """Load and validate a :class:`ValuationConfig` from a scenario YAML file.
 
-    Raises :class:`FileNotFoundError` if the path does not exist and
-    :class:`ValueError` (specifically a :class:`pydantic.ValidationError`)
-    on any malformed or invalid content.
+    The file is read through :func:`common.file_io.load_yaml_mapping`; an
+    empty file takes every default. A string ``generations`` value is a path
+    to a generations YAML (a top-level ``generations: [...]`` mapping, as in
+    the bundled ``scenarios/generations.yaml``), resolved relative to the
+    scenario file's own directory, never the working directory.
+
+    Args:
+        path: The scenario YAML file.
+
+    Returns:
+        The validated config.
+
+    Raises:
+        common.file_io.ModelFileError: If the scenario file, or the
+            generations file it names, is missing, unreadable, malformed, or
+            of the wrong top-level shape.
+        pydantic.ValidationError: If the content is not a valid config.
     """
-    p = Path(path)
-    if not p.is_file():
-        raise FileNotFoundError(f"config file not found: {p}")
-    try:
-        data = yaml.safe_load(p.read_text())
-    except yaml.YAMLError as exc:
-        raise ValueError(f"could not parse YAML config {p}: {exc}") from exc
-    if data is None:
-        # An empty scenario file = all defaults.
-        return ValuationConfig()
-    if not isinstance(data, dict):
-        raise ValueError(f"config file {p} must contain a YAML mapping (got {type(data).__name__})")
+    scenario = Path(path)
+    data = load_yaml_mapping(scenario)
+    generations_ref = data.get(GENERATIONS_FIELD)
+    if isinstance(generations_ref, str):
+        generations_path = Path(generations_ref)
+        if not generations_path.is_absolute():
+            generations_path = scenario.parent / generations_path
+        logger.debug("scenario %s reads its generations from %s", scenario, generations_path)
+        data = {**data, GENERATIONS_FIELD: load_generations_yaml(generations_path)}
     return config_from_dict(data)
 
 

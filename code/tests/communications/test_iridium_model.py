@@ -40,6 +40,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from common.cli import EXIT_ERROR
 from communications.config import CommsConfig, IridiumArpuDials, IridiumDials, load_comms_config
 from communications.constants import (
     APERTURE_FOLD_CAVEAT_NOTE,
@@ -70,7 +71,6 @@ from communications.engine import (
     run_comms_model,
 )
 from communications.json_output import (
-    EXIT_ERROR,
     MODEL_NAME,
     IridiumModelArtifact,
     build_iridium_artifact,
@@ -255,26 +255,24 @@ SATURATION_POOL = 367_058_824  # 62,400,000 / 0.17, rounded half up.
 SATURATION_REVENUE_TOTAL_MUSD = 48_534.132_504
 SATURATION_MARGIN_PCT = 98.279_561_296_513_99
 
-# The scenario YAMLs (anchored from this test file: tests/communications -> code ->
-# scenarios/) and the committed promoted artifact (-> the repo root).
-_SCENARIO_YAML = Path(__file__).resolve().parents[2] / "scenarios" / "iridium.yaml"
-_SATURATION_YAML = Path(__file__).resolve().parents[2] / "scenarios" / "iridium_saturation.yaml"
-_PROMOTED_ARTIFACT = (
-    Path(__file__).resolve().parents[3] / "communications" / "models" / "iridium" / "default.json"
-)
+# The scenario YAMLs and the committed promoted artifact come from the
+# repository-anchored fixtures in conftest.py (iridium_yaml,
+# iridium_saturation_yaml, promoted_iridium_artifact).
 
 
-def _iridium_scenario_with(block: str, **fields: object) -> CommsConfig:
-    """Load the promoted Iridium scenario with one block's fields replaced (re-validated).
+def _iridium_scenario_with(scenario: Path, block: str, **fields: object) -> CommsConfig:
+    """Load an Iridium scenario with one block's fields replaced (re-validated).
 
     Args:
+        scenario: The scenario YAML to start from (the promoted
+            ``iridium.yaml``).
         block: The top-level config block to edit (e.g. ``"satellite"``).
         **fields: The fields to set inside that block.
 
     Returns:
         The validated variant config.
     """
-    data = load_comms_config(_SCENARIO_YAML).model_dump()
+    data = load_comms_config(scenario).model_dump()
     data[block] = {**(data.get(block) or {}), **fields}
     return CommsConfig.model_validate(data)
 
@@ -496,7 +494,9 @@ def test_iridium_rich_tier_flips_to_capacity() -> None:
     assert traj.binding_regime is BindingRegime.CAPACITY
 
 
-def test_rich_tier_reports_below_target_truthfully_then_completes_all_in() -> None:
+def test_rich_tier_reports_below_target_truthfully_then_completes_all_in(
+    iridium_yaml: Path,
+) -> None:
     """The rich tier's 802-satellite fleet: 576 by FY2036 at 0.18, complete in 2033 all-in.
 
     Objective: the model reports below-target deployment truthfully (the documented
@@ -511,12 +511,14 @@ def test_rich_tier_reports_below_target_truthfully_then_completes_all_in() -> No
     assert default_share.fleet_target == EXPECTED_FLEET_TARGET_RICH
     assert default_share.full_coverage_reached_year is None
     assert default_share.years[-1].living_fleet == RICH_TIER_LIVING_AT_DEFAULT_SHARE
-    all_in_config = _iridium_scenario_with("iridium", active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS)
+    all_in_config = _iridium_scenario_with(
+        iridium_yaml, "iridium", active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS
+    )
     all_in = run_comms_model(all_in_config)
     assert all_in.full_coverage_reached_year == RICH_TIER_COMPLETION_YEAR_ALL_IN
     assert all_in.years[-1].living_fleet == RICH_TIER_BUILT_FLEET
     incomplete = _iridium_scenario_with(
-        "iridium", active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS
+        iridium_yaml, "iridium", active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS
     ).model_copy(update={"comms_cadence": CommsConfig().comms_cadence})
     assert _artifact_for(incomplete).trajectory_summary.build_completes_in_horizon is False
 
@@ -611,9 +613,9 @@ def test_iridium_aperture_60_what_if() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_iridium_yaml_scenario_loads_and_runs() -> None:
+def test_iridium_yaml_scenario_loads_and_runs(iridium_yaml: Path) -> None:
     """The Iridium scenario YAML loads (iridium, factory metadata) and runs the baseline."""
-    config = load_comms_config(_SCENARIO_YAML)
+    config = load_comms_config(iridium_yaml)
     assert config.iridium is not None
     assert config.iridium.scenario_name == IRIDIUM_SCENARIO_NAME_DEFAULT
     # No metadata block in the file: the default factory supplies base year 2026, horizon 10.
@@ -660,7 +662,7 @@ def test_iridium_assumptions_states_ecosystem_and_ops() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
+def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path, iridium_yaml: Path) -> None:
     """The export runs the Iridium scenario and the JSON carries the frozen baseline.
 
     Objective: the promoted-JSON writer end to end (scenario YAML in, artifact
@@ -684,7 +686,7 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
     annualized cost.
     """
     out_path = tmp_path / "iridium_default.json"
-    written = export_iridium_json(_SCENARIO_YAML, out_path, version_stamp="test-stamp")
+    written = export_iridium_json(iridium_yaml, out_path, version_stamp="test-stamp")
     assert written == out_path
     payload = json.loads(written.read_text(encoding="utf-8"))
     assert payload["provenance"]["model_name"] == MODEL_NAME
@@ -924,7 +926,7 @@ def test_arpu_supersession_one_iot_truth() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_completion_year_is_a_build_year_on_the_promoted_scenario() -> None:
+def test_completion_year_is_a_build_year_on_the_promoted_scenario(iridium_yaml: Path) -> None:
     """The 2031 completion tranche is build, never replacement; HOLD years replace cohorts.
 
     Objective: the replacement rule on the promoted scenario. FY2031 deploys the final
@@ -933,7 +935,7 @@ def test_completion_year_is_a_build_year_on_the_promoted_scenario() -> None:
     HOLD years FY2032..FY2036 replace the cohorts launched five years earlier, with
     replacement lines 50, 75, 125, 225, and 250 M, each equal to the year's cash.
     """
-    traj = run_comms_model(load_comms_config(_SCENARIO_YAML))
+    traj = run_comms_model(load_comms_config(iridium_yaml))
     by_year = {year.year: year for year in traj.years}
     completion = by_year[FULL_COVERAGE_YEAR_ALL_IN]
     assert completion.is_hold_phase is False
@@ -952,7 +954,7 @@ def test_completion_year_is_a_build_year_on_the_promoted_scenario() -> None:
         assert year.replacement_cost_this_year_musd == year.total_cost_this_year_musd
 
 
-def test_horizon_ending_on_completion_publishes_no_cash_replacement() -> None:
+def test_horizon_ending_on_completion_publishes_no_cash_replacement(iridium_yaml: Path) -> None:
     """A horizon that ends on the completion year publishes no final-year cash replacement.
 
     Objective: the final-year cash pair never carries a build tranche. Before the
@@ -962,7 +964,7 @@ def test_horizon_ending_on_completion_publishes_no_cash_replacement() -> None:
     annualized basis (145.0 M, 14.50 USD per person) still publishes.
     """
     config = _iridium_scenario_with(
-        "metadata", base_year=BASE_YEAR_DEFAULT, horizon_years=COMPLETION_YEAR_HORIZON
+        iridium_yaml, "metadata", base_year=BASE_YEAR_DEFAULT, horizon_years=COMPLETION_YEAR_HORIZON
     )
     summary = _artifact_for(config).trajectory_summary
     assert summary.full_coverage_reached_year == FULL_COVERAGE_YEAR_ALL_IN
@@ -976,7 +978,7 @@ def test_horizon_ending_on_completion_publishes_no_cash_replacement() -> None:
     )
 
 
-def test_long_satellite_life_publishes_no_cash_replacement() -> None:
+def test_long_satellite_life_publishes_no_cash_replacement(iridium_yaml: Path) -> None:
     """A satellite life longer than the horizon publishes no 0.0 cash cost as a real figure.
 
     Objective: with a 10-year life no cohort retires by FY2036, so the final year
@@ -984,14 +986,18 @@ def test_long_satellite_life_publishes_no_cash_replacement() -> None:
     subscriber as if serving cost nothing. Expected: the final-year cash pair is None
     and the annualized basis carries the real cost (72.5 M a year for 348 satellites).
     """
-    config = _iridium_scenario_with("satellite", satellite_lifetime_years=LONG_LIFE_YEARS)
+    config = _iridium_scenario_with(
+        iridium_yaml, "satellite", satellite_lifetime_years=LONG_LIFE_YEARS
+    )
     summary = _artifact_for(config).trajectory_summary
     assert summary.final_year_replacement_cost_musd is None
     assert summary.final_year_cash_cost_per_subscriber_usd is None
     assert summary.steady_state_annual_cost_musd == pytest.approx(LONG_LIFE_ANNUAL_COST_MUSD)
 
 
-def test_near_zero_share_does_not_publish_a_full_margin_on_an_empty_fleet() -> None:
+def test_near_zero_share_does_not_publish_a_full_margin_on_an_empty_fleet(
+    iridium_yaml: Path,
+) -> None:
     """A share that never launches publishes the built fleet's margin, flagged incomplete.
 
     Objective: the ARPU margin pairs revenue and cost on the same (built) fleet.
@@ -1003,7 +1009,7 @@ def test_near_zero_share_does_not_publish_a_full_margin_on_an_empty_fleet() -> N
     baseline's 98.24 percent (not 100), and the per-person and final-year cash
     figures are None (nobody served, nothing replaced).
     """
-    config = _iridium_scenario_with("comms_cadence", share_of_fleet=NEAR_ZERO_SHARE)
+    config = _iridium_scenario_with(iridium_yaml, "comms_cadence", share_of_fleet=NEAR_ZERO_SHARE)
     artifact = _artifact_for(config)
     summary = artifact.trajectory_summary
     assert summary.build_completes_in_horizon is False
@@ -1020,7 +1026,7 @@ def test_near_zero_share_does_not_publish_a_full_margin_on_an_empty_fleet() -> N
     )
 
 
-def test_incomplete_build_margin_equals_the_completed_build_margin() -> None:
+def test_incomplete_build_margin_equals_the_completed_build_margin(iridium_yaml: Path) -> None:
     """The margin describes the built fleet whether or not the horizon reaches it.
 
     Objective: consistency of the built-fleet convention. The rich tier on the flat
@@ -1030,7 +1036,9 @@ def test_incomplete_build_margin_equals_the_completed_build_margin() -> None:
     incomplete run projects the 804-satellite built fleet at the flat price instead of
     pricing the 576 on orbit), and only the incomplete run is flagged.
     """
-    complete_config = _iridium_scenario_with("iridium", active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS)
+    complete_config = _iridium_scenario_with(
+        iridium_yaml, "iridium", active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS
+    )
     incomplete_config = complete_config.model_copy(
         update={"comms_cadence": CommsConfig().comms_cadence}
     )
@@ -1060,7 +1068,7 @@ def test_incomplete_build_margin_equals_the_completed_build_margin() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_saturation_companion_end_to_end(tmp_path: Path) -> None:
+def test_saturation_companion_end_to_end(tmp_path: Path, iridium_saturation_yaml: Path) -> None:
     """The saturation companion's published column, frozen end to end.
 
     Objective: scenarios/iridium_saturation.yaml through the promotion writer
@@ -1074,7 +1082,7 @@ def test_saturation_companion_end_to_end(tmp_path: Path) -> None:
     715,765 government contracts, a 367,058,824 billable-connection pool) totaling
     48,534.132504 M a year at a 98.28 percent margin; people and devices never summed.
     """
-    written = export_iridium_json(_SATURATION_YAML, tmp_path / "saturation.json")
+    written = export_iridium_json(iridium_saturation_yaml, tmp_path / "saturation.json")
     payload = json.loads(written.read_text(encoding="utf-8"))
     ts = payload["trajectory_summary"]
     assert ts["fleet_target"] == SATURATION_FLEET_TARGET
@@ -1109,15 +1117,17 @@ def test_saturation_companion_end_to_end(tmp_path: Path) -> None:
     assert payload["iridium_physics"]["iot_devices"] == SATURATION_IOT_COUNT
 
 
-def test_the_two_scenarios_differ_only_in_target_and_label() -> None:
+def test_the_two_scenarios_differ_only_in_target_and_label(
+    iridium_yaml: Path, iridium_saturation_yaml: Path
+) -> None:
     """The saturation companion moves exactly one dial (and its label) from the baseline.
 
     Objective: the two hand-repeated YAMLs stay in step. Expected: loaded configs are
     identical except ``subscribers.subscribers_at_full_coverage`` (10M versus the
     cap-binding 62.4M) and ``iridium.scenario_name``.
     """
-    baseline = load_comms_config(_SCENARIO_YAML).model_dump()
-    saturation = load_comms_config(_SATURATION_YAML).model_dump()
+    baseline = load_comms_config(iridium_yaml).model_dump()
+    saturation = load_comms_config(iridium_saturation_yaml).model_dump()
     assert saturation["subscribers"].pop("subscribers_at_full_coverage") == (
         SATURATION_TARGET_PEOPLE
     )
@@ -1139,7 +1149,9 @@ def test_the_two_scenarios_differ_only_in_target_and_label() -> None:
         "iridium-v5; re-promote it from scenarios/iridium.yaml and delete this marker"
     ),
 )
-def test_regenerated_default_artifact_matches_committed(tmp_path: Path) -> None:
+def test_regenerated_default_artifact_matches_committed(
+    tmp_path: Path, iridium_yaml: Path, promoted_iridium_artifact: Path
+) -> None:
     """Regenerating the promoted Iridium artifact reproduces the committed file.
 
     Objective: the committed communications/models/iridium/default.json is exactly
@@ -1147,9 +1159,9 @@ def test_regenerated_default_artifact_matches_committed(tmp_path: Path) -> None:
     it). Expected: a fresh export, stamped with the committed version stamp,
     parses to the same JSON document, key for key and value for value.
     """
-    committed = json.loads(_PROMOTED_ARTIFACT.read_text(encoding="utf-8"))
+    committed = json.loads(promoted_iridium_artifact.read_text(encoding="utf-8"))
     written = export_iridium_json(
-        _SCENARIO_YAML,
+        iridium_yaml,
         tmp_path / "default.json",
         version_stamp=committed["provenance"]["version_stamp"],
     )

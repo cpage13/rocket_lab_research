@@ -40,7 +40,6 @@ import pytest
 
 from data_center.config import (
     RadiatorArchitecture,
-    ValuationConfig,
     config_from_dict,
     load_config,
 )
@@ -87,17 +86,12 @@ from data_center.validation import (
 # Shared fixtures + mutation helper
 # ---------------------------------------------------------------------------
 
-# Shipped scenarios, resolved from this file so the suite is cwd-independent.
-_SCENARIOS = Path(__file__).resolve().parents[2] / "scenarios"
 
 # The default window (base year 2026, ten-year horizon) anchors at FY2036.
 _DEFAULT_ANCHOR_FY = "2036"
 
-
-@pytest.fixture(scope="module")
-def default_output() -> ValuationOutput:
-    """The default-scenario v8 engine output — every rule should pass."""
-    return run_valuation(ValuationConfig())
+# ``default_output`` (every rule passes on it) is the session's default run,
+# shared from ``conftest.py``.
 
 
 def _mutate_node_total(output: ValuationOutput, fy: str, value: float) -> ValuationOutput:
@@ -735,7 +729,7 @@ def test_v15_reads_utilization_not_the_binding_label(default_output: ValuationOu
     assert check_volume_fits_horizon(relabeled).pass_check
 
 
-def test_v15_fails_on_the_volume_stress_fixture() -> None:
+def test_v15_fails_on_the_volume_stress_fixture(scenarios_dir: Path) -> None:
     """Objective: the shipped V15 fixture still trips V15.
 
     ``volume_stress.yaml`` cuts the usable fairing to 5 m3 (its only
@@ -743,7 +737,7 @@ def test_v15_fails_on_the_volume_stress_fixture() -> None:
     stowed node of well over 5 m3. Expected: every year is labeled ``both``
     and overfills the fairing, and V15 fails naming the overfilled years.
     """
-    output = run_valuation(load_config(_SCENARIOS / "volume_stress.yaml"))
+    output = run_valuation(load_config(scenarios_dir / "volume_stress.yaml"))
     assert output.inputs.config.physical.mass_envelope_t.value == 12.5
     years = output.physical.years.values()
     assert {py.binding_constraint.value for py in years} == {"both"}
@@ -779,14 +773,16 @@ def test_v16_trips_when_living_fleet_inconsistent(
     ("scenario", "service_life_years"),
     [("conservative.yaml", 3), ("upside_7yr.yaml", 7)],
 )
-def test_v16_follows_the_configured_service_life(scenario: str, service_life_years: int) -> None:
+def test_v16_follows_the_configured_service_life(
+    scenario: str, service_life_years: int, scenarios_dir: Path
+) -> None:
     """Objective: V16's cohort window is the configured service life, not 5 years.
 
     Expected: the shipped 3-year and 7-year scenarios pass V16 (the engine's
     living fleet is right; before the fix V16 re-derived a 5-year window and
     failed both), and the rule text states the scenario's own window.
     """
-    output = run_valuation(load_config(_SCENARIOS / scenario))
+    output = run_valuation(load_config(scenarios_dir / scenario))
     assert output.inputs.fleet.service_life_years == service_life_years
     check = check_fleet_cliff_consistency(output)
     assert check.pass_check, check.computed

@@ -59,6 +59,7 @@ logger = logging.getLogger(__name__)
 
 ASSUMPTION_INDEX_PREFIX: Final[str] = "inputs.assumption_index"
 DEFAULT_SCENARIO_PATH: Final[str] = "code/scenarios/default.yaml"
+"""Repository-relative path of the canonical default scenario (see :func:`is_default_scenario`)."""
 MARKET_REFERENCE_CAPACITY_GW: Final[float] = 100.0
 PATH_SUFFIX_SPLITS: Final[int] = 1
 
@@ -100,11 +101,14 @@ def generation_path(index: int, field: GenerationField) -> FieldPath:
 def extrapolation_sources(field: GenerationField, listed_count: int) -> list[FieldPath]:
     """Return the inputs an extrapolated generation's field is derived from.
 
-    The k-th extrapolated generation compounds the latest listed generation's
-    per-package values on the growth slopes (``latest x (1 + slope) ** k``),
-    is dated ``latest.year_available + k x release_cadence_yr``, and keeps the
-    latest listed die count. So every extrapolated field derives from the
-    latest listed generation's same field plus its slope or the cadence.
+    The k-th extrapolated generation applies the growth slopes to the
+    previous generation's per-package values, step by step from the latest
+    listed generation: kW, kg, and PF compound to ``latest x (1 + slope) ** k``
+    up to float rounding, while the USD price is truncated to a whole dollar at
+    every step (so it can sit a few dollars below that product). It is dated
+    ``latest.year_available + k x release_cadence_yr`` and keeps the latest
+    listed die count. So every extrapolated field derives from the latest
+    listed generation's same field plus its slope or the cadence.
 
     Args:
         field: The per-generation field.
@@ -1064,6 +1068,22 @@ def collect_input_cells(node: BaseModel | list[BaseModel]) -> list[InputCell]:
     return cells
 
 
+def is_default_scenario(source_scenario_path: str) -> bool:
+    """Return whether a run's scenario is the canonical default.
+
+    The one predicate behind ``inputs.scenario.is_default`` and the promotion
+    rules of ``rklb-value --promote``: a scenario is the default exactly when
+    its repository-relative path is :data:`DEFAULT_SCENARIO_PATH`.
+
+    Args:
+        source_scenario_path: The run's repository-relative scenario path.
+
+    Returns:
+        True for ``code/scenarios/default.yaml``, else False.
+    """
+    return source_scenario_path == DEFAULT_SCENARIO_PATH
+
+
 def build_input_manifest(
     *,
     config: ValuationConfig,
@@ -1088,7 +1108,7 @@ def build_input_manifest(
         A frozen :class:`InputManifest` with nested config cells and a flat
         assumption index keyed by stable public paths.
     """
-    is_default = source_scenario_path == DEFAULT_SCENARIO_PATH
+    is_default = is_default_scenario(source_scenario_path)
     default = ValuationConfig()
     listed_count = len(config.listed_generations())
 
@@ -1167,4 +1187,5 @@ __all__ = [
     "generation_field_uses",
     "generation_path",
     "generation_source_status",
+    "is_default_scenario",
 ]

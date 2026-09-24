@@ -35,3 +35,9 @@ The live modules:
 Units: money in $M; subscribers in PEOPLE; time in project years. Year 0 = FY2026
 (Neutron first-flight year).
 """
+
+from __future__ import annotations
+
+import logging
+
+logger = logging.getLogger(__name__)

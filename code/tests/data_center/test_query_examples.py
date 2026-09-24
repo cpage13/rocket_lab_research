@@ -14,9 +14,12 @@ builds for the default window's anchor year (FY2036) it:
 If a future schema change breaks a ``jq`` path, the corresponding case
 fails here rather than silently shipping a broken cold-reader contract.
 
-The default-scenario JSON is generated fresh per test session (engine →
-:func:`data_center.json_output.render_json`) and written to a temp file,
-so the test never depends on a stale committed ``output/default.json``.
+The default-scenario JSON is the session's default run (``default_output``
+in ``conftest.py``) serialised with the production
+:func:`data_center.json_output.render_json` to a temp file, so the test never
+depends on a stale committed ``output/default.json``. Each example's ``jq``
+expression runs once per module (:func:`jq_outcomes`); the execution and shape
+tests read the same result.
 """
 
 from __future__ import annotations
@@ -28,19 +31,13 @@ from pathlib import Path
 
 import pytest
 
-from data_center.config import load_config
-from data_center.engine import run_valuation
 from data_center.json_output import render_json
-from data_center.output import QueryExample
+from data_center.output import QueryExample, SpaceModelOutput
 from data_center.query_examples import build_query_examples
 
 # Resolve `jq` once. The query_examples contract is jq-expressed, so the
 # test needs the jq binary; skip cleanly (not fail) if it is absent.
 _JQ: str | None = shutil.which("jq")
-
-# The packaged default scenario, resolved relative to this test file so
-# the test is independent of the process working directory.
-_DEFAULT_YAML = Path(__file__).resolve().parents[2] / "scenarios" / "default.yaml"
 
 # Number of mandatory query examples — fixed by strategy §3.3 / plan T58.
 _EXPECTED_COUNT = 12
@@ -52,44 +49,59 @@ QUERY_EXAMPLES = build_query_examples(_DEFAULT_ANCHOR_YEAR)
 
 
 @pytest.fixture(scope="module")
-def default_json_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Generate the default-scenario v8 output JSON once for the module.
+def default_json_path(
+    default_output: SpaceModelOutput, tmp_path_factory: pytest.TempPathFactory
+) -> Path:
+    """Write the session's default run as JSON once for the module.
 
-    Runs the default scenario through the engine and serialises it with
-    the production :func:`render_json`, writing to a temp file. This is
-    the same content the CLI's ``--json`` path emits for
-    ``scenarios/default.yaml`` — i.e. the ``output/default.json`` the
-    plan's T61 names — but generated fresh so the test is hermetic.
+    Serialises the default run with the production :func:`render_json` to a
+    temp file: the same content the CLI's ``--json`` path emits for
+    ``scenarios/default.yaml`` (the ``output/default.json`` the plan's T61
+    names), generated fresh so the test is hermetic.
     """
-    output = run_valuation(load_config(str(_DEFAULT_YAML)))
     path = tmp_path_factory.mktemp("query_examples") / "default.json"
-    path.write_text(render_json(output), encoding="utf-8")
+    path.write_text(render_json(default_output), encoding="utf-8")
     return path
 
 
-def _run_jq(expression: str, json_path: Path) -> str:
-    """Run a ``jq`` expression against a JSON file; return raw stdout.
-
-    Args:
-        expression: The jq program (one of the built example jq strings).
-        json_path: Path to the JSON file to query.
+@pytest.fixture(scope="module")
+def jq_outcomes(default_json_path: Path) -> dict[str, subprocess.CompletedProcess[str]]:
+    """Run every example's ``jq`` expression once against the default JSON.
 
     Returns:
-        The raw ``jq`` stdout, stripped of trailing whitespace.
+        The completed ``jq`` process for each example, keyed by example name;
+        each test asserts on its own example's outcome.
+    """
+    if _JQ is None:
+        pytest.skip("jq binary not installed")
+    return {
+        example.name: subprocess.run(  # noqa: S603 (_JQ is shutil.which output; args are static)
+            [_JQ, example.jq, str(default_json_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        for example in QUERY_EXAMPLES
+    }
+
+
+def _jq_stdout(outcomes: dict[str, subprocess.CompletedProcess[str]], example: QueryExample) -> str:
+    """Return one example's ``jq`` stdout, stripped of trailing whitespace.
+
+    Args:
+        outcomes: The module's ``jq`` outcomes, keyed by example name.
+        example: The query example whose result to read.
+
+    Returns:
+        The raw ``jq`` stdout, stripped.
 
     Raises:
-        AssertionError: If ``jq`` exits non-zero (the expression is
-            invalid against the schema).
+        AssertionError: If ``jq`` exited non-zero (the expression is invalid
+            against the schema).
     """
-    assert _JQ is not None  # guarded by the module-level skipif
-    result = subprocess.run(  # noqa: S603 — _JQ is shutil.which output, args are static
-        [_JQ, expression, str(json_path)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = outcomes[example.name]
     assert result.returncode == 0, (
-        f"jq failed for expression {expression!r}: {result.stderr.strip()}"
+        f"jq failed for expression {example.jq!r}: {result.stderr.strip()}"
     )
     return result.stdout.strip()
 
@@ -143,7 +155,7 @@ _SKIP_NO_JQ = pytest.mark.skipif(_JQ is None, reason="jq binary not installed")
 @_SKIP_NO_JQ
 @pytest.mark.parametrize("example", QUERY_EXAMPLES, ids=lambda e: e.name)
 def test_query_example_jq_runs_and_is_non_null(
-    example: QueryExample, default_json_path: Path
+    example: QueryExample, jq_outcomes: dict[str, subprocess.CompletedProcess[str]]
 ) -> None:
     """Every example's jq expression runs and yields a non-null result.
 
@@ -151,7 +163,7 @@ def test_query_example_jq_runs_and_is_non_null(
     schema path would surface here. (An empty list ``[]`` is a valid
     non-null result — e.g. ``volume_binding_check`` is empty by D6.)
     """
-    raw = _run_jq(example.jq, default_json_path)
+    raw = _jq_stdout(jq_outcomes, example)
     assert raw != "", f"{example.name}: jq produced empty output"
     assert raw != "null", f"{example.name}: jq path resolved to null"
 
@@ -159,7 +171,7 @@ def test_query_example_jq_runs_and_is_non_null(
 @_SKIP_NO_JQ
 @pytest.mark.parametrize("example", QUERY_EXAMPLES, ids=lambda e: e.name)
 def test_query_example_result_matches_expected_shape(
-    example: QueryExample, default_json_path: Path
+    example: QueryExample, jq_outcomes: dict[str, subprocess.CompletedProcess[str]]
 ) -> None:
     """Each example's result has the structure its ``expected_shape`` claims.
 
@@ -172,7 +184,7 @@ def test_query_example_result_matches_expected_shape(
       seven ProvenanceCell keys.
     """
     name = example.name
-    parsed = json.loads(_run_jq(example.jq, default_json_path))
+    parsed = json.loads(_jq_stdout(jq_outcomes, example))
 
     scalar_number_examples = {
         "deployed_year_capacity_2036",

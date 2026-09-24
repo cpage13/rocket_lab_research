@@ -38,6 +38,7 @@ References:
 
 from __future__ import annotations
 
+import logging
 from enum import StrEnum
 from typing import Final
 
@@ -64,6 +65,8 @@ from data_center.config import (
 from data_center.constants import MAX_FY, MAX_HORIZON_YEARS, MIN_FY, MIN_HORIZON_YEARS
 from data_center.input_manifest import InputManifest, SourceStatus
 from data_center.provenance import ProvenanceCell, YearString
+
+logger = logging.getLogger(__name__)
 
 # The v8 output JSON schema version. The single place the schema-version
 # string is defined; mirrors ``GROUND_SCHEMA_VERSION`` in ``ground.py``.

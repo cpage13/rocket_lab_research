@@ -20,11 +20,14 @@ description without private lifecycle notes.
 
 from __future__ import annotations
 
+import logging
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from common.input_manifest import SourceStatus
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Semantic type aliases (CLAUDE.md "semantic-typed dict keys" / strategy 3.5)

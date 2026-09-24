@@ -32,9 +32,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final  # typing-acceptable: Any types the YAML boundary
 
-import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
+from common.file_io import load_yaml_mapping
 from common.input_manifest import CellSpec, _field_description, _spec_cell
 from common.meta import COUNT_UNIT, summarize_source_statuses
 from data_center.config import anchor_year
@@ -614,6 +614,10 @@ def ground_config_from_dict(data: dict[str, Any]) -> GroundReferenceConfig:
 def load_ground_config(path: str | Path) -> GroundReferenceConfig:
     """Load and validate ground-reference assumptions from YAML.
 
+    The file is read through the shared
+    :func:`common.file_io.load_yaml_mapping`; an empty file takes every
+    default.
+
     Args:
         path: Filesystem path to the ground-reference YAML scenario.
 
@@ -621,24 +625,11 @@ def load_ground_config(path: str | Path) -> GroundReferenceConfig:
         A validated :class:`GroundReferenceConfig`.
 
     Raises:
-        FileNotFoundError: If ``path`` is absent.
-        ValueError: If YAML parsing or validation fails.
+        common.file_io.ModelFileError: If the file is missing, unreadable,
+            malformed, or not a YAML mapping.
+        pydantic.ValidationError: If the content is not a valid ground config.
     """
-    config_path = Path(path)
-    if not config_path.is_file():
-        raise FileNotFoundError(f"ground config file not found: {config_path}")
-    try:
-        data = yaml.safe_load(config_path.read_text())
-    except yaml.YAMLError as exc:
-        raise ValueError(f"could not parse YAML config {config_path}: {exc}") from exc
-    if data is None:
-        return _default_ground_config()
-    if not isinstance(data, dict):
-        raise ValueError(
-            f"ground config file {config_path} must contain a YAML mapping "
-            f"(got {type(data).__name__})"
-        )
-    return ground_config_from_dict(data)
+    return ground_config_from_dict(load_yaml_mapping(Path(path)))
 
 
 def build_ground_reference_output(

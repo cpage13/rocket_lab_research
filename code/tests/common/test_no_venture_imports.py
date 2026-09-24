@@ -17,6 +17,9 @@ from pathlib import Path
 
 import pytest
 
+# Anchored from this file (not the shared ``code_dir`` fixture) because the
+# parametrized guards below list the files at collection time, before any
+# fixture exists.
 _COMMON_DIR = Path(__file__).resolve().parents[2] / "src" / "common"
 _COMMON_FILES = sorted(_COMMON_DIR.glob("*.py"))
 

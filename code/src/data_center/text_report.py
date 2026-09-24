@@ -32,6 +32,7 @@ R-band trajectory block on top of the v8-typed tables.
 
 from __future__ import annotations
 
+import logging
 from typing import Final
 
 from data_center.output import (
@@ -41,6 +42,8 @@ from data_center.output import (
     ValuationOutput,
 )
 from data_center.validation import collect_provenance_cells
+
+logger = logging.getLogger(__name__)
 
 # Fixed monospaced report width, in characters.
 _WIDTH: Final[int] = 78

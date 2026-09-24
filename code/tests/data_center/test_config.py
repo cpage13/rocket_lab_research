@@ -35,6 +35,8 @@ from data_center.constants import (
     LOW_CADENCE_COST_MUSD_DEFAULT,
     SERVICE_LIFE_YEARS,
 )
+from data_center.engine import run_valuation
+from data_center.generations import KNOWN_GENS
 
 # -- enums ------------------------------------------------------------
 
@@ -407,12 +409,11 @@ def test_window_past_max_fy_fails_at_load() -> None:
     assert MetadataConfig(base_year=2060, horizon_years=19).base_year == 2060
 
 
-def test_every_shipped_data_center_scenario_still_loads() -> None:
+def test_every_shipped_data_center_scenario_still_loads(scenarios_dir: Path) -> None:
     """Objective: the new validators reject no shipped scenario.
 
     Expected: all seven data-center scenario files load.
     """
-    scenarios = Path(__file__).resolve().parents[2] / "scenarios"
     for name in (
         "default",
         "ai1_equivalent",
@@ -422,4 +423,36 @@ def test_every_shipped_data_center_scenario_still_loads() -> None:
         "volume_stress",
         "with_premium",
     ):
-        assert load_config(scenarios / f"{name}.yaml").scenario_name
+        assert load_config(scenarios_dir / f"{name}.yaml").scenario_name
+
+
+@pytest.mark.parametrize("base_year", [2020, 2022, 2024])
+def test_base_year_before_the_first_generation_fails_at_load(base_year: int) -> None:
+    """Objective: every window year must have a frontier GPU generation.
+
+    The bundled roadmap starts with B200/GB200, dated 2024.5. The original
+    trigger: base years 2020 to 2024 loaded, then crashed mid-run with a
+    ``NoFrontierAvailableError`` traceback. Expected: they fail at load with
+    a ValidationError naming the earliest generation and the first valid
+    base year (2025), which loads and runs.
+    """
+    metadata = {"base_year": base_year, "horizon_years": 10}
+    with pytest.raises(ValidationError, match="base year must be 2025 or later"):
+        config_from_dict({"metadata": metadata})
+    first_valid = config_from_dict({"metadata": {"base_year": 2025, "horizon_years": 10}})
+    assert run_valuation(first_valid).physical.years["2025"].gpus_per_node.value
+
+
+def test_base_year_check_reads_the_scenarios_own_generation_list() -> None:
+    """Objective: the base-year check follows a scenario's own roadmap.
+
+    Expected: pinning the roadmap to the 2026.5 Rubin entry alone rejects
+    base year 2026 (nothing flies that year) and accepts 2027.
+    """
+    rubin = next(g for g in KNOWN_GENS if g.name == "Rubin VR200").model_dump(mode="json")
+    with pytest.raises(ValidationError, match="the earliest, Rubin VR200, is available in 2026.5"):
+        config_from_dict({"generations": [rubin]})
+    pinned = config_from_dict(
+        {"generations": [rubin], "metadata": {"base_year": 2027, "horizon_years": 10}}
+    )
+    assert pinned.metadata.base_year == 2027
