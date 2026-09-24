@@ -4,53 +4,69 @@ The cycle-2 v8 schema extends the GPU-first per-node dial set with the
 fleet / volume / cadence / R-band blocks:
 
 * :class:`ValuationConfig` carries:
-    * ``gospel: GospelInputs`` — the locked numeric anchors (mass envelope,
+    * ``gospel: GospelInputs``: the locked numeric anchors (mass envelope,
       bus dynamics, solar/radiator $/kW, radiator t/kW pre/post Tjmax lift,
       release cadence).
-    * ``slopes: GenerationSlopes`` — post-Feynman per-generation growth
+    * ``slopes: GenerationSlopes``: post-Feynman per-generation growth
       slopes used to extrapolate generations beyond ``KNOWN_GENS``.
-    * ``generations: list[GenerationSpec] | None`` — optional per-generation
+    * ``generations: list[GenerationSpec] | None``: optional per-generation
       override. ``None`` (the default) means use the bundled ``KNOWN_GENS``.
-    * ``scenario_name: str`` — human-readable label shown in the report.
-    * ``metadata: MetadataConfig`` — the three investor-locked enums plus
+    * ``scenario_name: str``: human-readable label shown in the report.
+    * ``metadata: MetadataConfig``: the three investor-locked enums plus
       base year + horizon.
-    * ``cadence: CadenceDials`` — launch-cadence logistic-ramp dials.
-    * ``fleet: FleetDials`` — fleet-rollup service-life cliff dial.
-    * ``volume: VolumeDials`` — stowed-volume-envelope dials.
-    * ``r_band: RBand`` — the three R trajectories (low/central/high).
-    * ``launch_cost: LaunchCostDials`` — cadence-indexed launch-cost dials.
+    * ``cadence: CadenceDials``: launch-cadence logistic-ramp dials (the
+      shared :class:`common.cadence.CadenceDials`).
+    * ``fleet: FleetDials``: fleet-rollup service-life cliff dial.
+    * ``volume: VolumeDials``: stowed-volume-envelope dials.
+    * ``r_band: RBand``: the three R trajectories (low/central/high).
+    * ``launch_cost: LaunchCostDials``: cadence-indexed launch-cost dials
+      (the shared :class:`common.cadence.LaunchCostDials`).
 
 Cycle-2 categorical enums (:class:`WorkloadType`, :class:`OperatorModel`,
 :class:`RadiatorArchitecture`, :class:`BindingConstraint`) are defined
 here too.
 
 YAML loading: scenario files are YAML mappings whose top-level keys are
-the block names above — all optional (omitted = defaults). ``extra="forbid"``
-means a typo in a scenario file fails loudly.
+the block names above, all optional (omitted = defaults), read through the
+shared :func:`common.file_io.load_yaml_mapping`. ``extra="forbid"`` means a
+typo in a scenario file fails loudly. A scenario may give ``generations`` as
+a path to a generations YAML, resolved relative to the scenario file.
+
+Cross-field validators reject, at load, every combination the engine cannot
+run or would run into nonsense: cadence anchors outside
+``0 < launches_at_year_5 < launches_at_year_10 < cadence_ceiling`` and
+reversed launch-cost cadence anchors (the shared dial blocks' own
+validators, :mod:`common.cadence`), R bands out of ``low <= central <= high`` order
+or with duplicate anchor years, a fixed node mass at or above the mass
+envelope, a bus decline of -100% or steeper, an unordered generations list,
+a base year before the earliest listed generation is available, and a run
+window whose generation extension would pass
+:data:`~data_center.constants.MAX_FY`.
+
+:func:`anchor_year` is the one helper that resolves a run's anchor year (the
+year-10 cadence anchor, or the final window year for shorter horizons); the
+validation checks, the ground reference, and the query examples all read it.
 """
 
 from __future__ import annotations
 
+import logging
+import math
 from enum import StrEnum
 from pathlib import Path
-from typing import Any  # typing-acceptable: Any types the dict deserialization boundary
+from typing import Any, Final  # typing-acceptable: Any types the dict deserialization boundary
 
-import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from common.cadence import CadenceDials, LaunchCostDials
+from common.file_io import load_yaml_mapping
 from data_center.constants import (
+    ANCHOR_MODEL_YEAR,
     BUS_BASE_MUSD,
     BUS_FLATTEN_AFTER_YR,
     BUS_GROWTH_PRE,
-    CADENCE_CEILING_DEFAULT,
-    FIRST_LAUNCH_YEAR_DEFAULT,
-    FOLD_RATIO,
-    HIGH_CADENCE_COST_MUSD_DEFAULT,
-    HIGH_CADENCE_LAUNCHES_DEFAULT,
-    LAUNCHES_AT_YEAR_5_DEFAULT,
-    LAUNCHES_AT_YEAR_10_DEFAULT,
-    LOW_CADENCE_COST_MUSD_DEFAULT,
-    LOW_CADENCE_LAUNCHES_DEFAULT,
+    BUS_GROWTH_PRE_FLOOR,
+    GENERATION_EXTENSION_LOOKAHEAD_YEARS,
     MASS_ENVELOPE_T,
     MAX_FY,
     MAX_HORIZON_YEARS,
@@ -64,12 +80,10 @@ from data_center.constants import (
     R_BAND_HIGH_ANCHORS_DEFAULT,
     R_BAND_LOW_ANCHORS_DEFAULT,
     RADIATOR_COST_MUSD_PER_KW,
-    RADIATOR_SOLAR_AREA_RATIO,
     RADIATOR_T_PER_KW_POST,
     RADIATOR_T_PER_KW_PRE,
     RELEASE_CADENCE_YR,
     SERVICE_LIFE_YEARS,
-    SI_AREAL_DENSITY_KG_M2,
     SI_BOL_EFFICIENCY,
     SOLAR_COST_MUSD_PER_KW,
     SOLAR_MASS_T_PER_KW,
@@ -77,11 +91,20 @@ from data_center.constants import (
     TJMAX_LIFT_YEAR,
 )
 from data_center.generations import (
-    GENERATIONS_YAML_KEY,
+    FRONTIER_YEAR_TOLERANCE,
+    KNOWN_GENS,
     GenerationSlopes,
     GenerationSpec,
+    NoFrontierAvailableError,
+    frontier_at,
     load_generations_yaml,
+    validate_generation_order,
 )
+
+logger = logging.getLogger(__name__)
+
+GENERATIONS_FIELD: Final[str] = "generations"
+"""The scenario key holding the generation roadmap: a list, or a path to a generations YAML."""
 
 # ===========================================================================
 # 0. Cycle-2 v8 categorical enums
@@ -92,7 +115,7 @@ class WorkloadType(StrEnum):
     """The compute workload the data centre serves.
 
     Locked to ``INFERENCE`` by D14 (investor decision). No ``TRAINING``
-    member — the venture does not model a training-workload framing.
+    member: the venture does not model a training-workload framing.
     """
 
     INFERENCE = "inference"
@@ -101,7 +124,7 @@ class WorkloadType(StrEnum):
 class OperatorModel(StrEnum):
     """The commercial operating model for the data centre.
 
-    Locked to ``B2B_DEDICATED_OPTICAL_RF`` by D15 — business-to-business
+    Locked to ``B2B_DEDICATED_OPTICAL_RF`` by D15: business-to-business
     with a dedicated optical/RF uplink (the premium-driver narrative).
     Further operator models may be added in later cycles.
     """
@@ -114,10 +137,10 @@ class RadiatorArchitecture(StrEnum):
 
     Two members, each a real flown-or-revealed architecture class:
 
-    * ``SINGLE_FACE_CO_MOUNTED`` — solar on one side, radiator on the other
+    * ``SINGLE_FACE_CO_MOUNTED``: solar on one side, radiator on the other
       side of the same panel (the D16 lock, 2026-06; one radiating face,
       cold operation, the conservative 0.010-0.014 t/kW band, V17's floor).
-    * ``DEPLOYED_DOUBLE_SIDED`` — a dedicated deployed radiator wing, edge-on
+    * ``DEPLOYED_DOUBLE_SIDED``: a dedicated deployed radiator wing, edge-on
       to the sun, radiating from both faces and run hot (the AI-1 class;
       investor decision 2026-07-14 superseding the D16 lock for the default:
       the model semi-copies the AI-1 architecture because a radiator backed
@@ -134,10 +157,16 @@ class RadiatorArchitecture(StrEnum):
 
 
 class BindingConstraint(StrEnum):
-    """Which physical envelope constraint binds the node's package count.
+    """Which physical envelope binds the node in a year (a reported label).
 
-    Mass-only binding is the model rule (D6); ``VOLUME`` (sole) appearing
-    is a model-consistency failure surfaced by V15.
+    Mass is the only envelope that sizes the node (D6). The engine labels a
+    year mass-bound when the mass budget left after packing N packages is
+    smaller than one more package, which floor packing makes true every year;
+    it adds the volume envelope when the stowed node fills the usable fairing
+    (volume utilization at or above 100%). So the engine emits ``MASS``, or
+    ``BOTH`` when the fairing is full as well; ``VOLUME`` and ``NEITHER``
+    complete the enumeration but floor packing cannot produce them. The label
+    is transparency only: V15 judges ``volume_utilization_pct`` directly.
     """
 
     MASS = "mass"
@@ -149,41 +178,6 @@ class BindingConstraint(StrEnum):
 # ===========================================================================
 # 1. Cycle-2 v8 dial blocks
 # ===========================================================================
-
-
-class CadenceDials(BaseModel):
-    """Launch-cadence dials feeding the logistic launches-per-year ramp.
-
-    Defaults are the v7-archaeology values (commit 8fdc210), but the
-    default is now explicitly a source-indexed scenario: ``launches_at_year_5``
-    and ``launches_at_year_10`` fit the logistic curve to integer mission
-    counts. ``first_launch_year`` only clamps earlier years to zero; it does
-    not move the year-5 or year-10 anchors. Consumed by
-    :func:`data_center.cadence.compute_launches_per_year`.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    cadence_ceiling: int = Field(
-        default=CADENCE_CEILING_DEFAULT,
-        gt=0,
-        description="Hard cap on whole-number launches per year.",
-    )
-    launches_at_year_5: int = Field(
-        default=LAUNCHES_AT_YEAR_5_DEFAULT,
-        ge=0,
-        description="Integer logistic anchor: launches per year at model year 5.",
-    )
-    launches_at_year_10: int = Field(
-        default=LAUNCHES_AT_YEAR_10_DEFAULT,
-        ge=0,
-        description="Integer logistic anchor: launches per year at model year 10.",
-    )
-    first_launch_year: int = Field(
-        default=FIRST_LAUNCH_YEAR_DEFAULT,
-        ge=0,
-        description="Model-year index before which launch count is clamped to zero.",
-    )
 
 
 class FleetDials(BaseModel):
@@ -209,38 +203,25 @@ class FleetDials(BaseModel):
 class VolumeDials(BaseModel):
     """Volume-envelope dials for the stowed solar+radiator volume check.
 
-    All defaults are R1-sourced. Consumed by the Phase 3 volume module;
+    All defaults are R1-sourced. Consumed by :mod:`data_center.volume`;
     the volume check is for transparency and does NOT gate package count
-    (mass-only binding, D6).
+    (mass-only binding, D6). The stowed array volume is the deployed array
+    area times the stowed panel pitch (a stowed array is a stack of panels),
+    so the block needs no deployed-to-stowed area ratio.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    si_areal_density_kg_m2: float = Field(
-        default=SI_AREAL_DENSITY_KG_M2,
-        gt=0,
-        description="Full Si array areal density including structure, kg/m2.",
-    )
     si_bol_efficiency: float = Field(
         default=SI_BOL_EFFICIENCY,
         gt=0,
         lt=1,
         description="Si beginning-of-life AM0 conversion efficiency.",
     )
-    fold_ratio: float = Field(
-        default=FOLD_RATIO,
-        gt=0,
-        description="Deployed-to-stowed solar-array area ratio.",
-    )
     stowed_pitch_mm: float = Field(
         default=STOWED_PITCH_MM,
         gt=0,
         description="Per-panel stowed thickness (Si + co-mounted radiator), mm.",
-    )
-    radiator_solar_area_ratio: float = Field(
-        default=RADIATOR_SOLAR_AREA_RATIO,
-        gt=0,
-        description="Radiator area / solar area for single-face co-mounted.",
     )
     mounting_overhead_pct: float = Field(
         default=MOUNTING_OVERHEAD_PCT,
@@ -255,39 +236,8 @@ class VolumeDials(BaseModel):
     )
 
 
-class LaunchCostDials(BaseModel):
-    """Cadence-indexed launch-cost dials feeding the log-linear cost curve.
-
-    Defaults are the v7-archaeology values. Consumed by
-    :func:`data_center.cadence.compute_launch_cost_musd`.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    low_cadence_cost_musd: float = Field(
-        default=LOW_CADENCE_COST_MUSD_DEFAULT,
-        gt=0,
-        description="Launch cost at the low-cadence anchor, $M.",
-    )
-    high_cadence_cost_musd: float = Field(
-        default=HIGH_CADENCE_COST_MUSD_DEFAULT,
-        gt=0,
-        description="Launch cost at the high-cadence anchor, $M.",
-    )
-    low_cadence_launches: float = Field(
-        default=LOW_CADENCE_LAUNCHES_DEFAULT,
-        gt=0,
-        description="Cadence (launches/yr) at the low-cost anchor.",
-    )
-    high_cadence_launches: float = Field(
-        default=HIGH_CADENCE_LAUNCHES_DEFAULT,
-        gt=0,
-        description="Cadence (launches/yr) at the high-cost anchor.",
-    )
-
-
 class GospelInputs(BaseModel):
-    """The locked numeric anchors — gospel constants from plan § 0.
+    """The locked numeric anchors: gospel constants from plan § 0.
 
     The v8 gospel block is the cycle-1 gospel verbatim **minus the six
     fields that moved to dedicated v8 blocks** (D18/D24): ``r_revenue_cost``
@@ -298,9 +248,11 @@ class GospelInputs(BaseModel):
     volume envelopes, the Tjmax-lift state, the solar / radiator t/kW, the
     bus + solar + radiator cost dials, and the generation release cadence.
 
-    Defaults reproduce plan § 0's central case exactly — so a config
+    Defaults reproduce plan § 0's central case exactly, so a config
     constructed with no arguments, or a YAML omitting the ``gospel`` block,
-    is fully valid.
+    is fully valid. :meth:`_fixed_mass_inside_envelope` rejects a fixed node
+    mass at or above the mass envelope (no mass would be left for packages,
+    and the engine would report a negative package count).
 
     Excludes the per-generation values (in the engine's generation list)
     and the post-Feynman growth slopes (in :class:`GenerationSlopes`).
@@ -337,8 +289,9 @@ class GospelInputs(BaseModel):
     tjmax_lift_year: int = Field(
         default=TJMAX_LIFT_YEAR,
         description=(
-            "Year index (0-based) at which the radiator hot-loop arrives "
-            "and radiator t/kW steps down (D11)."
+            "Year index (0-based) at which the radiator dial switches from "
+            "'radiator_t_per_kw_pre' to 'radiator_t_per_kw_post' (D11). Inert "
+            "when the two dials are equal, as in the investor-set default."
         ),
         ge=0,
     )
@@ -361,6 +314,7 @@ class GospelInputs(BaseModel):
             "Bus real-cost growth per year between year 0 and "
             "'bus_flatten_after_yr' (negative = decline)."
         ),
+        gt=BUS_GROWTH_PRE_FLOOR,
     )
     solar_cost_musd_per_kw: float = Field(
         default=SOLAR_COST_MUSD_PER_KW,
@@ -380,19 +334,26 @@ class GospelInputs(BaseModel):
     radiator_t_per_kw_pre: float = Field(
         default=RADIATOR_T_PER_KW_PRE,
         description=(
-            "Radiator t/kW before the Tjmax lift (pre 'tjmax_lift_year'), "
-            "the conservative t/kW (D11)."
+            "Radiator mass per kW of flown power before the Tjmax lift (model "
+            "years before 'tjmax_lift_year'), t/kW. The investor-set default "
+            "(2026-07-14, RLDC-SOLAR-RADIATOR-MASS) is the AI-1-class deployed "
+            "double-sided radiator run hot, about 0.00165 t/kW, equal to the "
+            "post-lift dial so the Tjmax step is inert. The single-face "
+            "co-mounted 0.012 to 0.013 t/kW posture is the labeled "
+            "conservative exception."
         ),
         gt=0.0,
     )
     radiator_t_per_kw_post: float = Field(
         default=RADIATOR_T_PER_KW_POST,
         description=(
-            "Radiator t/kW after the Tjmax lift (post 'tjmax_lift_year'), "
-            "the hot-loop coolant arrives and lowers t/kW (D11). Cycle-2 "
-            "lifts this to 0.012 (central of the R1 0.010-0.014 band) for "
-            "the single-face co-mounted architecture (D16/D17); cycle-1's "
-            "value was 0.007."
+            "Radiator mass per kW of flown power from the Tjmax lift on "
+            "('tjmax_lift_year' and later), t/kW. The investor-set default "
+            "(2026-07-14, RLDC-SOLAR-RADIATOR-MASS) is the AI-1-class deployed "
+            "double-sided radiator run hot, about 0.00165 t/kW; the "
+            "temperature and architecture win is booked here in mass, never "
+            "in the cost dials. The single-face co-mounted 0.012 to 0.013 "
+            "t/kW posture is the labeled conservative exception."
         ),
         gt=0.0,
     )
@@ -401,6 +362,17 @@ class GospelInputs(BaseModel):
         description=("Years per generation, used to extrapolate post-Feynman generations (D6)."),
         gt=0.0,
     )
+
+    @model_validator(mode="after")
+    def _fixed_mass_inside_envelope(self) -> GospelInputs:
+        """Require ``node_mass_fixed_t < mass_envelope_t``."""
+        if not self.node_mass_fixed_t < self.mass_envelope_t:
+            raise ValueError(
+                "node_mass_fixed_t must be below mass_envelope_t (the packages "
+                f"need a positive mass budget); got node_mass_fixed_t="
+                f"{self.node_mass_fixed_t}, mass_envelope_t={self.mass_envelope_t}"
+            )
+        return self
 
 
 class YearRValue(BaseModel):
@@ -431,10 +403,12 @@ def _anchors_to_models(anchors: tuple[tuple[int, float], ...]) -> list[YearRValu
 class RBand(BaseModel):
     """The three R trajectories (low / central / high) with year anchors.
 
-    Each trajectory is a list of :class:`YearRValue` anchors, sorted by
-    ``fy`` ascending, with at least two anchors. The engine interpolates R
-    linearly between adjacent anchors. Defaults are scenario assumptions tied
-    to SOURCE_INDEX REV-008, not observed orbital-compute pricing.
+    Each trajectory is a list of :class:`YearRValue` anchors, strictly
+    ascending by ``fy`` (no duplicate anchor years), with at least two
+    anchors. The engine interpolates R linearly between adjacent anchors.
+    At every anchor year the bands share, ``low <= central <= high``
+    (:meth:`_bands_ordered`). Defaults are scenario assumptions tied to
+    SOURCE_INDEX REV-008, not observed orbital-compute pricing.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -455,22 +429,56 @@ class RBand(BaseModel):
     @field_validator("central", "low", "high")
     @classmethod
     def _at_least_two_anchors_sorted(cls, v: list[YearRValue]) -> list[YearRValue]:
-        """Each trajectory needs >= 2 anchors, sorted by fy ascending."""
+        """Each trajectory needs >= 2 anchors, strictly ascending by fy."""
         if len(v) < 2:
             raise ValueError("Each R-band trajectory needs at least 2 anchors")
         years = [a.fy for a in v]
         if years != sorted(years):
             raise ValueError("R-band anchors must be sorted by fy ascending")
+        if len(set(years)) != len(years):
+            raise ValueError(f"R-band anchors must not repeat an anchor year; got fy {years}")
         return v
+
+    @model_validator(mode="after")
+    def _bands_ordered(self) -> RBand:
+        """Require ``low <= central <= high`` at every shared anchor year."""
+        low = {a.fy: a.r for a in self.low}
+        central = {a.fy: a.r for a in self.central}
+        high = {a.fy: a.r for a in self.high}
+        for fy in sorted(central.keys() & low.keys()):
+            if low[fy] > central[fy]:
+                raise ValueError(
+                    f"R band out of order at fy {fy}: low r={low[fy]} is above central "
+                    f"r={central[fy]} (require low <= central <= high)"
+                )
+        for fy in sorted(central.keys() & high.keys()):
+            if central[fy] > high[fy]:
+                raise ValueError(
+                    f"R band out of order at fy {fy}: central r={central[fy]} is above "
+                    f"high r={high[fy]} (require low <= central <= high)"
+                )
+        for fy in sorted(low.keys() & high.keys()):
+            if low[fy] > high[fy]:
+                raise ValueError(
+                    f"R band out of order at fy {fy}: low r={low[fy]} is above high "
+                    f"r={high[fy]} (require low <= central <= high)"
+                )
+        return self
 
 
 class MetadataConfig(BaseModel):
-    """The run metadata block: the three enum locks + base year + horizon.
+    """The run metadata block: the three enums + base year + horizon.
 
-    The three enums (workload, operator, radiator architecture) are
-    investor-locked (D14-D16); their defaults are the only valid members.
+    Workload and operator are investor-locked (D14, D15) to their single
+    members. The radiator architecture (D16) has two members: deployed
+    double-sided is the default since 2026-07-14, and single-face
+    co-mounted remains selectable as the labeled conservative exception.
     ``base_year`` and ``horizon_years`` move here from the cycle-1 gospel
-    block in the v8 schema.
+    block in the v8 schema. The window end plus the generation lookahead
+    (:data:`~data_center.constants.GENERATION_EXTENSION_LOOKAHEAD_YEARS`)
+    must stay within :data:`~data_center.constants.MAX_FY`
+    (:meth:`_window_inside_fiscal_bounds`), since the engine extends the
+    generation list that far and no generation may be dated past ``MAX_FY``.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -490,6 +498,41 @@ class MetadataConfig(BaseModel):
         description="Number of fiscal-year steps after year 0.",
     )
 
+    @model_validator(mode="after")
+    def _window_inside_fiscal_bounds(self) -> MetadataConfig:
+        """Require the window end plus the generation lookahead to be <= MAX_FY."""
+        extension_end = self.base_year + self.horizon_years + GENERATION_EXTENSION_LOOKAHEAD_YEARS
+        if extension_end > MAX_FY:
+            raise ValueError(
+                "base_year + horizon_years + the generation lookahead "
+                f"({GENERATION_EXTENSION_LOOKAHEAD_YEARS} year) must not exceed "
+                f"{MAX_FY}; got base_year={self.base_year}, "
+                f"horizon_years={self.horizon_years}"
+            )
+        return self
+
+
+def anchor_year(base_year: int, horizon_years: int) -> int:
+    """Return a run's anchor fiscal year: the year-10 anchor, else the window end.
+
+    The anchor year is the model year the ``launches_at_year_10`` cadence
+    dial pins (:data:`~data_center.constants.ANCHOR_MODEL_YEAR`): the
+    deployed-year cohort the ground reference compares against (ADR-003),
+    the year the headline validation checks read, and the year the query
+    examples address. When the horizon is shorter than that, the anchor is
+    the final window year, so the anchor always lies inside
+    ``[base_year, base_year + horizon_years]``. The default window
+    (2026, 10 years) resolves to 2036.
+
+    Args:
+        base_year: Calendar year of model year 0.
+        horizon_years: Number of fiscal-year steps after year 0.
+
+    Returns:
+        The anchor fiscal year.
+    """
+    return base_year + min(ANCHOR_MODEL_YEAR, horizon_years)
+
 
 # ===========================================================================
 # 2. The top-level GPU-first ValuationConfig
@@ -504,7 +547,7 @@ class ValuationConfig(BaseModel):
     :func:`data_center.engine.run_valuation`.
 
     Each block defaults via Pydantic's ``default_factory`` so a config
-    constructed with no arguments — or a YAML omitting a block — gets a
+    constructed with no arguments, or a YAML omitting a block, gets a
     fully valid all-default block.
     """
 
@@ -524,7 +567,7 @@ class ValuationConfig(BaseModel):
     )
 
     slopes: GenerationSlopes = Field(
-        default_factory=lambda: _default_slopes(),
+        default_factory=GenerationSlopes,
         description=(
             "Post-Feynman per-generation growth slopes used to extrapolate "
             "generations beyond the last sourced generation."
@@ -545,7 +588,7 @@ class ValuationConfig(BaseModel):
         default="Default (central case)",
         description=(
             "Human-readable scenario label, surfaced in the report header "
-            "and in the JSON output's manifest.scenario field."
+            "and in the JSON output's inputs.scenario.name field."
         ),
     )
 
@@ -584,32 +627,58 @@ class ValuationConfig(BaseModel):
         description="Cadence-indexed launch-cost dials (log-linear curve).",
     )
 
+    @field_validator("generations")
+    @classmethod
+    def _generations_ordered(cls, v: list[GenerationSpec] | None) -> list[GenerationSpec] | None:
+        """An override list must be non-empty and strictly ascending by year."""
+        if v is not None:
+            validate_generation_order(v)
+        return v
+
+    @model_validator(mode="after")
+    def _frontier_available_at_base_year(self) -> ValuationConfig:
+        """Require a listed generation to be available by the base year.
+
+        Every window year picks its frontier generation
+        (:func:`~data_center.generations.frontier_at`); the base year is the
+        earliest, so if a generation is available then, every later year has
+        one too. A base year before the earliest listed generation (2020 to
+        2024 against the bundled roadmap, whose first entry is dated 2024.5)
+        would otherwise fail mid-run.
+        """
+        base_year = self.metadata.base_year
+        listed = self.listed_generations()
+        try:
+            frontier_at(base_year, listed)
+        except NoFrontierAvailableError as exc:
+            earliest = listed[0]
+            first_valid = math.ceil(earliest.year_available - FRONTIER_YEAR_TOLERANCE)
+            raise ValueError(
+                f"metadata.base_year {base_year} precedes every listed generation: the "
+                f"earliest, {earliest.name}, is available in {earliest.year_available:g}, "
+                f"so the base year must be {first_valid} or later (or list an earlier "
+                "generation)"
+            ) from exc
+        return self
+
+    def listed_generations(self) -> list[GenerationSpec]:
+        """Return the run's listed generation roadmap, before extrapolation.
+
+        The scenario's own ``generations`` list when it sets one, else the
+        bundled :data:`~data_center.generations.KNOWN_GENS`. The engine
+        extends this list on the slopes and the release cadence; the first
+        ``len(listed_generations())`` entries of the extended list are the
+        listed ones, every later entry is extrapolated.
+
+        Returns:
+            A new list of the listed generations, oldest first.
+        """
+        return list(self.generations) if self.generations is not None else list(KNOWN_GENS)
+
 
 # ===========================================================================
 # 3. Default-builder helpers
 # ===========================================================================
-
-
-def _default_slopes() -> GenerationSlopes:
-    """Build a default `GenerationSlopes` matching plan-§-0 growth rates.
-
-    The named constructor exists to satisfy mypy --strict + Pydantic v2:
-    `GenerationSlopes()` (no args) is rejected at strict check time
-    because mypy treats Pydantic field defaults as not satisfying the
-    call-arg requirement. Naming every kwarg here side-steps that quirk
-    while keeping `ValuationConfig.slopes` constructible via a no-arg
-    default_factory. Phase 4 can fold this back when mypy/Pydantic
-    settle the call-arg rule for `BaseModel` field defaults.
-    """
-    return GenerationSlopes(
-        usd_growth_per_gen=0.30,
-        # 0.20 — per-package power growth/gen; corrected from 0.30
-        # (assembly-rate misapplied) per validation V-A,
-        # sourcing_audit_05_21.md.
-        kw_growth_per_gen=0.20,
-        kg_growth_per_gen=-0.10,
-        pf_growth_per_gen=0.625,
-    )
 
 
 def _default_metadata() -> MetadataConfig:
@@ -617,9 +686,10 @@ def _default_metadata() -> MetadataConfig:
 
     A named builder is required because :class:`MetadataConfig` has two
     required fields (``base_year``, ``horizon_years``) with no defaults,
-    so ``default_factory=MetadataConfig`` would fail. The three enum
-    locks fall to their (only) members; base year / horizon reproduce
-    the cycle-1 central case.
+    so ``default_factory=MetadataConfig`` would fail. Workload and
+    operator fall to their single members and the radiator architecture
+    to its default; base year / horizon reproduce the cycle-1 central
+    case.
     """
     return MetadataConfig(base_year=2026, horizon_years=10)
 
@@ -630,63 +700,65 @@ def _default_metadata() -> MetadataConfig:
 
 
 def config_from_dict(data: dict[str, Any]) -> ValuationConfig:
-    """Build a :class:`ValuationConfig` from an already-parsed YAML mapping.
+    """Build a :class:`ValuationConfig` from an already-parsed mapping.
 
-    Top-level keys are the v8 block names — ``gospel``, ``slopes``,
+    Top-level keys are the v8 block names: ``gospel``, ``slopes``,
     ``generations``, ``scenario_name``, ``metadata``, ``cadence``,
-    ``fleet``, ``volume``, ``r_band``, ``launch_cost`` — all optional.
-    ``generations`` may be a list of per-generation specs (each validated
-    against `GenerationSpec`) or a string path to a YAML file containing a
-    top-level ``generations: [...]`` mapping.
+    ``fleet``, ``volume``, ``r_band``, ``launch_cost``, all optional.
+    ``generations`` is a list of per-generation specs (each validated
+    against `GenerationSpec`); a path to a generations file is a scenario
+    file feature that :func:`load_config` resolves before calling this.
 
     Validation is Pydantic's: an unknown key, a wrong type, an
     out-of-bounds value, or a missing required field raises
     :class:`pydantic.ValidationError` with a precise location.
+
+    Raises:
+        ValueError: If ``data`` is not a mapping.
+        pydantic.ValidationError: If the mapping is not a valid config.
     """
     if not isinstance(data, dict):
         raise ValueError("config root must be a mapping (a YAML object)")
-    # If `generations` is a string, treat it as a path to a generations YAML
-    # file and load it. Lets a scenario point at the bundled
-    # `scenarios/generations.yaml` (or a custom file) instead of inlining the
-    # whole list.
-    gens_raw = data.get("generations")
-    if isinstance(gens_raw, str):
-        data = dict(data)  # don't mutate the caller's dict
-        data["generations"] = load_generations_yaml(Path(gens_raw))
     return ValuationConfig.model_validate(data)
 
 
 def load_config(path: str | Path) -> ValuationConfig:
-    """Load and validate a :class:`ValuationConfig` from a YAML file.
+    """Load and validate a :class:`ValuationConfig` from a scenario YAML file.
 
-    Raises :class:`FileNotFoundError` if the path does not exist and
-    :class:`ValueError` (specifically a :class:`pydantic.ValidationError`)
-    on any malformed or invalid content.
+    The file is read through :func:`common.file_io.load_yaml_mapping`; an
+    empty file takes every default. A string ``generations`` value is a path
+    to a generations YAML (a top-level ``generations: [...]`` mapping, as in
+    the bundled ``scenarios/generations.yaml``), resolved relative to the
+    scenario file's own directory, never the working directory.
+
+    Args:
+        path: The scenario YAML file.
+
+    Returns:
+        The validated config.
+
+    Raises:
+        common.file_io.ModelFileError: If the scenario file, or the
+            generations file it names, is missing, unreadable, malformed, or
+            of the wrong top-level shape.
+        pydantic.ValidationError: If the content is not a valid config.
     """
-    p = Path(path)
-    if not p.is_file():
-        raise FileNotFoundError(f"config file not found: {p}")
-    try:
-        data = yaml.safe_load(p.read_text())
-    except yaml.YAMLError as exc:
-        raise ValueError(f"could not parse YAML config {p}: {exc}") from exc
-    if data is None:
-        # An empty scenario file = all defaults.
-        return ValuationConfig()
-    if not isinstance(data, dict):
-        raise ValueError(f"config file {p} must contain a YAML mapping (got {type(data).__name__})")
+    scenario = Path(path)
+    data = load_yaml_mapping(scenario)
+    generations_ref = data.get(GENERATIONS_FIELD)
+    if isinstance(generations_ref, str):
+        generations_path = Path(generations_ref)
+        if not generations_path.is_absolute():
+            generations_path = scenario.parent / generations_path
+        logger.debug("scenario %s reads its generations from %s", scenario, generations_path)
+        data = {**data, GENERATIONS_FIELD: load_generations_yaml(generations_path)}
     return config_from_dict(data)
 
 
-# Re-export the public config surface so external callers (CLI, tests,
-# downstream modules) import from one place.
 __all__ = [
-    "GENERATIONS_YAML_KEY",
     "BindingConstraint",
-    "CadenceDials",
     "FleetDials",
     "GospelInputs",
-    "LaunchCostDials",
     "MetadataConfig",
     "OperatorModel",
     "RBand",
@@ -695,6 +767,7 @@ __all__ = [
     "VolumeDials",
     "WorkloadType",
     "YearRValue",
+    "anchor_year",
     "config_from_dict",
     "load_config",
 ]

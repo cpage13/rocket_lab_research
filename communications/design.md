@@ -104,11 +104,14 @@ cost and launches. The engine also computes the cellular family's cost-plus
 revenue line on the shared trajectory, but the Iridium artifact does not
 publish it as of iridium-v3 (investor direction 2026-07-10). When the ARPU block
 is set, the published four-bucket revenue case derives: one pool anchored to
-fleet capacity (fleet target times density, 62,400,000 connections at the
-baseline), four bucket counts by mix percentage (standard the exact residual,
-so the people identity holds by construction), revenue per bucket as count
-times price times twelve months, and the margin against the steady-state fleet
-cost.
+fleet capacity (the fleet's people capacity, fleet target times density or
+10,608,000 people at the baseline, divided by the people share of the mix,
+standard plus premium at 17 percent: 62,400,000 connections), four bucket
+counts by mix percentage (standard the exact residual, so the people identity
+holds by construction), revenue per bucket as count times price times twelve
+months, and the margin against the built fleet's annualized cost (its build,
+launch, and replacement cost spread over the satellite life; schema
+iridium-v5).
 
 **The frozen-test discipline.** The family's test suite locks every baseline
 number (capacity, density, fleet, pool, rates, aggregate, launch identity,

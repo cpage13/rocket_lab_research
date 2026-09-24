@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "schema_version": "ground-v1",
+    "schema_version": "ground-v2",
     "scenario_name": "Default ground reference scenario",
     "base_year": 2026,
     "horizon_years": 10,
@@ -8,7 +8,7 @@
     "operator_model": "b2b_dedicated_optical_rf",
     "radiator_architecture": "deployed_double_sided",
     "deployment_philosophy": "ground_validated_before_launch",
-    "generated_at": "2026-07-15T16:17:49.244540+00:00",
+    "generated_at": "2026-09-24T04:08:20.062756+00:00",
     "model_package": "rklb-value",
     "model_version": "0.1.0",
     "artifact_role": "promoted_ground_default",
@@ -24,10 +24,10 @@
     "service_life_years": 5,
     "note": "Annual deployment cohort, not living fleet market share.",
     "source_paths": [
-      "business.years.\"2036\".nodes_deployed_this_year",
-      "physical.years.\"2036\".gpus_per_node",
-      "physical.years.\"2036\".kw_per_node",
-      "inputs.config.fleet.service_life_years"
+      "space:business.years.\"2036\".nodes_deployed_this_year",
+      "space:physical.years.\"2036\".gpus_per_node",
+      "space:physical.years.\"2036\".kw_per_node",
+      "space:inputs.config.fleet.service_life_years"
     ]
   },
   "inputs": {
@@ -36,7 +36,7 @@
       "description": "Canonical default ground reference scenario for the promoted space model.",
       "path": "code/scenarios/ground_default.yaml",
       "is_default": true,
-      "owner_note": "Creator-selected ground reference assumptions traced to the research wiki."
+      "owner_note": "Investor-selected ground reference assumptions traced to the research wiki."
     },
     "config": {
       "gpu_package_cost_multiplier": {
@@ -44,7 +44,7 @@
         "label": "GPU package cost multiplier",
         "value": 1.0,
         "unit": "ratio",
-        "description": "Multiplier applied to the space model's 2036 package acquisition cost.",
+        "description": "Multiplier applied to the space model's anchor-year package cost.",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -61,10 +61,10 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-GPU-PACKAGE-COST-BOUNDARY",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Uses the same GPU package cost basis as the orbital cohort.",
@@ -75,7 +75,7 @@
         "label": "Facility shell and fit-out",
         "value": 18.0,
         "unit": "MUSD/MW",
-        "description": "Five-year facility shell and fit-out allocation per MW.",
+        "description": "Facility shell and fit-out allocation per MW, charged to the anchor cohort.",
         "assumption_role": "default",
         "source_status": "sourced_estimate",
         "source_refs": [
@@ -92,10 +92,10 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-FACILITY-FITOUT-18M-MW",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Captures terrestrial building and AI-hall fit-out costs.",
@@ -106,7 +106,7 @@
         "label": "Racked power and networking",
         "value": 0.08,
         "unit": "MUSD/package",
-        "description": "Power distribution and networking allocation per GPU package.",
+        "description": "Racked power and networking allocation per GPU package.",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -123,10 +123,10 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-RACKED-POWER-NETWORK-80K-PACKAGE",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Captures non-GPU rack-side electrical and network integration.",
@@ -154,13 +154,13 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-ENERGY-PRICE-85-MWH",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
-        "rationale": "Turns IT load, PUE, and utilization into a five-year energy cost.",
+        "rationale": "Turns IT load, PUE, and utilization into an energy cost over the comparison period.",
         "notes": null
       },
       "pue": {
@@ -168,7 +168,7 @@
         "label": "PUE",
         "value": 1.25,
         "unit": "ratio",
-        "description": "Power usage effectiveness for total facility draw.",
+        "description": "Power usage effectiveness applied to IT load.",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -185,10 +185,10 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-PUE-1_25",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Converts IT load into total facility electricity consumption.",
@@ -199,7 +199,7 @@
         "label": "Utilization",
         "value": 0.85,
         "unit": "fraction",
-        "description": "Average IT-load utilization during the comparison window.",
+        "description": "Average IT-load utilization during the comparison period (the anchor cohort's service life).",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -216,10 +216,10 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-UTILIZATION-0_85",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Energy cost scales with the average utilized IT load.",
@@ -247,10 +247,10 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-O_AND_M-1_5M-MW-YR",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Keeps recurring terrestrial support cost explicit.",
@@ -278,44 +278,13 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-COOLING-4M-MW",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Represents liquid-cooling and heat-rejection infrastructure.",
-        "notes": null
-      },
-      "comparison_period_years": {
-        "path": "inputs.config.comparison_period_years",
-        "label": "Comparison period",
-        "value": 5,
-        "unit": "years",
-        "description": "Cost comparison window.",
-        "assumption_role": "default",
-        "source_status": "scenario",
-        "source_refs": [
-          {
-            "ref_type": "source_index",
-            "ref": "research/SOURCE_INDEX.md#RLDC-GROUND-COMPARISON-PERIOD-5Y",
-            "claim_id": "RLDC-GROUND-COMPARISON-PERIOD-5Y",
-            "note": "Per-input source ledger entry for the ground reference."
-          },
-          {
-            "ref_type": "research_doc",
-            "ref": "research/economics/ground_infrastructure_electricity_costs_2036.md",
-            "claim_id": "RLDC-GROUND-COMPARISON-PERIOD-5Y",
-            "note": "Research basis for ground infrastructure and electricity costs."
-          },
-          {
-            "ref_type": "model_derivation",
-            "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-COMPARISON-PERIOD-5Y",
-            "note": "Ground scenario YAML value used for this model run."
-          }
-        ],
-        "rationale": "Aligns the terrestrial comparison to the orbital service-life view.",
         "notes": null
       }
     },
@@ -325,7 +294,7 @@
         "label": "GPU package cost multiplier",
         "value": 1.0,
         "unit": "ratio",
-        "description": "Multiplier applied to the space model's 2036 package acquisition cost.",
+        "description": "Multiplier applied to the space model's anchor-year package cost.",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -342,10 +311,10 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-GPU-PACKAGE-COST-BOUNDARY",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Uses the same GPU package cost basis as the orbital cohort.",
@@ -356,7 +325,7 @@
         "label": "Facility shell and fit-out",
         "value": 18.0,
         "unit": "MUSD/MW",
-        "description": "Five-year facility shell and fit-out allocation per MW.",
+        "description": "Facility shell and fit-out allocation per MW, charged to the anchor cohort.",
         "assumption_role": "default",
         "source_status": "sourced_estimate",
         "source_refs": [
@@ -373,10 +342,10 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-FACILITY-FITOUT-18M-MW",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Captures terrestrial building and AI-hall fit-out costs.",
@@ -387,7 +356,7 @@
         "label": "Racked power and networking",
         "value": 0.08,
         "unit": "MUSD/package",
-        "description": "Power distribution and networking allocation per GPU package.",
+        "description": "Racked power and networking allocation per GPU package.",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -404,10 +373,10 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-RACKED-POWER-NETWORK-80K-PACKAGE",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Captures non-GPU rack-side electrical and network integration.",
@@ -435,13 +404,13 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-ENERGY-PRICE-85-MWH",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
-        "rationale": "Turns IT load, PUE, and utilization into a five-year energy cost.",
+        "rationale": "Turns IT load, PUE, and utilization into an energy cost over the comparison period.",
         "notes": null
       },
       "inputs.config.pue": {
@@ -449,7 +418,7 @@
         "label": "PUE",
         "value": 1.25,
         "unit": "ratio",
-        "description": "Power usage effectiveness for total facility draw.",
+        "description": "Power usage effectiveness applied to IT load.",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -466,10 +435,10 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-PUE-1_25",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Converts IT load into total facility electricity consumption.",
@@ -480,7 +449,7 @@
         "label": "Utilization",
         "value": 0.85,
         "unit": "fraction",
-        "description": "Average IT-load utilization during the comparison window.",
+        "description": "Average IT-load utilization during the comparison period (the anchor cohort's service life).",
         "assumption_role": "default",
         "source_status": "scenario",
         "source_refs": [
@@ -497,10 +466,10 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-UTILIZATION-0_85",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Energy cost scales with the average utilized IT load.",
@@ -528,10 +497,10 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-O_AND_M-1_5M-MW-YR",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Keeps recurring terrestrial support cost explicit.",
@@ -559,44 +528,13 @@
             "note": "Research basis for ground infrastructure and electricity costs."
           },
           {
-            "ref_type": "model_derivation",
+            "ref_type": "research_doc",
             "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-COOLING-4M-MW",
-            "note": "Ground scenario YAML value used for this model run."
+            "claim_id": null,
+            "note": "Scenario YAML value used for this model run."
           }
         ],
         "rationale": "Represents liquid-cooling and heat-rejection infrastructure.",
-        "notes": null
-      },
-      "inputs.config.comparison_period_years": {
-        "path": "inputs.config.comparison_period_years",
-        "label": "Comparison period",
-        "value": 5,
-        "unit": "years",
-        "description": "Cost comparison window.",
-        "assumption_role": "default",
-        "source_status": "scenario",
-        "source_refs": [
-          {
-            "ref_type": "source_index",
-            "ref": "research/SOURCE_INDEX.md#RLDC-GROUND-COMPARISON-PERIOD-5Y",
-            "claim_id": "RLDC-GROUND-COMPARISON-PERIOD-5Y",
-            "note": "Per-input source ledger entry for the ground reference."
-          },
-          {
-            "ref_type": "research_doc",
-            "ref": "research/economics/ground_infrastructure_electricity_costs_2036.md",
-            "claim_id": "RLDC-GROUND-COMPARISON-PERIOD-5Y",
-            "note": "Research basis for ground infrastructure and electricity costs."
-          },
-          {
-            "ref_type": "model_derivation",
-            "ref": "code/scenarios/ground_default.yaml",
-            "claim_id": "RLDC-GROUND-COMPARISON-PERIOD-5Y",
-            "note": "Ground scenario YAML value used for this model run."
-          }
-        ],
-        "rationale": "Aligns the terrestrial comparison to the orbital service-life view.",
         "notes": null
       }
     }
@@ -613,8 +551,9 @@
           "formula_name": "ground_gpu_acquisition_from_space_package_cost",
           "uses": [
             "anchor.gpu_packages",
-            "physical.years.\"2036\".cost_breakdown.compute",
-            "physical.years.\"2036\".gpus_per_node",
+            "space:business.years.\"2036\".nodes_deployed_this_year",
+            "space:physical.years.\"2036\".gpus_per_node",
+            "space:physical.years.\"2036\".cost_breakdown.compute",
             "inputs.config.gpu_package_cost_multiplier"
           ],
           "sources": [
@@ -627,7 +566,7 @@
         "included": true,
         "source_paths": [
           "anchor.gpu_packages",
-          "physical.years.\"2036\".cost_breakdown.compute",
+          "space:physical.years.\"2036\".cost_breakdown.compute",
           "inputs.config.gpu_package_cost_multiplier"
         ],
         "notes": "Uses the space model's same-generation package cost basis."
@@ -642,6 +581,8 @@
           "formula_name": "ground_facility_cost_from_mw",
           "uses": [
             "anchor.kw",
+            "space:business.years.\"2036\".nodes_deployed_this_year",
+            "space:physical.years.\"2036\".kw_per_node",
             "inputs.config.facility_shell_fitout_musd_per_mw"
           ],
           "sources": [
@@ -669,6 +610,8 @@
           "formula_name": "ground_racked_power_network_from_package_count",
           "uses": [
             "anchor.gpu_packages",
+            "space:business.years.\"2036\".nodes_deployed_this_year",
+            "space:physical.years.\"2036\".gpus_per_node",
             "inputs.config.racked_power_network_musd_per_gpu_package"
           ],
           "sources": [
@@ -687,28 +630,30 @@
       },
       {
         "name": "energy",
-        "label": "Five-year energy",
+        "label": "Energy over the comparison period",
         "cost": {
           "value": 267.97611931199987,
           "unit": "MUSD",
-          "formula": "anchor_kw x PUE x utilization x hours_per_year x years / 1000 x usd_per_mwh / 1_000_000",
+          "formula": "anchor_kw x PUE x utilization x hours_per_year x service_life_years / 1000 x usd_per_mwh / 1_000_000",
           "formula_name": "ground_energy_cost_from_kw_pue_utilization",
           "uses": [
             "anchor.kw",
+            "space:business.years.\"2036\".nodes_deployed_this_year",
+            "space:physical.years.\"2036\".kw_per_node",
             "inputs.config.energy_price_usd_per_mwh",
             "inputs.config.pue",
             "inputs.config.utilization",
-            "inputs.config.comparison_period_years"
+            "anchor.service_life_years",
+            "space:inputs.config.fleet.service_life_years"
           ],
           "sources": [
             "RLDC-GROUND-ENERGY-PRICE-85-MWH",
             "RLDC-GROUND-PUE-1_25",
             "RLDC-GROUND-UTILIZATION-0_85",
-            "RLDC-GROUND-COMPARISON-PERIOD-5Y",
             "research/economics/ground_infrastructure_electricity_costs_2036.md"
           ],
           "source_status": "derived_estimate",
-          "description": "Five-year electricity cost using PUE and utilization.",
+          "description": "Electricity cost over the comparison period using PUE and utilization.",
           "notes": null
         },
         "included": true,
@@ -730,6 +675,8 @@
           "formula_name": "ground_cooling_cost_from_mw",
           "uses": [
             "anchor.kw",
+            "space:business.years.\"2036\".nodes_deployed_this_year",
+            "space:physical.years.\"2036\".kw_per_node",
             "inputs.config.cooling_cost_musd_per_mw"
           ],
           "sources": [
@@ -753,18 +700,21 @@
         "cost": {
           "value": 508.0838399999999,
           "unit": "MUSD",
-          "formula": "anchor_mw x operations_maintenance_musd_per_mw_year x years",
+          "formula": "anchor_mw x operations_maintenance_musd_per_mw_year x service_life_years",
           "formula_name": "ground_operations_cost_from_mw_year",
           "uses": [
             "anchor.kw",
+            "space:business.years.\"2036\".nodes_deployed_this_year",
+            "space:physical.years.\"2036\".kw_per_node",
             "inputs.config.operations_maintenance_musd_per_mw_year",
-            "inputs.config.comparison_period_years"
+            "anchor.service_life_years",
+            "space:inputs.config.fleet.service_life_years"
           ],
           "sources": [
             "RLDC-GROUND-O_AND_M-1_5M-MW-YR"
           ],
           "source_status": "derived_estimate",
-          "description": "Five-year operations, maintenance, and labor allocation.",
+          "description": "Operations, maintenance, and labor allocation over the comparison period.",
           "notes": null
         },
         "included": true,
@@ -775,34 +725,35 @@
         "notes": "Labor is represented in this combined recurring-cost line."
       }
     ],
-    "total_five_year_cost": {
+    "total_service_life_cost": {
       "value": 6558.813903312,
       "unit": "MUSD",
       "formula": "sum(component_costs)",
       "formula_name": "total_cost_from_components",
       "uses": [
-        "Ground acquisition cost for the same GPU package count.",
-        "Ground facility shell and AI-hall fit-out allocation.",
-        "Racked power distribution and networking allocation.",
-        "Five-year electricity cost using PUE and utilization.",
-        "Cooling infrastructure allocation for the ground cohort.",
-        "Five-year operations, maintenance, and labor allocation."
+        "ground.component_costs[0].cost",
+        "ground.component_costs[1].cost",
+        "ground.component_costs[2].cost",
+        "ground.component_costs[3].cost",
+        "ground.component_costs[4].cost",
+        "ground.component_costs[5].cost"
       ],
       "sources": [
         "RLDC-GROUND-COST-BASIS"
       ],
       "source_status": "derived_estimate",
-      "description": "Total five-year ground cost for the anchor cohort.",
+      "description": "Total ground cost for the anchor cohort over the comparison period.",
       "notes": null
     },
     "annualized_cost": {
       "value": 1311.7627806624,
       "unit": "MUSD/year",
-      "formula": "total_cost / comparison_period_years",
+      "formula": "total_cost / anchor.service_life_years (the comparison period)",
       "formula_name": "annualized_cost_from_total_and_period",
       "uses": [
-        "ground.total_five_year_cost",
-        "inputs.config.comparison_period_years"
+        "ground.total_service_life_cost",
+        "anchor.service_life_years",
+        "space:inputs.config.fleet.service_life_years"
       ],
       "sources": [
         "RLDC-GROUND-COST-BASIS"
@@ -811,43 +762,47 @@
       "description": "Ground total annualized over the comparison period.",
       "notes": null
     },
-    "cost_per_gpu_package_five_year": {
+    "cost_per_gpu_package_service_life": {
       "value": 1.1041774248,
       "unit": "MUSD/package",
       "formula": "total_cost / denominator",
       "formula_name": "cost_per_unit_from_total",
       "uses": [
-        "ground.total_five_year_cost",
-        "anchor.gpu_packages"
+        "ground.total_service_life_cost",
+        "anchor.gpu_packages",
+        "space:business.years.\"2036\".nodes_deployed_this_year",
+        "space:physical.years.\"2036\".gpus_per_node"
       ],
       "sources": [
         "RLDC-GROUND-COST-BASIS"
       ],
       "source_status": "derived_estimate",
-      "description": "Five-year ground cost per GPU package.",
+      "description": "Ground cost per GPU package over the comparison period.",
       "notes": null
     },
-    "cost_per_mw_five_year": {
+    "cost_per_mw_service_life": {
       "value": 96.81690382996635,
       "unit": "MUSD/MW",
       "formula": "total_cost / denominator",
       "formula_name": "cost_per_unit_from_total",
       "uses": [
-        "ground.total_five_year_cost",
-        "anchor.kw"
+        "ground.total_service_life_cost",
+        "anchor.kw",
+        "space:business.years.\"2036\".nodes_deployed_this_year",
+        "space:physical.years.\"2036\".kw_per_node"
       ],
       "sources": [
         "RLDC-GROUND-COST-BASIS"
       ],
       "source_status": "derived_estimate",
-      "description": "Five-year ground cost per MW.",
+      "description": "Ground cost per MW over the comparison period.",
       "notes": null
     },
     "included_components": [
       "GPU/package acquisition",
       "facility shell or fit-out allocation",
       "racked power and networking",
-      "energy over five years with PUE and utilization",
+      "energy over the comparison period with PUE and utilization",
       "cooling infrastructure",
       "operations, maintenance, and labor"
     ],
@@ -858,16 +813,6 @@
       "water costs",
       "depreciation accounting"
     ],
-    "source_status_summary": {
-      "certified": 0,
-      "sourced_estimate": 2,
-      "derived_estimate": 0,
-      "projection": 0,
-      "extrapolation": 0,
-      "scenario": 7,
-      "placeholder": 0,
-      "stale": 0
-    },
     "warnings": []
   },
   "orbital_reference": {
@@ -881,8 +826,9 @@
           "formula": "space_per_node_component_cost x anchor_nodes",
           "formula_name": "orbital_component_cost_from_space_node_component",
           "uses": [
-            "physical.years.\"2036\".cost_breakdown.compute",
-            "anchor.nodes"
+            "space:physical.years.\"2036\".cost_breakdown.compute",
+            "anchor.nodes",
+            "space:business.years.\"2036\".nodes_deployed_this_year"
           ],
           "sources": [
             "cycle-1 engine formula"
@@ -893,7 +839,7 @@
         },
         "included": true,
         "source_paths": [
-          "physical.years.\"2036\".cost_breakdown.compute"
+          "space:physical.years.\"2036\".cost_breakdown.compute"
         ],
         "notes": "Mirrors the promoted space model's per-node component."
       },
@@ -906,12 +852,13 @@
           "formula": "space_per_node_component_cost x anchor_nodes",
           "formula_name": "orbital_component_cost_from_space_node_component",
           "uses": [
-            "physical.years.\"2036\".cost_breakdown.bus",
-            "anchor.nodes"
+            "space:physical.years.\"2036\".cost_breakdown.bus",
+            "anchor.nodes",
+            "space:business.years.\"2036\".nodes_deployed_this_year"
           ],
           "sources": [
-            "cycle-1 cost dial",
-            "research/SOURCE_INDEX.md#THR-011"
+            "research/SOURCE_INDEX.md#RLDC-BUS-COST",
+            "cycle-1 cost dial"
           ],
           "source_status": "derived_estimate",
           "description": "Anchor-cohort orbital bus/platform cost.",
@@ -919,7 +866,7 @@
         },
         "included": true,
         "source_paths": [
-          "physical.years.\"2036\".cost_breakdown.bus"
+          "space:physical.years.\"2036\".cost_breakdown.bus"
         ],
         "notes": "Mirrors the promoted space model's per-node component."
       },
@@ -932,12 +879,13 @@
           "formula": "space_per_node_component_cost x anchor_nodes",
           "formula_name": "orbital_component_cost_from_space_node_component",
           "uses": [
-            "physical.years.\"2036\".cost_breakdown.solar",
-            "anchor.nodes"
+            "space:physical.years.\"2036\".cost_breakdown.solar",
+            "anchor.nodes",
+            "space:business.years.\"2036\".nodes_deployed_this_year"
           ],
           "sources": [
-            "cycle-1 cost dial",
-            "research/SOURCE_INDEX.md#THR-006"
+            "research/SOURCE_INDEX.md#RLDC-SOLAR-RADIATOR-COST",
+            "research/SOURCE_INDEX.md#THR-013"
           ],
           "source_status": "derived_estimate",
           "description": "Anchor-cohort orbital solar/power cost.",
@@ -945,7 +893,7 @@
         },
         "included": true,
         "source_paths": [
-          "physical.years.\"2036\".cost_breakdown.solar"
+          "space:physical.years.\"2036\".cost_breakdown.solar"
         ],
         "notes": "Mirrors the promoted space model's per-node component."
       },
@@ -958,12 +906,13 @@
           "formula": "space_per_node_component_cost x anchor_nodes",
           "formula_name": "orbital_component_cost_from_space_node_component",
           "uses": [
-            "physical.years.\"2036\".cost_breakdown.radiator",
-            "anchor.nodes"
+            "space:physical.years.\"2036\".cost_breakdown.radiator",
+            "anchor.nodes",
+            "space:business.years.\"2036\".nodes_deployed_this_year"
           ],
           "sources": [
-            "cycle-1 cost dial",
-            "research/SOURCE_INDEX.md#THR-003"
+            "research/SOURCE_INDEX.md#RLDC-SOLAR-RADIATOR-COST",
+            "research/SOURCE_INDEX.md#THR-016"
           ],
           "source_status": "derived_estimate",
           "description": "Anchor-cohort orbital radiator/thermal cost.",
@@ -971,7 +920,7 @@
         },
         "included": true,
         "source_paths": [
-          "physical.years.\"2036\".cost_breakdown.radiator"
+          "space:physical.years.\"2036\".cost_breakdown.radiator"
         ],
         "notes": "Mirrors the promoted space model's per-node component."
       },
@@ -984,10 +933,12 @@
           "formula": "space_per_node_component_cost x anchor_nodes",
           "formula_name": "orbital_component_cost_from_space_node_component",
           "uses": [
-            "physical.years.\"2036\".cost_breakdown.launch",
-            "anchor.nodes"
+            "space:physical.years.\"2036\".cost_breakdown.launch",
+            "anchor.nodes",
+            "space:business.years.\"2036\".nodes_deployed_this_year"
           ],
           "sources": [
+            "research/SOURCE_INDEX.md#RLDC-LAUNCH-COST-2036",
             "research/SOURCE_INDEX.md#NTR-009"
           ],
           "source_status": "derived_estimate",
@@ -996,7 +947,7 @@
         },
         "included": true,
         "source_paths": [
-          "physical.years.\"2036\".cost_breakdown.launch"
+          "space:physical.years.\"2036\".cost_breakdown.launch"
         ],
         "notes": "Mirrors the promoted space model's per-node component."
       }
@@ -1007,11 +958,11 @@
       "formula": "sum(orbital cohort component costs)",
       "formula_name": "orbital_total_cost_from_space_node_total",
       "uses": [
-        "Anchor-cohort orbital compute hardware cost.",
-        "Anchor-cohort orbital bus/platform cost.",
-        "Anchor-cohort orbital solar/power cost.",
-        "Anchor-cohort orbital radiator/thermal cost.",
-        "Anchor-cohort orbital launch allocation cost."
+        "orbital_reference.component_costs[0].cost",
+        "orbital_reference.component_costs[1].cost",
+        "orbital_reference.component_costs[2].cost",
+        "orbital_reference.component_costs[3].cost",
+        "orbital_reference.component_costs[4].cost"
       ],
       "sources": [
         "space model cost_breakdown"
@@ -1020,55 +971,40 @@
       "description": "Total orbital build and launch cost for the anchor cohort.",
       "notes": null
     },
-    "five_year_cost_view": {
-      "value": 8396.644819805533,
-      "unit": "MUSD",
-      "formula": "sum(orbital cohort component costs)",
-      "formula_name": "orbital_total_cost_from_space_node_total",
-      "uses": [
-        "Anchor-cohort orbital compute hardware cost.",
-        "Anchor-cohort orbital bus/platform cost.",
-        "Anchor-cohort orbital solar/power cost.",
-        "Anchor-cohort orbital radiator/thermal cost.",
-        "Anchor-cohort orbital launch allocation cost."
-      ],
-      "sources": [
-        "space model cost_breakdown"
-      ],
-      "source_status": "derived_estimate",
-      "description": "Total orbital build and launch cost for the anchor cohort.",
-      "notes": null
-    },
-    "cost_per_gpu_package_five_year": {
+    "cost_per_gpu_package_service_life": {
       "value": 1.4135765689908304,
       "unit": "MUSD/package",
       "formula": "total_cost / denominator",
       "formula_name": "cost_per_unit_from_total",
       "uses": [
-        "orbital_reference.five_year_cost_view",
-        "anchor.gpu_packages"
+        "orbital_reference.total_build_and_launch_cost",
+        "anchor.gpu_packages",
+        "space:business.years.\"2036\".nodes_deployed_this_year",
+        "space:physical.years.\"2036\".gpus_per_node"
       ],
       "sources": [
         "RLDC-GROUND-COST-BASIS"
       ],
       "source_status": "derived_estimate",
-      "description": "Five-year orbital reference cost per GPU package.",
+      "description": "Orbital reference cost per GPU package over the comparison period.",
       "notes": null
     },
-    "cost_per_mw_five_year": {
+    "cost_per_mw_service_life": {
       "value": 123.94575696117694,
       "unit": "MUSD/MW",
       "formula": "total_cost / denominator",
       "formula_name": "cost_per_unit_from_total",
       "uses": [
-        "orbital_reference.five_year_cost_view",
-        "anchor.kw"
+        "orbital_reference.total_build_and_launch_cost",
+        "anchor.kw",
+        "space:business.years.\"2036\".nodes_deployed_this_year",
+        "space:physical.years.\"2036\".kw_per_node"
       ],
       "sources": [
         "RLDC-GROUND-COST-BASIS"
       ],
       "source_status": "derived_estimate",
-      "description": "Five-year orbital reference cost per MW.",
+      "description": "Orbital reference cost per MW over the comparison period.",
       "notes": null
     },
     "kw": {
@@ -1077,8 +1013,8 @@
       "formula": "nodes_deployed_this_year x kw_per_node",
       "formula_name": "kw_deployed_this_year_from_nodes",
       "uses": [
-        "business.years.\"2036\".nodes_deployed_this_year",
-        "physical.years.\"2036\".kw_per_node"
+        "space:business.years.\"2036\".nodes_deployed_this_year",
+        "space:physical.years.\"2036\".kw_per_node"
       ],
       "sources": [
         "space model deployed-year cohort"
@@ -1093,8 +1029,8 @@
       "formula": "nodes_deployed_this_year x gpus_per_node",
       "formula_name": "ground_anchor_gpu_packages_from_nodes_and_packages",
       "uses": [
-        "business.years.\"2036\".nodes_deployed_this_year",
-        "physical.years.\"2036\".gpus_per_node"
+        "space:business.years.\"2036\".nodes_deployed_this_year",
+        "space:physical.years.\"2036\".gpus_per_node"
       ],
       "sources": [
         "space model deployed-year cohort"
@@ -1125,37 +1061,37 @@
     ]
   },
   "comparison": {
-    "ground_total_five_year_cost": {
+    "ground_total_service_life_cost": {
       "value": 6558.813903312,
       "unit": "MUSD",
       "formula": "sum(component_costs)",
       "formula_name": "total_cost_from_components",
       "uses": [
-        "Ground acquisition cost for the same GPU package count.",
-        "Ground facility shell and AI-hall fit-out allocation.",
-        "Racked power distribution and networking allocation.",
-        "Five-year electricity cost using PUE and utilization.",
-        "Cooling infrastructure allocation for the ground cohort.",
-        "Five-year operations, maintenance, and labor allocation."
+        "ground.component_costs[0].cost",
+        "ground.component_costs[1].cost",
+        "ground.component_costs[2].cost",
+        "ground.component_costs[3].cost",
+        "ground.component_costs[4].cost",
+        "ground.component_costs[5].cost"
       ],
       "sources": [
         "RLDC-GROUND-COST-BASIS"
       ],
       "source_status": "derived_estimate",
-      "description": "Total five-year ground cost for the anchor cohort.",
+      "description": "Total ground cost for the anchor cohort over the comparison period.",
       "notes": null
     },
-    "orbital_total_five_year_cost": {
+    "orbital_total_service_life_cost": {
       "value": 8396.644819805533,
       "unit": "MUSD",
       "formula": "sum(orbital cohort component costs)",
       "formula_name": "orbital_total_cost_from_space_node_total",
       "uses": [
-        "Anchor-cohort orbital compute hardware cost.",
-        "Anchor-cohort orbital bus/platform cost.",
-        "Anchor-cohort orbital solar/power cost.",
-        "Anchor-cohort orbital radiator/thermal cost.",
-        "Anchor-cohort orbital launch allocation cost."
+        "orbital_reference.component_costs[0].cost",
+        "orbital_reference.component_costs[1].cost",
+        "orbital_reference.component_costs[2].cost",
+        "orbital_reference.component_costs[3].cost",
+        "orbital_reference.component_costs[4].cost"
       ],
       "sources": [
         "space model cost_breakdown"
@@ -1170,14 +1106,14 @@
       "formula": "ground_cost - orbital_cost",
       "formula_name": "absolute_delta_from_totals",
       "uses": [
-        "ground.total_five_year_cost",
-        "orbital_reference.five_year_cost_view"
+        "ground.total_service_life_cost",
+        "orbital_reference.total_build_and_launch_cost"
       ],
       "sources": [
         "ground reference comparison arithmetic"
       ],
       "source_status": "derived_estimate",
-      "description": "Ground five-year total minus orbital five-year reference total.",
+      "description": "Ground total minus orbital reference total over the comparison period.",
       "notes": null
     },
     "ground_to_orbit_ratio": {
@@ -1186,14 +1122,14 @@
       "formula": "numerator / denominator",
       "formula_name": "ratio_from_totals",
       "uses": [
-        "ground.total_five_year_cost",
-        "orbital_reference.five_year_cost_view"
+        "ground.total_service_life_cost",
+        "orbital_reference.total_build_and_launch_cost"
       ],
       "sources": [
         "ground reference comparison arithmetic"
       ],
       "source_status": "derived_estimate",
-      "description": "Ground five-year total divided by orbital five-year reference total.",
+      "description": "Ground total divided by orbital reference total.",
       "notes": null
     },
     "orbit_to_ground_ratio": {
@@ -1202,14 +1138,14 @@
       "formula": "numerator / denominator",
       "formula_name": "ratio_from_totals",
       "uses": [
-        "orbital_reference.five_year_cost_view",
-        "ground.total_five_year_cost"
+        "orbital_reference.total_build_and_launch_cost",
+        "ground.total_service_life_cost"
       ],
       "sources": [
         "ground reference comparison arithmetic"
       ],
       "source_status": "derived_estimate",
-      "description": "Orbital five-year reference total divided by ground five-year total.",
+      "description": "Orbital reference total divided by ground total.",
       "notes": null
     },
     "cost_per_gpu_package_delta": {
@@ -1218,8 +1154,8 @@
       "formula": "ground_cost - orbital_cost",
       "formula_name": "absolute_delta_from_totals",
       "uses": [
-        "ground.cost_per_gpu_package_five_year",
-        "orbital_reference.cost_per_gpu_package_five_year"
+        "ground.cost_per_gpu_package_service_life",
+        "orbital_reference.cost_per_gpu_package_service_life"
       ],
       "sources": [
         "ground reference comparison arithmetic"
@@ -1234,8 +1170,8 @@
       "formula": "ground_cost - orbital_cost",
       "formula_name": "absolute_delta_from_totals",
       "uses": [
-        "ground.cost_per_mw_five_year",
-        "orbital_reference.cost_per_mw_five_year"
+        "ground.cost_per_mw_service_life",
+        "orbital_reference.cost_per_mw_service_life"
       ],
       "sources": [
         "ground reference comparison arithmetic"
@@ -1254,8 +1190,9 @@
           "formula_name": "ground_gpu_acquisition_from_space_package_cost",
           "uses": [
             "anchor.gpu_packages",
-            "physical.years.\"2036\".cost_breakdown.compute",
-            "physical.years.\"2036\".gpus_per_node",
+            "space:business.years.\"2036\".nodes_deployed_this_year",
+            "space:physical.years.\"2036\".gpus_per_node",
+            "space:physical.years.\"2036\".cost_breakdown.compute",
             "inputs.config.gpu_package_cost_multiplier"
           ],
           "sources": [
@@ -1271,8 +1208,9 @@
           "formula": "space_per_node_component_cost x anchor_nodes",
           "formula_name": "orbital_component_cost_from_space_node_component",
           "uses": [
-            "physical.years.\"2036\".cost_breakdown.compute",
-            "anchor.nodes"
+            "space:physical.years.\"2036\".cost_breakdown.compute",
+            "anchor.nodes",
+            "space:business.years.\"2036\".nodes_deployed_this_year"
           ],
           "sources": [
             "cycle-1 engine formula"
@@ -1287,8 +1225,8 @@
           "formula": "ground_cost - orbital_cost",
           "formula_name": "absolute_delta_from_totals",
           "uses": [
-            "Ground acquisition cost for the same GPU package count.",
-            "Anchor-cohort orbital compute hardware cost."
+            "comparison.component_deltas[0].ground_cost",
+            "comparison.component_deltas[0].orbital_reference_cost"
           ],
           "sources": [
             "ground reference comparison arithmetic"
@@ -1303,8 +1241,8 @@
           "formula": "numerator / denominator",
           "formula_name": "ratio_from_totals",
           "uses": [
-            "Ground acquisition cost for the same GPU package count.",
-            "Anchor-cohort orbital compute hardware cost."
+            "comparison.component_deltas[0].ground_cost",
+            "comparison.component_deltas[0].orbital_reference_cost"
           ],
           "sources": [
             "ground reference comparison arithmetic"
@@ -1323,8 +1261,8 @@
           "formula": "sum(component_costs)",
           "formula_name": "total_cost_from_components",
           "uses": [
-            "Ground facility shell and AI-hall fit-out allocation.",
-            "Racked power distribution and networking allocation."
+            "ground.component_costs[1].cost",
+            "ground.component_costs[2].cost"
           ],
           "sources": [
             "ground reference grouped component subtotal"
@@ -1339,12 +1277,13 @@
           "formula": "space_per_node_component_cost x anchor_nodes",
           "formula_name": "orbital_component_cost_from_space_node_component",
           "uses": [
-            "physical.years.\"2036\".cost_breakdown.bus",
-            "anchor.nodes"
+            "space:physical.years.\"2036\".cost_breakdown.bus",
+            "anchor.nodes",
+            "space:business.years.\"2036\".nodes_deployed_this_year"
           ],
           "sources": [
-            "cycle-1 cost dial",
-            "research/SOURCE_INDEX.md#THR-011"
+            "research/SOURCE_INDEX.md#RLDC-BUS-COST",
+            "cycle-1 cost dial"
           ],
           "source_status": "derived_estimate",
           "description": "Anchor-cohort orbital bus/platform cost.",
@@ -1356,8 +1295,8 @@
           "formula": "ground_cost - orbital_cost",
           "formula_name": "absolute_delta_from_totals",
           "uses": [
-            "Grouped cost subtotal for ground facility plus rack infrastructure.",
-            "Anchor-cohort orbital bus/platform cost."
+            "comparison.component_deltas[1].ground_cost",
+            "comparison.component_deltas[1].orbital_reference_cost"
           ],
           "sources": [
             "ground reference comparison arithmetic"
@@ -1372,8 +1311,8 @@
           "formula": "numerator / denominator",
           "formula_name": "ratio_from_totals",
           "uses": [
-            "Grouped cost subtotal for ground facility plus rack infrastructure.",
-            "Anchor-cohort orbital bus/platform cost."
+            "comparison.component_deltas[1].ground_cost",
+            "comparison.component_deltas[1].orbital_reference_cost"
           ],
           "sources": [
             "ground reference comparison arithmetic"
@@ -1392,9 +1331,9 @@
           "formula": "sum(component_costs)",
           "formula_name": "total_cost_from_components",
           "uses": [
-            "Five-year electricity cost using PUE and utilization.",
-            "Cooling infrastructure allocation for the ground cohort.",
-            "Five-year operations, maintenance, and labor allocation."
+            "ground.component_costs[3].cost",
+            "ground.component_costs[4].cost",
+            "ground.component_costs[5].cost"
           ],
           "sources": [
             "ground reference grouped component subtotal"
@@ -1409,8 +1348,8 @@
           "formula": "sum(component_costs)",
           "formula_name": "total_cost_from_components",
           "uses": [
-            "Anchor-cohort orbital solar/power cost.",
-            "Anchor-cohort orbital radiator/thermal cost."
+            "orbital_reference.component_costs[2].cost",
+            "orbital_reference.component_costs[3].cost"
           ],
           "sources": [
             "ground reference grouped component subtotal"
@@ -1425,8 +1364,8 @@
           "formula": "ground_cost - orbital_cost",
           "formula_name": "absolute_delta_from_totals",
           "uses": [
-            "Grouped cost subtotal for ground energy plus cooling plus operations.",
-            "Grouped cost subtotal for orbital solar plus radiator."
+            "comparison.component_deltas[2].ground_cost",
+            "comparison.component_deltas[2].orbital_reference_cost"
           ],
           "sources": [
             "ground reference comparison arithmetic"
@@ -1441,8 +1380,8 @@
           "formula": "numerator / denominator",
           "formula_name": "ratio_from_totals",
           "uses": [
-            "Grouped cost subtotal for ground energy plus cooling plus operations.",
-            "Grouped cost subtotal for orbital solar plus radiator."
+            "comparison.component_deltas[2].ground_cost",
+            "comparison.component_deltas[2].orbital_reference_cost"
           ],
           "sources": [
             "ground reference comparison arithmetic"
@@ -1474,10 +1413,12 @@
           "formula": "space_per_node_component_cost x anchor_nodes",
           "formula_name": "orbital_component_cost_from_space_node_component",
           "uses": [
-            "physical.years.\"2036\".cost_breakdown.launch",
-            "anchor.nodes"
+            "space:physical.years.\"2036\".cost_breakdown.launch",
+            "anchor.nodes",
+            "space:business.years.\"2036\".nodes_deployed_this_year"
           ],
           "sources": [
+            "research/SOURCE_INDEX.md#RLDC-LAUNCH-COST-2036",
             "research/SOURCE_INDEX.md#NTR-009"
           ],
           "source_status": "derived_estimate",
@@ -1490,8 +1431,8 @@
           "formula": "ground_cost - orbital_cost",
           "formula_name": "absolute_delta_from_totals",
           "uses": [
-            "Ground launch cost is not applicable.",
-            "Anchor-cohort orbital launch allocation cost."
+            "comparison.component_deltas[3].ground_cost",
+            "comparison.component_deltas[3].orbital_reference_cost"
           ],
           "sources": [
             "ground reference comparison arithmetic"
@@ -1506,8 +1447,8 @@
           "formula": "numerator / denominator",
           "formula_name": "ratio_from_totals",
           "uses": [
-            "Ground launch cost is not applicable.",
-            "Anchor-cohort orbital launch allocation cost."
+            "comparison.component_deltas[3].ground_cost",
+            "comparison.component_deltas[3].orbital_reference_cost"
           ],
           "sources": [
             "ground reference comparison arithmetic"
@@ -1548,55 +1489,874 @@
   "meta": {
     "data_dictionary": [
       {
-        "path": "anchor",
-        "description": "The 2036 deployed-year cohort selected from the space model.",
+        "path": "anchor.basis",
+        "description": "Anchor basis.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "anchor.gpu_packages",
+        "description": "GPU packages in the anchor cohort.",
+        "unit": "count",
+        "type": "integer",
+        "source_class": "derived"
+      },
+      {
+        "path": "anchor.kw",
+        "description": "Anchor cohort IT load, kW.",
+        "unit": "kW",
+        "type": "number",
+        "source_class": "derived"
+      },
+      {
+        "path": "anchor.nodes",
+        "description": "Nodes deployed in the anchor year.",
+        "unit": "count",
+        "type": "integer",
+        "source_class": "derived"
+      },
+      {
+        "path": "anchor.note",
+        "description": "Plain-language anchor note.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "anchor.service_life_years",
+        "description": "Space model service life of the anchor cohort; the ground comparison period.",
+        "unit": "years",
+        "type": "integer",
+        "source_class": "derived"
+      },
+      {
+        "path": "anchor.source_paths",
+        "description": "Space-model cells the anchor quantities are taken from, prefixed 'space:' (they resolve in the space artifact at space_model_path).",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "anchor.space_model_path",
+        "description": "Repository path of the space artifact this reference was built from; 'uses' entries prefixed 'space:' resolve in it.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "anchor.year",
+        "description": "Anchor year.",
+        "unit": "year",
+        "type": "integer",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.absolute_delta",
+        "description": "Ground minus orbital total.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.component_deltas[].absolute_delta",
+        "description": "Ground minus orbital cost for this group.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.component_deltas[].ground_cost",
+        "description": "Ground cost for this group.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.component_deltas[].ground_to_orbit_ratio",
+        "description": "Ground cost divided by orbital cost for this group.",
+        "unit": "ratio",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.component_deltas[].name",
+        "description": "Stable component-delta key.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.component_deltas[].notes",
+        "description": "How this grouping should be interpreted.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.component_deltas[].orbital_reference_cost",
+        "description": "Orbital reference cost for this group.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.conclusion_label",
+        "description": "Plain-language conclusion label.",
         "unit": "-",
-        "type": "object",
-        "source_class": "DERIVED"
+        "type": "string",
+        "source_class": "derived"
       },
       {
-        "path": "ground.total_five_year_cost",
-        "description": "Total five-year terrestrial cost for the anchor cohort.",
+        "path": "comparison.cost_per_gpu_package_delta",
+        "description": "Ground minus orbital cost per GPU package.",
         "unit": "MUSD",
         "type": "cell",
-        "source_class": "DERIVED"
+        "source_class": "derived"
       },
       {
-        "path": "orbital_reference.five_year_cost_view",
-        "description": "Comparable five-year build/launch cost view from the space model.",
+        "path": "comparison.cost_per_mw_delta",
+        "description": "Ground minus orbital cost per MW.",
         "unit": "MUSD",
         "type": "cell",
-        "source_class": "DERIVED"
+        "source_class": "derived"
       },
       {
         "path": "comparison.ground_to_orbit_ratio",
-        "description": "Ground five-year total divided by orbital five-year reference total.",
+        "description": "Ground/orbit total ratio.",
         "unit": "ratio",
         "type": "cell",
-        "source_class": "DERIVED"
+        "source_class": "derived"
       },
       {
-        "path": "inputs.assumption_index",
-        "description": "Flat index of every ground assumption input cell.",
+        "path": "comparison.ground_total_service_life_cost",
+        "description": "Ground total cost over the comparison period.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.orbit_to_ground_ratio",
+        "description": "Orbit/ground total ratio.",
+        "unit": "ratio",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.orbital_total_service_life_cost",
+        "description": "Orbital total reference cost over the comparison period.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.warnings[].expected_condition",
+        "description": "Expected condition.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.warnings[].observed_result",
+        "description": "Observed result.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.warnings[].related_json_paths",
+        "description": "Related JSON paths.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.warnings[].remediation_hint",
+        "description": "Suggested remediation.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.warnings[].severity",
+        "description": "pass, warn, or fail.",
         "unit": "-",
-        "type": "object",
-        "source_class": "INPUT"
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.warnings[].validation_id",
+        "description": "Stable validation identifier.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "comparison.warnings[].what_tested",
+        "description": "Plain-language test description.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.annualized_cost",
+        "description": "Annualized ground cost.",
+        "unit": "MUSD/year",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.component_costs[].cost",
+        "description": "Cost of this component over the comparison period.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.component_costs[].included",
+        "description": "Whether this component is included in totals.",
+        "unit": "-",
+        "type": "boolean",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.component_costs[].label",
+        "description": "Human-readable component label.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.component_costs[].name",
+        "description": "Stable component key.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.component_costs[].notes",
+        "description": "Component caveat or treatment note.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.component_costs[].source_paths",
+        "description": "Source JSON paths or input cells.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.cost_per_gpu_package_service_life",
+        "description": "Ground cost per GPU package over the comparison period.",
+        "unit": "MUSD/package",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.cost_per_mw_service_life",
+        "description": "Ground cost per MW over the comparison period.",
+        "unit": "MUSD/MW",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.excluded_components",
+        "description": "Explicitly excluded components.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.included_components",
+        "description": "Explicitly included components.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.total_service_life_cost",
+        "description": "Total ground cost over the comparison period (the anchor cohort's service life; five years for the default).",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.warnings[].expected_condition",
+        "description": "Expected condition.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.warnings[].observed_result",
+        "description": "Observed result.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.warnings[].related_json_paths",
+        "description": "Related JSON paths.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.warnings[].remediation_hint",
+        "description": "Suggested remediation.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.warnings[].severity",
+        "description": "pass, warn, or fail.",
+        "unit": "-",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.warnings[].validation_id",
+        "description": "Stable validation identifier.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "ground.warnings[].what_tested",
+        "description": "Plain-language test description.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "inputs.assumption_index[]",
+        "description": "Flat path-indexed lookup for all ground input cells.",
+        "unit": "per cell (read each cell's unit)",
+        "type": "cell",
+        "source_class": "input"
+      },
+      {
+        "path": "inputs.config.cooling_cost_musd_per_mw",
+        "description": "Cooling cost input.",
+        "unit": "MUSD/MW",
+        "type": "cell",
+        "source_class": "input"
+      },
+      {
+        "path": "inputs.config.energy_price_usd_per_mwh",
+        "description": "Energy-price input.",
+        "unit": "USD/MWh",
+        "type": "cell",
+        "source_class": "input"
+      },
+      {
+        "path": "inputs.config.facility_shell_fitout_musd_per_mw",
+        "description": "Facility shell / fit-out allocation input.",
+        "unit": "MUSD/MW",
+        "type": "cell",
+        "source_class": "input"
+      },
+      {
+        "path": "inputs.config.gpu_package_cost_multiplier",
+        "description": "GPU package cost-basis multiplier.",
+        "unit": "ratio",
+        "type": "cell",
+        "source_class": "input"
+      },
+      {
+        "path": "inputs.config.operations_maintenance_musd_per_mw_year",
+        "description": "Operations, maintenance, and labor input.",
+        "unit": "MUSD/MW-year",
+        "type": "cell",
+        "source_class": "input"
+      },
+      {
+        "path": "inputs.config.pue",
+        "description": "Power-usage-effectiveness input.",
+        "unit": "ratio",
+        "type": "cell",
+        "source_class": "input"
+      },
+      {
+        "path": "inputs.config.racked_power_network_musd_per_gpu_package",
+        "description": "Racked power and networking allocation input.",
+        "unit": "MUSD/package",
+        "type": "cell",
+        "source_class": "input"
+      },
+      {
+        "path": "inputs.config.utilization",
+        "description": "Average utilization input.",
+        "unit": "fraction",
+        "type": "cell",
+        "source_class": "input"
+      },
+      {
+        "path": "inputs.scenario.description",
+        "description": "What the scenario represents.",
+        "unit": "",
+        "type": "string",
+        "source_class": "input"
+      },
+      {
+        "path": "inputs.scenario.is_default",
+        "description": "Whether this is the canonical default scenario.",
+        "unit": "-",
+        "type": "boolean",
+        "source_class": "input"
+      },
+      {
+        "path": "inputs.scenario.name",
+        "description": "Human-readable scenario name.",
+        "unit": "",
+        "type": "string",
+        "source_class": "input"
+      },
+      {
+        "path": "inputs.scenario.owner_note",
+        "description": "Maintainer note for this scenario.",
+        "unit": "",
+        "type": "string",
+        "source_class": "input"
+      },
+      {
+        "path": "inputs.scenario.path",
+        "description": "Repository-relative source scenario path.",
+        "unit": "",
+        "type": "string",
+        "source_class": "input"
+      },
+      {
+        "path": "meta.data_dictionary[].description",
+        "description": "One-sentence plain-English description of the field.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.data_dictionary[].path",
+        "description": "Public JSON path this dictionary entry describes.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.data_dictionary[].source_class",
+        "description": "Provenance class of the field: input, constant, or derived.",
+        "unit": "-",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.data_dictionary[].type",
+        "description": "The leaf value's wire type (e.g. 'number', 'integer', 'string').",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.data_dictionary[].unit",
+        "description": "Unit string, e.g. 'MUSD', 'kW', 't', 'count', 'percent', or '-' for a unitless value.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.query_examples[].applies_to",
+        "description": "Model family this query applies to.",
+        "unit": "-",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.query_examples[].expected_shape",
+        "description": "What the query result looks like.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.query_examples[].important_paths",
+        "description": "Important JSON paths touched.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.query_examples[].jq_expression",
+        "description": "The exact jq expression.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.query_examples[].name",
+        "description": "Stable key, e.g. 'headline_2036_revenue_central'.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.query_examples[].question_answered",
+        "description": "Plain-language question this query answers.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.schema_version_notes",
+        "description": "Human-readable schema notes.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.source_status_summary.certified",
+        "description": "Certified source-backed input count.",
+        "unit": "count",
+        "type": "integer",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.source_status_summary.derived_estimate",
+        "description": "Derived-estimate input count.",
+        "unit": "count",
+        "type": "integer",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.source_status_summary.extrapolation",
+        "description": "Extrapolation input count.",
+        "unit": "count",
+        "type": "integer",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.source_status_summary.placeholder",
+        "description": "Placeholder input count; must be zero in promoted artifacts.",
+        "unit": "count",
+        "type": "integer",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.source_status_summary.projection",
+        "description": "Projection input count.",
+        "unit": "count",
+        "type": "integer",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.source_status_summary.scenario",
+        "description": "Scenario-authored input count.",
+        "unit": "count",
+        "type": "integer",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.source_status_summary.sourced_estimate",
+        "description": "Sourced-estimate input count.",
+        "unit": "count",
+        "type": "integer",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.source_status_summary.stale",
+        "description": "Stale-source input count; must be zero in promoted artifacts.",
+        "unit": "count",
+        "type": "integer",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.validation_results[].expected_condition",
+        "description": "Expected condition.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.validation_results[].observed_result",
+        "description": "Observed result.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.validation_results[].related_json_paths",
+        "description": "Related JSON paths.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.validation_results[].remediation_hint",
+        "description": "Suggested remediation.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.validation_results[].severity",
+        "description": "pass, warn, or fail.",
+        "unit": "-",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.validation_results[].validation_id",
+        "description": "Stable validation identifier.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "meta.validation_results[].what_tested",
+        "description": "Plain-language test description.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "metadata.artifact_role",
+        "description": "Artifact role: draft, promoted_default, promoted_named, or (on a ground reference) promoted_ground_default / promoted_ground_named.",
+        "unit": "-",
+        "type": "string",
+        "source_class": "constant"
+      },
+      {
+        "path": "metadata.base_year",
+        "description": "Calendar year corresponding to model year 0.",
+        "unit": "year",
+        "type": "integer",
+        "source_class": "constant"
+      },
+      {
+        "path": "metadata.deployment_philosophy",
+        "description": "The deployment philosophy (e.g. 'ground_validated_before_launch').",
+        "unit": "",
+        "type": "string",
+        "source_class": "constant"
+      },
+      {
+        "path": "metadata.generated_at",
+        "description": "ISO-8601 UTC timestamp at which the artifact was generated.",
+        "unit": "",
+        "type": "string",
+        "source_class": "constant"
+      },
+      {
+        "path": "metadata.horizon_years",
+        "description": "Number of fiscal-year steps after year 0; the physical / business 'years' maps have 'horizon_years + 1' entries.",
+        "unit": "years",
+        "type": "integer",
+        "source_class": "constant"
+      },
+      {
+        "path": "metadata.model_package",
+        "description": "Python package name that generated the artifact, when known.",
+        "unit": "",
+        "type": "string",
+        "source_class": "constant"
+      },
+      {
+        "path": "metadata.model_version",
+        "description": "Installed model package version, when available.",
+        "unit": "",
+        "type": "string",
+        "source_class": "constant"
+      },
+      {
+        "path": "metadata.operator_model",
+        "description": "The commercial operating model (D15).",
+        "unit": "-",
+        "type": "string",
+        "source_class": "constant"
+      },
+      {
+        "path": "metadata.radiator_architecture",
+        "description": "The radiator mounting architecture (D16).",
+        "unit": "-",
+        "type": "string",
+        "source_class": "constant"
+      },
+      {
+        "path": "metadata.scenario_name",
+        "description": "Human-readable scenario label from the YAML config.",
+        "unit": "",
+        "type": "string",
+        "source_class": "constant"
+      },
+      {
+        "path": "metadata.schema_version",
+        "description": "The artifact's JSON schema version ('v9' for the space model, 'ground-v2' for the ground reference).",
+        "unit": "",
+        "type": "string",
+        "source_class": "constant"
+      },
+      {
+        "path": "metadata.source_scenario_path",
+        "description": "Repository-relative source scenario path.",
+        "unit": "",
+        "type": "string",
+        "source_class": "constant"
+      },
+      {
+        "path": "metadata.workload_type",
+        "description": "The compute workload the data centre serves (D14).",
+        "unit": "-",
+        "type": "string",
+        "source_class": "constant"
+      },
+      {
+        "path": "orbital_reference.component_costs[].cost",
+        "description": "Cost of this component over the comparison period.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.component_costs[].included",
+        "description": "Whether this component is included in totals.",
+        "unit": "-",
+        "type": "boolean",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.component_costs[].label",
+        "description": "Human-readable component label.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.component_costs[].name",
+        "description": "Stable component key.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.component_costs[].notes",
+        "description": "Component caveat or treatment note.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.component_costs[].source_paths",
+        "description": "Source JSON paths or input cells.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.cost_per_gpu_package_service_life",
+        "description": "Orbital cost per GPU package over the comparison period.",
+        "unit": "MUSD/package",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.cost_per_mw_service_life",
+        "description": "Orbital cost per MW over the comparison period.",
+        "unit": "MUSD/MW",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.explicit_exclusions",
+        "description": "Orbital exclusions.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.gpu_packages",
+        "description": "Anchor cohort GPU packages.",
+        "unit": "count",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.kw",
+        "description": "Anchor cohort kW.",
+        "unit": "kW",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.total_build_and_launch_cost",
+        "description": "Total build and launch cost for the anchor cohort: its orbital cost over the comparison period, since the build and launch cover the cohort's whole service life.",
+        "unit": "MUSD",
+        "type": "cell",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.warnings[].expected_condition",
+        "description": "Expected condition.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.warnings[].observed_result",
+        "description": "Observed result.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.warnings[].related_json_paths",
+        "description": "Related JSON paths.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.warnings[].remediation_hint",
+        "description": "Suggested remediation.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.warnings[].severity",
+        "description": "pass, warn, or fail.",
+        "unit": "-",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.warnings[].validation_id",
+        "description": "Stable validation identifier.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
+      },
+      {
+        "path": "orbital_reference.warnings[].what_tested",
+        "description": "Plain-language test description.",
+        "unit": "",
+        "type": "string",
+        "source_class": "derived"
       }
     ],
     "validation_results": [
       {
         "validation_id": "ground_anchor_2036_deployed_year",
         "severity": "pass",
-        "what_tested": "Ground anchor uses the canonical deployed-year cohort.",
-        "expected_condition": "year=2036 and basis=deployed_this_year.",
-        "observed_result": "year=2036; basis=deployed_this_year.",
+        "what_tested": "The ground anchor is the space run's anchor-year deployed-year cohort.",
+        "expected_condition": "year=2036, basis=deployed_this_year, and nodes, GPU packages, kW, and service life equal the space output's anchor-year cohort.",
+        "observed_result": "year=2036; basis=deployed_this_year; nodes=90 (space 90); gpu_packages=5940 (space 5940); kw=67744.5 (space 67744.5); service_life_years=5 (space 5).",
         "related_json_paths": [
           "anchor.year",
           "anchor.basis",
-          "business.years.\"2036\".nodes_deployed_this_year",
-          "physical.years.\"2036\".gpus_per_node",
-          "physical.years.\"2036\".kw_per_node",
-          "inputs.config.fleet.service_life_years"
+          "space:business.years.\"2036\".nodes_deployed_this_year",
+          "space:physical.years.\"2036\".gpus_per_node",
+          "space:physical.years.\"2036\".kw_per_node",
+          "space:inputs.config.fleet.service_life_years"
         ],
         "remediation_hint": null
       },
@@ -1646,12 +2406,12 @@
       },
       {
         "name": "ground_cost_summary",
-        "question_answered": "What are the total ground and orbital five-year costs?",
-        "jq_expression": "{ground: .ground.total_five_year_cost, orbital: .orbital_reference.five_year_cost_view}",
+        "question_answered": "What are the total ground and orbital costs over the comparison period?",
+        "jq_expression": "{ground: .ground.total_service_life_cost, orbital: .orbital_reference.total_build_and_launch_cost}",
         "expected_shape": "object with two ProvenanceCell values",
         "important_paths": [
-          "ground.total_five_year_cost",
-          "orbital_reference.five_year_cost_view"
+          "ground.total_service_life_cost",
+          "orbital_reference.total_build_and_launch_cost"
         ],
         "applies_to": "ground"
       },
@@ -1672,10 +2432,10 @@
       "derived_estimate": 0,
       "projection": 0,
       "extrapolation": 0,
-      "scenario": 7,
+      "scenario": 6,
       "placeholder": 0,
       "stale": 0
     },
-    "schema_version_notes": "ground-v1 reference output anchored to the 2036 deployed-year space-model cohort; ground assumptions are source-status tagged through the research wiki source ledger."
+    "schema_version_notes": "ground-v2 reference output anchored to the 2036 deployed-year space-model cohort over its service life; ground assumptions are source-status tagged through the research wiki source ledger. A 'uses' entry prefixed 'space:' resolves in the space artifact at anchor.space_model_path; every other entry resolves in this artifact. Since ground-v1 the cost fields over the comparison period are named *_service_life* (they were *_five_year*), the duplicate orbital_reference.five_year_cost_view is gone (read orbital_reference.total_build_and_launch_cost), and the data dictionary's source_class is lowercase."
   }
 }

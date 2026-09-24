@@ -55,7 +55,7 @@ family and the equality tripwire still see the defaults.
 | Launch cost (flat) | 13.0 million dollars per launch | `scenario`, investor-flat | Investor simplification 2026-07-09: both cadence anchors of the shared log-linear curve set equal in `iridium.yaml`, so the launch cost is flat at every cadence (no stepped pricing as launches scale). In-band, just below the shared curve's grounded 13.5 high-cadence floor; the shared-spine default curve (25.0 to 13.5) is untouched. |
 | Satellite lifetime | 5 years | `scenario` | The corpus Starlink operating-life lineage (`COMM-088`, the ~5-year depreciation and replacement treadmill). |
 | Coverage floor | 340 satellites | `scenario` on a computed basis | The project coverage simulation's 95 percent column reads 341 at 450 km and a 25 degree mask, investor-rounded to 340; inside `COMM-216`'s 290 to 960 floor band. Honest bounds (2026-07-14 audit): a fuller integer-phasing search finds 320 passing the same stored geographic metric, while the saved 341 case is the robust one under equal-area weighting; the metric is geographic, not population-weighted, so 340 is a supported conservative scenario and the exact floor is an engineering decision. |
-| Orbit (altitude, inclination) | about 450 km, 53 degrees | `derived_estimate` (Part 7 physics loop) | The coverage-of-people choice: 53 degrees covers the latitudes holding about 99.6 percent of population and needs about 10 percent fewer satellites than polar (341 vs 375); the four couplings (path loss, coverage economy, the saturation ceiling, the sun-angle power floor) favor about 450 km, robustly on the link budget and latency. Supports the 340-satellite floor as a conservative scenario (not a solved optimum; see the coverage-floor row); the promoted artifact carries the orbit as a labeled scenario block with the bounds attached (schema iridium-v4). |
+| Orbit (altitude, inclination) | about 450 km, 53 degrees | `derived_estimate` (Part 7 physics loop) | The coverage-of-people choice: 53 degrees covers the latitudes holding about 99.6 percent of population and needs about 10 percent fewer satellites than polar (341 vs 375); the four couplings (path loss, coverage economy, the saturation ceiling, the sun-angle power floor) favor about 450 km, robustly on the link budget and latency. Supports the 340-satellite floor as a conservative scenario (not a solved optimum; see the coverage-floor row); the promoted artifact carries the orbit as a labeled scenario block with the bounds attached (since schema iridium-v4). |
 | Saturation cap | 2,000 satellites | `scenario` | Investor-set dial encoding the tiling/interference ceiling (`COMM-413` to `COMM-416` own the mechanism; `COMM-550/553` the fleet scale). |
 | Busy-hour concurrency | 2.5 percent | `scenario`, corpus-central | `COMM-543`: working direct-to-cell concurrency about 1 to 5 percent, central 2 to 3. |
 | Subscriber base at coverage | 10,000,000 people | `scenario` | Investor-set conservative slice of the coverage-gap pool (`COMM-021`: about 300 million people without mobile coverage; context `COMM-390`, `COMM-065`). |
@@ -97,7 +97,10 @@ margin) is no longer emitted on the promoted Iridium artifact as of iridium-v3
 (investor direction 2026-07-10); it stays on the shared trajectory for the
 cellular family and the equality tripwire. The published Iridium margin is
 `arpu_margin_vs_steady_state_cost_pct`, an operating-style margin (not a gross
-margin) as defined in the conclusion, measured against steady-state cost.
+margin) as defined in the conclusion, measured against the built fleet's
+annualized cost (`built_fleet_annual_cost_musd`, schema iridium-v5). That
+basis equals the steady-state cost whenever the built fleet is on orbit in the
+final year, as it is at the default, so the field keeps its historical name.
 
 ## The Assumptions Register
 
@@ -212,7 +215,7 @@ the output, not papered over.
 | 38 | The equality tripwire premise: the Iridium baseline and the cellular default both bind at the 340 floor with the aperture identity at 25.0; a dial change breaks the test loudly by design | tripwire |
 | 39 | ARPU full sell-through: every serveable billable-connection slot the built fleet can carry is sold (revenue rides capacity, not the served target); clearly optimistic, stated, investor-owned | sell-through |
 | 40 | ARPU mix posture: the people-and-government share is loosely anchored on the FY2025 book's like-for-like share (about 21.2 percent); government is de-anchored to reproduce the one fixed EMSS contract; IoT is the residual; the mix is held constant as the fleet grows (v1) | market shape |
-| 41 | ARPU built-fleet convention: the revenue case is computed once at the built fleet (fleet_target), so a below-target build describes the completed fleet, not the final horizon year's smaller actual fleet | built fleet |
+| 41 | ARPU built-fleet convention: the revenue case and its margin's cost basis (the built fleet's annualized cost, schema iridium-v5) are both computed at the built fleet (fleet_target), so a below-target build describes the completed fleet, not the final horizon year's smaller actual fleet; the artifact states whether the build completes inside the horizon | built fleet |
 | 42 | The flat cost model (investor-set simplification, 2026-07-09): launch cost 13.0 million dollars at every cadence and satellite build cost 1.0 million dollars, no stepped pricing as launches scale; both in-band of the research anchors; scenario overrides only, the shared-spine defaults untouched (the cellular family and the equality tripwire still see the defaults) | flat 13.0 / 1.0 |
 
 ## Model Output Anchors
@@ -232,8 +235,8 @@ All are `derived_estimate`.
 | Coverage complete (all-in share) | 2031 |
 | Build-and-hold cost through FY2036 (flat cost model: 696 satellite units x 1.0 + 58 launches x 13.0, the 2031 build plus one full five-year fleet replacement) | 1,450.0 million dollars |
 | Steady-state annual fleet cost (annualized basis) | 145.0 million dollars per year |
-| Cash cost per subscriber (final-year FY2036 replacement-cost artifact, 250.0 million dollars over the 10-million configured base; see conclusion caveat) | 25.00 dollars per year |
-| ARPU margin vs steady-state cost (operating-style; the conclusion carries the definition) | about 98.2 percent |
+| Cash cost per subscriber (final-year FY2036 replacement-cost artifact, 250.0 million dollars over the 10-million served base; see conclusion caveat) | 25.00 dollars per year |
+| ARPU margin vs the built fleet's annualized cost (145.0 million dollars per year at the default; operating-style; the conclusion carries the definition) | about 98.2 percent |
 | ARPU standard bucket (people) | 9,360,000 at 15 dollars, 1,684.8 million dollars per year |
 | ARPU premium bucket (people) | 1,248,000 at 100 dollars, 1,497.6 million dollars per year |
 | ARPU IoT bucket (devices) | 51,670,320 at 8 dollars, about 4,960.4 million dollars per year |

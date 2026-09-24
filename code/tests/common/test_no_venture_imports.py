@@ -4,10 +4,10 @@ The binding invariant is that no ``common`` module IMPORTS the ``data_center`` o
 ``communications`` package. The check is import-based rather than a raw-substring
 scan because the package docstrings legitimately name both ventures in prose
 (e.g. ``common/__init__.py``: "Shared code imported by both the data_center and
-communications models"), and ``common/cadence.py`` documents in a comment that its
-eight cadence defaults are copied from ``data_center/constants.py``. Those prose
-mentions are not dependencies; an ``import`` of a venture would be. See the Phase 0
-report for the deviation rationale.
+communications models"), and ``common/cadence.py`` documents that its dial blocks
+are the ``cadence`` and ``launch_cost`` blocks of both ventures' configs. Those
+prose mentions are not dependencies; an ``import`` of a venture would be. See the
+Phase 0 report for the deviation rationale.
 """
 
 from __future__ import annotations
@@ -17,6 +17,9 @@ from pathlib import Path
 
 import pytest
 
+# Anchored from this file (not the shared ``code_dir`` fixture) because the
+# parametrized guards below list the files at collection time, before any
+# fixture exists.
 _COMMON_DIR = Path(__file__).resolve().parents[2] / "src" / "common"
 _COMMON_FILES = sorted(_COMMON_DIR.glob("*.py"))
 

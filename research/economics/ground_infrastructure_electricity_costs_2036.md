@@ -8,6 +8,11 @@
 for this focused pass. It is cataloged in `LIBRARY.md` and `RESEARCH_TRACKER.md`;
 `SOURCE_INDEX.md` carries per-input ground source-status entries, and the
 promoted ground JSON points to those entries.
+**Contract note (2026-09-23):** the JSON paths below use the current ground-v2
+names, and the comparison window is now the anchor cohort's service life (the
+`comparison_period_years` dial was removed); the values remain this pass's
+2026-05-28 read of the pre-rebase default, not current output (the promoted
+reference now reads about `$6.56B` ground, `$8.40B` orbital, `1.28x`).
 
 ## Central Finding
 
@@ -27,8 +32,8 @@ The promoted ground JSON computes a five-year ground total of about `$3.68B`
 and an orbital build-plus-launch reference of about `$7.05B`, so the current
 orbital/ground ratio is about `1.92x`. All three values are derived directly
 from `data_center/models/ground/default.json` paths
-`.ground.total_five_year_cost.value`,
-`.orbital_reference.five_year_cost_view.value`, and
+`.ground.total_service_life_cost.value`,
+`.orbital_reference.total_build_and_launch_cost.value`, and
 `.comparison.orbit_to_ground_ratio.value`.
 
 The delicate public interpretation is:
@@ -63,9 +68,9 @@ cohort source path.
 | Nodes deployed | `.anchor.nodes` | `90` | `derived_estimate` from space model |
 | GPU packages | `.anchor.gpu_packages` | `3330` | `derived_estimate` from `90 * 37` |
 | IT load | `.anchor.kw` | `~37,978 kW` (≈37.98 MW) | `derived_estimate` from `90 * 421.98 kW` |
-| Comparison period | `.anchor.service_life_years` and `.inputs.assumption_index["inputs.config.comparison_period_years"].value` | `5 years` | `scenario`, aligned to service life |
-| Ground five-year total | `.ground.total_five_year_cost.value` | `~3,677 MUSD` (≈$3.68B) | `derived_estimate` from source-linked and scenario inputs |
-| Orbital five-year reference | `.orbital_reference.five_year_cost_view.value` | `~7,048 MUSD` (≈$7.05B) | `derived_estimate` from space model cost lines |
+| Comparison period (the anchor cohort's service life) | `.anchor.service_life_years` | `5 years` | `scenario`, the service-life window |
+| Ground five-year total | `.ground.total_service_life_cost.value` | `~3,677 MUSD` (≈$3.68B) | `derived_estimate` from source-linked and scenario inputs |
+| Orbital five-year reference | `.orbital_reference.total_build_and_launch_cost.value` | `~7,048 MUSD` (≈$7.05B) | `derived_estimate` from space model cost lines |
 | Ground/orbit ratio | `.comparison.ground_to_orbit_ratio.value` | `~0.52` | `derived_estimate` |
 | Orbit/ground ratio | `.comparison.orbit_to_ground_ratio.value` | `~1.92` | `derived_estimate` |
 | Conclusion label | `.comparison.conclusion_label` | `same_order_of_magnitude` | interpretation label, not a parity claim |
@@ -104,10 +109,10 @@ The comparison summary (anchor, ground and orbital totals, ratios, and the
 component breakdowns) comes from one query:
 
 ```sh
-jq '{anchor: .anchor, ground_total_musd: .ground.total_five_year_cost.value, orbital_total_musd: .orbital_reference.five_year_cost_view.value, ground_to_orbit: .comparison.ground_to_orbit_ratio.value, orbit_to_ground: .comparison.orbit_to_ground_ratio.value, ground_components: [.ground.component_costs[] | {name, value_musd: .cost.value}], orbital_components: [.orbital_reference.component_costs[] | {name, value_musd: .cost.value}]}' data_center/models/ground/default.json
+jq '{anchor: .anchor, ground_total_musd: .ground.total_service_life_cost.value, orbital_total_musd: .orbital_reference.total_build_and_launch_cost.value, ground_to_orbit: .comparison.ground_to_orbit_ratio.value, orbit_to_ground: .comparison.orbit_to_ground_ratio.value, ground_components: [.ground.component_costs[] | {name, value_musd: .cost.value}], orbital_components: [.orbital_reference.component_costs[] | {name, value_musd: .cost.value}]}' data_center/models/ground/default.json
 ```
 
-The nine ground input dials, with units and source status, come from
+The ground input dials, with units and source status, come from
 `.inputs.assumption_index`. They are tabulated under
 [Input Audit And Implemented Source Statuses](#input-audit-and-implemented-source-statuses):
 
@@ -161,8 +166,8 @@ Using the promoted model:
 | `37,978 kW * 1.25 * 0.85 * 8760 * 5 / 1000 * 85 / 1e6` | `~150 MUSD` | ground JSON and ground YAML |
 | `37.98 MW * 4 MUSD/MW` | `~152 MUSD` | ground JSON and ground YAML |
 | `37.98 MW * 1.5 MUSD/MW-year * 5` | `~285 MUSD` | ground JSON and ground YAML |
-| Sum of ground components | `~3,677 MUSD` | ground JSON `.ground.total_five_year_cost.value` |
-| Sum of orbital build/launch components | `~7,048 MUSD` | ground JSON `.orbital_reference.five_year_cost_view.value` |
+| Sum of ground components | `~3,677 MUSD` | ground JSON `.ground.total_service_life_cost.value` |
+| Sum of orbital build/launch components | `~7,048 MUSD` | ground JSON `.orbital_reference.total_build_and_launch_cost.value` |
 | `~7,048 / ~3,677` | `~1.92x` | ground JSON `.comparison.orbit_to_ground_ratio.value` |
 
 This is the reason the current ground total is close to the May 26 sidecar
@@ -321,7 +326,7 @@ How this applies here:
 | `utilization` | `0.85` | `scenario` | Tyler Norris warns public utilization data is poor; Epoch uses about `71%` as a sourced modeling input. | High-utilization assumption; affects energy only in current model. |
 | `operations_maintenance_musd_per_mw_year` | `1.5 MUSD/MW-year` | `scenario` | Epoch maintenance plus labor is about `$160M/year` for `1 GW`, or `$0.16M/MW-year`. Current value is plausible only if it also includes hardware maintenance/support. | Must not be described as pure labor/facility O&M. |
 | `cooling_cost_musd_per_mw` | `4.0 MUSD/MW` | `scenario` | Turner & Townsend liquid-cooled AI construction has `33%` mechanical share and `7-10%` premium; prior local research used `$3-5M/MW` for AI liquid-cooling infrastructure. | Source-supported scenario with double-count risk against facility fit-out. |
-| `comparison_period_years` | `5` | `scenario` | Tied to `RLDC-SERVICE-LIFE-5Y` and the space model service-life comparison. | Not a data-center depreciation claim. |
+| Comparison window (the `comparison_period_years` dial until its 2026-09-23 removal) | `5` | `scenario` | The anchor cohort's service life (`.anchor.service_life_years`, from the space model's `fleet.service_life_years`, `RLDC-SERVICE-LIFE-5Y`); no separate dial. | Not a data-center depreciation claim. |
 
 ## Electricity Is Small Relative To Ground Infrastructure
 

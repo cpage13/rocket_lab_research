@@ -42,7 +42,7 @@ communications disciplines: the three lanes stay separate (cellular phones,
 broadband dish, MSS on Iridium's owned L-band); subscribers are people and
 IoT are devices, never summed; frequency (the ~1.6 GHz dial position) and
 bandwidth (the ~8 MHz width held) are different quantities; every published
-number traces to the promoted JSON, a `COMM-*` claim, or a founder-set dial.
+number traces to the promoted JSON, a `COMM-*` claim, or an investor-set dial.
 
 ## Research Wiki Map
 
@@ -99,14 +99,14 @@ promoted ground reference is `data_center/models/ground/default.json`.
 Prefer the embedded query examples before inventing a query:
 
 ```sh
-jq -r '.meta.query_examples[] | .name + " :: " + .jq' data_center/models/space/default.json
+jq -r '.meta.query_examples[] | .name + " :: " + .jq_expression' data_center/models/space/default.json
 ```
 
 For direct inspection:
 
 ```sh
 jq '.metadata' data_center/models/space/default.json
-jq '.inputs.assumption_index | keys | length' data_center/models/space/default.json
+jq '.inputs.assumption_index | keys | length' data_center/models/space/default.json   # 119 at the current default
 jq '.business.years."2036".kw_deployed_this_year.value' data_center/models/space/default.json
 jq '.comparison.conclusion_label' data_center/models/ground/default.json
 ```
@@ -121,7 +121,9 @@ with `value`, `unit`, `formula`, `uses`, `sources`, `source_status`, and
 
 The ground JSON is source-linked through per-input `RLDC-GROUND-*` claims. Its
 `comparison.conclusion_label` is `same_order_of_magnitude`; do not describe the
-ground comparison as parity or proof.
+ground comparison as parity or proof. Its provenance `uses` paths resolve
+inside the ground artifact, except paths prefixed `space:`, which point into
+the space artifact (for example `space:physical.years."2036".kw_per_node`).
 
 ## Trace Inputs To Sources
 
@@ -143,7 +145,7 @@ Source rules:
   matching `RLDC-*` claim ID.
 - Scenario or source assumptions cite the `RLDC-*` claim ID and the source
   ledger or research path.
-- Derived interpretations, such as the roughly 90 percent same-margin token
+- Derived interpretations, such as the roughly 28 percent same-margin token
   premium, cite the JSON comparison path and the matching `RLDC-*` claim ID.
 - Soft strategic rationale, such as cadence learning or infrastructure
   bootstrapping, should stay qualitative unless a model value or sourced claim
@@ -159,8 +161,10 @@ The important code path is `code/src/data_center/`:
 - `config.py` owns typed scenario parsing.
 - `engine.py` runs the core model.
 - `input_manifest.py` builds the source-traceable assumption index.
-- `provenance.py`, `output.py`, and `json_output.py` define public output
-  structure, provenance cells, validation metadata, and rendering.
+- `output.py` and `json_output.py` define the public output structure and
+  validation metadata. Shared pieces live in `code/src/common/`: provenance
+  cells in `provenance.py`, the cadence spine in `cadence.py`, and rendering
+  (the one artifact serializer and the promotion writer) in `file_io.py`.
 - `ground.py` owns the deployed-year ground reference.
 - `query_examples.py` embeds `jq` examples in promoted JSON.
 - `cli.py` owns command-line execution and promotion.
@@ -174,9 +178,19 @@ lives under `data_center/models/`.
 Run from `code/`:
 
 ```sh
-uv run rklb-value scenarios/default.yaml --json 2>&1 | tee outputs/data_center/runs/default.json
+uv run rklb-value scenarios/default.yaml --json | tee outputs/data_center/runs/default.json
 uv run rklb-value --promote 2>&1 | tee /tmp/rklb_promote.txt
 ```
+
+Pipe only stdout when saving `--json` output: status and errors are log lines
+on stderr, and `2>&1` would write them into the JSON file. Promotion's own
+status line is on stderr, which is what the second command captures.
+
+Promotion rules: the output name `default` is reserved for
+`scenarios/default.yaml`; any other scenario is promoted only with a lowercase
+`--output-name <stem>` and writes only a named space artifact (the ground
+reference comes from the default promotion alone); and promotion refuses, and
+writes nothing, when any validation check fails in either artifact.
 
 Promotion updates the promoted JSON artifacts only. It does not update
 `data_center/conclusion.md`.
@@ -218,13 +232,14 @@ Keep these boundaries visible in public docs:
 - Engineering-phase upside, such as thermal-path improvement, derating,
   packaging changes, or cadence learning, is a future design-space argument,
   not a hidden input to the promoted default.
-- The roughly 90 percent same-margin token premium, the solar/radiator
-  cost-down sensitivity toward roughly 50 percent, and the thermal
-  package-density sensitivity are separate claims.
+- The roughly 28 percent same-margin token premium, the solar/radiator cost
+  sensitivity (inverted 2026-07-14: returning both cost dials to $40k/kW reads
+  about 1.69x), and the superseded thermal package-density sensitivity are
+  separate claims.
 - Launch cost and cadence values are scenario assumptions, not Rocket Lab
   guidance.
 - Do not describe "4 kW units" in public copy unless the unit is defined
-  against the current promoted model. The public 2036 node is about 421.98 kW.
+  against the current promoted model. The public 2036 node is about 753 kW.
 - Do not write "synchronous orbit" when the model means SSO or sun-synchronous
   orbit. Use the orbit language supported by the current model and research.
 
@@ -234,9 +249,11 @@ Keep these boundaries visible in public docs:
 - Do not restore the old flat public model alias.
 - Do not make promotion rewrite `data_center/conclusion.md`.
 - Do not describe the ground comparison as settled parity. The current default
-  is about 1.92x ground, with cost-down sensitivities that can lower the ratio.
-- Do not blur the default 90 percent token premium, the solar/radiator cost-down
-  sensitivity toward 50 percent, and the separate thermal package-density
+  is about 1.28x ground, with cost-down sensitivities that can lower the ratio;
+  the old heavy-radiator posture (about 1.92x) is the labeled conservative
+  exception, not the default.
+- Do not blur the default 28 percent token premium, the solar/radiator cost
+  sensitivity, and the separate (superseded) thermal package-density
   sensitivity.
 - Communications is a modeled, public workstream (the Iridium model: promoted
   JSON, frozen tests, a reviewed conclusion, `COMM-*` claims complete through
@@ -252,10 +269,11 @@ Keep these boundaries visible in public docs:
 - Do not present training as the modeled product.
 - Do not collapse deployed-year capacity into living-fleet capacity.
 - When writing the public 2036 headline, lead with cadence and scale: 90
-  launches, 90 new nodes, and about 38 MW newly deployed that year. Then, in a
-  separate sentence or section, describe the active on-orbit revenue run-rate:
-  about $6.31B revenue and $2.10B gross profit. Do not weave back and forth
-  between launch cadence and active-base revenue.
+  launches, 90 new nodes, and about 68 MW newly deployed that year. Then, in a
+  separate sentence or section, describe the active on-orbit revenue run-rate
+  of the 268 living nodes: about $7.42B revenue and about $2.47B profit (the
+  33% is a full-cost profit margin, not gross profit). Do not weave back and
+  forth between launch cadence and active-base revenue.
 - When writing the vertical-integration story, say the strong version: the
   default uses many external buy-price/customer-facing cost lines, while a
   Rocket Lab-operated program would make Rocket Lab its own customer for bus,

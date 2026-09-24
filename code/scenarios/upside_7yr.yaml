@@ -2,7 +2,8 @@
 # rklb-value, 7-YEAR SERVICE-LIFE UPSIDE scenario (v8)
 # =============================================================================
 #
-# The v8 default dial set with two changes from the default scenario:
+# The default dial set (scenarios/default.yaml) with two changes from the
+# default scenario:
 #   1. fleet.service_life_years raised to 7 (the upside end of the honest
 #      3.5 to 7 year service-life band).
 #   2. the central R multiple set to a flat 1.47 (a locked 7-year contract,
@@ -10,6 +11,9 @@
 #      flat per-cohort multiple with no in-life decay, because a fixed
 #      long-term contract fixes the price.
 # The low / high R brackets and every other dial are identical to the default.
+# Rebased 2026-09-23 onto the current default dials, including the 2026-07-14
+# AI-1-class rebase (the deployed double-sided radiator at 0.00165 t/kW and
+# the 0.02 $M/kW solar and radiator cost dials).
 #
 # Why this scenario: a 7-year cohort life keeps each node revenue-bearing two
 # years longer before the cliff, so the living fleet is larger; the flat 1.47
@@ -19,12 +23,12 @@
 # To run:   uv run rklb-value scenarios/upside_7yr.yaml
 # =============================================================================
 
-scenario_name: "Upside — v8 default dials with 7-year service life"
+scenario_name: "Upside: v8 default dials with 7-year service life"
 
 metadata:
   workload_type: inference
   operator_model: b2b_dedicated_optical_rf
-  radiator_architecture: single_face_co_mounted
+  radiator_architecture: deployed_double_sided   # the default's architecture (investor decision 2026-07-14)
   deployment_philosophy: ground_validated_before_launch
   base_year: 2026
   horizon_years: 10
@@ -36,22 +40,20 @@ cadence:
   first_launch_year: 1
 
 fleet:
-  service_life_years: 7           # the one change from default (upside)
+  service_life_years: 7           # change 1 of 2 from the default (the upside)
 
 volume:
-  si_areal_density_kg_m2: 2.0
   si_bol_efficiency: 0.20
-  fold_ratio: 80.0
   stowed_pitch_mm: 6.0
-  radiator_solar_area_ratio: 0.70
   mounting_overhead_pct: 0.30
   neutron_fairing_usable_volume_m3: 80.0
 
 r_band:
-  # Flat, no taper (matches the default's flat-R design). The 7-year term is a
-  # locked long-term contract, so the central multiple is held flat at 1.47,
-  # about 2% below the 5-year 1.50. No in-life decay curve: a fixed contract
-  # fixes the price. Low / high are the same flat brackets as the default.
+  # Change 2 of 2. Flat, no taper (matches the default's flat-R design). The
+  # 7-year term is a locked long-term contract, so the central multiple is
+  # held flat at 1.47, about 2% below the 5-year 1.50. No in-life decay
+  # curve: a fixed contract fixes the price. Low / high are the same flat
+  # brackets as the default.
   central:
     - { fy: 2026, r: 1.47 }
     - { fy: 2028, r: 1.47 }
@@ -81,23 +83,24 @@ launch_cost:
   high_cadence_launches: 100.0
 
 gospel:
+  # The default gospel, including the 2026-07-14 investor-set rebase.
   mass_envelope_t: 12.5
   node_mass_fixed_t: 2.5
   node_volume_fixed_m3: 5.0
-  tjmax_lift_year: 5
-  radiator_t_per_kw_pre: 0.013
-  radiator_t_per_kw_post: 0.012   # D17 (v8)
+  tjmax_lift_year: 5               # inert: pre == post below
+  radiator_t_per_kw_pre: 0.00165   # the default's AI-1-class light radiator (investor-set 2026-07-14)
+  radiator_t_per_kw_post: 0.00165  # held flat, as in the default
   solar_mass_t_per_kw: 0.011
   bus_base_musd: 8.0
   bus_flatten_after_yr: 5
   bus_growth_pre: -0.03
-  solar_cost_musd_per_kw: 0.04
-  radiator_cost_musd_per_kw: 0.04
+  solar_cost_musd_per_kw: 0.02     # the default (investor-set 2026-07-14)
+  radiator_cost_musd_per_kw: 0.02  # the default (investor-set 2026-07-14)
   release_cadence_yr: 1.5
 
 slopes:
   usd_growth_per_gen: 0.30
-  # 0.20 — per-package power growth/gen; corrected from 0.30
+  # 0.20: per-package power growth/gen; corrected from 0.30
   # (assembly-rate misapplied) per validation V-A, sourcing_audit_05_21.md.
   kw_growth_per_gen: 0.20
   kg_growth_per_gen: -0.10

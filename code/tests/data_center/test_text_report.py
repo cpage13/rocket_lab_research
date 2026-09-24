@@ -1,7 +1,7 @@
-"""Tests for the v8 text report (cycle-2 Phase 6, T85).
+"""Tests for the text report (cycle-2 Phase 6, T85).
 
-``data_center.text_report.render_text`` walks a typed v8
-:class:`data_center.output.ValuationOutput` and emits the human-readable
+``data_center.text_report.render_text`` walks a typed
+:class:`data_center.output.SpaceModelOutput` and emits the human-readable
 fixed-width report. After cycle-2 Phase 6 (T80-T84) that report has
 eight sections in a fixed order: the metadata header, the
 provenance-summary banner, the per-generation reference table, the
@@ -13,29 +13,32 @@ the validation block.
 These tests guard that layout:
 
 1. every section header is present, in order;
-2. the renderer is total — no exception, no ``KeyError``, no empty
+2. the renderer is total: no exception, no ``KeyError``, no empty
    section, on the real default-scenario output;
-3. the v8-specific content lands — the provenance banner cites
+3. the cycle-2 content lands: the provenance banner cites
    formulas, the physical table shows volume-util, the fleet table
    shows the revenue band, the R-band block shows all three
    trajectories;
 4. ``render_headline`` produces the one-line ``--brief`` view.
 
-The fixture runs the default scenario through the real engine, so the
-tests exercise the renderer against a genuine v8 artifact rather than a
-hand-built stub.
+The report is rendered from the session's default run (``default_output``
+in ``conftest.py``), the real engine's output, so the tests exercise the
+renderer against a genuine space artifact rather than a hand-built stub.
 """
 
 from __future__ import annotations
+
+import re
+from pathlib import Path
 
 import pytest
 
 from data_center.config import load_config
 from data_center.engine import run_valuation
-from data_center.output import ValuationOutput
+from data_center.output import SpaceModelOutput
 from data_center.text_report import render_headline, render_text
 
-# The eight v8 section headers, in render order (T80 section ordering).
+# The eight section headers, in render order (T80 section ordering).
 _SECTION_HEADERS: tuple[str, ...] = (
     "ROCKET LAB ORBITAL DATA-CENTER VENTURE",
     "PROVENANCE SUMMARY",
@@ -49,13 +52,7 @@ _SECTION_HEADERS: tuple[str, ...] = (
 
 
 @pytest.fixture(scope="module")
-def default_output() -> ValuationOutput:
-    """Run the default scenario through the v8 engine once for the module."""
-    return run_valuation(load_config("scenarios/default.yaml"))
-
-
-@pytest.fixture(scope="module")
-def default_report(default_output: ValuationOutput) -> str:
+def default_report(default_output: SpaceModelOutput) -> str:
     """Render the default-scenario text report once for the module."""
     return render_text(default_output)
 
@@ -72,13 +69,13 @@ def test_render_text_returns_a_nonempty_string(default_report: str) -> None:
 
 
 def test_all_eight_sections_present(default_report: str) -> None:
-    """Every one of the eight v8 section headers appears in the report."""
+    """Every one of the eight section headers appears in the report."""
     for header in _SECTION_HEADERS:
         assert header in default_report, f"missing section: {header}"
 
 
 def test_sections_appear_in_render_order(default_report: str) -> None:
-    """The eight sections appear in the fixed v8 order (T80)."""
+    """The eight sections appear in the fixed order (T80)."""
     positions = [default_report.index(h) for h in _SECTION_HEADERS]
     assert positions == sorted(positions)
 
@@ -91,13 +88,34 @@ def test_provenance_summary_precedes_generation_table(default_report: str) -> No
 
 
 # ---------------------------------------------------------------------------
-# Renderer is total — no exception, no empty section
+# Renderer is total: no exception, no empty section
 # ---------------------------------------------------------------------------
 
 
-def test_render_text_raises_no_exception(default_output: ValuationOutput) -> None:
-    """render_text is total — it does not raise on a real v8 artifact."""
+def test_render_text_raises_no_exception(default_output: SpaceModelOutput) -> None:
+    """render_text is total: it does not raise on a real space artifact."""
     render_text(default_output)
+
+
+def test_a_non_numeric_cell_raises_instead_of_printing_zero(
+    default_output: SpaceModelOutput,
+) -> None:
+    """Objective: the report never prints a made-up number for a bad cell.
+
+    The report used to read cells through a lenient unwrap that printed 0.0
+    for a string or null value. Expected: with FY2030's ``kw_per_node`` set to
+    a string, ``render_text`` raises ``TypeError`` naming the cell's formula.
+    """
+    year = default_output.physical.years["2030"]
+    bad = year.model_copy(
+        update={"kw_per_node": year.kw_per_node.model_copy(update={"value": "n/a"})}
+    )
+    years = {**default_output.physical.years, "2030": bad}
+    broken = default_output.model_copy(
+        update={"physical": default_output.physical.model_copy(update={"years": years})}
+    )
+    with pytest.raises(TypeError, match="kw_per_node_from_n_and_kw_per_pkg"):
+        render_text(broken)
 
 
 def test_no_section_is_empty(default_report: str) -> None:
@@ -134,7 +152,7 @@ def test_provenance_summary_cites_key_formulas(default_report: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Per-year physical table (T82) — volume-util column
+# Per-year physical table (T82): volume-util column
 # ---------------------------------------------------------------------------
 
 
@@ -147,7 +165,7 @@ def test_physical_table_has_volume_utilization_column(default_report: str) -> No
 
 
 def test_physical_table_renders_every_year(
-    default_report: str, default_output: ValuationOutput
+    default_report: str, default_output: SpaceModelOutput
 ) -> None:
     """The physical table renders one row per fiscal year."""
     metrics = default_report.split("PER-YEAR SYSTEM METRICS", 1)[1].split("PER-YEAR PER-NODE", 1)[0]
@@ -156,7 +174,7 @@ def test_physical_table_renders_every_year(
 
 
 # ---------------------------------------------------------------------------
-# Per-year fleet rollup (T81) — revenue + margin band
+# Per-year fleet rollup (T81): revenue + margin band
 # ---------------------------------------------------------------------------
 
 
@@ -208,22 +226,68 @@ def test_rband_block_shows_cumulative_revenue(default_report: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_validation_block_renders_every_rule(
-    default_report: str, default_output: ValuationOutput
+def test_validation_block_renders_every_validation_result(
+    default_report: str, default_output: SpaceModelOutput
 ) -> None:
-    """The validation block renders one line per V-rule (17 on the default scenario)."""
+    """Objective: the report shows the one public verdict list.
+
+    Expected: every ``meta.validation_results`` entry (the 16 V-rules plus
+    the model invariants) appears by id, so the report cannot drop a check
+    the JSON publishes.
+    """
     validation = default_report.split("VALIDATION CHECKS", 1)[1]
-    rules = default_output.meta.validation.rules
-    assert len(rules) == 17
-    for rule in rules:
-        assert rule.name in validation
+    results = default_output.meta.validation_results
+    assert len(results) > len(default_output.meta.validation.rules)
+    for result in results:
+        assert result.validation_id in validation
 
 
 def test_validation_block_marks_passing_rules(default_report: str) -> None:
-    """All V-rules pass on the default scenario, so the block shows PASS marks."""
+    """All checks pass on the default scenario, so the block shows PASS marks."""
     validation = default_report.split("VALIDATION CHECKS", 1)[1]
     assert "PASS" in validation
     assert "FAIL" not in validation
+
+
+def test_validation_block_agrees_with_the_json_on_a_non_default_scenario(
+    scenarios_dir: Path,
+) -> None:
+    """Objective: one verdict source for the report and the JSON (ambitious).
+
+    The ambitious scenario differs from the default by design. Expected: the
+    report's summary line counts exactly the passing entries of
+    ``meta.validation_results``, it shows every non-passing id the JSON
+    shows, and no default-pinned check appears at all.
+    """
+    out = run_valuation(load_config(scenarios_dir / "ambitious.yaml"))
+    report = render_text(out).split("VALIDATION CHECKS", 1)[1]
+    results = out.meta.validation_results
+    passing = [r for r in results if r.severity == "pass"]
+    assert f"{len(passing)} of {len(results)} checks pass." in report
+    for result in results:
+        if result.severity != "pass":
+            assert f"[{result.severity.value.upper():>4}] {result.validation_id}" in report
+    assert "default_" not in report
+
+
+def test_provenance_banner_counts_match_v13(
+    default_report: str, default_output: SpaceModelOutput
+) -> None:
+    """Objective: the banner and V13 count cells with the same walker.
+
+    Expected: the banner's cell count and distinct-formula count are the
+    ones V13 (``provenance_formula_keys``) reports, nested cost-breakdown
+    cells included.
+    """
+    v13 = next(
+        r for r in default_output.meta.validation.rules if r.name == "provenance_formula_keys"
+    )
+    match = re.search(r"all (\d+) cells reference one of (\d+) formula names", v13.computed)
+    assert match is not None
+    cells, formulas = match.groups()
+    banner = default_report.split("PROVENANCE SUMMARY", 1)[1].split("PER-GENERATION", 1)[0]
+    assert f"This run produced {cells} cells" in banner
+    assert f"across {formulas} distinct formulas" in banner
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +295,7 @@ def test_validation_block_marks_passing_rules(default_report: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_render_headline_is_one_line(default_output: ValuationOutput) -> None:
+def test_render_headline_is_one_line(default_output: SpaceModelOutput) -> None:
     """render_headline produces a single-line GPU-first headline."""
     headline = render_headline(default_output)
     assert isinstance(headline, str)
@@ -239,7 +303,7 @@ def test_render_headline_is_one_line(default_output: ValuationOutput) -> None:
     assert "GPU-first" in headline
 
 
-def test_render_headline_reports_fleet_revenue(default_output: ValuationOutput) -> None:
+def test_render_headline_reports_fleet_revenue(default_output: SpaceModelOutput) -> None:
     """The headline reports the horizon-year fleet revenue and margin."""
     headline = render_headline(default_output)
     assert "fleet annual revenue" in headline

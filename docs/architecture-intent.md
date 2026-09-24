@@ -17,8 +17,8 @@ The system has four public layers:
 |---|---|---|
 | Research | `research/` | Evidence, source notes, synthesis, claim ledger, and open questions. |
 | Scenario inputs | `code/scenarios/` | Machine-readable model assumptions. |
-| Model code | `code/src/data_center/` | Typed config parsing, model execution, JSON assembly, promotion, and tests. |
-| Public artifacts | `data_center/` | Static conclusion, assumption ledger, and promoted JSON. |
+| Model code | `code/src/data_center/`, `code/src/communications/`, `code/src/common/` | Typed config parsing, model execution, JSON assembly, promotion, and tests; `common/` holds what both models share (the cadence spine, provenance cells, file I/O, and CLI conventions). |
+| Public artifacts | `data_center/`, `communications/` | Static conclusions, assumption ledgers, and promoted JSON. |
 
 Human docs are reviewed reading paths. JSON artifacts are the canonical
 machine-readable model outputs.
@@ -66,7 +66,16 @@ data_center/models/space/default.json
 data_center/models/ground/default.json
 ```
 
-Named promotions write named space JSON under `data_center/models/space/`.
+The output name `default` is reserved for `code/scenarios/default.yaml`. Any
+other scenario is promoted only with a lowercase `--output-name`, which writes
+a named space JSON under `data_center/models/space/` (only the default
+promotion writes the ground reference). Promotion refuses, and writes nothing,
+when any validation check fails in either artifact. Both artifacts are built in
+memory first and written by one rollback pair writer (`common/file_io.py`):
+each file is staged beside its destination, the current files are backed up,
+the staged files are renamed into place one at a time, and a failed rename
+restores every artifact already replaced.
+
 Promotion does not write `data_center/conclusion.md`. That invariant prevents a
 new timestamped model run from silently replacing reviewed prose.
 
@@ -76,16 +85,18 @@ new timestamped model run from silently replacing reviewed prose.
 |---|---|
 | `config.py` | Pydantic scenario config and schema boundary. |
 | `generations.py` | GPU package generation specs and extrapolation. |
-| `cadence.py` | Launch-cadence curve and integer launch output. |
+| `common/cadence.py` | Launch-cadence curve, launch cost, and their dials, shared by both models. |
 | `fleet.py` | Deployed-year cohorts and living-fleet rollup. |
 | `volume.py` | Stowed volume reporting and validation support. |
 | `engine.py` | Main model orchestration from config to typed output. |
 | `input_manifest.py` | Agent-readable input tree and assumption index. |
-| `provenance.py` | Provenance cells and formula catalog. |
+| `common/provenance.py` | Provenance cells and formula catalog. |
 | `output.py` | Public Pydantic output models. |
-| `json_output.py` | JSON assembly, data dictionary, validation metadata, and rendering. |
+| `json_output.py` | JSON assembly, data dictionary, and validation metadata. |
+| `common/file_io.py` | The one YAML loader, the one artifact serializer (rendering), and the rollback pair writer promotion uses. |
 | `query_examples.py` | Embedded `jq` examples for cold-reader interrogation. |
 | `cli.py` | Command-line interface and promotion. |
+| `common/cli.py` | Shared CLI conventions: product output on stdout, status on stderr, exit codes. |
 
 The deep modules are the config boundary, engine, input manifest, output
 contract, and ground reference. Callers should not recreate their internal
@@ -94,11 +105,11 @@ logic.
 ## Ground Model Modules
 
 `data_center.ground` owns the ground reference model. It takes the promoted
-space model's 2036 deployed-year cohort as the anchor, then compares five-year
-ground cost against the orbital build-and-launch reference for the same GPU
-package cohort. Its current conclusion label is `same_order_of_magnitude`
-because the ground-side inputs now trace to per-input research-wiki source
-statuses.
+space model's 2036 deployed-year cohort as the anchor, then compares ground
+cost over the anchor cohort's service life (five years at the default) against
+the orbital build-and-launch reference for the same GPU package cohort. Its
+current conclusion label is `same_order_of_magnitude` because the ground-side
+inputs now trace to per-input research-wiki source statuses.
 
 The ground model must not anchor to market share or living-fleet capacity. The
 anchor is the deployed-year cohort.
@@ -121,6 +132,14 @@ Static docs:
 - `data_center/README.md`
 - `data_center/assumptions.md`
 - `data_center/conclusion.md`
+- `data_center/structural_case.md`
+- `data_center/ai1_comparison.md`
+- `data_center/CURRENT_STATE.md`
+- `communications/README.md`
+- `communications/CURRENT_STATE.md`
+- `communications/design.md`
+- `communications/assumptions.md`
+- `communications/conclusion.md`
 - `docs/architecture-intent.md`
 - `docs/adr/*.md`
 - `docs/agent-guide.md`
@@ -129,6 +148,7 @@ Dynamic model artifacts:
 
 - `data_center/models/space/default.json`
 - `data_center/models/ground/default.json`
+- `communications/models/iridium/default.json`
 - scratch JSON under `code/outputs/data_center/runs/`
 
 Static docs change only through intentional edits. Dynamic JSON changes through
@@ -162,10 +182,11 @@ model runs and promotion.
   extrapolation remain the load-bearing data-center uncertainties.
 - The static conclusion must be re-reviewed whenever the default scenario or
   promoted JSON changes.
-- The communications ARPU revenue case is deferred until per-tier prices are
-  set; operations cost is an explicit zero assumption pending research; the
-  Iridium-model ecosystem assumption (in-chipset band support for the phone
-  tier) is the stated load-bearing conditional.
+- The communications ARPU revenue case is published (the four-bucket Sheet A,
+  investor-set 2026-07-09; a per-year mix and revenue trajectory are the
+  documented v2 extensions); operations cost is an explicit zero assumption
+  pending research; the Iridium-model ecosystem assumption (in-chipset band
+  support for the phone tier) is the stated load-bearing conditional.
 
 ## Test Coverage Expectations
 

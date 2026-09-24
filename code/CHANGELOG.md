@@ -2,8 +2,348 @@
 
 All notable changes to the `code/` model package: the `rklb-value` orbital
 data-center valuation calculator and, from July 2026, the communications model
-families. Versions track each output JSON **schema version** (data center: v8;
-the Iridium model: iridium-v3).
+families. Versions track each output JSON **schema version** (the data center:
+space v9 and ground reference ground-v2; the Iridium model: iridium-v5).
+
+## Data center, space schema v9 and ground schema ground-v2 (2026-09-23), the review fix set
+
+The mechanical fixes from the 2026-09-23 cold code reviews, adversarial
+reviews, and `/code-review` pass: phases 1 to 4 (commits 19c76c9, e203397,
+6250cd7, 262422f) and phase 6 (the scenario rebases, the input-cell and
+cost-line citations with their new ledger rows, `RLDC-BUS-COST` among them,
+the em-dash sweep and its guard test, and the re-promotion); the command-line
+and file changes shared with the Iridium model have their own entry below. No
+headline number moves: the re-promoted default reproduces the 2036 cohort (90
+launches, 66 GPU packages and about 753 kW per node, about 67.7 MW deployed),
+the 268-node living fleet, $7,418.9M central revenue and $2,473.0M profit, and
+the 1.2802x orbit-to-ground ratio exactly. The one intended change to a
+default output value is the stowed volume; the two rebased scenarios move by
+design (see Fixed). Both default artifacts were re-promoted on 2026-09-24
+(their `metadata.generated_at`).
+
+### Fixed
+
+- **One anchor year.** Every hardcoded 2036 (the validation checks, the
+  ground anchor, the query examples) reads one config-derived anchor year,
+  `anchor_year(base_year, horizon_years)`: the base year + 10 (the year-10
+  cadence anchor) when inside the window, else the last window year. The
+  default still resolves to FY2036; a five-year window or a 2040 base year
+  now runs end to end instead of crashing.
+- **Service life everywhere.** V16's lookback and the published formula text
+  follow the configured service life
+  (`sum(cohorts[Y-(service_life_years-1)..Y].nodes_deployed)`,
+  `/ service_life_years`); `FLEET_CLIFF_LOOKBACK_YEARS` is removed, and the
+  3-year and 7-year scenarios pass V16.
+- **Rules re-pointed.** V9 bands the life-independent node total
+  (`node_total_in_band`, $50M to $200M, replacing
+  `cost_annual_per_node_in_band`); V6 reads the anchor year, not the last
+  window year; V17 checks both radiator dials when co-mounted; V15 checks
+  `volume_utilization_pct <= 100` directly.
+- **The binding constraint** is computed where N is packed: mass binds when
+  less than one package of budget remains, `both` when the fairing is also
+  full. The 99 percent threshold is gone; the default reads `mass` every year.
+- **Stowed volume physics.** Stowed array volume is the deployed area times
+  the stowed panel pitch (a fold changes the footprint, not the stacked
+  volume), and the configured `node_volume_fixed_m3` is honored instead of a
+  shadowing constant. The default FY2036 node volume moves from about 5.3 m3
+  to about 26.6 m3 and fairing utilization from about 6.6 percent to about
+  33.2 percent (previously understated about 5x); N and every headline number
+  are unchanged.
+- **Generations.** Extrapolated generations are dated latest listed plus k x
+  cadence (no accumulated float error), the frontier comparison uses the
+  named `FRONTIER_YEAR_TOLERANCE`, a generations list must be ordered (it
+  fails loudly otherwise), `GenerationSlopes`, `GenerationSpec`, and `Source`
+  forbid unknown keys, `year_available` is bounded by `MAX_FY`, and the slope
+  defaults have one source.
+- **Load-time validators.** Fixed node mass below the mass envelope; cadence
+  anchors ordered inside the ceiling (`0 < launches_at_year_5 <
+  launches_at_year_10 < cadence_ceiling`); launch-cost anchors ordered;
+  revenue bands ordered (`low <= central <= high` at shared anchor years) with
+  unique anchor years; `bus_growth_pre > -1`; ground `pue >= 1` and
+  `utilization <= 1`. Each invalid case fails at load with a clear message.
+- **Exact fits.** Package counts use `PACKAGE_FIT_TOLERANCE`, so an exact fit
+  keeps its last package despite float rounding (the V1 slack derives from
+  it); cadence is computed once per year.
+- **Stale scenarios rebased.** `with_premium.yaml` and `upside_7yr.yaml`
+  describe themselves as the default dial set plus stated changes, but still
+  carried the dials the 2026-07-14 rebase replaced (the co-mounted radiator at
+  0.013 and 0.012 t/kW, solar and radiator cost at 0.04 $M/kW). Both now carry
+  the current default dials (radiator architecture `deployed_double_sided`,
+  radiator dials 0.00165 t/kW, solar and radiator cost dials 0.02 $M/kW) and
+  keep only their stated changes: the premium-uplifted central R band
+  (`with_premium`), and the 7-year service life with its flat 1.47 central R
+  (`upside_7yr`). FY2036 central living-fleet revenue moves from $6,391.2M to
+  $7,518.3M (`with_premium`) and from $4,789.8M to $5,613.5M (`upside_7yr`);
+  peak fairing volume utilization (reached in FY2035 and FY2036) moves from
+  21.4 to 33.2 percent in both. `ambitious.yaml` still carries the co-mounted
+  radiator dials, pending an investor decision.
+
+### Changed
+
+- **One verdict list.** `meta.validation_results` is built in one place: the
+  16 V-rules, three checks that hold for any scenario
+  (`anchor_year_launches_match_year_10_dial`, which replaces the
+  default-pinned `target_cadence_is_90_launches`;
+  `living_fleet_distinct_from_deployed_year_cohort`;
+  `release_critical_inputs_have_no_placeholder_or_stale_status`), and three
+  default guards emitted only for the canonical default scenario (22 checks
+  in the default artifact). The text report, its banner counts, and the
+  embedded `validation_warnings` query read the same list, so no scenario
+  fails for differing from the default.
+- **Assumption index.** `inputs.assumption_index` includes the 18
+  revenue-band anchors (the default goes from 104 to 119 entries); the
+  source-status summary follows.
+- **Data-dictionary units** come from the cell each entry describes (66 space
+  units corrected; for example, `mounting_overhead_pct` is a fraction).
+- **Provenance closes.** Every dial that moves a cell is reachable through
+  that cell's `uses` chain, across the space and ground artifacts:
+  `gpus_per_node` cites the per-package mass inputs, the radiator dial active
+  that year, and the Tjmax lift year; fleet rollups cite the per-vintage cells
+  they sum and the service life; cumulative revenue cites the prior
+  cumulative; extrapolated generations cite the slopes and cadence they
+  derive from (role `derived_input`). A sweep test perturbs all 86 dials.
+- **Source metadata is current.** The radiator dials describe the
+  investor-set deployed double-sided bet (2026-07-14) and cite
+  `RLDC-SOLAR-RADIATOR-MASS` (status `scenario`), as does the solar-mass
+  dial, which keeps `THR-006` as a supporting claim; the fairing-volume dial
+  cites `RLDC-FAIRING-VOLUME-80M3` (status `scenario`) instead of the
+  payload-mass claim `NTR-004`, so the source-status summary moves those two
+  cells from `sourced_estimate` to `scenario`. An input cell can cite
+  supporting SOURCE_INDEX claims after its primary claim
+  (`CellSpec.supporting_claims`). The cadence ceiling is the horizon-scoped
+  infrastructure parameter citing `RLDC-CADENCE-CEILING-150`; labels derive
+  from config ("Launches at the year-10 anchor").
+- **Cost cells cite cost claims.** The solar and radiator cost lines cited
+  `THR-006` (solar-array mass) and `THR-003` (hot-loop radiator area and
+  mass), and the bus line and its three dials cited `THR-011` (node power).
+  Each cost line now cites first the claim of the cost dial that sets it:
+  solar and radiator `RLDC-SOLAR-RADIATOR-COST` (supporting `THR-013` and
+  `THR-016`), launch `RLDC-LAUNCH-COST-2036` (supporting `NTR-009`, on the
+  business launch-cost cell too), and bus the new ledger row `RLDC-BUS-COST`
+  (status `scenario`), which the bus dials cite as well, so the base bus
+  cost dial moves from `derived_estimate` to `scenario`. The ground
+  reference's orbital components re-cite them; the compute line cites no
+  claim, since no ledger row describes the node compute cost.
+- **Scenario overrides.** A scenario value that differs from the default has
+  the `assumption_role` `scenario_override` and status `scenario`, cites only
+  the scenario YAML, and no longer carries the default's claim or rationale.
+- **One generations vocabulary.** `meta.generations_dictionary` uses the
+  input cells' source statuses (`certified`, `sourced_estimate`, and so on),
+  not the internal `fact` and `estimate` tiers.
+- **Ground reference.** The comparison window follows the anchor cohort's
+  service life; the ground metadata reflects the scenario file actually
+  loaded, and `space_model_path` comes from the caller; the anchor check
+  compares nodes, GPU packages, kW, and service life with the space output's
+  anchor-year cohort; `ArtifactRole` is one StrEnum for space, ground, and
+  the CLI (`draft`, `promoted_default`, `promoted_named`,
+  `promoted_ground_default`, `promoted_ground_named`); ground inputs use the
+  common cell builders (one `ref_type` vocabulary); `uses` entries are
+  resolvable paths, prefixed `space:` for cells in the space artifact; the
+  ground data dictionary is generated by the shared builder (5 to 122
+  entries).
+- **Space schema v8 to v9.** The duplicate `business.years.*.kw_on_orbit` and
+  `pf_on_orbit` are removed (read `kw_living_fleet` and `pf_living_fleet`);
+  the data-dictionary `source_class` is typed by `FieldKind` and emitted
+  lowercase (`input`, `constant`, `derived`); formula definitions go from 51
+  to 48 and the data dictionary from 162 to 157 entries.
+- **Ground schema ground-v1 to ground-v2.** The seven fields named
+  `five_year` hold service-life values and now say so:
+  `ground.total_service_life_cost`, `ground.cost_per_gpu_package_service_life`,
+  `ground.cost_per_mw_service_life`,
+  `orbital_reference.cost_per_gpu_package_service_life`,
+  `orbital_reference.cost_per_mw_service_life`,
+  `comparison.ground_total_service_life_cost`, and
+  `comparison.orbital_total_service_life_cost`. The duplicate
+  `orbital_reference.five_year_cost_view` gives way to
+  `orbital_reference.total_build_and_launch_cost`, and the duplicate
+  `ground.source_status_summary` dict to `meta.source_status_summary`. An
+  empty anchor-year cohort is refused with one clear error instead of a
+  traceback.
+- **One implementation each.** A strict `as_float` / `as_int` cell unwrap
+  (an integer read never truncates); the cadence and launch-cost dial classes
+  and the eight cadence defaults live once in `common/cadence.py` (the
+  communications config now validates its cadence anchors too); one R-band
+  interpolation (`interpolate_r`); one artifact serializer and writer
+  (`render_artifact_json`, `artifact_write`); one half-up rounding helper
+  (`round_half_up`).
+- **Typed keys and final constants.** `YearString`, `FiscalYear`,
+  `FormulaName`, and `ConfigFieldName` key the year and formula maps; module
+  constants are `Final`.
+- **V14 alone judges whole launch counts** (`cadence_monotonicity`); the
+  other rules read launch counts as numbers.
+- **The revenue-trace query** (`trace_revenue_multiple_assumption`) reads the
+  first central anchor, `.inputs.config.revenue.central[0]`, so a re-anchored
+  band still resolves.
+- **Scenario names carry no em-dash.** The labels of `ambitious.yaml`,
+  `conservative.yaml`, `with_premium.yaml`, and `upside_7yr.yaml`, which a run
+  emits as `metadata.scenario_name` and `inputs.scenario.name`, use a colon
+  instead (for example "Conservative: 11t SSO, 3yr life, low R band, slow
+  cadence").
+- **Tests.** The em-dash guard (`tests/test_no_em_dashes.py`) holds the
+  writing convention after the phase 6 sweep over every file under
+  `code/src/`, `code/tests/`, and `code/scenarios/`; `code/README.md`,
+  `code/CHANGELOG.md`, and `code/pyproject.toml`; the three promoted
+  artifacts; the root documents and `.gitignore`; every document under
+  `docs/`, `data_center/`, and `communications/`; and the research front door
+  and ledgers (the legacy research write-ups stay excluded pending an investor
+  decision). A failure names each offending line. The scenario drift guard
+  (`tests/data_center/test_scenario_drift.py`) loads `with_premium.yaml` and
+  `upside_7yr.yaml` beside `default.yaml` and fails, naming each dial by path,
+  when either differs from the default outside its stated changes or stops
+  making them. The citation tests (`tests/data_center/test_provenance_uses.py`
+  and `tests/data_center/test_input_manifest.py`) read
+  `research/SOURCE_INDEX.md` through a shared ledger fixture: every claim the
+  artifacts cite must exist in the ledger, a cost line must cite a claim about
+  cost (never a mass claim) and a mass cell never a cost claim, ground copies
+  of space cost lines must re-cite them exactly, and every default input cell
+  whose primary claim is an `RLDC-*` row must carry that row's source status.
+
+### Removed
+
+- V11 (`no_legacy_r_scalar`), its constants, wiring, and hand-injected test:
+  16 V-rules remain.
+- The inert dials `volume.fold_ratio`, `volume.si_areal_density_kg_m2`, and
+  `volume.radiator_solar_area_ratio`, which no computation used, everywhere
+  (config, input manifest, scenarios, tests).
+- `data_center/conclusion.py` and `render_conclusion_markdown`: no callers,
+  and it published contradictory hardcoded prose.
+- The 52 unreferenced `comms_*` formulas and the prefix filter that hid them;
+  the uncited formula definitions `launch_cost_musd_linear_ramp`,
+  `mass_per_pkg_from_gen_and_dials`, and `r_at_year_from_band_anchors`; the
+  test-only `dump_generations_yaml`; unused constants and enum members.
+- The compatibility aliases and re-export shims: `ValuationOutput` (use
+  `SpaceModelOutput`), `data_center.provenance` and `data_center.cadence`
+  (import from `common`), and `QueryExample.jq` (read `jq_expression`).
+- The stale `.gitignore` rule `data_center/conclusion_*.md` and its mention in
+  the promoted-model comment: nothing writes a conclusion file (promotion
+  writes JSON only, and the uncalled conclusion renderer is gone).
+
+## The Iridium model, schema iridium-v5 (2026-09-23), the review fix set
+
+The communications fixes from the same review set (phase 5, commit 5b1de2b,
+with the phase 4 cleanup in 262422f). The published default reproduces
+exactly: 340 satellites at 31,200 people per satellite, $1,450M
+build-and-hold, about $145M a year steady-state cost, $250M final-year
+replacement, and $8,250.8M a year of ARPU revenue at a 98.24 percent margin.
+`communications/models/iridium/default.json` was re-promoted on 2026-09-23.
+
+### Added
+
+- `trajectory_summary.build_completes_in_horizon` (whether the fleet target
+  is built inside the horizon; true at the baseline) and
+  `trajectory_summary.built_fleet_annual_cost_musd` (the built fleet's build,
+  launch, and replacement cost annualized over the satellite life; equal to
+  the steady-state annual cost at the baseline).
+
+### Changed
+
+- **Schema iridium-v4 to iridium-v5**: the two keys above;
+  `final_year_replacement_cost_musd`, `final_year_cash_cost_per_subscriber_usd`,
+  and `cost_per_subscriber_annualized_usd` are nullable (`null` marks an
+  undefined figure instead of a 0.0 that reads as a real cost); the
+  "Built-fleet convention" and "Margin definition" stated assumptions are
+  reworded to the built-fleet cost basis (each is published in both
+  `revenue_arpu_buckets.stated_assumptions` and `assumptions`).
+- **The ARPU margin's cost basis** is the built fleet's annualized cost
+  (`built_fleet_annual_cost_musd`), the same fleet the revenue is computed on,
+  so a build that does not complete inside the horizon no longer reads a
+  margin against a different fleet. The baseline margin is unchanged.
+- **The served base is capped at capacity**: the smaller of the subscriber
+  target (or the served override) times the build-out and the fleet target's
+  people capacity, so a saturated fleet never reports serving more people
+  than it carries; the binding-regime labels agree. A served override above
+  the capacity is capped, with a warning.
+- **The replacement line** counts only retiring cohorts, never a build
+  tranche; the final-year figures are `null`, not 0.0, when nothing retired;
+  a zero space cost yields `null` ground ratios, as documented; the
+  final-year cash cost per subscriber divides by the served base.
+- **Engine names.** On `CommsTrajectory`,
+  `steady_state_annual_replacement_cost_musd` becomes
+  `final_year_replacement_cost_musd`, `cost_per_subscriber_annual_usd`
+  becomes `final_year_cash_cost_per_subscriber_usd`, and
+  `built_fleet_annual_cost_musd` is added; `CommsYear` gains
+  `satellites_replaced_this_year`.
+- **Validators and guards.** The coverage floor may not exceed the
+  saturation cap; off-peak concurrency may not exceed peak; a derived density
+  below one person per satellite is a clear error; launch shares round half
+  up under `LAUNCH_SHARE_ROUNDING_TOLERANCE`, so an exact half is not lost to
+  binary rounding.
+- **Stale text corrected**: the cost-plus sentence and the dial-count
+  contradiction in `scenarios/iridium.yaml`, the engine docstrings on the
+  annualized versus final-year cash lines, and the code citations
+  (`RLDC-REVENUE-MULTIPLE-1_5X` for the 1.5x, `COMM-530` for the ground
+  cost; no agent-folder paths in code).
+- **Tests.** The saturation scenario's published column is frozen end to end
+  (2,000 satellites complete in 2035, 62,400,000 people, about $48.5B a year
+  of revenue, about $835M a year of fleet cost); the variant densities and a
+  strengthened equality tripwire are pinned; and regenerating the promoted
+  artifact must reproduce the committed file (held by a strict xfail until
+  this re-promotion; the marker is removed).
+
+### Removed
+
+- The unused variant constants `SPECTRUM_MHZ_COORDINATED` and
+  `ACTIVE_USER_RATE_MBPS_RICH`, the never-built `PLACEHOLDER_DIAL_FLAGS` map
+  and its `DialPath` alias, the module's own JSON renderer (the shared
+  `render_artifact_json` serializes the artifact), and the duplicate margin
+  helpers (the engine's `margin_pct` and `usd_per_person` serve both).
+
+## Both applications (2026-09-23), promotion, command line, and file I/O
+
+The command-line and file fixes from the same review set (phase 3, commit
+6250cd7, hardened in phase 4, 262422f). Every scenario output and promoted
+artifact is byte-identical apart from timestamps.
+
+### Changed
+
+- **Promotion rules.** The output name `default` belongs to
+  `scenarios/default.yaml` alone (`is_default_scenario`): any other scenario
+  needs `--output-name`, and output names are lowercase letters, digits,
+  underscores, and hyphens only, so no case variant can land on
+  `default.json` on a case-insensitive file system. The artifact role
+  follows the scenario, never the name. Promotion refuses, and writes
+  nothing, when any validation check fails in the space artifact or the
+  ground reference, or when the anchor-year cohort is empty.
+- **The backup-and-rollback pair writer.** Space and ground are built in
+  memory, then written by `common.file_io.write_files_with_rollback`: each
+  file is staged in full beside its destination, each existing destination
+  is kept as a hidden backup, and the staged files are renamed into place one
+  at a time. If a rename fails, the destinations already replaced are
+  restored, and the error says which files were restored and which, if any,
+  still hold new content. Staged and backup files are created exclusively
+  under fresh random names (a name collision retries), the writer removes
+  only files it created, and a destination that is a symbolic link or not a
+  regular file is refused before anything is written. The Iridium promotion
+  writes through the same function.
+- **Exit codes** (`common.cli`): `EXIT_OK` (0); `EXIT_ERROR` (1), one
+  `ERROR:` line and no traceback; `EXIT_USAGE` (2) for conflicting flags
+  (`--default` with a config path, `--brief` with `--json`, `--output-name`
+  without `--promote`, `--brief` or `--json` with `--promote`,
+  `--input-schema` with anything else), a malformed `--output-name`, and a
+  name that misstates the scenario.
+- **Error wording.** A scenario that cannot be read or validated is
+  `ERROR: could not load <scenario>: <reason>`; one the model cannot run is
+  `ERROR: could not run <scenario>: <reason>`. A base year before the
+  earliest listed generation and a generation-extension overflow are clean
+  errors, not tracebacks.
+- **One YAML loader**, `common.file_io.load_yaml_mapping` (libyaml's
+  `CSafeLoader` with a `SafeLoader` fallback, utf-8), for all four loaders,
+  raising one `ModelFileError` for YAML, OS, and encoding failures. A
+  scenario's `generations:` path resolves beside the scenario file.
+- **Logging.** A module logger in every source module; status and errors are
+  log lines on stderr (`INFO: promoted <path>`, `ERROR: ...`); stdout carries
+  only the product (the report, the headline, the JSON, the schema).
+- **Source checkout only.** Repository paths resolve through
+  `locate_source_checkout`, so an installed wheel fails clearly instead of
+  reading or writing inside its virtual environment. `rklb-value`'s `main`
+  takes a `models_dir` so tests promote into a temporary directory.
+- **Tests.** Repository-anchored shared fixtures and a session-scoped
+  default run; the suite passes from `code/` and from the repository root;
+  `ValuationConfig()` is pinned to `default.yaml`; jq runs once per
+  expression; the ground module loads lazily.
+- **`.gitignore`**: named local promotions and the writer's recovery files
+  stay out of git, while the two data-center `default.json` artifacts stay
+  tracked, as the file's comment intended.
 
 ## Data center, schema v8 (2026-07-15), the deployed-capacity validation band rebased
 
@@ -23,9 +363,111 @@ The band now guards the rebased anchor.
   reference stability. The AI-1-equivalent scenario (about 81 MW deployed in
   2036) still trips the band by design.
 
+## Data center, schema v8 (2026-07-14), the AI-1-class light-radiator rebase
+
+Per investor decision (commit e0c4494), the default scenario semi-copies the
+AI-1 architecture. The schema is unchanged (still v8).
+
+### Changed
+
+- **Radiator architecture.** `RadiatorArchitecture` gains
+  `DEPLOYED_DOUBLE_SIDED` (a dedicated deployed wing, edge-on to the sun,
+  radiating from both faces, run hot) and the default moves to it,
+  superseding the D16 co-mounted lock. Co-mounted stays available as the
+  labeled conservative posture, with V17's 0.010 t/kW floor enforced whenever
+  it is selected.
+- **Radiator mass** goes to 0.00165 t/kW before and after the Tjmax lift
+  (within 10 percent of AI-1's implied 0.0015; the Tjmax step is inert in the
+  default and kept for the exception scenario).
+- **Solar and radiator cost dials** go from the uncited cycle-1 0.04 to 0.02
+  $M/kW each (THR-013 / THR-016; investor-set, judged conservative at
+  assembly-line manufacturing scale with in-house vertical integration and a
+  five-year life). The two moves are booked through two distinct channels,
+  never double-counted: the mass dial carries the temperature and
+  architecture win, the cost dials carry the manufacturing-scale win.
+- **New frozen baseline**: FY2026 223 packages and about 457 kW per node;
+  FY2036 66 packages and about 753 kW; the 2036 cohort 90 nodes, about 67.7
+  MW, and 5,940 packages; a 268-node living fleet; $7,418.9M fleet revenue
+  and $2,473.0M profit at the pinned 33 percent margin. The orbit-to-ground
+  ratio moves from 1.9168x to 1.2802x. Tests re-pinned across the parity,
+  engine, output, config, constants, and validation suites (554 passed); the
+  space and ground artifacts re-promoted. The default deployed-capacity guard
+  (then 35,000 to 45,000 kW) failed against the rebased default until the
+  2026-07-15 band rebase above.
+- The data-center terminology sweep to investor wording rides along (18
+  tokens across scenarios, config, output, validation, provenance, and
+  tests).
+
+## The Iridium model, schema iridium-v4 (2026-07-14), the promoted contract cleaned
+
+Per investor direction (commit df37011): the trajectory summary's cost bases
+now say what they are, and the published orbit posture rides in the
+artifact. No old JSON kept.
+
+### Changed
+
+- **Renamed cost keys**, the final-year cash pair:
+  `steady_state_annual_replacement_cost_musd` becomes
+  `final_year_replacement_cost_musd` (250.0) and
+  `cost_per_subscriber_annual_usd` becomes
+  `final_year_cash_cost_per_subscriber_usd` (25.0).
+- Citation and docstring fixes: the config lifetime citation moves from
+  COMM-091 to COMM-088 (091 stays the per-subscriber cost split it actually
+  is), and the engine launch-coupling docstring states the inverse-area
+  convention (5 at 60 m^2) beside the estimate-bound mass quotient (6).
+
+### Added
+
+- **The annualized basis** beside the cash pair:
+  `cost_per_subscriber_annualized_usd` (about 14.50).
+- **The denominators the prose quotes**, as first-class fields:
+  `living_fleet_final_year` (348), `cumulative_launches_to_completion` (29),
+  `cumulative_launches_final_year` (58), `people_capacity_target_fleet`
+  (10,608,000), and `people_capacity_living_fleet_final_year` (10,857,600).
+- **The `orbit_scenario` block**: the published posture (450 km, 53 degrees,
+  source status `scenario`) with a basis paragraph carrying the simulation
+  support and its honest bounds, documented in code by
+  `ORBIT_ALTITUDE_KM_SCENARIO`, `ORBIT_INCLINATION_DEG_SCENARIO`,
+  `ORBIT_SCENARIO_SOURCE_STATUS`, and `ORBIT_SCENARIO_BASIS`.
+- The export test freezes the v4 schema: the renamed keys, the annualized
+  line, all five denominators, and the orbit block.
+
+## The Iridium model, schema iridium-v3 (2026-07-14), the all-in deployment baseline
+
+Per investor decision (commit b236a13): the Iridium baseline answers the same
+all-in deployment question the data-center model answers. A scenario-level
+change: no config-schema or artifact-schema change.
+
+### Changed
+
+- **The all-in share.** `scenarios/iridium.yaml` overrides the shared-spine
+  `comms_cadence.share_of_fleet` to 1.0 (the config default 0.18 is
+  untouched, so the High-Bandwidth Cellular Pure Play family and the equality
+  tripwire still ride the defaults; 0.18 is retired to a sensitivity). The
+  340-satellite fleet completes in 2031 (29 launches, the ramp-bound floor).
+- **The re-promoted default**: full coverage in 2031; FY2036 build-and-hold
+  1,450.0 $M (696 satellites and 58 launches: the 2031 build plus one full
+  five-year fleet replacement); final-year replacement cash 250.0 $M (25.00
+  USD per subscriber over the configured 10M); the steady-state annual cost
+  unchanged at about 145 $M; the Sheet A bucket block untouched (8,250.80256
+  $M at 98.24 percent). Tests re-frozen to the new baseline plus a
+  completion-year pin (554 passed).
+- **Terminology**: the communications code, scenarios, and the promoted
+  artifact's assumption strings adopt investor wording (commit 02665be, a
+  wording change only).
+
+### Added
+
+- **The saturation companion scenario** `scenarios/iridium_saturation.yaml`:
+  the subscriber target raised to the cap-binding 62,400,000; the
+  2,000-satellite build completes in 2035 (2,004 living on whole launches,
+  200 cumulative launches through FY2036, 5,000.0 $M build-and-hold, about
+  835 $M a year steady state, Sheet A about 48,534 $M a year at about 98.3
+  percent).
+
 ## The Iridium model, schema iridium-v3 (2026-07-10), the cost-plus revenue case removed from the artifact
 
-Per founder direction: the synthetic cost-plus revenue convention (price at
+Per investor direction: the synthetic cost-plus revenue convention (price at
 1.5x annualized cost, the automatic 33.3 percent margin) is the data center's
 no-prices-available discipline. The Iridium model now has a real published
 revenue case (the four-bucket ARPU case, schema iridium-v2) with real cost and
@@ -74,8 +516,8 @@ like the earlier placeholder-ARPU removal.
 
 ## The Iridium model, schema iridium-v2 (2026-07-09), the flat cost model and the published ARPU margin
 
-A same-day follow-on to the four-bucket ARPU case, per founder direction:
-the cost model is simplified to founder-flat dials, the promoted ARPU block
+A same-day follow-on to the four-bucket ARPU case, per investor direction:
+the cost model is simplified to investor-flat dials, the promoted ARPU block
 now carries its margin metric, and the margin naming is corrected across the
 communications docs (it is not a gross margin).
 
@@ -111,8 +553,8 @@ communications docs (it is not a gross margin).
 - Docs refreshed in tandem: `communications/conclusion.md` (the flat-cost
   paragraph, the 217.5 cost-plus floor at about 1.81 dollars per subscriber
   per month, the 98.2 percent margin with its definition, the 88-to-94
-  percent founder-range sweep, the premium price-tier reframe),
-  `communications/assumptions.md` (the two founder-flat dial rows, register
+  percent investor-range sweep, the premium price-tier reframe),
+  `communications/assumptions.md` (the two investor-flat dial rows, register
   rows 13/28/34 plus the new row 42, the output anchors, the premium
   price-tier note), the root `README.md` (about $218M a year at a 33 percent
   margin), and `communications/CURRENT_STATE.md`.
@@ -123,14 +565,14 @@ The Iridium ARPU revenue case, previously deferred, is now published: four
 billable-connection buckets (standard personal, premium terminal, IoT devices,
 government), each a percentage mix of one pool anchored to fleet capacity
 (`fleet_target x subscribers_per_satellite`), so every bucket scales with the
-satellite count. Founder-set Sheet A blessed 2026-07-09. Built per the approved
+satellite count. Investor-set Sheet A blessed 2026-07-09. Built per the approved
 `design_iridium_arpu_07_09`.
 
 ### Added
 
 - **`IridiumArpuDials`** (`config.py`): a frozen, extra-forbid block nested as the
   optional `arpu` field on `IridiumDials` (None by default, so every bare-dials
-  construction including the equality tripwire sees no buckets). Eight founder-set
+  construction including the equality tripwire sees no buckets). Eight investor-set
   dials (four percentage mixes, four monthly prices) with Field bounds (the two
   people mixes strictly positive) and a model validator enforcing the four mixes
   sum to 100 within `ARPU_MIX_SUM_EPSILON`.
@@ -303,7 +745,7 @@ schema is a **clean break** from v7, no back-compatibility shim (D24).
 - **Agent-first contract (D22).** `query_examples.py`, 12 worked `jq`
   queries embedded at `meta.query_examples`, so a cold agent can answer the
   common questions straight off the artifact.
-- **Founder-locked enums.** `metadata` now carries `workload_type`
+- **Investor-locked enums.** `metadata` now carries `workload_type`
   (INFERENCE, D14), `operator_model` (B2B_DEDICATED_OPTICAL_RF, D15),
   `radiator_architecture` (SINGLE_FACE_CO_MOUNTED, D16), and
   `deployment_philosophy`.

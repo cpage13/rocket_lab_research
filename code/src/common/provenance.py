@@ -12,6 +12,11 @@ passes a ``formula_name`` and the factory resolves the human-readable
 code reads like bare-value math at the call site while still emitting a
 fully provenance-annotated cell.
 
+:func:`as_float` and :func:`as_int` are the one way to read a number back out
+of a cell (a :class:`ProvenanceCell` or an input cell): strict, so a flag, a
+string, a missing value, or a fractional count raises instead of turning into
+a silent number.
+
 The output contract relies on two durable rules: every emitted formula name
 must resolve through the catalog below, and every public numeric cell should
 carry enough provenance for a reader to trace formula, inputs, sources, and
@@ -20,11 +25,14 @@ description without private lifecycle notes.
 
 from __future__ import annotations
 
+import logging
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from common.input_manifest import SourceStatus
+from common.input_manifest import InputCell, SourceStatus
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Semantic type aliases (CLAUDE.md "semantic-typed dict keys" / strategy 3.5)
@@ -37,14 +45,14 @@ from common.input_manifest import SourceStatus
 type FieldPath = str
 """A JSON path string, e.g. ``physical.years."2036".kw_per_node``."""
 
-type GenerationName = str
-"""A GPU generation name, e.g. ``B200``, ``Rubin Ultra``, ``Gen+4(extrap)``."""
-
 type YearString = str
 """A JSON-string year, e.g. ``"2036"``."""
 
-type LaunchesPerYear = int
-"""Whole-number launches in one fiscal year."""
+type FiscalYear = int
+"""A calendar fiscal year as an integer, e.g. ``2036``."""
+
+type FormulaName = str
+"""A :data:`FORMULAS` key, e.g. ``kw_per_node_from_n_and_kw_per_pkg``."""
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +100,7 @@ class ProvenanceCell(BaseModel):
     value: float | int | str | bool | None
     unit: str
     formula: str
-    formula_name: str
+    formula_name: FormulaName
     uses: list[FieldPath]
     sources: list[str]
     source_status: SourceStatus = Field(default=SourceStatus.DERIVED_ESTIMATE)
@@ -110,47 +118,59 @@ class ProvenanceCell(BaseModel):
 # add it here too.
 
 
-FORMULAS: Final[dict[str, FormulaSpec]] = {
-    "mass_per_pkg_from_gen_and_dials": FormulaSpec(
-        formula=(
-            "pkg_mass_kg + (solar_t_per_kw + radiator_t_per_kw_active(year)) x kw_per_pkg x 1000"
-        ),
-        description="Per-package effective mass including apportioned solar + radiator.",
-    ),
+FORMULAS: Final[dict[FormulaName, FormulaSpec]] = {
     "n_packages_from_mass_envelope": FormulaSpec(
-        formula="floor((mass_envelope_t - node_mass_fixed_t) x 1000 / mass_per_pkg_kg)",
-        description="Packages per node, mass-bound under D6.",
+        formula=(
+            "floor((mass_envelope_t - node_mass_fixed_t) / mass_per_pkg_t "
+            "+ PACKAGE_FIT_TOLERANCE); mass_per_pkg_t = kg_per_pkg / 1000 + kw_per_pkg "
+            "x (solar_mass_t_per_kw + radiator_t_per_kw(year)); radiator_t_per_kw(year) "
+            "= radiator_t_per_kw_pre before tjmax_lift_year, else radiator_t_per_kw_post"
+        ),
+        description=(
+            "Packages per node, mass-bound under D6; the fit tolerance keeps an "
+            "exact fit's last package despite float rounding."
+        ),
     ),
     "kw_per_node_from_n_and_kw_per_pkg": FormulaSpec(
         formula="N x kw_per_pkg",
         description="Total node electrical power.",
     ),
     "mass_per_node_from_n_and_mass_per_pkg": FormulaSpec(
-        formula="N x mass_per_pkg + node_mass_fixed_t",
+        formula=(
+            "N x mass_per_pkg_t + node_mass_fixed_t (mass_per_pkg_t as in "
+            "n_packages_from_mass_envelope)"
+        ),
         description="Total node mass including bus.",
     ),
     "mass_utilization": FormulaSpec(
-        formula="mass_per_node_t / mass_envelope_t",
-        description="Fraction of mass envelope used.",
+        formula="mass_per_node_t / mass_envelope_t x 100",
+        description="Percent of the mass envelope used.",
     ),
     "solar_area_per_pkg_from_kw_and_eff": FormulaSpec(
         formula="kw_per_pkg x 1000 / (SOLAR_CONSTANT_W_M2 x si_bol_efficiency)",
         description="Solar collector area per package required to power it.",
     ),
     "volume_per_pkg_stowed": FormulaSpec(
-        formula="(solar_area_m2_per_pkg / fold_ratio) x (stowed_pitch_mm / 1000)",
-        description="Stowed volume per package (panel + co-mounted radiator).",
+        formula="solar_area_m2_per_pkg x (stowed_pitch_mm / 1000)",
+        description=(
+            "Stowed array volume per package: deployed area x stowed panel pitch "
+            "(a stack of panels, each one pitch thick)."
+        ),
     ),
     "volume_per_node_from_n_and_vol_per_pkg": FormulaSpec(
         formula="N x volume_per_pkg + node_volume_fixed_m3 + mounting_overhead x array_volume",
         description="Total node stowed volume.",
     ),
     "volume_utilization": FormulaSpec(
-        formula="volume_per_node_m3 / neutron_fairing_usable_volume_m3",
-        description="Fraction of Neutron fairing volume used.",
+        formula="volume_per_node_m3 / neutron_fairing_usable_volume_m3 x 100",
+        description="Percent of the Neutron fairing volume used.",
     ),
     "binding_constraint_from_utilizations": FormulaSpec(
-        formula="enum(mass_util > 1.0 ? MASS : 0, volume_util > 1.0 ? VOLUME : 0)",
+        formula=(
+            "mass binds if (mass_envelope_t - mass_per_node_t) < mass_per_pkg_t; "
+            "volume binds if volume_utilization_pct >= 100; "
+            "BOTH if both, MASS or VOLUME if one, NEITHER if none"
+        ),
         description="Which envelope (mass / volume / both / neither) is binding.",
     ),
     "pf_per_node_from_n_and_pf_per_pkg": FormulaSpec(
@@ -162,7 +182,7 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Compute density in PFLOPS/kW.",
     ),
     "cost_annual_per_node_from_breakdown": FormulaSpec(
-        formula="(compute + bus + solar + radiator + launch_cost(year)) / 5",
+        formula="(compute + bus + solar + radiator + launch_cost(year)) / service_life_years",
         description="Annualized cost per node over service life (D1).",
     ),
     "revenue_annual_per_node_from_cost_and_r": FormulaSpec(
@@ -195,8 +215,8 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Nodes deployed this year (1 node per Neutron flight).",
     ),
     "living_fleet_from_cohort_cliff": FormulaSpec(
-        formula="sum(cohorts[Y-4..Y].nodes_deployed)",
-        description="Living fleet under 5-year hard cliff (D1).",
+        formula="sum(cohorts[Y-(service_life_years-1)..Y].nodes_deployed)",
+        description="Living fleet under the service_life_years hard cliff (D1).",
     ),
     "kw_on_orbit_from_living_fleet": FormulaSpec(
         formula="sum(cohort.nodes x cohort.kw_per_node) for living cohorts",
@@ -219,7 +239,9 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Fleet annual revenue (cohort-vintaged).",
     ),
     "revenue_cumulative_fleet_from_annuals": FormulaSpec(
-        formula="sum(year[Y'].revenue_annual for Y' in [base_year, Y])",
+        formula=(
+            "revenue_cumulative(Y - 1) + revenue_annual(Y); revenue_cumulative(base_year - 1) = 0"
+        ),
         description="Cumulative fleet revenue base_year through Y.",
     ),
     "cost_annual_fleet_from_cohorts": FormulaSpec(
@@ -229,10 +251,6 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
     "gross_profit_annual_fleet_from_rev_and_cost": FormulaSpec(
         formula="revenue - cost at fleet level",
         description="Fleet annual gross profit.",
-    ),
-    "r_at_year_from_band_anchors": FormulaSpec(
-        formula="linear interpolation between band.anchors",
-        description="R value at year Y interpolated from anchors.",
     ),
     # ---- Per-node cost-breakdown lines (cycle-2 Phase 2; the five build
     # lines the engine's CostBreakdown emits as individual cells). These
@@ -254,23 +272,19 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         formula="radiator_cost_musd_per_kw x kw_per_node",
         description="Per-node radiator build cost, $M.",
     ),
-    "launch_cost_musd_linear_ramp": FormulaSpec(
-        formula="launch_y0_musd + (launch_y10_musd - launch_y0_musd) x (year_idx / 10)",
-        description="Per-node launch cost: cycle-1 linear ramp year 0 to year 10, $M.",
-    ),
     "node_total_cost_from_breakdown": FormulaSpec(
         formula="compute + bus + solar + radiator + launch",
         description="Total per-node build + launch cost (sum of the five lines), $M.",
     ),
-    # ---- v8 output-assembly formula names (cycle-2 Phase 4A). Added when
-    # first used by the v8 PhysicalYear cells (plan section 0.8: "sub-agents
+    # ---- Output-assembly formula names (cycle-2 Phase 4A). Added when
+    # first used by the PhysicalYear cells (plan section 0.8: "sub-agents
     # adding any new formula must also add it to FORMULAS").
     "frontier_generation_from_cadence": FormulaSpec(
         formula="latest generation with year_available <= FY (18-month cadence rule)",
         description="The frontier GPU generation selected for a model year (D7).",
     ),
     # ---- Ground reference model formulas (Phase 3). These support the
-    # ground-v1 public artifact and keep the terrestrial comparison traceable
+    # ground reference artifact and keep the terrestrial comparison traceable
     # through the same ProvenanceCell contract as the space model.
     "ground_anchor_gpu_packages_from_nodes_and_packages": FormulaSpec(
         formula="nodes_deployed_this_year x gpus_per_node",
@@ -290,7 +304,7 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
     ),
     "ground_energy_cost_from_kw_pue_utilization": FormulaSpec(
         formula=(
-            "anchor_kw x PUE x utilization x hours_per_year x years / 1000 "
+            "anchor_kw x PUE x utilization x hours_per_year x service_life_years / 1000 "
             "x usd_per_mwh / 1_000_000"
         ),
         description="Ground electricity cost over the comparison period.",
@@ -300,8 +314,8 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Ground cooling infrastructure allocation.",
     ),
     "ground_operations_cost_from_mw_year": FormulaSpec(
-        formula="anchor_mw x operations_maintenance_musd_per_mw_year x years",
-        description="Ground operations, maintenance, and labor allocation.",
+        formula="anchor_mw x operations_maintenance_musd_per_mw_year x service_life_years",
+        description="Ground operations, maintenance, and labor over the comparison period.",
     ),
     "orbital_component_cost_from_space_node_component": FormulaSpec(
         formula="space_per_node_component_cost x anchor_nodes",
@@ -316,7 +330,7 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         description="Total cost from included component costs.",
     ),
     "annualized_cost_from_total_and_period": FormulaSpec(
-        formula="total_cost / comparison_period_years",
+        formula="total_cost / anchor.service_life_years (the comparison period)",
         description="Annualized cost over the comparison period.",
     ),
     "cost_per_unit_from_total": FormulaSpec(
@@ -335,351 +349,6 @@ FORMULAS: Final[dict[str, FormulaSpec]] = {
         formula="0 by explicit scope treatment",
         description="Explicit zero cost for a component that does not apply in this scope.",
     ),
-    # ---- Communications model formulas (comms Phase 2). Appended at the END
-    # of the table (no existing DC entry touched) when first used by the comms
-    # engine-room modules (constellation, spectrum, price_reference). The DC
-    # never references these names; the DC parity gate confirms the append is
-    # behavior-preserving. (plan section 0.8 / comms plan P2.3.)
-    #
-    # Constellation: the four-area cost-out, the per-class fork, the cost-down,
-    # the V4 step.
-    "comms_solar_cost_from_power_and_dial": FormulaSpec(
-        formula="solar_cost_usd_per_kw x payload_power_kw / USD_PER_MUSD",
-        description="Per-satellite solar-array build cost, sized from comms payload power, $M.",
-    ),
-    "comms_cost_area_line_from_dial": FormulaSpec(
-        formula="configured build cost for this area (direct dial, no computation)",
-        description=(
-            "Per-satellite build cost for one of the directly-configured areas "
-            "(antenna, comms electronics, or radiator/bus), taken straight from its dial, $M."
-        ),
-    ),
-    "comms_minor_component_cost_from_pct": FormulaSpec(
-        formula="minor_component_pct x (antenna + comms_electronics + solar + radiator_bus)",
-        description="Per-satellite minor-component carry, a fraction of the four-area sum, $M.",
-    ),
-    "comms_satellite_build_cost_from_four_areas": FormulaSpec(
-        formula="antenna + comms_electronics + solar + radiator_bus + minor_component",
-        description=(
-            "Per-satellite build cost: the sum of the four cost areas plus the "
-            "minor-component carry, $M."
-        ),
-    ),
-    "comms_satellites_per_launch_mass_bound": FormulaSpec(
-        formula="floor(mass_envelope_t / satellite_mass_t)",
-        description="Satellites per Neutron launch when mass-bound (the broadband-class binding).",
-    ),
-    "comms_satellites_per_launch_volume_bound": FormulaSpec(
-        formula="floor(fairing_volume_m3 / stowed_volume_m3)",
-        description=(
-            "Satellites per Neutron launch when stowed-antenna-volume-bound "
-            "(the direct-to-cell binding)."
-        ),
-    ),
-    "comms_satellites_per_launch_fork": FormulaSpec(
-        formula="min(mass_bound, volume_bound)  # the binding envelope wins per class",
-        description=(
-            "Satellites per launch: the smaller of the mass-bound and the "
-            "stowed-volume-bound count."
-        ),
-    ),
-    "comms_satellite_binding_constraint": FormulaSpec(
-        formula="enum(MASS if mass_bound <= volume_bound else ANTENNA_STOW)",
-        description=(
-            "Which envelope binds satellites-per-launch (mass for broadband, "
-            "antenna-stow for direct-to-cell)."
-        ),
-    ),
-    "comms_launch_cost_per_satellite_from_cadence": FormulaSpec(
-        formula="launch_cost_musd(cadence) / satellites_per_launch",
-        description="Per-satellite share of the cadence-indexed Neutron launch cost, $M.",
-    ),
-    "comms_learning_curve_multiplier": FormulaSpec(
-        formula="(cumulative_units / reference_units) ** log2(1 - learning_rate_per_doubling)",
-        description="Wright-style learning-curve cost multiplier at a cumulative-units count.",
-    ),
-    "comms_satellite_build_cost_after_learning": FormulaSpec(
-        formula="satellite_build_cost x learning_curve_multiplier",
-        description="Per-satellite build cost after the learning-curve discount, $M.",
-    ),
-    "comms_capability_after_v4_step": FormulaSpec(
-        formula="base_capability x v4_capability_multiplier",
-        description=(
-            "Per-satellite capability after the optional V4 capability-step "
-            "multiplier (dimensionless x base)."
-        ),
-    ),
-    "comms_satellite_total_cost_from_build_and_launch": FormulaSpec(
-        formula="satellite_build_cost_after_learning + launch_cost_per_satellite",
-        description=(
-            "Total per-satellite cost: discounted build cost plus the "
-            "per-satellite launch share, $M."
-        ),
-    ),
-    "comms_satellite_cost_annual_from_total_and_life": FormulaSpec(
-        formula="satellite_total_cost / satellite_lifetime_years",
-        description="Annualized per-satellite cost over the service-life cliff, $M/yr.",
-    ),
-    # Spectrum: the requirement, the empirical anchor, the naive cross-check,
-    # the customer chain.
-    "comms_spectrum_to_acquire_from_leased": FormulaSpec(
-        formula="leased_bandwidth_mhz  # reused across all beams and satellites, not x beam count",
-        description=(
-            "Spectrum the constellation must acquire: one per-beam block, reused across every beam."
-        ),
-    ),
-    "comms_per_beam_capacity_from_empirical_anchor": FormulaSpec(
-        formula=(
-            "PER_BEAM_CAPACITY_ANCHOR_MBPS x (leased_bandwidth_mhz / PER_BEAM_CAPACITY_ANCHOR_MHZ)"
-        ),
-        description=(
-            "Per-beam capacity from the empirical AST 40-MHz-to-120-Mbps anchor, "
-            "scaled by leased MHz."
-        ),
-    ),
-    "comms_naive_capacity_cross_check": FormulaSpec(
-        formula=(
-            "leased_bandwidth_mhz x spectral_efficiency_bps_per_hz  "
-            "# CROSS-CHECK ONLY, never the capacity generator"
-        ),
-        description=(
-            "Naive bandwidth-times-spectral-efficiency capacity, reported only "
-            "as a labeled cross-check."
-        ),
-    ),
-    "comms_customers_per_beam_from_capacity_rate_oversub": FormulaSpec(
-        formula="(per_beam_capacity_mbps / target_per_user_rate_mbps) x oversubscription_factor",
-        description=(
-            "Registered customers a beam serves: sustainable concurrency "
-            "inflated by oversubscription."
-        ),
-    ),
-    "comms_customers_per_sat_from_beams_and_per_beam": FormulaSpec(
-        formula="beams_per_sat x customers_per_beam",
-        description="Registered customers per satellite (a planning-band member).",
-    ),
-    "comms_total_served_from_per_sat_and_count": FormulaSpec(
-        formula="customers_per_sat x num_satellites",
-        description=(
-            "Total registered customers served across the constellation (a planning-band member)."
-        ),
-    ),
-    # Price reference (plan section 0.0 Amendment A1: RENAMED from demand; the
-    # priced revenue line, the ARPU-collectable line, the scope split). The
-    # market-size projection formula is DELETED by A1 (it is demand modeling and
-    # changes no verdict), so it is intentionally not registered here.
-    "comms_priced_cost_from_cost_and_multiple": FormulaSpec(
-        formula="cost_annual_per_customer x revenue_multiple  # 1.5x for a 33.3% regular margin",
-        description=(
-            "Priced per-customer revenue: the per-customer cost marked up by "
-            "the regular-margin multiple."
-        ),
-    ),
-    "comms_arpu_collectable_revenue_from_arpu_and_share": FormulaSpec(
-        formula="arpu_usd_per_month x 12 x operator_revenue_share",
-        description=(
-            "Annual per-customer revenue the operator can collect: ARPU times "
-            "the operator revenue share."
-        ),
-    ),
-    "comms_scope_weighted_customers_from_total_and_weight": FormulaSpec(
-        formula="total_served x scope_weight",
-        description=(
-            "Customers in one scope region (US / Europe / Asia-ex-China) by the scope-weight split."
-        ),
-    ),
-    # Phase 3 (engine) rollup and steady-state formula names, appended additively
-    # after the Phase-2 entries. No existing entry is edited or reordered.
-    "comms_satellites_deployed_this_year_from_launches_and_per_launch": FormulaSpec(
-        formula="launches_this_year x satellites_per_launch",
-        description=(
-            "Satellites deployed in this calendar year: the year's launches times "
-            "satellites-per-launch."
-        ),
-    ),
-    "comms_living_fleet_satellites_from_cohort_cliff": FormulaSpec(
-        formula=(
-            "sum(cohort.satellites_deployed for cohort alive at year under the service-life cliff)"
-        ),
-        description=(
-            "Living-fleet satellite count: the sum over cohorts within the "
-            "service-life cliff at this year."
-        ),
-    ),
-    "comms_cost_annual_fleet_from_living_cohorts": FormulaSpec(
-        formula=(
-            "sum(cohort.satellites_deployed x cohort.cost_annual_per_satellite for living cohorts)"
-        ),
-        description=(
-            "Living-fleet annual cost: the cohort-vintaged sum of per-satellite "
-            "annual cost over the living set, $M/yr."
-        ),
-    ),
-    "comms_cost_annual_per_customer_from_fleet_cost_and_served": FormulaSpec(
-        formula=(
-            "cost_annual_fleet_musd x USD_PER_MUSD / total_served  "
-            "# per-customer annual cost, USD/yr"
-        ),
-        description=(
-            "Annual cost to serve one customer: the living-fleet annual cost spread "
-            "over the served customer band, USD/yr."
-        ),
-    ),
-    "comms_steady_state_satellites_from_deploy_rate_and_life": FormulaSpec(
-        formula=(
-            "living_fleet_satellites at the steady-state year "
-            "(deploy-rate x service-life at the mature cadence)"
-        ),
-        description=(
-            "Steady-state living-fleet satellite count: the standing constellation "
-            "at the configured steady-state year."
-        ),
-    ),
-    "comms_satellites_deployed_passthrough": FormulaSpec(
-        formula="satellites_deployed_this_year  # carried as a business-block cell",
-        description=(
-            "Satellites deployed this year, surfaced as a business-block cell for the cold reader."
-        ),
-    ),
-    # Phase 4 (ground reference and comparison) formula names, appended
-    # additively after the Phase-3 entries. No existing entry is edited or
-    # reordered. The ground side builds a bottom-up per-subscriber cost PER
-    # DENSITY REGIME (sparse fresh-build, dense incumbent-marginal); the
-    # comparison side builds the per-density cost-to-cost ratio and price
-    # undercut plus the fleet-wide revenue-ceiling and Starlink-floor blocks.
-    "comms_ground_sites_per_sub": FormulaSpec(
-        formula="sites_per_million_subs / 1e6",
-        description="Cell sites needed to serve one subscriber (fractional).",
-    ),
-    "comms_ground_tower_amortized_per_sub": FormulaSpec(
-        formula="sites_per_sub x tower_cost_musd_per_site x 1e6 / amortization_years",
-        description="Per-subscriber annual amortized cellular tower/site capex, USD/yr.",
-    ),
-    "comms_ground_backhaul_per_sub": FormulaSpec(
-        formula="sites_per_sub x backhaul_cost_musd_per_site_year x 1e6",
-        description="Per-subscriber annual cellular backhaul cost, USD/yr.",
-    ),
-    "comms_ground_opex_per_sub": FormulaSpec(
-        formula="sites_per_sub x ground_opex_musd_per_site_year x 1e6",
-        description="Per-subscriber annual cellular operations and maintenance cost, USD/yr.",
-    ),
-    "comms_ground_spectrum_wash_per_sub": FormulaSpec(
-        formula="spectrum_cost_musd x 1e6",
-        description=(
-            "Per-subscriber annual ground-side spectrum cost; an explicit zero wash, not a "
-            "cost numerator line."
-        ),
-    ),
-    "comms_ground_dense_incumbent_marginal_per_sub": FormulaSpec(
-        formula="incumbent_marginal_fraction_of_arpu x arpu_usd_per_month x 12",
-        description=(
-            "The dense-regime incumbent marginal-cost defend floor, USD/yr (the served-market "
-            "ground denominator, a fraction of annual ARPU; COMM-096)."
-        ),
-    ),
-    "comms_ground_density_crossover_reference": FormulaSpec(
-        formula="about $490/sub/yr at the dense-suburban fringe (COMM-103)",
-        description=(
-            "The approximate sparse-vs-dense crossover ground cost, a reported reference (a zone, "
-            "not a sharp point)."
-        ),
-    ),
-    "comms_ground_total_per_sub_from_lines": FormulaSpec(
-        formula="sum(included per-subscriber ground cost lines)",
-        description="Total bottom-up ground per-subscriber annual cost, USD/yr.",
-    ),
-    "comms_ground_priced_per_sub_from_cost_and_multiple": FormulaSpec(
-        formula="ground_cost_per_sub x 1.5",
-        description=(
-            "Ground per-subscriber cost marked up by the 1.5x margin (the cost-to-cost ground "
-            "side)."
-        ),
-    ),
-    "comms_cost_to_cost_ratio_space_over_ground": FormulaSpec(
-        formula="space_cost_per_sub / ground_cost_per_sub",
-        description=(
-            "Space per-customer cost divided by ground per-subscriber cost (same 1.5x both "
-            "sides; a pure cost-structure ratio)."
-        ),
-    ),
-    "comms_cost_to_cost_ratio_ground_over_space": FormulaSpec(
-        formula="ground_cost_per_sub / space_cost_per_sub",
-        description=(
-            "Ground per-subscriber cost divided by space per-customer cost (the inverse ratio)."
-        ),
-    ),
-    "comms_cost_to_cost_absolute_delta": FormulaSpec(
-        formula="ground_cost_per_sub - space_cost_per_sub",
-        description="Ground per-subscriber cost minus space per-customer cost, USD/yr.",
-    ),
-    "comms_space_is_cheaper_flag": FormulaSpec(
-        formula="ground_to_space_ratio_mid > 1.0",
-        description=(
-            "Boolean: does space cost less than ground at the mid band in this density regime "
-            "(a comparison flag, NOT a verdict)."
-        ),
-    ),
-    "comms_space_capacity_binds_by_regime": FormulaSpec(
-        formula="False for sparse, True for dense (SPECTRUM_spec.md Section 3)",
-        description=(
-            "Boolean: does the space capacity ceiling bind in this regime (coverage has "
-            "headroom in sparse, capacity binds in dense; a physics flag, NOT a verdict)."
-        ),
-    ),
-    "comms_retail_reference_annualized": FormulaSpec(
-        formula="retail_reference_usd_per_month x 12",
-        description=(
-            "The investor-set retail reference annualized, USD/yr (the sparse-regime "
-            "price-to-beat and the fleet-wide revenue-ceiling retail ceiling)."
-        ),
-    ),
-    "comms_price_undercut_headroom": FormulaSpec(
-        formula="price_to_beat_usd_per_year - space_priced_cost_per_sub",
-        description=(
-            "This regime's price-to-beat minus the space priced per-subscriber cost, USD/yr "
-            "(positive = undercuts; sparse price-to-beat is retail, dense is the incumbent "
-            "marginal floor)."
-        ),
-    ),
-    "comms_price_undercut_passes_flag": FormulaSpec(
-        formula="space_priced_cost_per_sub <= price_to_beat_usd_per_year",
-        description=(
-            "Boolean: the space priced cost lands under this regime's price-to-beat (the market "
-            "test per regime, NOT a verdict)."
-        ),
-    ),
-    "comms_priced_below_collectable_flag": FormulaSpec(
-        formula="priced_revenue_per_sub <= arpu_collectable_revenue",
-        description="Boolean: the priced revenue is at or below the ARPU-collectable ceiling.",
-    ),
-    "comms_priced_below_retail_flag": FormulaSpec(
-        formula="priced_revenue_per_sub <= retail_reference_usd_per_year",
-        description="Boolean: the priced revenue is at or below the retail reference.",
-    ),
-    "comms_collectable_win_flag": FormulaSpec(
-        formula="priced_below_collectable AND priced_below_retail",
-        description=(
-            "Boolean: the priced revenue is at or below BOTH the ARPU-collectable ceiling and "
-            "the retail reference (the collectable-win gate)."
-        ),
-    ),
-    "comms_chain_below_disclosed_floor_flag": FormulaSpec(
-        formula="bottom_up_chain_cost_per_sub < disclosed_starlink_floor",
-        description=(
-            "Boolean: the bottom-up chain figure is below the disclosed Starlink floor "
-            "(REPORTED only; being below is NOT claimed as a win)."
-        ),
-    ),
-    "comms_disclosed_starlink_floor_passthrough": FormulaSpec(
-        formula="starlink_disclosed_all_in_cost_usd_per_sub_year (config input)",
-        description="The disclosed all-in Starlink floor carried as a comparison reference cell.",
-    ),
-    "comms_ground_anchor_total_served_mid": FormulaSpec(
-        formula="space_output total_served.mid at steady-state year",
-        description=(
-            "The steady-state served-customer mid band member, the per-subscriber comparison basis."
-        ),
-    ),
 }
 
 
@@ -692,7 +361,7 @@ def cell(
     *,
     value: float | int | str | bool | None,
     unit: str,
-    formula_name: str,
+    formula_name: FormulaName,
     uses: list[FieldPath],
     sources: list[str],
     description: str,
@@ -734,13 +403,71 @@ def cell(
     )
 
 
+# ---------------------------------------------------------------------------
+# Reading a number back out of a cell: the one strict unwrap API
+# ---------------------------------------------------------------------------
+
+
+def _cell_label(source: ProvenanceCell | InputCell) -> str:
+    """Name a cell in an unwrap error: an input by its path, a computed cell by its formula."""
+    if isinstance(source, InputCell):
+        return f"input {source.path}"
+    return f"cell {source.formula_name!r} ({source.description})"
+
+
+def as_float(source: ProvenanceCell | InputCell) -> float:
+    """Return a cell's numeric value as a ``float``.
+
+    An ``int`` or ``float`` value converts; anything else raises: a ``bool``
+    (a flag is not a number), a string or list, and ``None`` (a cell with no
+    value has nothing to read).
+
+    Args:
+        source: A :class:`ProvenanceCell` or an input cell.
+
+    Returns:
+        The value as a ``float``.
+
+    Raises:
+        TypeError: If the value is not a real number.
+    """
+    value = source.value
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{_cell_label(source)} is not numeric: {value!r}")
+    return float(value)
+
+
+def as_int(source: ProvenanceCell | InputCell) -> int:
+    """Return a cell's integral value (a count, a year index, a whole-number dial).
+
+    Only an ``int`` value converts. A ``float`` raises even when it is whole,
+    so a fractional quantity can never be truncated into a count, and a
+    ``bool`` raises too.
+
+    Args:
+        source: A :class:`ProvenanceCell` or an input cell.
+
+    Returns:
+        The value as an ``int``.
+
+    Raises:
+        TypeError: If the value is not an integer.
+    """
+    value = source.value
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{_cell_label(source)} is not an integer: {value!r}")
+    return value
+
+
 __all__ = [
     "FORMULAS",
     "FieldPath",
+    "FiscalYear",
+    "FormulaName",
     "FormulaSpec",
-    "GenerationName",
-    "LaunchesPerYear",
     "ProvenanceCell",
     "YearString",
+    "as_float",
+    "as_int",
     "cell",
 ]

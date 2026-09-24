@@ -19,17 +19,16 @@ from pathlib import Path
 
 import pytest
 
-# The comms src directory and the default comms scenario (the Iridium scenario,
-# scenarios/iridium.yaml), repo-anchored from this file.
-_REPO_CODE = Path(__file__).resolve().parents[2]
-_COMMS_SRC = _REPO_CODE / "src" / "communications"
-_DEFAULT_YAML = _REPO_CODE / "scenarios" / "iridium.yaml"
+# The comms src directory, anchored from this file because the parametrized
+# guards below list its files at collection time, before any fixture exists.
+# The default comms scenario comes from the ``iridium_yaml`` fixture.
+_COMMS_SRC = Path(__file__).resolve().parents[2] / "src" / "communications"
 
 _COMMS_SRC_FILES = sorted(_COMMS_SRC.glob("*.py"))
 
-# The forbidden config-time tokens (case-insensitive). The verdict/conclusion
-# token set guards the OUTPUT JSON (a Phase-5 deliverable that does not exist
-# yet) and is intentionally not enforced here.
+# The forbidden config-time tokens (case-insensitive), scanned in the comms src and
+# the default scenario YAML. The promoted output JSON
+# (communications/models/iridium/default.json) is not token-scanned here.
 _FORBIDDEN_TOKENS = [
     "starship",
     "capture_share",
@@ -79,10 +78,10 @@ def test_no_forbidden_token_in_comms_src(token: str) -> None:
 
 
 @pytest.mark.parametrize("token", _FORBIDDEN_TOKENS)
-def test_no_forbidden_token_in_default_yaml(token: str) -> None:
+def test_no_forbidden_token_in_default_yaml(token: str, iridium_yaml: Path) -> None:
     """No forbidden token appears in the default comms scenario YAML (iridium.yaml)."""
     pattern = re.compile(token, re.IGNORECASE)
-    assert not pattern.search(_DEFAULT_YAML.read_text()), f"{token} found in iridium.yaml"
+    assert not pattern.search(iridium_yaml.read_text()), f"{token} found in iridium.yaml"
 
 
 def test_comms_src_files_discovered() -> None:

@@ -47,7 +47,7 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [README.md](README.md) | Research-wiki front door. | How the source base, claim ledger, tracker, and library fit together. |
 | [LIBRARY.md](LIBRARY.md) | This catalog. | Research navigation and glossary. |
 | [RESEARCH_TRACKER.md](RESEARCH_TRACKER.md) | Research Wiki tracker. | Status, stale notes, stakeholder input, and open questions. |
-| [SOURCE_INDEX.md](SOURCE_INDEX.md) | Claim-level hard-number source ledger. | Whether a number is `certified`, `sourced_estimate`, `derived_estimate`, `projection`, `extrapolation`, `scenario`, `placeholder`, or `stale`. |
+| [SOURCE_INDEX.md](SOURCE_INDEX.md) | Claim-level hard-number source ledger (`RLDC-*` rows current to the promoted default as of 2026-09-24). | Whether a number is `certified`, `sourced_estimate`, `derived_estimate`, `projection`, `extrapolation`, `scenario`, `placeholder`, or `stale`. |
 | [vision/initial_thesis.md](vision/initial_thesis.md) | Versioned thesis. | The belief history and current research/output boundary. |
 | [vision/comms_thesis.md](vision/comms_thesis.md) | Communications thesis, Revision 1 (belief record only; comms wave 1). | The starting belief record for the comms track: working hypotheses (diminishing returns past baseline broadband; space as a possible step change gated on economics and new use cases; laser high-bandwidth but weather-limited and possibly fiber-dependent; security as a differentiator) and the open questions that test them. No verdict; built on the comms baseline synthesis. |
 | [direct_communication/README.md](direct_communication/README.md) | Communications workstream front door. | The adjacent Rocket Lab communications thesis and its scope. |
@@ -86,7 +86,7 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [economics/ai_datacenter_tam.md](economics/ai_datacenter_tam.md) | AI data-center market and TAM. | A small share of inference demand can still be a large business. |
 | [economics/ambition_case.md](economics/ambition_case.md) | The roughly $5B/yr scenario. | Buildout, cadence, and capital constrain the go-for-it case. |
 | [economics/energy_operating_costs.md](economics/energy_operating_costs.md) | Energy, water, and operating costs. | Avoided terrestrial opex is real but second-order to launch/node capex. |
-| [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md) | Ground infrastructure and electricity cost basis for the 2036 deployed-year cohort. | Current ground reference is about `$3.68B` over five years; electricity is only about `$150M`, and promoted JSON now carries per-input source statuses. |
+| [economics/ground_infrastructure_electricity_costs_2036.md](economics/ground_infrastructure_electricity_costs_2036.md) | Ground infrastructure and electricity cost basis for the 2036 deployed-year cohort (a dated 2026-05-28 read; its JSON paths follow the ground-v2 names since 2026-09-23). | At its 2026-05-28 read the ground reference was about `$3.68B` over five years with electricity only about `$150M`; the promoted reference now reads about `$6.56B`, energy still about 4 percent of it. The input audit and per-input source statuses carry over. |
 | [economics/gpu_cost_trajectory.md](economics/gpu_cost_trajectory.md) | GPU/package acquisition-cost trajectory. | Cost growth is lumpy and package-driven, not a simple rack doubling. |
 | [economics/gpu_hour_rental_rates.md](economics/gpu_hour_rental_rates.md) | GPU-hour rental rates over time. | Rental rates track acquisition cost more than FLOPS. |
 | [economics/hyperscaler_margins.md](economics/hyperscaler_margins.md) | Margin pools and premium logic. | Premium must attach to scarce attributes, not commodity FLOPS. |
@@ -258,7 +258,7 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | File | What it is | Key takeaway |
 |---|---|---|
 | [valuation/ai_compute_trajectory.md](valuation/ai_compute_trajectory.md) | Compute trajectory research. | FLOPS gains mostly accrue to buyers unless revenue tracks cost. |
-| [valuation/projection_2026_2036.md](valuation/projection_2026_2036.md) | Historical fleet projection narrative. | Retained as research history; current generator/output paths are outside `research/`. |
+| [valuation/projection_2026_2036.md](valuation/projection_2026_2036.md) | Historical fleet projection narrative (cycle 2, 2026-05-20). | Retained as research history with a 2026-09-23 contract note (16 V-rules, a flat 1.5x R band, rebased dials); current generator/output paths are outside `research/`. |
 | [valuation/rklb_baseline_financials.md](valuation/rklb_baseline_financials.md) | Reported Rocket Lab financial baseline. | Grounds company revenue, margins, backlog, cash, and profitability in filings. |
 | [valuation/rklb_forward_trajectory.md](valuation/rklb_forward_trajectory.md) | Forward Rocket Lab trajectory. | Neutron cadence/cost and market sizing are central uncertainties. |
 | [valuation/trajectory_notes.md](valuation/trajectory_notes.md) | Trajectory scratchpad. | Working notes, not a finished sourced memo. |

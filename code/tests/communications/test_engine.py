@@ -1,18 +1,22 @@
-"""Phase 2 tests for the comms CELLULAR engine (the cohort treadmill).
+"""Structural tests for the communications engine (the cohort treadmill).
 
-These cover the engine's contract from the plan's Phase 2 test list: the
+These run the High-Bandwidth Cellular Pure Play defaults (the config default) and
+small synthetic configs through the real engine and check its contract: the
 trajectory length, the build-and-hold cap (living fleet non-decreasing during
 build-out and bounded by one launch's overshoot), the satellites-per-launch
 identity, the build-out monotonicity of the comms launch sequence and the
-whole-fleet cadence, the cumulative-cost identity, the low-target sanity case
-(immediate HOLD), and the 5-year cliff bite. They use the real shared cadence /
+whole-fleet cadence, the cumulative-cost identity, the replacement rule (only
+retiring cohorts' replacement counts, never a build tranche), the low-target
+sanity case (the target reached at the first launch, HOLD from the next year),
+the cliff bite, and the launch-share rounding. They use the real shared cadence /
 cohort spine (no mocks), so they also act as an integration check on the
 ``common.*`` seam.
 
-The golden cost-per-subscriber parity trajectory is frozen separately in
-``test_parity.py`` (Phase 7); this file checks the engine's structural and
-counting invariants, which are exact integers (no float tolerance needed except
-where a cost sum is compared, where a tight relative tolerance is used).
+The frozen end-to-end numbers (the Iridium baseline, the saturation companion, and
+the equality tripwire that holds the cellular default's cost per subscriber) live in
+``test_iridium_model.py``; this file checks structural and counting invariants,
+which are exact integers (no float tolerance needed except where a cost sum is
+compared, where a tight relative tolerance is used).
 """
 
 from __future__ import annotations
@@ -21,9 +25,8 @@ import math
 
 import pytest
 
-from common.cadence import ROUND_TO_NEAREST_OFFSET
+from common.cadence import ROUND_TO_NEAREST_OFFSET, CadenceDials
 from communications.config import (
-    CadenceDials,
     CommsCadenceDials,
     CommsConfig,
     CoverageDials,
@@ -31,7 +34,12 @@ from communications.config import (
     SubscriberDials,
 )
 from communications.constants import MONTHS_PER_YEAR
-from communications.engine import CommsTrajectory, run_comms_model
+from communications.engine import (
+    MARGIN_PERCENT_SCALE,
+    MUSD_TO_USD,
+    CommsTrajectory,
+    run_comms_model,
+)
 
 # The default-config horizon is 10 years after the base year, so the trajectory
 # spans FY2026..FY2036 inclusive (11 model years).
@@ -40,13 +48,6 @@ EXPECTED_DEFAULT_YEAR_COUNT = 11
 # A tight relative tolerance for the one cost-sum identity check (floats sum in a
 # different association order than the engine's running accumulation).
 COST_SUM_REL_TOL = 1e-9
-
-# The $M -> USD conversion the engine uses for the ARPU revenue (ARPU is in USD/mo,
-# revenue is reported in $M). Mirrors the engine's ``MUSD_TO_USD``.
-MUSD_TO_USD = 1_000_000.0
-
-# The percent scale for a gross margin (the engine's ``MARGIN_PERCENT_SCALE``).
-MARGIN_PERCENT_SCALE = 100.0
 
 # A tiny subscriber target whose capacity need (ceil(target / 75,000) == 1) is below
 # any coverage floor these tests set, so the fleet target equals the coverage floor.
@@ -60,11 +61,12 @@ _FLOOR_BINDING_SUBSCRIBERS = SubscriberDials(
 
 def test_run_returns_trajectory_with_full_horizon() -> None:
     """The default run returns a CommsTrajectory spanning FY2026..FY2036 (11 years)."""
-    traj = run_comms_model(CommsConfig())
+    config = CommsConfig()
+    traj = run_comms_model(config)
     assert isinstance(traj, CommsTrajectory)
     assert len(traj.years) == EXPECTED_DEFAULT_YEAR_COUNT
-    assert traj.years[0].year == 2026
-    assert traj.years[-1].year == 2036
+    assert traj.years[0].year == config.metadata.base_year
+    assert traj.years[-1].year == config.metadata.base_year + config.metadata.horizon_years
 
 
 def test_satellites_deployed_equals_launches_times_per_launch() -> None:
@@ -81,8 +83,9 @@ def test_satellites_deployed_equals_launches_times_per_launch() -> None:
 def test_living_fleet_non_decreasing_during_build_out() -> None:
     """The living fleet never shrinks while the build-out is still filling the target.
 
-    During build-out (before the target is first reached) the treadmill only adds
-    satellites, so the living count is non-decreasing year over year.
+    During build-out (up to and including the year the target is first reached) the
+    default run's additions outpace its retirements, so the living count is
+    non-decreasing year over year.
     """
     traj = run_comms_model(CommsConfig())
     build_out_years = [y for y in traj.years if not y.is_hold_phase]
@@ -105,17 +108,21 @@ def test_living_fleet_never_exceeds_target_by_more_than_one_launch() -> None:
         assert year.living_fleet < traj.fleet_target + per_launch
 
 
-def test_comms_launch_sequence_non_decreasing_during_build_out() -> None:
-    """The comms launches flown are non-decreasing during build-out.
+def test_comms_launch_sequence_non_decreasing_before_completion() -> None:
+    """The comms launches flown are non-decreasing in the build years before completion.
 
-    This is the cadence-monotonicity the Phase 5 invariant enforces. NOTE: during
-    HOLD the flown count can DROP (only the cliff losses are replaced), so the
-    strict monotonicity is asserted on the build-out phase only. The whole-fleet
-    cadence is checked separately (it is always non-decreasing).
+    Objective: the cadence share, not the deficit, sets the flown count while the
+    build is short of the target. Expected: on the default run (completion 2035) the
+    flown count never drops across the years before the completion year. The
+    completion year itself flies only the remaining deficit (the final tranche can be
+    smaller), and HOLD years replace only the cliff losses, so neither is included.
+    The whole-fleet cadence is checked separately (it is always non-decreasing).
     """
     traj = run_comms_model(CommsConfig())
-    build_out_years = [y for y in traj.years if not y.is_hold_phase]
-    for earlier, later in zip(build_out_years, build_out_years[1:], strict=False):
+    completion_year = traj.full_coverage_reached_year
+    assert completion_year is not None
+    pre_completion = [y for y in traj.years if y.year < completion_year]
+    for earlier, later in zip(pre_completion, pre_completion[1:], strict=False):
         assert later.comms_launches_flown_this_year >= earlier.comms_launches_flown_this_year
 
 
@@ -167,16 +174,47 @@ def test_build_cost_uses_the_configured_build_cost_scalar() -> None:
         )
 
 
-def test_replacement_line_zero_during_build_out_nonzero_in_hold() -> None:
-    """The replacement line is 0.0 during build-out and equals the year cost in HOLD."""
-    traj = run_comms_model(CommsConfig())
+def test_replacement_line_never_books_a_build_tranche() -> None:
+    """Only retiring cohorts' replacement counts as replacement, never a build tranche.
+
+    Objective: the replacement rule on the default run, which builds through 2035
+    while its first cohorts already retire (from 2032). Expected: in build-out years
+    (the completion year included) the replaced satellites are exactly
+    ``min(deployed, retired)`` and the replacement line costs just those satellites
+    and their whole launches, strictly below the year's cost whenever the year also
+    builds; in HOLD years every deployed satellite is replacement and the line equals
+    the year's total cost. The retired count is re-derived from the living-fleet
+    bookkeeping (prior living + deployed - living).
+    """
+    config = CommsConfig()
+    per_launch = config.satellite.satellites_per_launch
+    build_cost = config.satellite.satellite_build_cost_musd
+    traj = run_comms_model(config)
+    previous_living = 0
+    saw_build_year_replacement = False
     for year in traj.years:
+        deployed = year.satellites_deployed_this_year
+        retired = previous_living + deployed - year.living_fleet
+        replaced = year.satellites_replaced_this_year
         if year.is_hold_phase:
+            assert replaced == deployed
             assert year.replacement_cost_this_year_musd == pytest.approx(
                 year.total_cost_this_year_musd, rel=COST_SUM_REL_TOL
             )
         else:
-            assert year.replacement_cost_this_year_musd == 0.0
+            assert replaced == min(deployed, retired)
+            expected = (
+                replaced * build_cost + (replaced // per_launch) * year.launch_cost_per_launch_musd
+            )
+            assert year.replacement_cost_this_year_musd == pytest.approx(
+                expected, rel=COST_SUM_REL_TOL
+            )
+            if 0 < replaced < deployed:
+                saw_build_year_replacement = True
+                assert year.replacement_cost_this_year_musd < year.total_cost_this_year_musd
+        previous_living = year.living_fleet
+    # The default run exercises the mixed case (a build year that also replaces).
+    assert saw_build_year_replacement
 
 
 def test_coverage_fraction_is_living_over_floor_clamped() -> None:
@@ -202,28 +240,49 @@ def test_buildout_fraction_is_living_over_fleet_target_clamped() -> None:
         assert 0.0 <= year.buildout_fraction <= 1.0
 
 
-def test_full_coverage_reached_year_is_first_hold_year() -> None:
-    """full_coverage_reached_year is the first fiscal year HOLD is entered (target hit)."""
+def test_hold_phase_starts_the_year_after_full_coverage() -> None:
+    """HOLD begins the year AFTER the target is first reached; the completion year builds.
+
+    Objective: the completion year carries the final build tranche, so it is the last
+    build-out year. Expected: on the default run the first HOLD year is
+    ``full_coverage_reached_year + 1``, the completion year is not HOLD, and its
+    living fleet has reached the target.
+    """
     traj = run_comms_model(CommsConfig())
+    completion_year = traj.full_coverage_reached_year
+    assert completion_year is not None
     hold_years = [y.year for y in traj.years if y.is_hold_phase]
-    assert traj.full_coverage_reached_year == hold_years[0]
+    assert hold_years[0] == completion_year + 1
+    completion = next(y for y in traj.years if y.year == completion_year)
+    assert completion.is_hold_phase is False
+    assert completion.living_fleet >= traj.fleet_target
 
 
-def test_steady_state_replacement_is_final_year_replacement_line() -> None:
-    """The steady-state annual replacement cost is the final model year's replacement line."""
+def test_final_year_replacement_is_the_final_year_replacement_line() -> None:
+    """The final-year replacement headline is the final model year's replacement line.
+
+    Objective: the headline reads the last year's cash replacement. Expected: on the
+    default run (HOLD in the final year, a cohort retiring) the headline equals the
+    final year's replacement line, which equals that year's total cost.
+    """
     traj = run_comms_model(CommsConfig())
-    assert traj.steady_state_annual_replacement_cost_musd == pytest.approx(
-        traj.years[-1].replacement_cost_this_year_musd, rel=COST_SUM_REL_TOL
+    final = traj.years[-1]
+    assert final.satellites_replaced_this_year > 0
+    assert traj.final_year_replacement_cost_musd == final.replacement_cost_this_year_musd
+    assert traj.final_year_replacement_cost_musd == pytest.approx(
+        final.total_cost_this_year_musd, rel=COST_SUM_REL_TOL
     )
 
 
-def test_low_target_enters_hold_immediately() -> None:
+def test_low_target_reached_at_first_launch_then_holds() -> None:
     """A one-launch-worth target is reached at the first comms launch, then HOLD holds.
 
     With ``satellites_for_full_coverage`` set to exactly one launch's worth, the
-    target is reached the first year a comms launch flies; from that year on the
-    model is in HOLD and the living fleet pins at the target (the sanity of the
-    cap logic). The build-out phase before the first comms launch deploys nothing.
+    target is reached the first year a comms launch flies (that year is the
+    completion year, still a build year); from the next year on the model is in HOLD,
+    and from the completion year on the living fleet pins at the target (the sanity
+    of the cap logic). The build-out phase before the first comms launch deploys
+    nothing.
     """
     config = CommsConfig()
     per_launch = config.satellite.satellites_per_launch
@@ -239,16 +298,19 @@ def test_low_target_enters_hold_immediately() -> None:
     assert traj.fleet_target == per_launch
 
     first_deploy_year = next(y for y in traj.years if y.satellites_deployed_this_year > 0)
-    # The target is reached the moment the first comms launch flies.
-    assert first_deploy_year.is_hold_phase is True
+    # The target is reached the moment the first comms launch flies; that year is the
+    # completion year (a build year, no replacement: nothing has retired yet).
+    assert first_deploy_year.is_hold_phase is False
+    assert first_deploy_year.satellites_replaced_this_year == 0
     assert first_deploy_year.living_fleet == per_launch
     assert traj.full_coverage_reached_year == first_deploy_year.year
-    # From the reached year onward, every year is HOLD and the living fleet pins
-    # at exactly one launch's worth (the target).
+    # From the reached year onward the living fleet pins at exactly one launch's
+    # worth (the target); every LATER year is HOLD.
     for year in traj.years:
         if year.year >= first_deploy_year.year:
-            assert year.is_hold_phase is True
             assert year.living_fleet == per_launch
+        if year.year > first_deploy_year.year:
+            assert year.is_hold_phase is True
 
 
 def test_five_year_cliff_retires_an_early_cohort() -> None:
@@ -309,9 +371,15 @@ def test_unreached_target_reports_none_and_runs() -> None:
     assert traj.fleet_target == unreachable_target
     assert traj.full_coverage_reached_year is None
     assert len(traj.years) == EXPECTED_DEFAULT_YEAR_COUNT
-    # No year reaches HOLD, so the steady-state replacement line is zero.
+    # No year reaches HOLD. The final year still builds, and it also replaces the
+    # cohort retiring that year: the final-year replacement is that cohort's cost
+    # alone, strictly below the year's build-plus-replacement cash.
     assert all(not y.is_hold_phase for y in traj.years)
-    assert traj.steady_state_annual_replacement_cost_musd == 0.0
+    final = traj.years[-1]
+    assert 0 < final.satellites_replaced_this_year < final.satellites_deployed_this_year
+    assert traj.final_year_replacement_cost_musd == final.replacement_cost_this_year_musd
+    assert traj.final_year_replacement_cost_musd is not None
+    assert traj.final_year_replacement_cost_musd < final.total_cost_this_year_musd
 
 
 def test_trajectory_surfaces_fleet_target_and_regime() -> None:
@@ -343,13 +411,31 @@ def test_capacity_base_builds_beyond_the_coverage_floor() -> None:
     assert final.buildout_fraction <= 1.0
 
 
-def test_cost_per_subscriber_is_steady_state_over_target() -> None:
-    """cost_per_subscriber_annual_usd == steady-state annual cost (USD) / subscriber target."""
+def test_final_year_cash_per_subscriber_is_over_the_served_base() -> None:
+    """The final-year cash per subscriber divides the final-year replacement by the served base.
+
+    Objective: the cash per-person figure uses the served base (the same base the
+    annualized per-person figure uses), not the configured target. Expected: on the
+    default run it equals the final-year replacement (USD) over
+    ``subscribers_served``; with a served override of half the target it doubles
+    (the fleet, and so the replacement cash, is unchanged).
+    """
     config = CommsConfig()
     traj = run_comms_model(config)
-    target = config.subscribers.subscribers_at_full_coverage
-    expected = traj.steady_state_annual_replacement_cost_musd * 1_000_000.0 / target
-    assert traj.cost_per_subscriber_annual_usd == pytest.approx(expected, rel=COST_SUM_REL_TOL)
+    assert traj.final_year_replacement_cost_musd is not None
+    expected = traj.final_year_replacement_cost_musd * MUSD_TO_USD / traj.subscribers_served
+    assert traj.final_year_cash_cost_per_subscriber_usd == pytest.approx(
+        expected, rel=COST_SUM_REL_TOL
+    )
+    half_base = config.subscribers.subscribers_at_full_coverage // 2
+    overridden = run_comms_model(
+        CommsConfig(subscribers=SubscriberDials(subscribers_served_override=half_base))
+    )
+    assert overridden.subscribers_served == half_base
+    assert overridden.final_year_replacement_cost_musd == traj.final_year_replacement_cost_musd
+    assert overridden.final_year_cash_cost_per_subscriber_usd == pytest.approx(
+        2.0 * expected, rel=COST_SUM_REL_TOL
+    )
 
 
 def test_comms_share_matches_shared_half_up_rounding() -> None:
@@ -379,6 +465,38 @@ def test_comms_share_matches_shared_half_up_rounding() -> None:
     for year in traj.years:
         expected = math.floor(year.fleet_launches_this_year * 1.0 + ROUND_TO_NEAREST_OFFSET)
         assert year.comms_launches_flown_this_year == expected
+
+
+def test_comms_share_exact_half_rounds_up() -> None:
+    """An exact half of a launch rounds UP, despite binary representation error.
+
+    Objective: the launch-share rounding tolerance. A 0.35 share of the 90-launch
+    FY2036 whole-fleet cadence is exactly 31.5 launches, but the float product is
+    31.499999999999996, which plain half-up rounding sends to 31. Expected: with the
+    build never capped (a 100,000-satellite floor and cap), FY2036 flies 32 comms
+    launches.
+    """
+    never_capped_target = 100_000
+    share = 0.35
+    expected_fy2036_launches = 32  # round_half_up(0.35 x 90 = 31.5).
+    config = CommsConfig(
+        comms_cadence=CommsCadenceDials(share_of_fleet=share),
+        coverage=CoverageDials(
+            satellites_for_full_coverage=never_capped_target,
+            max_fleet_satellites=never_capped_target,
+        ),
+        subscribers=_FLOOR_BINDING_SUBSCRIBERS,
+    )
+    traj = run_comms_model(config)
+    final = traj.years[-1]
+    # The default window's final year is the year-10 cadence anchor (FY2036), where
+    # the whole-fleet ramp flies exactly the year-10 dial (90 launches).
+    assert final.year == config.metadata.base_year + config.metadata.horizon_years
+    assert final.fleet_launches_this_year == config.cadence.launches_at_year_10
+    assert (
+        final.fleet_launches_this_year * share < expected_fy2036_launches - ROUND_TO_NEAREST_OFFSET
+    )
+    assert final.comms_launches_flown_this_year == expected_fy2036_launches
 
 
 # -- the revenue + gross-margin overlay (the two cases, per cohort + fleet) --

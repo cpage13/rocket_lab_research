@@ -1,4 +1,4 @@
-"""Module-level ``Final`` named constants for the communications CELLULAR model.
+"""Module-level ``Final`` named constants for the communications model families.
 
 This module is the single source of truth for the comms config's "no bare
 numeric literals" rule (CLAUDE.md). Every default the ``communications.config``
@@ -9,13 +9,12 @@ Pydantic blocks read lives here, each with a docstring carrying:
 - A citation: a global ``COMM-*`` claim id from ``research/SOURCE_INDEX.md``,
   a research-doc path, the coverage-sim findings, or an investor note.
 
-The eight cadence / launch-cost defaults are NOT re-stated here: they are
-IMPORTED from ``common.cadence`` (the shared spine both ventures consume) and
-re-exported, so the comms config behaves identically to the data-center cadence
-machinery and cannot drift from it (re-export, not a hand-copy, makes the
-``test_config`` drift-guard trivially true). Importing from ``common`` is not a
-venture dependency. This module never imports ``data_center`` (the cross-import
-guard forbids it).
+The eight cadence / launch-cost defaults and their dial blocks are NOT stated
+here: they live once in ``common.cadence`` (the shared spine both ventures
+consume), which the comms config imports directly, so the comms cadence cannot
+drift from the data-center cadence. Importing from ``common`` is not a venture
+dependency. This module never imports ``data_center`` (the cross-import guard
+forbids it).
 
 The INVESTOR-SET dials are recorded as real default VALUES
 (``satellites_for_full_coverage = 340`` the coverage FLOOR, ``share_of_fleet =
@@ -23,13 +22,6 @@ The INVESTOR-SET dials are recorded as real default VALUES
 ``subscribers_per_satellite = 75,000``, ``max_fleet_satellites = 2,000``,
 ``satellite_build_cost = 1.05`` $M, ``revenue_multiple = 1.5`` mirroring the DC R,
 ``arpu_usd_per_month = 50.0`` the supportable median); they stay configurable.
-Because they are real
-values, the Phase 5 placeholder check CANNOT use value-equals-default as the
-placeholder signal (that would false-positive on the real defaults). Instead a
-static per-dial flag map (:data:`PLACEHOLDER_DIAL_FLAGS`) records, per guarded dial,
-whether its default is a real investor-set value (``False``) or an arbitrary sentinel
-(``True``); all are ``False`` now. The Phase 5 ``check_no_placeholder_inputs`` reads
-that map.
 
 CAPACITY DIMENSION (investor-directed 2026-06-26, research COMM-535..560). The model
 is sized to SERVE the subscriber base, not merely to cover it. The subscriber TARGET
@@ -42,24 +34,13 @@ ceil(subscriber_target / subscribers_per_satellite)))``.
 
 from __future__ import annotations
 
+import logging
 from enum import StrEnum
 from typing import Final
 
-# The eight cadence + launch-cost defaults are the shared spine's authority.
-# Re-exported (not hand-copied) so the comms config is bit-identical to the
-# data-center cadence machinery and cannot drift. ROUND_TO_NEAREST_OFFSET is the
-# shared half-up rounding offset the Phase 2 comms-share re-rounding reuses.
-from common.cadence import (
-    CADENCE_CEILING_DEFAULT,
-    FIRST_LAUNCH_YEAR_DEFAULT,
-    HIGH_CADENCE_COST_MUSD_DEFAULT,
-    HIGH_CADENCE_LAUNCHES_DEFAULT,
-    LAUNCHES_AT_YEAR_5_DEFAULT,
-    LAUNCHES_AT_YEAR_10_DEFAULT,
-    LOW_CADENCE_COST_MUSD_DEFAULT,
-    LOW_CADENCE_LAUNCHES_DEFAULT,
-    ROUND_TO_NEAREST_OFFSET,
-)
+from common.input_manifest import SourceStatus
+
+logger = logging.getLogger(__name__)
 
 # ===========================================================================
 # Density-regime enum (the two-regime ground interface, Phase 4)
@@ -203,10 +184,12 @@ simulation needs about 10 percent fewer satellites at 53 degrees than polar
 (341 versus 375 at the 95 percent threshold, 450 km, 25 degree mask). Same
 posture as the altitude: a stated scenario input, not an engine input."""
 
-ORBIT_SCENARIO_SOURCE_STATUS: Final[str] = "scenario"
+ORBIT_SCENARIO_SOURCE_STATUS: Final[SourceStatus] = SourceStatus.SCENARIO
 """The assumptions-ledger source status carried on the promoted orbit block:
 the orbit is a chosen modeling assumption on a computed (simulation-informed)
-basis, per the public source-status taxonomy in communications/assumptions.md."""
+basis, per the public source-status taxonomy (the shared
+:class:`common.input_manifest.SourceStatus`, which communications/assumptions.md
+uses)."""
 
 ORBIT_SCENARIO_BASIS: Final[str] = (
     "Simulation-informed scenario, not an engine derivation: the project "
@@ -222,7 +205,7 @@ ORBIT_SCENARIO_BASIS: Final[str] = (
     "decision."
 )
 """The orbit block's basis paragraph: the simulation support and every honest
-bound recorded by the 2026-07-11 calculation audit, carried verbatim on the
+bound recorded by the 2026-07-14 calculation audit, carried verbatim on the
 promoted artifact so the limitations travel with the numbers."""
 
 SATELLITE_BUILD_COST_MUSD_DEFAULT: Final[float] = 1.05
@@ -249,8 +232,9 @@ subscriber base is large: the capacity dimension (see
 SERVE the base, in which case the capacity need binds and the fleet target rises
 above the floor. The floor is the quality-link case (a 25 degree elevation mask over
 the populated mid-latitude band, +/-55 deg, at 95% coverage, ~450 km, ~53 deg
-inclined). Backed by the coverage sim (.agent/other/coverage_sim/FINDINGS.md:
-populated band, 450 km, 25 deg mask, 95% = 341 sats, investor-rounded to 340) and the
+inclined). Backed by the project coverage simulation (populated band, 450 km, 25 deg
+mask, 95% = 341 sats, investor-rounded to 340; the coverage-floor row of
+communications/assumptions.md carries the result and its honest bounds) and the
 corpus (COMM-209 / COMM-216 / COMM-217 from leo_constellation_coverage_minimums; the
 DTC coverage-geography band COMM-386..COMM-405). 340 sits inside the analytic ~290 to
 960 global-band floor (COMM-216) and the sim's populated-band 95% figure. The
@@ -315,7 +299,8 @@ low-density subscriber is servable (a dense cell saturates). CONFIGURABLE."""
 # ===========================================================================
 
 REVENUE_MULTIPLE_DEFAULT: Final[float] = 1.5
-"""INVESTOR_SET (mirrors the DC central R = 1.5, research/SOURCE_INDEX.md#REV-008).
+"""INVESTOR_SET (mirrors the DC central R = 1.5, research/SOURCE_INDEX.md
+RLDC-REVENUE-MULTIPLE-1_5X).
 The COST-PLUS / MARGIN-TARGET revenue case: annual revenue = annual cost x this
 multiple. 1.5 is cost+50%, an implied gross margin of (1.5 - 1) / 1.5 = 33.3%, the
 same owner-operator margin the data-center model carries as its central R. Each
@@ -372,12 +357,8 @@ SCHEMA_VERSION: Final[str] = "comms-v1"
 SPECTRUM_MHZ_DEFAULT: Final[float] = 8.0
 """INVESTOR_SET (flagged; session state, Iridium spectrum reconciled). The Iridium
 EXCLUSIVE L-band holding (~7.775 MHz rounded to 8.0), a WIDTH held, NOT a frequency
-(the frequency is the ~1.6 GHz dial position). The coordinated 10.5 MHz span is the
-documented variant (:data:`SPECTRUM_MHZ_COORDINATED`), not the default."""
-
-SPECTRUM_MHZ_COORDINATED: Final[float] = 10.5
-"""SCENARIO. The coordinated L-band span (1616 to 1626.5 MHz), a documented
-Iridium-model variant WIDTH, not the default (the exclusive ~8 MHz is the default)."""
+(the frequency is the ~1.6 GHz dial position). The coordinated 10.5 MHz span (1616 to
+1626.5 MHz) is a documented variant a scenario can set, not the default."""
 
 PHONE_CLASS_SE_CENTRAL: Final[float] = 0.65
 """SOURCED_ESTIMATE (COMM-428 / COMM-429). Central of the 0.5 to 0.8 bps/Hz
@@ -446,12 +427,8 @@ x 0.15 = 3.0 Gbps. Per-satellite capacity is this x spectrum_mhz x SE x (apertur
 ACTIVE_USER_RATE_MBPS_DEFAULT: Final[float] = 1.0
 """INVESTOR_SET (flagged; 6a input schema). The per-subscriber active data rate in
 Mbps (standard smartphone activity when active); also the peak per-user rate by
-construction (the service tier). :data:`ACTIVE_USER_RATE_MBPS_RICH` is the rich
-variant."""
-
-ACTIVE_USER_RATE_MBPS_RICH: Final[float] = 2.5
-"""SCENARIO (6a input schema). The rich per-subscriber active-rate variant in Mbps, a
-documented alternative to :data:`ACTIVE_USER_RATE_MBPS_DEFAULT`."""
+construction (the service tier). The rich 2.5 Mbps tier is a documented variant a
+scenario can set, not the default."""
 
 CONCURRENCY_PEAK_DEFAULT: Final[float] = 0.025
 """INVESTOR_SET (flagged as the pair with :data:`CONCURRENCY_OFFPEAK_DEFAULT`; 6a input
@@ -625,80 +602,21 @@ validator): it absorbs float representation error (e.g. 82.805 has no exact bina
 form) without admitting a materially wrong sheet (a 99- or 101-sum sheet fails
 loudly, off by 1.0). A fixed epsilon, not a tunable."""
 
-# ===========================================================================
-# Placeholder-dial flag map (read by Phase 5 ``check_no_placeholder_inputs``)
-# ===========================================================================
-#
-# Each guarded dial maps to a flag: True means its current default is still an
-# arbitrary placeholder SENTINEL; False means a real value the investor set. The
-# four investor dials below are all False (set round 4). The Phase 5 check reports
-# any dial whose flag is True, so it PASSES on the default config yet still guards
-# against any FUTURE dial left on a placeholder. The keys are dotted config paths
-# for the report; the check does not read live config values under this mechanism.
-
-type DialPath = str
-"""A dotted ``block.field`` path naming a guarded config dial (placeholder map key)."""
-
-PLACEHOLDER_DIAL_FLAGS: Final[dict[DialPath, bool]] = {
-    "satellite.satellite_build_cost_musd": False,  # INVESTOR_SET 1.05 (not a sentinel)
-    "coverage.satellites_for_full_coverage": False,  # INVESTOR_SET 340 floor (not a sentinel)
-    "coverage.max_fleet_satellites": False,  # INVESTOR_SET 2,000 cap (not a sentinel)
-    "comms_cadence.share_of_fleet": False,  # INVESTOR_SET 0.18 (not a sentinel)
-    "subscribers.subscribers_at_full_coverage": False,  # INVESTOR_SET 10M target (not a sentinel)
-    "subscribers.subscribers_per_satellite": False,  # SOURCED_ESTIMATE 75,000 (not a sentinel)
-    "revenue.revenue_multiple": False,  # INVESTOR_SET 1.5 (mirrors the DC R; not a sentinel)
-    "revenue.arpu_usd_per_month": False,  # SCENARIO 50.0 supportable median (not a sentinel)
-    # Iridium-model (L-band) input dials, all real in-band values (not sentinels).
-    "iridium.spectrum_mhz": False,  # INVESTOR_SET 8.0 exclusive holding (not a sentinel)
-    "iridium.aperture_m2": False,  # INVESTOR_SET 25.0 Flatellite reference (not a sentinel)
-    "iridium.device_class": False,  # INVESTOR_SET PHONE_CLASS baseline (not a sentinel)
-    "iridium.active_user_rate_mbps": False,  # INVESTOR_SET 1.0 Mbps (not a sentinel)
-    "iridium.concurrency_peak": False,  # INVESTOR_SET 0.025 peak (not a sentinel)
-    "iridium.concurrency_offpeak": False,  # INVESTOR_SET 0.005 off-peak (not a sentinel)
-    "iridium.iot_devices": False,  # ESTIMATE 10M passthrough (not a sentinel)
-    # Iridium four-bucket ARPU dials (Sheet A, investor-set 2026-07-09; not sentinels).
-    "iridium.arpu.standard_mix_pct": False,  # INVESTOR_SET 15.0 percent (not a sentinel)
-    "iridium.arpu.premium_mix_pct": False,  # INVESTOR_SET 2.0 percent (not a sentinel)
-    "iridium.arpu.iot_mix_pct": False,  # INVESTOR_SET 82.805 percent residual (not a sentinel)
-    "iridium.arpu.government_mix_pct": False,  # INVESTOR_SET 0.195 percent (not a sentinel)
-    "iridium.arpu.standard_price_usd_month": False,  # INVESTOR_SET 15.0 dollars (not a sentinel)
-    "iridium.arpu.premium_price_usd_month": False,  # INVESTOR_SET 100.0 dollars (not a sentinel)
-    "iridium.arpu.iot_price_usd_month": False,  # INVESTOR_SET 8.0 dollars (not a sentinel)
-    "iridium.arpu.government_price_usd_month": False,  # INVESTOR_SET 74.0 dollars (not a sentinel)
-}
-"""INVESTOR_SET status per guarded dial. ``True`` = still an arbitrary placeholder
-sentinel; ``False`` = a real investor-set (or sourced) value. All are ``False``.
-``satellites_per_launch`` and ``satellite_lifetime_years`` were never placeholders,
-so they are not inspected. Add a future placeholder dial here as ``True`` and the
-Phase 5 check will catch it."""
-
-
 __all__ = [
     "ARPU_USD_PER_MONTH_DEFAULT",
     "BASE_YEAR_DEFAULT",
-    "CADENCE_CEILING_DEFAULT",
     "COMMS_SHARE_DEFAULT",
     "BindingRegime",
     "DensityRegime",
-    "DialPath",
-    "FIRST_LAUNCH_YEAR_DEFAULT",
     "GROUND_BASIS_DEFAULT",
-    "HIGH_CADENCE_COST_MUSD_DEFAULT",
-    "HIGH_CADENCE_LAUNCHES_DEFAULT",
     "HORIZON_YEARS_DEFAULT",
-    "LAUNCHES_AT_YEAR_5_DEFAULT",
-    "LAUNCHES_AT_YEAR_10_DEFAULT",
-    "LOW_CADENCE_COST_MUSD_DEFAULT",
-    "LOW_CADENCE_LAUNCHES_DEFAULT",
     "MAX_FLEET_SATELLITES_DEFAULT",
     "MAX_FY",
     "MAX_HORIZON_YEARS",
     "MIN_FY",
     "MIN_HORIZON_YEARS",
     "MONTHS_PER_YEAR",
-    "PLACEHOLDER_DIAL_FLAGS",
     "REVENUE_MULTIPLE_DEFAULT",
-    "ROUND_TO_NEAREST_OFFSET",
     "SATELLITES_FOR_FULL_COVERAGE_DEFAULT",
     "SATELLITES_PER_LAUNCH_DEFAULT",
     "SATELLITE_BUILD_COST_MUSD_DEFAULT",
@@ -708,7 +626,6 @@ __all__ = [
     "SUBSCRIBERS_PER_SATELLITE_DEFAULT",
     # Iridium-model (L-band max-outcome) additions.
     "ACTIVE_USER_RATE_MBPS_DEFAULT",
-    "ACTIVE_USER_RATE_MBPS_RICH",
     "APERTURE_FOLD_CAVEAT_NOTE",
     "APERTURE_NO_FOLD_LIMIT_M2",
     "APERTURE_REFERENCE_M2",
@@ -739,7 +656,6 @@ __all__ = [
     "SMALL_TERMINAL_CLASS_SE_CENTRAL",
     "SMALL_TERMINAL_CLASS_SE_HIGH",
     "SMALL_TERMINAL_CLASS_SE_LOW",
-    "SPECTRUM_MHZ_COORDINATED",
     "SPECTRUM_MHZ_DEFAULT",
     "TERMINAL_CLASS_SE_CENTRAL",
     "TERMINAL_CLASS_SE_HIGH",

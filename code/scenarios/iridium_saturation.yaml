@@ -14,11 +14,13 @@
 #
 # All commentary, sources, and rationale live in scenarios/iridium.yaml: this
 # file deliberately repeats its dials with one-line comments so the two files
-# stay diffable. The 62,400,000 equals the Sheet A allocation pool at the
-# baseline by construction (both are capacity x the same density chain); that
-# coincidence is deliberate and documented in the conclusion. The saturation
-# cap itself (2,000) is the investor-set scenario informed by the co-channel
-# interference mechanism, not a uniquely solved physical ceiling.
+# stay diffable (a test asserts the two load to configs that differ only in the
+# subscriber target and the scenario label). The 62,400,000 also equals the
+# baseline's Sheet A billable-connection pool (10,608,000 / 0.17), but only as a
+# coincidence of this sheet: 340 / 0.17 happens to be 2,000. It is not an
+# identity (another mix moves the pool and leaves this target unchanged). The
+# saturation cap itself (2,000) is the investor-set scenario informed by the
+# co-channel interference mechanism, not a uniquely solved physical ceiling.
 
 comms_cadence:
   share_of_fleet: 1.0  # investor-set all-in share (pedal to the metal, 2026-07-14)

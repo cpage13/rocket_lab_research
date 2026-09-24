@@ -65,7 +65,7 @@ labeled scenario dial.
 
 | Item | File | What it is |
 |---|---|---|
-| Iridium model | [`communications/models/iridium/default.json`](models/iridium/default.json) | The promoted model: the frozen baseline, its derivation, units, and sources, including the fleet, launch, and capacity denominators and the labeled orbit scenario block (schema iridium-v4) |
+| Iridium model | [`communications/models/iridium/default.json`](models/iridium/default.json) | The promoted model: the frozen baseline, its derivation, units, and sources, including the fleet, launch, and capacity denominators and the labeled orbit scenario block (schema iridium-v5) |
 | Default scenario | [`code/scenarios/iridium.yaml`](../code/scenarios/iridium.yaml) | The input dials; copy, edit, and re-run to test alternatives |
 | Saturation companion | [`code/scenarios/iridium_saturation.yaml`](../code/scenarios/iridium_saturation.yaml) | The 2,000-satellite build-out: one dial moved (the target rises to the cap-binding 62,400,000) |
 | Assumptions ledger | [`communications/assumptions.md`](assumptions.md) | Every default assumption, its source status, and where it comes from |
@@ -291,9 +291,9 @@ Operations cost is held at **zero** by explicit assumption, a fixed line to
 research and add later, stated in every model output rather than hidden. One
 accounting artifact worth naming: the final model year (FY2036) replaces the
 large 2031 cohort, so the final-year cash line reads $250 million, or $25 per
-configured person, while the annualized basis is $14.50. The promoted JSON
-names both bases directly: the final-year cash pair and the annualized line
-(schema iridium-v4).
+served person, while the annualized basis is $14.50. The promoted JSON names
+both bases directly: the final-year cash pair and the annualized line (schema
+iridium-v5).
 
 ### Who The Customers Are
 
@@ -365,7 +365,8 @@ ratio, about 39.3 million devices, about $7.07B a year) sits in the scenario
 file and the ledger.
 
 The margin definition travels with the number: it measures revenue against
-the fleet's full build, launch, and replacement cost. Operations cost is the
+the built fleet's full build, launch, and replacement cost, annualized over
+the satellite life. Operations cost is the
 explicit zero pending research and corporate overhead is never included, so
 this is an operating-style margin, not a gross margin and not a net margin.
 Three postures are stated, not hidden: full sell-through (every serveable

@@ -5,19 +5,25 @@ efficiency from the device class, per-satellite capacity with the aperture facto
 the derived per-satellite subscriber density, the per-user peak/off-peak rates, the
 aperture-coupled effective satellites-per-launch), the end-to-end engine run behind
 the ``config.iridium`` branch, the scenario YAML the existing loader parses
-unchanged, the stated-assumptions accessor, and the promoted-JSON export.
+unchanged, the stated-assumptions accessor, the promoted-JSON export, the
+documented variants (the rich tier, the coordinated spectrum, the device ladder),
+the edge cases the artifact must publish honestly (a build completing in the final
+year, a satellite life longer than the horizon, a near-zero share, an incomplete
+build, a degenerate density), the saturation companion end to end, and the drift
+guard that regenerates the committed promoted artifact.
 
 Two structural facts anchor the suite. First, the High-Bandwidth Cellular Pure Play
 model (formerly Model A) is untouched: the default config (no ``iridium`` block)
 still yields ``trajectory.iridium is None`` and every High-Bandwidth Cellular Pure
-Play number is unchanged. Second, THE STRONG EQUALITY CHECK: because the Iridium
+Play number is unchanged. Second, THE EQUALITY TRIPWIRE: because the Iridium
 phone-class baseline and the High-Bandwidth Cellular Pure Play default 10M run BOTH
 bind at the 340 coverage floor, and at the default 25 m^2 aperture the effective
 satellites-per-launch equals the configured 12 (the launch-coupling identity), their
-entire cost / cohort / revenue trajectories are IDENTICAL; only the per-satellite
-density and the new Iridium physics block differ. The 60 m^2 what-if breaks that
-identity by design (the launch granularity changes), so it freezes the derived
-physics and the fleet target only, not the deployment-year or cost outcomes.
+entire cost / cohort / revenue trajectories are IDENTICAL, per-year rollup by
+per-year rollup and headline by headline; only the per-satellite density and the
+Iridium physics block differ. The 60 m^2 what-if breaks that identity by design
+(the launch granularity changes), so it freezes the derived physics and the fleet
+target only, not the deployment-year or cost outcomes.
 
 Subscribers are PEOPLE; ``iot_devices`` is a separate DEVICE passthrough, never
 folded into the people count. The Iridium model is the MSS lane (purpose-built or
@@ -27,12 +33,15 @@ High-Bandwidth Cellular Pure Play model).
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
+from common.cli import EXIT_ERROR
+from common.file_io import render_artifact_json
 from communications.config import CommsConfig, IridiumArpuDials, IridiumDials, load_comms_config
 from communications.constants import (
     APERTURE_FOLD_CAVEAT_NOTE,
@@ -52,6 +61,7 @@ from communications.constants import (
 )
 from communications.engine import (
     MUSD_TO_USD,
+    CommsTrajectory,
     derive_arpu_buckets,
     derive_iridium_per_user_rates,
     derive_iridium_satellites_per_launch,
@@ -63,9 +73,10 @@ from communications.engine import (
 )
 from communications.json_output import (
     MODEL_NAME,
+    IridiumModelArtifact,
     build_iridium_artifact,
     export_iridium_json,
-    render_json,
+    main,
 )
 
 # ---------------------------------------------------------------------------
@@ -155,12 +166,17 @@ ARPU_TOTAL_REVENUE_MUSD = 8_250.802_56  # the four summed.
 # defaults (25 to 13.5 $M, 1.05 $M, 0.18 share), which are untouched.
 # ---------------------------------------------------------------------------
 FLAT_BUILD_AND_HOLD_COST_MUSD = 1450.0  # 696 satellites x 1.0 + 58 launches x 13.0.
-# The FY2036 hold-phase replacement: 120 satellites x 1.0 + 10 launches x 13.0.
-FLAT_STEADY_STATE_REPLACEMENT_COST_MUSD = 250.0
-# 250.0 M USD / 10,000,000 subscribers: the final-year cash basis.
-FLAT_COST_PER_SUBSCRIBER_ANNUAL_USD = 25.0
+# The FY2036 final-year cash replacement (the 2031 cohort retiring): 120 satellites
+# x 1.0 + 10 launches x 13.0.
+FLAT_FINAL_YEAR_REPLACEMENT_COST_MUSD = 250.0
+# 250.0 M USD / 10,000,000 served people: the final-year cash basis.
+FLAT_FINAL_YEAR_CASH_COST_PER_SUBSCRIBER_USD = 25.0
 FLAT_STEADY_STATE_ANNUAL_COST_MUSD = 145.0  # the annualized basis (share-independent).
 FULL_COVERAGE_YEAR_ALL_IN = 2031  # the 340-satellite build: 29 launches at 12 per launch.
+# The per-year cash replacement lines FY2032..FY2036 (each year replaces the cohort
+# launched five years earlier: 2, 3, 5, 9, 10 launches of 12 at 1.0 + 13.0 per launch).
+FLAT_HOLD_REPLACEMENT_LINES_MUSD = (50.0, 75.0, 125.0, 225.0, 250.0)
+COMPLETION_YEAR_SATELLITES = 120  # FY2031, the final build tranche (10 launches).
 # The schema-v4 denominators, frozen exact at the all-in baseline.
 ANNUALIZED_COST_PER_SUBSCRIBER_USD = 14.5  # 145.0 M USD / 10,000,000 people.
 LIVING_FLEET_FINAL_YEAR = 348  # 29 whole launches x 12 satellites.
@@ -168,18 +184,114 @@ CUM_LAUNCHES_TO_COMPLETION = 29  # cumulative launches through the 2031 completi
 CUM_LAUNCHES_FINAL_YEAR = 58  # the 2031 build replaced exactly once by FY2036.
 PEOPLE_CAPACITY_TARGET_FLEET = 10_608_000  # 340 x 31,200.
 PEOPLE_CAPACITY_LIVING_FLEET = 10_857_600  # 348 x 31,200.
-# The published ARPU margin against that flat-cost steady-state annual cost:
-# (8,250.80256 - 145.0) / 8,250.80256 x 100.
+# The published ARPU margin against the built fleet's annualized cost (the 348
+# satellites on orbit in FY2036, 145.0 M USD): (8,250.80256 - 145.0) / 8,250.80256 x 100.
 ARPU_MARGIN_VS_STEADY_STATE_COST_PCT = 98.242_595_202_762_91
+# The artifact schema this suite freezes.
+EXPECTED_SCHEMA_VERSION = "iridium-v5"
+# The ARPU case's stated assumptions: sell-through, mix posture, the built-fleet
+# convention, and the margin definition.
+ARPU_STATED_ASSUMPTION_COUNT = 4
+
+# The equality tripwire's frozen value: the cellular default's final-year cash per
+# subscriber (FY2036 replaces the 36-satellite 2031 cohort, 79.51... M USD, over the
+# 10M served people), carried identically by the Iridium bare-dials run.
+TRIPWIRE_CASH_COST_PER_SUBSCRIBER_USD = 7.951337204338448
+
+# The rich tier at the config-default 0.18 share builds only 576 of its 802-satellite
+# fleet by FY2036 (reported truthfully); the all-in share completes it in 2033 with
+# 804 satellites (67 whole launches).
+RICH_TIER_LIVING_AT_DEFAULT_SHARE = 576
+RICH_TIER_COMPLETION_YEAR_ALL_IN = 2033
+RICH_TIER_BUILT_FLEET = 804
+
+# The documented density variants at the 340 floor: the coordinated 10.5 MHz span
+# (10.5 x 0.65 x 0.15 = 1.02375 Gbps / 0.025 Mbps) and the device ladder (8 MHz at
+# SE 2.0 and 2.5: 2.4 and 3.0 Gbps).
+COORDINATED_SPECTRUM_MHZ = 10.5
+EXPECTED_SUBS_PER_SAT_COORDINATED = 40_950
+EXPECTED_SUBS_PER_SAT_SMALL_TERMINAL = 96_000
+EXPECTED_SUBS_PER_SAT_TERMINAL = 120_000
+
+# A degenerate aperture: at full peak concurrency the derived density rounds to zero
+# (8 x 0.65 x 0.15 x 0.0004 = 0.000312 Gbps = 0.312 Mbps over a 1.0 Mbps load).
+DEGENERATE_APERTURE_M2 = 0.01
+FULL_PEAK_CONCURRENCY = 1.0
+
+# The near-zero share: 0.001 of every whole-fleet cadence rounds to zero launches.
+NEAR_ZERO_SHARE = 0.001
+# A satellite life longer than the horizon (no cohort retires by FY2036).
+LONG_LIFE_YEARS = 10
+LONG_LIFE_ANNUAL_COST_MUSD = 72.5  # 348 x (1.0 + 13.0 / 12) / 10.
+# A horizon that ends on the 2031 completion year.
+COMPLETION_YEAR_HORIZON = 5
 
 # Test-3 scaling base: a non-frozen capacity whose float pool is NOT integral, so the
 # round-half-up genuinely exercises the plus-or-minus-1 count tolerance at 2X.
 ARPU_SCALING_CAPACITY_X = 7_000_000
 ARPU_REVENUE_FLOAT_EPS_MUSD = 1e-9  # float slack on the one-count-quantum revenue bound.
 
-# The scenario YAML (anchored from this test file: tests/communications -> code ->
-# scenarios/iridium.yaml).
-_SCENARIO_YAML = Path(__file__).resolve().parents[2] / "scenarios" / "iridium.yaml"
+# ---------------------------------------------------------------------------
+# The saturation companion (scenarios/iridium_saturation.yaml): the baseline dials
+# with the subscriber target raised to the cap-binding 62,400,000 (2,000 x 31,200).
+# Frozen from the published column: the 2,000-satellite build completes in 2035
+# (2,004 living on whole launches, 186 launches to completion, 200 through FY2036).
+# ---------------------------------------------------------------------------
+SATURATION_TARGET_PEOPLE = 62_400_000
+SATURATION_FLEET_TARGET = 2_000
+SATURATION_COMPLETION_YEAR = 2035
+SATURATION_LIVING_FLEET_FINAL_YEAR = 2_004
+SATURATION_CUM_LAUNCHES_TO_COMPLETION = 186
+SATURATION_CUM_LAUNCHES_FINAL_YEAR = 200
+SATURATION_BUILD_AND_HOLD_COST_MUSD = 5_000.0
+SATURATION_ANNUAL_COST_MUSD = 835.0  # 2,004 x (1.0 + 13.0 / 12) / 5.
+SATURATION_FINAL_YEAR_REPLACEMENT_COST_MUSD = 350.0  # 168 satellites + 14 launches.
+SATURATION_PEOPLE_CAPACITY_LIVING_FLEET = 62_524_800  # 2,004 x 31,200.
+SATURATION_STANDARD_COUNT = 55_058_824
+SATURATION_PREMIUM_COUNT = 7_341_176
+SATURATION_IOT_COUNT = 303_943_059
+SATURATION_GOVERNMENT_COUNT = 715_765
+SATURATION_POOL = 367_058_824  # 62,400,000 / 0.17, rounded half up.
+SATURATION_REVENUE_TOTAL_MUSD = 48_534.132_504
+SATURATION_MARGIN_PCT = 98.279_561_296_513_99
+
+# The scenario YAMLs and the committed promoted artifact come from the
+# repository-anchored fixtures in conftest.py (iridium_yaml,
+# iridium_saturation_yaml, promoted_iridium_artifact).
+
+
+def _iridium_scenario_with(scenario: Path, block: str, **fields: object) -> CommsConfig:
+    """Load an Iridium scenario with one block's fields replaced (re-validated).
+
+    Args:
+        scenario: The scenario YAML to start from (the promoted
+            ``iridium.yaml``).
+        block: The top-level config block to edit (e.g. ``"satellite"``).
+        **fields: The fields to set inside that block.
+
+    Returns:
+        The validated variant config.
+    """
+    data = load_comms_config(scenario).model_dump()
+    data[block] = {**(data.get(block) or {}), **fields}
+    return CommsConfig.model_validate(data)
+
+
+def _artifact_for(config: CommsConfig) -> IridiumModelArtifact:
+    """Run a config and assemble its promoted artifact (no file IO).
+
+    Args:
+        config: An Iridium-selecting config.
+
+    Returns:
+        The assembled artifact.
+    """
+    return build_iridium_artifact(
+        config=config,
+        trajectory=run_comms_model(config),
+        source_scenario_path="test",
+        version_stamp="test",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -339,34 +451,37 @@ def test_iridium_baseline_physics_frozen() -> None:
 
 
 def test_iridium_baseline_shares_hb_cellular_trajectory() -> None:
-    """The Iridium baseline shares the High-Bandwidth Cellular Pure Play trajectory.
+    """THE EQUALITY TRIPWIRE: the Iridium baseline equals the cellular default, field by field.
 
-    The two runs differ only in the per-satellite density (the strong equality
-    check).
+    Objective: prove the shared machinery. On config defaults both families bind at
+    the 340 coverage floor with the 12-per-launch identity at 25.0 m^2, so a shared
+    engine drift moves both together while anything that moves one family alone
+    breaks here. Expected: every per-year rollup is equal (the whole ``years``
+    tuple, cohort lines included), every other trajectory field is exactly equal
+    except the two intended differences (the per-satellite density, and the Iridium
+    physics block present on one side only), and the final-year cash cost per
+    subscriber is 7.951337204338448 dollars on both. Fields are enumerated from the
+    dataclass, so a new trajectory field joins the comparison automatically.
     """
     hb_cellular = run_comms_model(CommsConfig())
     iridium_run = run_comms_model(CommsConfig(iridium=IridiumDials()))
-    # The shared build / cost / revenue fields are identical (the strong equality check).
-    assert iridium_run.fleet_target == hb_cellular.fleet_target
-    assert iridium_run.binding_regime is hb_cellular.binding_regime
-    assert iridium_run.subscribers_served == hb_cellular.subscribers_served
-    assert iridium_run.full_coverage_reached_year == hb_cellular.full_coverage_reached_year
-    assert iridium_run.total_build_and_hold_cost_musd == pytest.approx(
-        hb_cellular.total_build_and_hold_cost_musd
+    assert iridium_run.years == hb_cellular.years
+    intended_differences = {"subscribers_per_satellite", "iridium"}
+    compared = [
+        field.name
+        for field in dataclasses.fields(CommsTrajectory)
+        if field.name not in intended_differences | {"years"}
+    ]
+    for name in compared:
+        assert getattr(iridium_run, name) == getattr(hb_cellular, name), name
+    assert hb_cellular.final_year_cash_cost_per_subscriber_usd == (
+        TRIPWIRE_CASH_COST_PER_SUBSCRIBER_USD
     )
-    assert iridium_run.cost_per_subscriber_annual_usd == pytest.approx(
-        hb_cellular.cost_per_subscriber_annual_usd
-    )
-    assert iridium_run.steady_state_revenue_cost_plus_musd == pytest.approx(
-        hb_cellular.steady_state_revenue_cost_plus_musd
-    )
-    assert iridium_run.steady_state_gross_margin_cost_plus_pct == pytest.approx(
-        hb_cellular.steady_state_gross_margin_cost_plus_pct
-    )
-    # The one intended difference: the derived density vs the fixed dial.
+    # The intended differences: the derived density vs the fixed dial, and the block.
     assert iridium_run.subscribers_per_satellite == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE
     assert hb_cellular.subscribers_per_satellite == HB_CELLULAR_SUBS_PER_SAT
-    assert iridium_run.subscribers_per_satellite != hb_cellular.subscribers_per_satellite
+    assert iridium_run.iridium is not None
+    assert hb_cellular.iridium is None
 
 
 def test_iridium_rich_tier_flips_to_capacity() -> None:
@@ -377,6 +492,86 @@ def test_iridium_rich_tier_flips_to_capacity() -> None:
     assert traj.subscribers_per_satellite == EXPECTED_SUBS_PER_SAT_RICH
     assert traj.fleet_target == EXPECTED_FLEET_TARGET_RICH
     assert traj.binding_regime is BindingRegime.CAPACITY
+
+
+def test_rich_tier_reports_below_target_truthfully_then_completes_all_in(
+    iridium_yaml: Path,
+) -> None:
+    """The rich tier's 802-satellite fleet: 576 by FY2036 at 0.18, complete in 2033 all-in.
+
+    Objective: the model reports below-target deployment truthfully (the documented
+    honesty feature). Expected: at the config-default 0.18 share the build never
+    reaches the 802 target (no full-coverage year, 576 living in FY2036, the
+    artifact publishes build_completes_in_horizon false); on the promoted scenario's
+    all-in share it completes in 2033 with 804 satellites (67 whole launches).
+    """
+    default_share = run_comms_model(
+        CommsConfig(iridium=IridiumDials(active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS))
+    )
+    assert default_share.fleet_target == EXPECTED_FLEET_TARGET_RICH
+    assert default_share.full_coverage_reached_year is None
+    assert default_share.years[-1].living_fleet == RICH_TIER_LIVING_AT_DEFAULT_SHARE
+    all_in_config = _iridium_scenario_with(
+        iridium_yaml, "iridium", active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS
+    )
+    all_in = run_comms_model(all_in_config)
+    assert all_in.full_coverage_reached_year == RICH_TIER_COMPLETION_YEAR_ALL_IN
+    assert all_in.years[-1].living_fleet == RICH_TIER_BUILT_FLEET
+    incomplete = _iridium_scenario_with(
+        iridium_yaml, "iridium", active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS
+    ).model_copy(update={"comms_cadence": CommsConfig().comms_cadence})
+    assert _artifact_for(incomplete).trajectory_summary.build_completes_in_horizon is False
+
+
+@pytest.mark.parametrize(
+    ("dials", "expected_density"),
+    [
+        (IridiumDials(spectrum_mhz=COORDINATED_SPECTRUM_MHZ), EXPECTED_SUBS_PER_SAT_COORDINATED),
+        (
+            IridiumDials(device_class=DeviceClass.SMALL_TERMINAL_CLASS),
+            EXPECTED_SUBS_PER_SAT_SMALL_TERMINAL,
+        ),
+        (IridiumDials(device_class=DeviceClass.TERMINAL_CLASS), EXPECTED_SUBS_PER_SAT_TERMINAL),
+    ],
+    ids=["coordinated_10_5_mhz", "small_terminal", "terminal"],
+)
+def test_documented_density_variants(dials: IridiumDials, expected_density: int) -> None:
+    """The documented variants' densities: 40,950 (10.5 MHz), 96,000 and 120,000 (ladder).
+
+    Objective: freeze the variant densities the conclusion quotes. Expected: each
+    variant derives its density exactly and, at the 10M target, still binds at the
+    340 coverage floor (more capacity per satellite buys nothing at this base).
+    """
+    traj = run_comms_model(CommsConfig(iridium=dials))
+    assert traj.subscribers_per_satellite == expected_density
+    assert traj.fleet_target == EXPECTED_FLEET_TARGET_BASELINE
+    assert traj.binding_regime is BindingRegime.COVERAGE
+
+
+def test_degenerate_density_fails_with_a_clear_error(tmp_path: Path) -> None:
+    """Dials that derive less than one subscriber per satellite fail clearly, not by division.
+
+    Objective: the derived density must be at least one person. A 0.01 m^2 aperture
+    at full peak concurrency derives 0.312 Mbps of capacity over a 1.0 Mbps load,
+    which rounds to zero and used to crash the fleet sizing with ZeroDivisionError.
+    Expected: the engine raises a ValueError naming the problem, and the promotion
+    command exits with the error code without writing an artifact (no traceback).
+    """
+    dials = IridiumDials(
+        aperture_m2=DEGENERATE_APERTURE_M2,
+        concurrency_peak=FULL_PEAK_CONCURRENCY,
+    )
+    with pytest.raises(ValueError, match="fewer than one subscriber per satellite"):
+        run_comms_model(CommsConfig(iridium=dials))
+    scenario = tmp_path / "degenerate.yaml"
+    scenario.write_text(
+        f"iridium:\n  aperture_m2: {DEGENERATE_APERTURE_M2}\n"
+        f"  concurrency_peak: {FULL_PEAK_CONCURRENCY}\n",
+        encoding="utf-8",
+    )
+    out_path = tmp_path / "degenerate.json"
+    assert main([str(scenario), str(out_path)]) == EXIT_ERROR
+    assert not out_path.exists()
 
 
 def test_iridium_terminal_class_capacity() -> None:
@@ -418,9 +613,9 @@ def test_iridium_aperture_60_what_if() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_iridium_yaml_scenario_loads_and_runs() -> None:
+def test_iridium_yaml_scenario_loads_and_runs(iridium_yaml: Path) -> None:
     """The Iridium scenario YAML loads (iridium, factory metadata) and runs the baseline."""
-    config = load_comms_config(_SCENARIO_YAML)
+    config = load_comms_config(iridium_yaml)
     assert config.iridium is not None
     assert config.iridium.scenario_name == IRIDIUM_SCENARIO_NAME_DEFAULT
     # No metadata block in the file: the default factory supplies base year 2026, horizon 10.
@@ -467,36 +662,37 @@ def test_iridium_assumptions_states_ecosystem_and_ops() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
+def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path, iridium_yaml: Path) -> None:
     """The export runs the Iridium scenario and the JSON carries the frozen baseline.
 
     Objective: the promoted-JSON writer end to end (scenario YAML in, artifact
     file out). Success: the file exists, the provenance names the model
-    'iridium', echoes the stamp, and carries schema iridium-v4; the frozen
+    'iridium', echoes the stamp, and carries schema iridium-v5; the frozen
     baseline keys/values are in the payload (subscribers_per_satellite 31,200 in
     both blocks, fleet target 340, full coverage reached 2031 under the all-in
-    share, the stated-assumptions lines present); the flat-cost model (investor
-    simplification 2026-07-09) under the all-in share freezes exact (1,450.0 M
-    build-and-hold, 250.0 M final-year replacement under its honest v4 name,
-    25.0 USD/sub final-year cash beside the 14.50 annualized basis, 145.0 M
-    annual cost); the v4 denominators are exposed (348 living, 29 launches to
-    completion, 58 through FY2036, 10,608,000 and 10,857,600 people capacity);
-    the orbit scenario block carries the published 450 km / 53 degree posture
-    with its basis text; the two cost-plus revenue fields are ABSENT from the
-    trajectory summary (since schema iridium-v3; the engine still computes them
-    for the cellular family and the equality tripwire); the two inherited
-    placeholder ARPU fields are gone; and the published four-bucket
-    revenue_arpu_buckets block carries the frozen Sheet A values plus the
-    published margin (98.2 percent) against the steady-state cost.
+    share and so build_completes_in_horizon true, the stated-assumptions lines
+    present); the flat-cost model (investor simplification 2026-07-09) under the
+    all-in share freezes exact (1,450.0 M build-and-hold, 250.0 M final-year
+    replacement, 25.0 USD/sub final-year cash beside the 14.50 annualized basis,
+    145.0 M annual cost, equal to the built fleet's annualized cost); the v4
+    denominators are exposed (348 living, 29 launches to completion, 58 through
+    FY2036, 10,608,000 and 10,857,600 people capacity); the orbit scenario block
+    carries the published 450 km / 53 degree posture with its basis text; the two
+    cost-plus revenue fields are ABSENT from the trajectory summary (since schema
+    iridium-v3; the engine still computes them for the cellular family and the
+    equality tripwire); the two inherited placeholder ARPU fields are gone; and
+    the published four-bucket revenue_arpu_buckets block carries the frozen Sheet
+    A values plus the published margin (98.2 percent) against the built fleet's
+    annualized cost.
     """
     out_path = tmp_path / "iridium_default.json"
-    written = export_iridium_json(_SCENARIO_YAML, out_path, version_stamp="test-stamp")
+    written = export_iridium_json(iridium_yaml, out_path, version_stamp="test-stamp")
     assert written == out_path
     payload = json.loads(written.read_text(encoding="utf-8"))
     assert payload["provenance"]["model_name"] == MODEL_NAME
     assert payload["provenance"]["version_stamp"] == "test-stamp"
     assert payload["provenance"]["scenario_name"] == IRIDIUM_SCENARIO_NAME_DEFAULT
-    assert payload["provenance"]["schema_version"] == "iridium-v4"
+    assert payload["provenance"]["schema_version"] == EXPECTED_SCHEMA_VERSION
     assert (
         payload["trajectory_summary"]["subscribers_per_satellite"]
         == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE
@@ -504,16 +700,17 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
     assert payload["trajectory_summary"]["fleet_target"] == EXPECTED_FLEET_TARGET_BASELINE
     assert payload["trajectory_summary"]["full_coverage_reached_year"] == FULL_COVERAGE_YEAR_ALL_IN
     # The flat-cost model (investor simplification 2026-07-09), frozen exact from the
-    # scenario's flat 13.0 $M launch, 1.0 $M build, and all-in share overrides. The
-    # final-year cash pair reads under its honest schema-v4 names.
+    # scenario's flat 13.0 $M launch, 1.0 $M build, and all-in share overrides.
     ts = payload["trajectory_summary"]
+    assert ts["build_completes_in_horizon"] is True
     assert ts["total_build_and_hold_cost_musd"] == pytest.approx(FLAT_BUILD_AND_HOLD_COST_MUSD)
     assert ts["final_year_replacement_cost_musd"] == pytest.approx(
-        FLAT_STEADY_STATE_REPLACEMENT_COST_MUSD
+        FLAT_FINAL_YEAR_REPLACEMENT_COST_MUSD
     )
     assert ts["final_year_cash_cost_per_subscriber_usd"] == pytest.approx(
-        FLAT_COST_PER_SUBSCRIBER_ANNUAL_USD
+        FLAT_FINAL_YEAR_CASH_COST_PER_SUBSCRIBER_USD
     )
+    assert ts["built_fleet_annual_cost_musd"] == ts["steady_state_annual_cost_musd"]
     assert ts["cost_per_subscriber_annualized_usd"] == pytest.approx(
         ANNUALIZED_COST_PER_SUBSCRIBER_USD
     )
@@ -563,10 +760,11 @@ def test_promoted_json_export_writes_frozen_baseline(tmp_path: Path) -> None:
     )
     assert buckets["total_connections"] == ARPU_POOL_BASELINE
     assert buckets["arpu_revenue_total_musd"] == pytest.approx(ARPU_TOTAL_REVENUE_MUSD)
-    # The published ARPU margin against the flat-cost steady-state annual cost (145.0 M).
+    # The published ARPU margin against the built fleet's annualized cost (145.0 M).
     assert buckets["arpu_margin_vs_steady_state_cost_pct"] == pytest.approx(
         ARPU_MARGIN_VS_STEADY_STATE_COST_PCT
     )
+    assert len(buckets["stated_assumptions"]) == ARPU_STATED_ASSUMPTION_COUNT
     # IoT supersession (one IoT truth): the physics IoT count is the bucket count.
     assert payload["iridium_physics"]["iot_devices"] == ARPU_IOT_COUNT
 
@@ -698,7 +896,7 @@ def test_arpu_none_path_omits_block_and_keeps_iot_passthrough() -> None:
     )
     assert artifact.revenue_arpu_buckets is None
     assert artifact.iridium_physics.iot_devices == EXPECTED_IOT_DEVICES
-    payload = json.loads(render_json(artifact))
+    payload = json.loads(render_artifact_json(artifact))
     assert payload.get("revenue_arpu_buckets") is None
 
 
@@ -720,3 +918,244 @@ def test_arpu_supersession_one_iot_truth() -> None:
     assert artifact.revenue_arpu_buckets is not None
     assert artifact.iridium_physics.iot_devices == artifact.revenue_arpu_buckets.iot.count
     assert artifact.iridium_physics.iot_devices == ARPU_IOT_COUNT
+
+
+# ---------------------------------------------------------------------------
+# The replacement line and the final-year cash pair on the promoted scenario and its
+# edge cases (only retiring cohorts' replacement counts; no 0.0 published as real).
+# ---------------------------------------------------------------------------
+
+
+def test_completion_year_is_a_build_year_on_the_promoted_scenario(iridium_yaml: Path) -> None:
+    """The 2031 completion tranche is build, never replacement; HOLD years replace cohorts.
+
+    Objective: the replacement rule on the promoted scenario. FY2031 deploys the final
+    120-satellite tranche with nothing retiring yet. Expected: FY2031 is not HOLD, has
+    no replaced satellites and a 0.0 replacement line against its 250.0 M cash; the
+    HOLD years FY2032..FY2036 replace the cohorts launched five years earlier, with
+    replacement lines 50, 75, 125, 225, and 250 M, each equal to the year's cash.
+    """
+    traj = run_comms_model(load_comms_config(iridium_yaml))
+    by_year = {year.year: year for year in traj.years}
+    completion = by_year[FULL_COVERAGE_YEAR_ALL_IN]
+    assert completion.is_hold_phase is False
+    assert completion.satellites_deployed_this_year == COMPLETION_YEAR_SATELLITES
+    assert completion.satellites_replaced_this_year == 0
+    assert completion.replacement_cost_this_year_musd == 0.0
+    assert completion.total_cost_this_year_musd == pytest.approx(
+        FLAT_FINAL_YEAR_REPLACEMENT_COST_MUSD
+    )
+    hold_years = [year for year in traj.years if year.year > FULL_COVERAGE_YEAR_ALL_IN]
+    assert all(year.is_hold_phase for year in hold_years)
+    assert [year.replacement_cost_this_year_musd for year in hold_years] == pytest.approx(
+        FLAT_HOLD_REPLACEMENT_LINES_MUSD
+    )
+    for year in hold_years:
+        assert year.replacement_cost_this_year_musd == year.total_cost_this_year_musd
+
+
+def test_horizon_ending_on_completion_publishes_no_cash_replacement(iridium_yaml: Path) -> None:
+    """A horizon that ends on the completion year publishes no final-year cash replacement.
+
+    Objective: the final-year cash pair never carries a build tranche. Before the
+    fix, a 5-year horizon (final year FY2031, the completion year, nothing retired)
+    published the 250.0 M build tranche as "final_year_replacement_cost_musd" and 25.0
+    USD as the cash cost per subscriber. Expected: both fields are None, while the
+    annualized basis (145.0 M, 14.50 USD per person) still publishes.
+    """
+    config = _iridium_scenario_with(
+        iridium_yaml, "metadata", base_year=BASE_YEAR_DEFAULT, horizon_years=COMPLETION_YEAR_HORIZON
+    )
+    summary = _artifact_for(config).trajectory_summary
+    assert summary.full_coverage_reached_year == FULL_COVERAGE_YEAR_ALL_IN
+    assert summary.final_year_replacement_cost_musd is None
+    assert summary.final_year_cash_cost_per_subscriber_usd is None
+    assert summary.steady_state_annual_cost_musd == pytest.approx(
+        FLAT_STEADY_STATE_ANNUAL_COST_MUSD
+    )
+    assert summary.cost_per_subscriber_annualized_usd == pytest.approx(
+        ANNUALIZED_COST_PER_SUBSCRIBER_USD
+    )
+
+
+def test_long_satellite_life_publishes_no_cash_replacement(iridium_yaml: Path) -> None:
+    """A satellite life longer than the horizon publishes no 0.0 cash cost as a real figure.
+
+    Objective: with a 10-year life no cohort retires by FY2036, so the final year
+    replaces nothing. Before the fix the artifact published 0.0 M and 0.0 USD per
+    subscriber as if serving cost nothing. Expected: the final-year cash pair is None
+    and the annualized basis carries the real cost (72.5 M a year for 348 satellites).
+    """
+    config = _iridium_scenario_with(
+        iridium_yaml, "satellite", satellite_lifetime_years=LONG_LIFE_YEARS
+    )
+    summary = _artifact_for(config).trajectory_summary
+    assert summary.final_year_replacement_cost_musd is None
+    assert summary.final_year_cash_cost_per_subscriber_usd is None
+    assert summary.steady_state_annual_cost_musd == pytest.approx(LONG_LIFE_ANNUAL_COST_MUSD)
+
+
+def test_near_zero_share_does_not_publish_a_full_margin_on_an_empty_fleet(
+    iridium_yaml: Path,
+) -> None:
+    """A share that never launches publishes the built fleet's margin, flagged incomplete.
+
+    Objective: the ARPU margin pairs revenue and cost on the same (built) fleet.
+    Before the fix a 0.001 share (zero launches, an empty fleet) published the
+    8,250.8 M built-fleet revenue at a 100 percent margin against a 0.0 cost.
+    Expected: the artifact flags build_completes_in_horizon false, the final-year
+    annualized cost is 0.0 (nothing on orbit) but the built fleet's annualized cost is
+    145.0 M (348 whole-launch satellites at the flat price), the margin is the
+    baseline's 98.24 percent (not 100), and the per-person and final-year cash
+    figures are None (nobody served, nothing replaced).
+    """
+    config = _iridium_scenario_with(iridium_yaml, "comms_cadence", share_of_fleet=NEAR_ZERO_SHARE)
+    artifact = _artifact_for(config)
+    summary = artifact.trajectory_summary
+    assert summary.build_completes_in_horizon is False
+    assert summary.living_fleet_final_year == 0
+    assert summary.subscribers_served == 0
+    assert summary.steady_state_annual_cost_musd == 0.0
+    assert summary.built_fleet_annual_cost_musd == pytest.approx(FLAT_STEADY_STATE_ANNUAL_COST_MUSD)
+    assert summary.cost_per_subscriber_annualized_usd is None
+    assert summary.final_year_replacement_cost_musd is None
+    assert summary.final_year_cash_cost_per_subscriber_usd is None
+    assert artifact.revenue_arpu_buckets is not None
+    assert artifact.revenue_arpu_buckets.arpu_margin_vs_steady_state_cost_pct == pytest.approx(
+        ARPU_MARGIN_VS_STEADY_STATE_COST_PCT
+    )
+
+
+def test_incomplete_build_margin_equals_the_completed_build_margin(iridium_yaml: Path) -> None:
+    """The margin describes the built fleet whether or not the horizon reaches it.
+
+    Objective: consistency of the built-fleet convention. The rich tier on the flat
+    costs builds an 802-satellite target (804 on whole launches): all-in it completes
+    in 2033; at the 0.18 share it reaches only 576 by FY2036. Expected: the same
+    revenue and, within float tolerance, the same margin in both runs (the
+    incomplete run projects the 804-satellite built fleet at the flat price instead of
+    pricing the 576 on orbit), and only the incomplete run is flagged.
+    """
+    complete_config = _iridium_scenario_with(
+        iridium_yaml, "iridium", active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS
+    )
+    incomplete_config = complete_config.model_copy(
+        update={"comms_cadence": CommsConfig().comms_cadence}
+    )
+    complete = _artifact_for(complete_config)
+    incomplete = _artifact_for(incomplete_config)
+    assert complete.trajectory_summary.build_completes_in_horizon is True
+    assert incomplete.trajectory_summary.build_completes_in_horizon is False
+    assert incomplete.trajectory_summary.living_fleet_final_year == (
+        RICH_TIER_LIVING_AT_DEFAULT_SHARE
+    )
+    assert incomplete.trajectory_summary.built_fleet_annual_cost_musd == pytest.approx(
+        complete.trajectory_summary.built_fleet_annual_cost_musd
+    )
+    assert complete.revenue_arpu_buckets is not None
+    assert incomplete.revenue_arpu_buckets is not None
+    assert (
+        incomplete.revenue_arpu_buckets.arpu_revenue_total_musd
+        == complete.revenue_arpu_buckets.arpu_revenue_total_musd
+    )
+    assert incomplete.revenue_arpu_buckets.arpu_margin_vs_steady_state_cost_pct == pytest.approx(
+        complete.revenue_arpu_buckets.arpu_margin_vs_steady_state_cost_pct
+    )
+
+
+# ---------------------------------------------------------------------------
+# The saturation companion and the scenario pair.
+# ---------------------------------------------------------------------------
+
+
+def test_saturation_companion_end_to_end(tmp_path: Path, iridium_saturation_yaml: Path) -> None:
+    """The saturation companion's published column, frozen end to end.
+
+    Objective: scenarios/iridium_saturation.yaml through the promotion writer
+    (YAML in, artifact file out), freezing the second column of the published
+    verdict. Expected: the 2,000-satellite cap binds (saturated regime) and the build
+    completes in 2035 with 2,004 living satellites, 186 launches to completion and
+    200 through FY2036; 62,400,000 people served (exactly the capped fleet's people
+    capacity); 5,000.0 M build-and-hold and an 835.0 M annualized fleet cost (equal
+    to the built fleet's); a 350.0 M FY2036 cash replacement; the Sheet A buckets
+    (55,058,824 standard and 7,341,176 premium people, 303,943,059 IoT devices,
+    715,765 government contracts, a 367,058,824 billable-connection pool) totaling
+    48,534.132504 M a year at a 98.28 percent margin; people and devices never summed.
+    """
+    written = export_iridium_json(iridium_saturation_yaml, tmp_path / "saturation.json")
+    payload = json.loads(written.read_text(encoding="utf-8"))
+    ts = payload["trajectory_summary"]
+    assert ts["fleet_target"] == SATURATION_FLEET_TARGET
+    assert ts["binding_regime"] == BindingRegime.SATURATED.value
+    assert ts["full_coverage_reached_year"] == SATURATION_COMPLETION_YEAR
+    assert ts["build_completes_in_horizon"] is True
+    assert ts["living_fleet_final_year"] == SATURATION_LIVING_FLEET_FINAL_YEAR
+    assert ts["cumulative_launches_to_completion"] == SATURATION_CUM_LAUNCHES_TO_COMPLETION
+    assert ts["cumulative_launches_final_year"] == SATURATION_CUM_LAUNCHES_FINAL_YEAR
+    assert ts["subscribers_served"] == SATURATION_TARGET_PEOPLE
+    assert ts["people_capacity_target_fleet"] == SATURATION_TARGET_PEOPLE
+    assert ts["people_capacity_living_fleet_final_year"] == (
+        SATURATION_PEOPLE_CAPACITY_LIVING_FLEET
+    )
+    assert ts["total_build_and_hold_cost_musd"] == pytest.approx(
+        SATURATION_BUILD_AND_HOLD_COST_MUSD
+    )
+    assert ts["steady_state_annual_cost_musd"] == pytest.approx(SATURATION_ANNUAL_COST_MUSD)
+    assert ts["built_fleet_annual_cost_musd"] == ts["steady_state_annual_cost_musd"]
+    assert ts["final_year_replacement_cost_musd"] == pytest.approx(
+        SATURATION_FINAL_YEAR_REPLACEMENT_COST_MUSD
+    )
+    buckets = payload["revenue_arpu_buckets"]
+    assert buckets["standard"]["count"] == SATURATION_STANDARD_COUNT
+    assert buckets["premium"]["count"] == SATURATION_PREMIUM_COUNT
+    assert buckets["standard"]["count"] + buckets["premium"]["count"] == SATURATION_TARGET_PEOPLE
+    assert buckets["iot"]["count"] == SATURATION_IOT_COUNT
+    assert buckets["government"]["count"] == SATURATION_GOVERNMENT_COUNT
+    assert buckets["total_connections"] == SATURATION_POOL
+    assert buckets["arpu_revenue_total_musd"] == pytest.approx(SATURATION_REVENUE_TOTAL_MUSD)
+    assert buckets["arpu_margin_vs_steady_state_cost_pct"] == pytest.approx(SATURATION_MARGIN_PCT)
+    assert payload["iridium_physics"]["iot_devices"] == SATURATION_IOT_COUNT
+
+
+def test_the_two_scenarios_differ_only_in_target_and_label(
+    iridium_yaml: Path, iridium_saturation_yaml: Path
+) -> None:
+    """The saturation companion moves exactly one dial (and its label) from the baseline.
+
+    Objective: the two hand-repeated YAMLs stay in step. Expected: loaded configs are
+    identical except ``subscribers.subscribers_at_full_coverage`` (10M versus the
+    cap-binding 62.4M) and ``iridium.scenario_name``.
+    """
+    baseline = load_comms_config(iridium_yaml).model_dump()
+    saturation = load_comms_config(iridium_saturation_yaml).model_dump()
+    assert saturation["subscribers"].pop("subscribers_at_full_coverage") == (
+        SATURATION_TARGET_PEOPLE
+    )
+    baseline["subscribers"].pop("subscribers_at_full_coverage")
+    assert saturation["iridium"].pop("scenario_name") != baseline["iridium"].pop("scenario_name")
+    assert saturation == baseline
+
+
+# ---------------------------------------------------------------------------
+# The committed promoted artifact regenerates from the code (the drift guard).
+# ---------------------------------------------------------------------------
+
+
+def test_regenerated_default_artifact_matches_committed(
+    tmp_path: Path, iridium_yaml: Path, promoted_iridium_artifact: Path
+) -> None:
+    """Regenerating the promoted Iridium artifact reproduces the committed file.
+
+    Objective: the committed communications/models/iridium/default.json is exactly
+    what the current code writes from scenarios/iridium.yaml (the conclusion quotes
+    it). Expected: a fresh export, stamped with the committed version stamp,
+    parses to the same JSON document, key for key and value for value.
+    """
+    committed = json.loads(promoted_iridium_artifact.read_text(encoding="utf-8"))
+    written = export_iridium_json(
+        iridium_yaml,
+        tmp_path / "default.json",
+        version_stamp=committed["provenance"]["version_stamp"],
+    )
+    regenerated = json.loads(written.read_text(encoding="utf-8"))
+    assert regenerated == committed

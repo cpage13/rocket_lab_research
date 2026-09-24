@@ -1,32 +1,42 @@
-"""Shared cold-reader contract types used by both ventures' meta blocks.
+"""Shared cold-reader contract types for the artifacts' meta blocks.
 
 The validation-check, data-dictionary, query-example, and formula-definition
-models, plus their enums, used by both ventures' `meta` blocks.
+models, their enums, and the source-status counter
+(:func:`summarize_source_statuses`), used by the data-center space and ground
+artifacts' ``meta`` blocks.
 """
 
 from __future__ import annotations
 
+import logging
+from collections import Counter
+from collections.abc import Iterable
 from enum import StrEnum
+from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from common.input_manifest import SourceStatus
 from common.provenance import FieldPath
+
+logger = logging.getLogger(__name__)
+
+COUNT_UNIT: Final[str] = "count"
+"""Declared data-dictionary unit for a whole-number count field."""
 
 
 class FieldKind(StrEnum):
-    """The semantic kind of one leaf field in the output JSON.
+    """The provenance class of one leaf field, published as a data-dictionary entry's
+    ``source_class``.
 
-    Used in the ``data_dictionary`` so a reader knows what a number *is*:
-    a dial they set (``INPUT``), a model constant (``CONSTANT``), a level
-    prevailing in a year (``STATE``), a per-year flow (``FLOW``), a running
-    total (``STOCK``), or a function of other fields (``DERIVED``).
+    The field's position in the artifact decides it: an input the scenario
+    sets (``INPUT``, under ``inputs``), a run-identity constant (``CONSTANT``,
+    under ``metadata``), or a value the model computes (``DERIVED``, everything
+    else).
     """
 
     INPUT = "input"
     CONSTANT = "constant"
-    STATE = "state"
-    FLOW = "flow"
-    STOCK = "stock"
     DERIVED = "derived"
 
 
@@ -56,7 +66,6 @@ class QueryAppliesTo(StrEnum):
 
     SPACE = "space"
     GROUND = "ground"
-    BOTH = "both"
 
 
 class SourceStatusSummary(BaseModel):
@@ -64,27 +73,72 @@ class SourceStatusSummary(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    certified: int = Field(..., description="Certified source-backed input count.")
-    sourced_estimate: int = Field(..., description="Sourced-estimate input count.")
-    derived_estimate: int = Field(..., description="Derived-estimate input count.")
-    projection: int = Field(..., description="Projection input count.")
-    extrapolation: int = Field(..., description="Extrapolation input count.")
-    scenario: int = Field(..., description="Scenario-authored input count.")
+    certified: int = Field(
+        ...,
+        description="Certified source-backed input count.",
+        json_schema_extra={"unit": COUNT_UNIT},
+    )
+    sourced_estimate: int = Field(
+        ..., description="Sourced-estimate input count.", json_schema_extra={"unit": COUNT_UNIT}
+    )
+    derived_estimate: int = Field(
+        ..., description="Derived-estimate input count.", json_schema_extra={"unit": COUNT_UNIT}
+    )
+    projection: int = Field(
+        ..., description="Projection input count.", json_schema_extra={"unit": COUNT_UNIT}
+    )
+    extrapolation: int = Field(
+        ..., description="Extrapolation input count.", json_schema_extra={"unit": COUNT_UNIT}
+    )
+    scenario: int = Field(
+        ..., description="Scenario-authored input count.", json_schema_extra={"unit": COUNT_UNIT}
+    )
     placeholder: int = Field(
-        ..., description="Placeholder input count; must be zero in promoted artifacts."
+        ...,
+        description="Placeholder input count; must be zero in promoted artifacts.",
+        json_schema_extra={"unit": COUNT_UNIT},
     )
     stale: int = Field(
-        ..., description="Stale-source input count; must be zero in promoted artifacts."
+        ...,
+        description="Stale-source input count; must be zero in promoted artifacts.",
+        json_schema_extra={"unit": COUNT_UNIT},
+    )
+
+
+def summarize_source_statuses(statuses: Iterable[SourceStatus]) -> SourceStatusSummary:
+    """Count input assumptions by source status.
+
+    The one counter behind every artifact's ``meta.source_status_summary``
+    (the space model and the ground reference).
+
+    Args:
+        statuses: The source status of every input cell to count.
+
+    Returns:
+        The eight-way count; statuses absent from the input count zero.
+    """
+    counts = Counter(statuses)
+    return SourceStatusSummary(
+        certified=counts[SourceStatus.CERTIFIED],
+        sourced_estimate=counts[SourceStatus.SOURCED_ESTIMATE],
+        derived_estimate=counts[SourceStatus.DERIVED_ESTIMATE],
+        projection=counts[SourceStatus.PROJECTION],
+        extrapolation=counts[SourceStatus.EXTRAPOLATION],
+        scenario=counts[SourceStatus.SCENARIO],
+        placeholder=counts[SourceStatus.PLACEHOLDER],
+        stale=counts[SourceStatus.STALE],
     )
 
 
 class ValidationCheck(BaseModel):
     """One engine-computed sanity check on the run.
 
-    The cycle-1 validation type, reused verbatim for V1–V17. The
-    ``meta.validation.rules`` block lets a reader run
-    ``jq '.meta.validation.rules[] | select(.pass_check == false)'`` and
-    see every failed check without reading the engine.
+    The cycle-1 validation type, reused verbatim for every wired V-rule. The
+    ``meta.validation.rules`` block lists the V-rules alone; the complete
+    public verdict list (every rule, the model invariants, and the default
+    guards) is ``meta.validation_results``, where
+    ``jq '.meta.validation_results[] | select(.severity != "pass")'`` shows
+    every warning and failure.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -127,9 +181,11 @@ class ValidationReport(BaseModel):
     rules: list[ValidationCheck] = Field(
         ...,
         description=(
-            "All V-rule results in declaration order (V1..V17). Run "
-            "`jq '.meta.validation.rules[] | select(.pass_check==false)'` "
-            "to find any failure."
+            "All V-rule results in declaration order (16 rules: V1-V10 and "
+            "V12-V17, V11 retired). The complete verdict list, rules plus the "
+            "model invariants and default guards, is meta.validation_results: "
+            "run `jq '.meta.validation_results[] | select(.severity != \"pass\")'` "
+            "to find every warning or failure."
         ),
     )
 
@@ -161,9 +217,9 @@ class DataDictEntry(BaseModel):
         ...,
         description="The leaf value's wire type (e.g. 'number', 'integer', 'string').",
     )
-    source_class: str = Field(
+    source_class: FieldKind = Field(
         ...,
-        description=("Provenance class of the field: INPUT / CONSTANT / DERIVED."),
+        description="Provenance class of the field: input, constant, or derived.",
     )
 
 
@@ -183,11 +239,6 @@ class QueryExample(BaseModel):
     expected_shape: str = Field(..., description="What the query result looks like.")
     important_paths: list[str] = Field(..., description="Important JSON paths touched.")
     applies_to: QueryAppliesTo = Field(..., description="Model family this query applies to.")
-
-    @property
-    def jq(self) -> str:
-        """Return the jq expression for existing test and renderer helpers."""
-        return self.jq_expression
 
 
 class FormulaDefinition(BaseModel):
@@ -219,6 +270,7 @@ class ValidationResult(BaseModel):
 
 
 __all__ = [
+    "COUNT_UNIT",
     "DataDictEntry",
     "FieldKind",
     "FormulaDefinition",
@@ -230,4 +282,5 @@ __all__ = [
     "ValidationReport",
     "ValidationResult",
     "ValidationSeverity",
+    "summarize_source_statuses",
 ]

@@ -1,20 +1,20 @@
-"""Regression tests for the v8 output naming convention (plan §5 T62).
+"""Regression tests for the output naming convention (plan §5 T62).
 
 Cycle-1 shipped a field ``annual_rev_per_node_musd`` that was *named*
 revenue but *held* gross profit (revenue − cost). The investor caught it
 when "2036 revenue" would not reconcile against the cost block. D25 fixed
-it: v8 splits the per-node and fleet money lines into explicit
+it: the cycle-2 schema splits the per-node and fleet money lines into explicit
 ``revenue_*`` / ``cost_*`` / ``gross_profit_*`` fields.
 
 This module guards that the bug cannot return. Three families:
 
-1. **The old field is gone** — no field path anywhere in a v8
-   ``ValuationOutput`` is named ``annual_rev_per_node_musd``.
-2. **revenue ≠ profit** — a field named ``revenue_*`` carries revenue,
+1. **The old field is gone**: no field path anywhere in the space artifact
+   (a ``SpaceModelOutput``) is named ``annual_rev_per_node_musd``.
+2. **revenue ≠ profit**: a field named ``revenue_*`` carries revenue,
    not profit. Proven algebraically: ``revenue − gross_profit == cost``
    for every band, and ``revenue > gross_profit`` (since R > 1). A
    conflated field would break this identity.
-3. **Unit-token consistency** — a field-name token implies its unit:
+3. **Unit-token consistency**: a field-name token implies its unit:
    ``kW`` not ``MW`` for power, ``t`` vs ``kg`` not swapped for mass.
    Checked against the generated ``meta.data_dictionary`` units and the
    per-cell ``ProvenanceCell.unit`` strings.
@@ -24,39 +24,35 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 import pytest
 
-from data_center.config import load_config
-from data_center.engine import run_valuation
+from data_center.output import SpaceModelOutput
 
-# The packaged default scenario, resolved relative to this test file.
-_DEFAULT_YAML = Path(__file__).resolve().parents[2] / "scenarios" / "default.yaml"
-
-# The cycle-1 misnamed field — must not exist anywhere in v8 output.
+# The cycle-1 misnamed field: it must not exist anywhere in the output.
 _BANNED_FIELD = "annual_rev_per_node_musd"
 
 # Unit families a field-name token must map to. A token in the field name
 # (e.g. `kw`, `_t`, `kg`) constrains the declared unit to one of these.
-_KW_UNITS = {"kW", "kW/pkg", "PFLOPS/kW", "MUSD/kW", "t/kW"}
+# Unit families, spelled as the cells and declared fields spell them (the
+# data dictionary reads each cell's own unit, so "kW/package" not "kW/pkg").
+_KW_UNITS = {"kW", "kW/package", "PFLOPS/kW", "MUSD/kW", "t/kW"}
 _TONNE_UNITS = {"t"}
-_KG_UNITS = {"kg", "kg/m2", "kg/pkg"}
+_KG_UNITS = {"kg", "kg/m2", "kg/package"}
 
 # Tolerance for the revenue − profit == cost algebraic identity (floats).
 _REL_TOL = 1e-9
 
 
 @pytest.fixture(scope="module")
-def default_output_json() -> dict[str, Any]:
-    """The default scenario, run through the engine and dumped to a dict.
+def default_output_json(default_output: SpaceModelOutput) -> dict[str, Any]:
+    """The session's default run (``conftest.py``), dumped to a dict.
 
     The JSON-shaped dict (via ``model_dump_json`` → ``json.loads``) is
     what the CLI's ``--json`` path emits; the naming checks walk it.
     """
-    output = run_valuation(load_config(str(_DEFAULT_YAML)))
-    parsed: dict[str, Any] = json.loads(output.model_dump_json())
+    parsed: dict[str, Any] = json.loads(default_output.model_dump_json())
     return parsed
 
 
@@ -65,7 +61,7 @@ def _walk_field_paths(node: Any, prefix: str = "") -> Iterator[str]:
 
     Dict keys extend the path; list elements are walked under the same
     path (the index is not part of the name). Used to enumerate every
-    field name a v8 output exposes.
+    field name the output exposes.
     """
     if isinstance(node, dict):
         for key, value in node.items():
@@ -78,12 +74,12 @@ def _walk_field_paths(node: Any, prefix: str = "") -> Iterator[str]:
 
 
 # --------------------------------------------------------------------------
-# Family 1 — the cycle-1 misnamed field is gone
+# Family 1: the cycle-1 misnamed field is gone
 # --------------------------------------------------------------------------
 
 
 def test_banned_field_absent_everywhere(default_output_json: dict[str, Any]) -> None:
-    """No field path in a v8 output is named ``annual_rev_per_node_musd``."""
+    """No field path in the output is named ``annual_rev_per_node_musd``."""
     offending = [p for p in _walk_field_paths(default_output_json) if p.endswith(_BANNED_FIELD)]
     assert offending == [], f"cycle-1 misnamed field resurfaced at: {offending}"
 
@@ -98,7 +94,7 @@ def test_banned_field_absent_in_physical_and_business_years(
 
 
 # --------------------------------------------------------------------------
-# Family 2 — revenue ≠ profit (the D25 bug, proven algebraically)
+# Family 2: revenue ≠ profit (the D25 bug, proven algebraically)
 # --------------------------------------------------------------------------
 
 
@@ -108,16 +104,16 @@ def test_per_node_revenue_is_not_profit(default_output_json: dict[str, Any], ban
 
     For every year and band: ``revenue − gross_profit == cost`` (the
     identity that holds only if the revenue field really is revenue) and
-    ``revenue > gross_profit`` (R > 1). The cycle-1 bug — a revenue-named
-    field holding profit — would fail both.
+    ``revenue > gross_profit`` (R > 1). The cycle-1 bug (a revenue-named
+    field holding profit) would fail both.
     """
     for year, cells in default_output_json["physical"]["years"].items():
         revenue = cells[f"revenue_annual_per_node_musd_{band}"]["value"]
         profit = cells[f"gross_profit_annual_per_node_musd_{band}"]["value"]
         cost = cells["cost_annual_per_node_musd"]["value"]
         assert revenue == pytest.approx(profit + cost, rel=_REL_TOL), (
-            f"physical.years.{year} ({band}): revenue != profit + cost — "
-            f"the revenue field is mislabelled"
+            f"physical.years.{year} ({band}): revenue != profit + cost "
+            f"(the revenue field is mislabelled)"
         )
         assert revenue >= profit, (
             f"physical.years.{year} ({band}): revenue < gross_profit (R>1 violated)"
@@ -155,7 +151,7 @@ def test_revenue_and_profit_fields_are_distinct_names(
 
 
 # --------------------------------------------------------------------------
-# Family 3 — unit-token consistency (kW ≠ MW, t ≠ kg)
+# Family 3: unit-token consistency (kW ≠ MW, t ≠ kg)
 # --------------------------------------------------------------------------
 
 
@@ -165,7 +161,7 @@ def _data_dictionary_units(output: dict[str, Any]) -> dict[str, str]:
 
 
 def test_no_field_name_uses_megawatts(default_output_json: dict[str, Any]) -> None:
-    """No field name uses an ``mw`` / megawatt token — power is in kW.
+    """No field name uses an ``mw`` / megawatt token: power is in kW.
 
     The model is power-budgeted in kW per package and per node; an ``mw``
     token in a field name would be a unit-scale error.
@@ -192,7 +188,7 @@ def test_kw_named_fields_have_kw_units(default_output_json: dict[str, Any]) -> N
 def test_mass_field_tonne_vs_kg_tokens_match_units(
     default_output_json: dict[str, Any],
 ) -> None:
-    """A ``_t`` mass field carries tonnes; a ``kg`` field carries kg — not swapped.
+    """A ``_t`` mass field carries tonnes; a ``kg`` field carries kg, not swapped.
 
     Mass appears at two scales: per-node in tonnes (``mass_per_node_t``)
     and per-package in kg. A field-name token of ``t`` or ``kg`` must
@@ -203,7 +199,7 @@ def test_mass_field_tonne_vs_kg_tokens_match_units(
         leaf = path.rsplit(".", 1)[-1].lower()
         if "generation_slopes" in path:
             continue
-        # Token-split so `kg` matches only as a whole token — `kw_per_pkg`
+        # Token-split so `kg` matches only as a whole token: `kw_per_pkg`
         # contains the substring "kg" inside "pkg" but is not a mass field.
         tokens = leaf.split("_")
         if tokens[-1] == "t":  # trailing `_t` => tonnes
@@ -217,14 +213,14 @@ def test_per_cell_unit_strings_match_field_name_tokens(
 ) -> None:
     """Per-year ProvenanceCell ``unit`` strings agree with their field-name tokens.
 
-    Walks ``physical.years`` / ``business.years`` — the leaf cells the
-    naming bug lived in — and checks each cell's own ``unit`` against the
+    Walks ``physical.years`` / ``business.years`` (the leaf cells the
+    naming bug lived in) and checks each cell's own ``unit`` against the
     field name: ``kw`` ⇒ kW-family, trailing ``_t`` ⇒ tonnes,
     trailing ``_musd`` ⇒ MUSD, trailing ``_pct`` ⇒ percent.
     """
 
     def _check(field: str, node: dict[str, Any], where: str) -> None:
-        """Check one node — a cell against its name, or recurse a sub-object.
+        """Check one node: a cell against its name, or recurse a sub-object.
 
         A leaf cell carries a ``unit`` key; a sub-object (e.g.
         ``cost_breakdown``) is a dict of cells and is walked recursively.

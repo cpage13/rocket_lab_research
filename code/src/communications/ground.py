@@ -1,14 +1,17 @@
 """The comms two-regime ground comparison: the model's own cellular space cost vs ground.
 
 This is the SLIM, clean-rewrite ground module. It compares THIS model's OWN
-COMPUTED cellular annual cost per subscriber (the space side, a plain ``float``
-supplied by the caller, computed by Phase 3 as steady-state annual cost divided by
-subscribers served) against TWO marked CELLULAR-ground baselines, the dense-served
-incumbent-marginal cost and the sparse fresh-build cost, supplied as a
+COMPUTED cellular cost per subscriber (the space side, a plain ``float`` the caller
+supplies together with the basis label it is on, for example the engine's annualized
+fleet cost over the served people; no production caller exists yet) against TWO
+marked CELLULAR-ground baselines, the dense-served incumbent-marginal cost and the
+sparse fresh-build cost, supplied as a
 :class:`communications.config.GroundInterfaceDials` interface block. The space side
 is NEVER Starlink's disclosed broadband per-subscriber number (that is a
 broadband-product figure for a different product and a different cost stack); only
-the model's own computed cellular figure feeds this comparison.
+the model's own computed cellular figure feeds this comparison. A zero space cost
+(an undefined figure, for example a run that serves nobody) yields ``None`` ratios,
+never a 0.0 or infinite ratio.
 
 It mirrors the data-center ``ground.py`` ratio mechanics exactly (the total/total
 ratio, the 0.5x / 2.0x materiality bands, the ``_safe_ratio`` zero-denominator
@@ -131,8 +134,8 @@ class CommsRegimeComparison:
             ground/orbital convention). ``None`` if the baseline was not supplied
             or the space cost is zero.
         space_to_ground_ratio: The inverse (space cost over ground cost), for
-            convenience. ``None`` under the same conditions, or if the ground cost
-            is zero.
+            convenience. ``None`` under the same conditions (so a zero space cost
+            never reads as a 0.0 ratio), or if the ground cost is zero.
         absolute_delta_usd: Ground cost minus space cost, USD/sub/yr. ``None`` if
             the baseline was not supplied.
         conclusion_label: The :class:`GroundConclusionLabel` value for this
@@ -239,7 +242,9 @@ def _build_regime_comparison(
     When this regime's ground baseline is ``None`` (not supplied), the result is an
     absent face: the ground cost and every derived field are ``None``. Otherwise the
     ground/space ratio, its inverse, the verdict label, and the per-regime
-    "space is cheaper at all" boolean are computed against the shared space cost.
+    "space is cheaper at all" boolean are computed against the shared space cost. A
+    zero space cost makes the comparison undefined: both ratios, the label, and the
+    boolean are ``None`` (the inverse is not reported as 0.0).
 
     Args:
         regime: Which density regime this is (SPARSE or DENSE).
@@ -264,8 +269,12 @@ def _build_regime_comparison(
     ground_to_space_ratio = _safe_ratio(
         ground_cost_per_subscriber_usd, space_cost_per_subscriber_usd
     )
-    space_to_ground_ratio = _safe_ratio(
-        space_cost_per_subscriber_usd, ground_cost_per_subscriber_usd
+    # A zero space cost leaves the comparison undefined: the inverse follows the
+    # forward ratio to None rather than reporting a 0.0 ratio.
+    space_to_ground_ratio = (
+        None
+        if ground_to_space_ratio is None
+        else _safe_ratio(space_cost_per_subscriber_usd, ground_cost_per_subscriber_usd)
     )
     label = _conclusion_label(ground_to_space_ratio)
     space_is_cheaper = (
@@ -305,9 +314,11 @@ def build_comms_ground_comparison(
     is the niche).
 
     Args:
-        space_cost_per_subscriber_usd: The model's own computed cellular annual cost
-            per subscriber, USD/sub/yr (steady-state annual cost / subscribers
-            served, from Phase 3).
+        space_cost_per_subscriber_usd: The model's own computed cellular cost per
+            subscriber, USD/sub/yr, on the basis named by ``space_basis`` (for an
+            annual basis, the engine's annualized fleet cost over the served people;
+            the engine's final-year cash figure is a lumpy cohort-timed line, not an
+            annual basis). Zero yields ``None`` ratios.
         space_basis: The basis label the space figure is on (e.g.
             ``"annual_cost_per_subscriber"``); must match ``ground.basis``.
         ground: The two-regime ground interface block, or ``None``. When ``None``,

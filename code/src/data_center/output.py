@@ -1,59 +1,60 @@
-"""v8 ``ValuationOutput`` — the cycle-2 output JSON schema.
+"""The space artifact's schema: :class:`SpaceModelOutput` and its blocks.
 
 This module is the single source of truth for the shape of the
-``rklb-value <scenario> --json`` artifact. The v8 schema is a clean break
-from the cycle-1 v7 shape (D24, no back-compat shim). The top-level
-structure has exactly five keys (D21):
+``rklb-value <scenario> --json`` artifact, versioned by
+:data:`SCHEMA_VERSION`. Its cycle-2 layout was a clean break from the
+cycle-1 v7 shape (D24, no back-compat shim). The top-level structure has
+exactly five keys (D21):
 
-* ``metadata`` — the run's identity (schema version, base year, horizon,
+* ``metadata``: the run's identity (schema version, base year, horizon,
   the three investor-locked enums, generated-at timestamp).
-* ``inputs`` — the gospel anchors, the post-Feynman slopes, and the v8
+* ``inputs``: the gospel anchors, the post-Feynman slopes, and the
   dial blocks (cadence / fleet / volume / R-band / launch-cost) plus the
   per-generation list.
-* ``physical`` — the per-year per-node trajectory, each leaf wrapped in a
-  :class:`data_center.provenance.ProvenanceCell`.
-* ``business`` — the per-year living-fleet rollup, each leaf a
+* ``physical``: the per-year per-node trajectory, each leaf wrapped in a
+  :class:`common.provenance.ProvenanceCell`.
+* ``business``: the per-year living-fleet rollup, each leaf a
   ProvenanceCell. The cycle-1 ``summary`` block is dropped; its content
   lives here in ``business.years``.
-* ``meta`` — the engine-computed validation report, the introspection-built
+* ``meta``: the engine-computed validation report, the introspection-built
   data dictionary, the per-generation summary, and the ``query_examples``
   block (the cold-reader contract).
 
-Every BaseModel here is ``model_config = ConfigDict(frozen=True)`` — the
+Every BaseModel here is ``model_config = ConfigDict(frozen=True)``: the
 output is immutable once built; downstream renderers and serializers may
 read but not mutate.
 
 Per-year data is keyed by a JSON-string year (``YearString``, e.g.
-``"2036"``) in ``PhysicalBlock.years`` / ``BusinessBlock.years`` — this is
+``"2036"``) in ``PhysicalBlock.years`` / ``BusinessBlock.years``. This is
 what a cold agent's ``jq`` queries address (``.physical.years."2036"``).
 
 ``ValidationCheck`` / ``Severity`` are the cycle-1 types, reused verbatim
-for V1–V17 — cycle 2 does **not** define a new validation type.
+for the 16 wired rules (V1-V10 and V12-V17; V11 retired): cycle 2 does
+**not** define a new validation type.
 
 References:
-    strategy_05_20_cycle2.md § 3 — the v8 schema.
-    plan_05_20_cycle2.md § 5 T50 — the v8 ``ValuationOutput`` sketch.
+    strategy_05_20_cycle2.md § 3: the v8 schema.
+    plan_05_20_cycle2.md § 5 T50: the v8 ``SpaceModelOutput`` sketch.
 """
 
 from __future__ import annotations
 
+import logging
+from enum import StrEnum
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from common.input_manifest import SourceStatus
 from common.meta import (
     DataDictEntry,
-    FieldKind,
     FormulaDefinition,
-    QueryAppliesTo,
     QueryExample,
-    Severity,
     SourceStatusSummary,
-    ValidationCheck,
     ValidationReport,
     ValidationResult,
-    ValidationSeverity,
 )
+from common.provenance import ProvenanceCell, YearString
 from data_center.config import (
     OperatorModel,
     RadiatorArchitecture,
@@ -61,15 +62,28 @@ from data_center.config import (
 )
 from data_center.constants import MAX_FY, MAX_HORIZON_YEARS, MIN_FY, MIN_HORIZON_YEARS
 from data_center.input_manifest import InputManifest
-from data_center.provenance import ProvenanceCell, YearString
 
-# The v8 output JSON schema version. The single place the schema-version
-# string is defined; mirrors ``GROUND_SCHEMA_VERSION`` in ``ground.py``.
-SCHEMA_VERSION: Final[str] = "v8"
+logger = logging.getLogger(__name__)
 
-# The cold-reader contract enums and summary type (FieldKind, Severity,
-# ValidationSeverity, QueryAppliesTo, SourceStatusSummary) are venture-agnostic
-# and now live in :mod:`common.meta`; they are imported above.
+SCHEMA_VERSION: Final[str] = "v9"
+"""The space artifact's schema version, the single place it is defined (mirrors
+``GROUND_SCHEMA_VERSION`` in ``ground.py``). ``v9`` (2026-09-23) removes the
+duplicate ``business.years[].kw_on_orbit`` and ``pf_on_orbit`` (same values
+and formulas as ``kw_living_fleet`` and ``pf_living_fleet``, which stay) and
+publishes the data dictionary's ``source_class`` in lowercase
+(``input`` / ``constant`` / ``derived``). ``v8`` was the cycle-2 five-block
+schema."""
+
+YEAR_UNIT: Final[str] = "year"
+"""Declared data-dictionary unit for a calendar-year field (a non-cell leaf
+declares its unit once in ``json_schema_extra``; cells carry their own)."""
+
+YEARS_UNIT: Final[str] = "years"
+"""Declared data-dictionary unit for a duration in years."""
+
+# The cold-reader contract types the meta block holds (the validation, data-
+# dictionary, query-example, and formula-definition models) live in
+# :mod:`common.meta`; import them from there.
 
 
 # ---------------------------------------------------------------------------
@@ -77,10 +91,30 @@ SCHEMA_VERSION: Final[str] = "v8"
 # ---------------------------------------------------------------------------
 
 
-class RunMetadata(BaseModel):
-    """The ``metadata`` block — the run's identity.
+class ArtifactRole(StrEnum):
+    """The role stamped in an artifact's ``metadata.artifact_role``.
 
-    Carries the v8 schema version, the base year + horizon, the three
+    One vocabulary for the space artifact, the ground reference, and the CLI:
+
+    * ``DRAFT``: a scratch run (the CLI's report and ``--json`` modes, the
+      API default); a ground reference built from a draft is a draft too.
+    * ``PROMOTED_DEFAULT`` / ``PROMOTED_NAMED``: a space artifact promoted as
+      the public default or under a named stem.
+    * ``PROMOTED_GROUND_DEFAULT`` / ``PROMOTED_GROUND_NAMED``: the ground
+      reference built from such a promoted space artifact.
+    """
+
+    DRAFT = "draft"
+    PROMOTED_DEFAULT = "promoted_default"
+    PROMOTED_NAMED = "promoted_named"
+    PROMOTED_GROUND_DEFAULT = "promoted_ground_default"
+    PROMOTED_GROUND_NAMED = "promoted_ground_named"
+
+
+class RunMetadata(BaseModel):
+    """The ``metadata`` block: the run's identity.
+
+    Carries the artifact's schema version, the base year + horizon, the three
     investor-locked enums (workload / operator / radiator architecture),
     the deployment philosophy, and an ISO-8601 generated-at timestamp.
     The enum locks + base year + horizon mirror
@@ -92,7 +126,10 @@ class RunMetadata(BaseModel):
 
     schema_version: str = Field(
         ...,
-        description="The output JSON schema version (e.g. 'v8').",
+        description=(
+            "The artifact's JSON schema version ('v9' for the space model, "
+            "'ground-v2' for the ground reference)."
+        ),
     )
     scenario_name: str = Field(
         ...,
@@ -103,6 +140,7 @@ class RunMetadata(BaseModel):
         description="Calendar year corresponding to model year 0.",
         ge=MIN_FY,
         le=MAX_FY,
+        json_schema_extra={"unit": YEAR_UNIT},
     )
     horizon_years: int = Field(
         ...,
@@ -112,6 +150,7 @@ class RunMetadata(BaseModel):
         ),
         ge=MIN_HORIZON_YEARS,
         le=MAX_HORIZON_YEARS,
+        json_schema_extra={"unit": YEARS_UNIT},
     )
     workload_type: WorkloadType = Field(
         ...,
@@ -141,9 +180,12 @@ class RunMetadata(BaseModel):
         ...,
         description="Installed model package version, when available.",
     )
-    artifact_role: str = Field(
+    artifact_role: ArtifactRole = Field(
         ...,
-        description="Artifact role such as draft, promoted_default, or promoted_named.",
+        description=(
+            "Artifact role: draft, promoted_default, promoted_named, or (on a "
+            "ground reference) promoted_ground_default / promoted_ground_named."
+        ),
     )
     source_scenario_path: str = Field(
         ...,
@@ -152,12 +194,12 @@ class RunMetadata(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Per-year blocks — physical (per-node) and business (fleet)
+# Per-year blocks: physical (per-node) and business (fleet)
 # ---------------------------------------------------------------------------
 
 
 class CostBreakdownBlock(BaseModel):
-    """The per-node cost decomposition — the five build/launch lines + total.
+    """The per-node cost decomposition: the five build/launch lines + total.
 
     Surfaces the cost intermediates the engine's
     :class:`data_center.engine.CostBreakdown` computes, so a cold agent can
@@ -196,12 +238,12 @@ class CostBreakdownBlock(BaseModel):
 class PhysicalYear(BaseModel):
     """One model year's per-node physical + per-node economics state.
 
-    Every field is a :class:`ProvenanceCell` — value plus the formula,
-    units, upstream paths, and sources that produced it — except
+    Every field is a :class:`ProvenanceCell` (value plus the formula,
+    units, upstream paths, and sources that produced it) except
     ``cost_breakdown``, which is a :class:`CostBreakdownBlock` of six cells.
     The per-node revenue / gross-profit lines are split into explicit
-    ``_central`` / ``_low`` / ``_high`` fields (one per R-band trajectory)
-    — the cycle-1 ``annual_rev_per_node_musd`` field (which conflated
+    ``_central`` / ``_low`` / ``_high`` fields (one per R-band trajectory).
+    The cycle-1 ``annual_rev_per_node_musd`` field (which conflated
     revenue and profit) is gone (D25).
     """
 
@@ -210,6 +252,7 @@ class PhysicalYear(BaseModel):
     year: int = Field(
         ...,
         description="Calendar year for this physical record.",
+        json_schema_extra={"unit": YEAR_UNIT},
     )
     frontier_generation: ProvenanceCell = Field(
         ...,
@@ -299,7 +342,7 @@ class BusinessYear(BaseModel):
     Every field is a :class:`ProvenanceCell`. The fleet revenue / gross
     profit / margin lines are split into explicit ``_central`` / ``_low``
     / ``_high`` fields (one per R-band trajectory). This block carries
-    what the cycle-1 ``summary`` block used to surface — but per-year,
+    what the cycle-1 ``summary`` block used to surface, but per-year,
     where it belongs.
     """
 
@@ -308,6 +351,7 @@ class BusinessYear(BaseModel):
     year: int = Field(
         ...,
         description="Calendar year for this business record.",
+        json_schema_extra={"unit": YEAR_UNIT},
     )
     launches: ProvenanceCell = Field(
         ...,
@@ -319,7 +363,7 @@ class BusinessYear(BaseModel):
     )
     living_fleet: ProvenanceCell = Field(
         ...,
-        description="Living fleet count under the 5-year hard cliff (D1).",
+        description="Living fleet count under the service_life_years hard cliff (D1).",
     )
     kw_deployed_this_year: ProvenanceCell = Field(
         ...,
@@ -329,10 +373,6 @@ class BusinessYear(BaseModel):
         ...,
         description="Living-fleet node power in this year, kW.",
     )
-    kw_on_orbit: ProvenanceCell = Field(
-        ...,
-        description="Total kW on orbit (living fleet).",
-    )
     pf_deployed_this_year: ProvenanceCell = Field(
         ...,
         description="Newly deployed node compute in this year, PFLOPS.",
@@ -340,10 +380,6 @@ class BusinessYear(BaseModel):
     pf_living_fleet: ProvenanceCell = Field(
         ...,
         description="Living-fleet node compute in this year, PFLOPS.",
-    )
-    pf_on_orbit: ProvenanceCell = Field(
-        ...,
-        description="Total PFLOPS on orbit (living fleet).",
     )
     launch_cost_this_year_musd: ProvenanceCell = Field(
         ...,
@@ -404,7 +440,7 @@ class BusinessYear(BaseModel):
 
 
 class PhysicalBlock(BaseModel):
-    """The ``physical`` block — the per-year per-node trajectory.
+    """The ``physical`` block: the per-year per-node trajectory.
 
     ``years`` is keyed by JSON-string year (``"2026"`` .. ``"2036"``);
     a cold agent addresses one year as ``.physical.years."2036"``.
@@ -419,7 +455,7 @@ class PhysicalBlock(BaseModel):
 
 
 class BusinessBlock(BaseModel):
-    """The ``business`` block — the per-year living-fleet rollup.
+    """The ``business`` block: the per-year living-fleet rollup.
 
     ``years`` is keyed by JSON-string year; a cold agent addresses one
     year as ``.business.years."2036"``.
@@ -434,33 +470,63 @@ class BusinessBlock(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Meta block — validation, data dictionary, generation summary, query examples
+# Meta block: validation, data dictionary, generation summary, query examples
 # ---------------------------------------------------------------------------
 
 
 class GenerationSummary(BaseModel):
-    """One entry of the ``meta.generations_dictionary`` — a compact gen view.
+    """One entry of the ``meta.generations_dictionary``: a compact gen view.
 
     A flattened, render-friendly view of one GPU generation: the headline
     per-package physical + cost numbers a reader scans without walking the
-    full ``inputs.generations`` list.
+    full ``inputs.config.generations`` list.
     """
 
     model_config = ConfigDict(frozen=True)
 
     name: str = Field(..., description="The generation's human label (e.g. 'Feynman').")
-    year_available: float = Field(..., description="Approximate calendar year of availability.")
-    die_count: int = Field(..., description="Number of dies on the package (D8 GPU = package).")
-    kw_per_pkg: float = Field(..., description="All-in per-package electrical power, kW.")
-    pkg_mass_kg: float = Field(..., description="All-in per-package mass, kg.")
-    pkg_cost_musd: float = Field(..., description="Per-package price, $M.")
-    pf_per_pkg: float = Field(..., description="Dense-FP4 PFLOPS per package.")
-    source_class: str = Field(..., description="Source confidence class for this generation.")
+    year_available: float = Field(
+        ...,
+        description="Approximate calendar year of availability.",
+        json_schema_extra={"unit": YEAR_UNIT},
+    )
+    die_count: int = Field(
+        ...,
+        description="Number of dies on the package (D8 GPU = package).",
+        json_schema_extra={"unit": "dies/package"},
+    )
+    kw_per_pkg: float = Field(
+        ...,
+        description="All-in per-package electrical power, kW.",
+        json_schema_extra={"unit": "kW/package"},
+    )
+    pkg_mass_kg: float = Field(
+        ...,
+        description="All-in per-package mass, kg.",
+        json_schema_extra={"unit": "kg/package"},
+    )
+    pkg_cost_musd: float = Field(
+        ...,
+        description="Per-package price, $M.",
+        json_schema_extra={"unit": "MUSD/package"},
+    )
+    pf_per_pkg: float = Field(
+        ...,
+        description="Dense-FP4 PFLOPS per package.",
+        json_schema_extra={"unit": "PFLOPS/package"},
+    )
+    source_class: SourceStatus = Field(
+        ...,
+        description=(
+            "Public source status of this generation (the SourceStatus vocabulary "
+            "the generation input cells use)."
+        ),
+    )
     source_doc_path: str = Field(..., description="Durable research source path for this entry.")
 
 
 class MetaBlock(BaseModel):
-    """The ``meta`` block — validation, data dictionary, generation summary,
+    """The ``meta`` block: validation, data dictionary, generation summary,
     and the ``query_examples`` cold-reader contract.
     """
 
@@ -468,7 +534,9 @@ class MetaBlock(BaseModel):
 
     validation: ValidationReport = Field(
         ...,
-        description="The engine-computed V-rule report (V1..V17).",
+        description=(
+            "The engine-computed V-rule report: 16 rules, V1-V10 and V12-V17 (V11 retired)."
+        ),
     )
     data_dictionary: list[DataDictEntry] = Field(
         ...,
@@ -483,7 +551,11 @@ class MetaBlock(BaseModel):
     )
     validation_results: list[ValidationResult] = Field(
         ...,
-        description="Public pass/warn/fail validation entries.",
+        description=(
+            "The one public pass/warn/fail verdict list: every V-rule, the model "
+            "invariants, and (for the canonical default scenario only) the "
+            "default guards."
+        ),
     )
     generations_dictionary: list[GenerationSummary] = Field(
         ...,
@@ -512,22 +584,22 @@ class MetaBlock(BaseModel):
 
 
 class SpaceModelOutput(BaseModel):
-    """The complete output of one valuation run — the v8 artifact.
+    """The complete output of one valuation run: the space artifact.
 
-    Top-level shape, in strategy § 3.1 order (D21 — two data sections plus
+    Top-level shape, in strategy § 3.1 order (D21: two data sections plus
     meta, no cycle-1 ``summary``):
 
-    1. ``metadata`` — the run's identity (schema version, base year,
+    1. ``metadata``: the run's identity (schema version, base year,
        horizon, the three investor-locked enums, generated-at timestamp).
-    2. ``inputs`` — gospel anchors + slopes + the v8 dial blocks +
+    2. ``inputs``: gospel anchors + slopes + the dial blocks +
        the per-generation list.
-    3. ``physical`` — the per-year per-node trajectory (ProvenanceCells).
-    4. ``business`` — the per-year living-fleet rollup (ProvenanceCells).
-    5. ``meta`` — validation report, data dictionary, generation summary,
+    3. ``physical``: the per-year per-node trajectory (ProvenanceCells).
+    4. ``business``: the per-year living-fleet rollup (ProvenanceCells).
+    5. ``meta``: validation report, data dictionary, generation summary,
        query_examples.
 
-    Frozen — once built the artifact is immutable. Serialize via
-    ``model_dump_json(indent=2)``.
+    Frozen: once built the artifact is immutable. Serialize via
+    :func:`common.file_io.render_artifact_json`.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -554,31 +626,18 @@ class SpaceModelOutput(BaseModel):
     )
 
 
-ValuationOutput = SpaceModelOutput
-"""Historical internal name for :class:`SpaceModelOutput`."""
-
-
 __all__ = [
     "SCHEMA_VERSION",
+    "YEARS_UNIT",
+    "YEAR_UNIT",
+    "ArtifactRole",
     "BusinessBlock",
     "BusinessYear",
     "CostBreakdownBlock",
-    "DataDictEntry",
-    "FieldKind",
-    "FormulaDefinition",
     "GenerationSummary",
     "MetaBlock",
     "PhysicalBlock",
     "PhysicalYear",
-    "QueryAppliesTo",
-    "QueryExample",
     "RunMetadata",
-    "Severity",
     "SpaceModelOutput",
-    "SourceStatusSummary",
-    "ValidationCheck",
-    "ValidationResult",
-    "ValidationSeverity",
-    "ValidationReport",
-    "ValuationOutput",
 ]

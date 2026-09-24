@@ -1,4 +1,4 @@
-"""Tests for the provenance module — ProvenanceCell + FORMULAS + cell() factory.
+"""Tests for the provenance module: ProvenanceCell + FORMULAS + cell() factory.
 
 Locks the Phase 2 provenance infrastructure: the frozen ProvenanceCell /
 FormulaSpec models, the FORMULAS lookup table, and the cell() factory's
@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from data_center.provenance import (
+from common.provenance import (
     FORMULAS,
     FieldPath,
     FormulaSpec,
@@ -62,7 +62,7 @@ def test_cell_resolves_formula_text_from_formulas_table() -> None:
 
 
 def test_provenance_cell_is_frozen() -> None:
-    """ProvenanceCell is immutable — assigning a field raises."""
+    """ProvenanceCell is immutable: assigning a field raises."""
     c = cell(
         value=1.0,
         unit="-",
@@ -91,19 +91,19 @@ def test_cell_serializes_to_json() -> None:
     """A ProvenanceCell round-trips cleanly through model_dump_json."""
     c = cell(
         value=1.5,
-        unit="ratio",
-        formula_name="r_at_year_from_band_anchors",
-        uses=["inputs.r_band.central"],
-        sources=["R2"],
-        description="R at 2026",
+        unit="MUSD",
+        formula_name="revenue_annual_per_node_from_cost_and_r",
+        uses=['physical.years."2026".cost_annual_per_node_musd'],
+        sources=["REV-008"],
+        description="Revenue at 2026",
     )
     j = c.model_dump_json()
     assert '"value":1.5' in j
-    assert '"formula_name":"r_at_year_from_band_anchors"' in j
+    assert '"formula_name":"revenue_annual_per_node_from_cost_and_r"' in j
 
 
 def test_field_path_is_alias_for_str() -> None:
-    """FieldPath is a str alias — a concrete path is a real str."""
+    """FieldPath is a str alias: a concrete path is a real str."""
     p: FieldPath = 'physical.years."2036".kw_per_node'
     assert isinstance(p, str)
 
