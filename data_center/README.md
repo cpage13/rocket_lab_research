@@ -75,7 +75,8 @@ Use `meta.query_examples` in the space JSON before writing a custom query. Every
 leaf under `physical.years` and `business.years` is a provenance cell with
 `value`, `unit`, `formula`, `uses`, `sources`, and `description`, and
 `inputs.assumption_index` traces each model dial back to its source. Agents
-should also read [../docs/agent-guide.md](../docs/agent-guide.md).
+should also read [../AGENTS.md](../AGENTS.md) and
+[../atlas/map.md](../atlas/map.md).
 
 Communications is a separate workstream with its own modeled application (the
 Iridium model); see [../communications/README.md](../communications/README.md).

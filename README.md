@@ -125,7 +125,8 @@ rklb_space_data_center/
 ├── communications/      # the communications application (Iridium model conclusion, assumptions, design, promoted models)
 ├── research/            # shared evidence wiki and source ledger
 ├── code/                # the model engine (rklb-value)
-└── docs/                # architecture intent, ADRs, agent guide
+├── atlas/               # the agent map: pieces, flows, invariants (start at AGENTS.md)
+└── docs/                # architecture decision records (ADRs)
 ```
 
 ## Running The Model

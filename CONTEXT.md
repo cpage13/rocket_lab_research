@@ -1,117 +1,134 @@
-# Project Context Glossary
+# Context: Rocket Lab Research
 
-This glossary defines the terms agents should use when working in this
-repository. It is deliberately short and operational: use these words in docs,
-code comments, source ledgers, and execution notes unless a future ADR changes
-the language.
+Live terms only; use these words in documents, code comments and notes.
 
-## Core Terms
+## Terms
 
-**Rocket Lab Research** - The repository-level umbrella for Rocket Lab-focused
-research, modeling, communications, and future rocket-related investigations.
-Two applications are modeled: the data-center investigation and the
-communications application (the Iridium model). Avoid: treating "data center"
-as the repository name or full scope.
+### application
+One modeled orbital business with its own folder of reviewed documents and promoted JSON.
+- **Avoid:** investigation, workstream
 
-**data-center investigation** - The current first Rocket Lab Research
-investigation, focused on Neutron-launched orbital AI inference as a business
-wedge. Avoid: using this term for future communications or rocket research
-tracks.
+### feasibility study
+An application's whole case: the thesis in `research/vision/`, its research, the model, the verdict.
 
-**space model** - The model estimating orbital AI-inference data-center
-capacity, cost, revenue, and margin under default or scenario assumptions.
-Avoid: "the calculator" when the public artifact or model contract is meant.
+### the Iridium model
+The communications family: the most the L-band Rocket Lab is acquiring with Iridium can carry.
+- **Avoid:** Model B, direct-to-cell model
+- **Relates to:** the three lanes, device class, saturation
 
-**ground reference model** - A comparison model estimating the cost of an
-equivalent ground data-center cohort over the anchor cohort's service life
-(five years at the default). Avoid: "ground truth"; this is a reference model,
-not a factual baseline.
+### High-Bandwidth Cellular Pure Play model
+The second communications family (cellular spectrum to phones), on hold; the equality tripwire runs on its defaults.
+- **Avoid:** Model A
 
-**deployed-year cohort** - The new capacity deployed in a single year, used as
-the anchor for the ground comparison. Do not confuse this with the living fleet
-or with total market capacity.
+### the three lanes
+Cellular (phones, cellular spectrum), broadband (a dish, Ku or Ka), MSS (devices, owned L-band): no claim crosses lanes.
 
-**living fleet** - The active on-orbit installed base after accounting for
-service life. It is cumulative active capacity, not same-year deployment.
+### space model
+The data-center model of orbital capacity, cost, revenue and margin by year (the space artifact).
+- **Avoid:** the calculator
 
-**node** - The modeled compute payload unit. A node contains GPU packages plus
-the supporting hardware it needs, but it is not the spacecraft bus. Avoid using
-"rack" for the product unit unless discussing historical research wording.
+### ground reference model
+The cost of a ground cohort equal to the anchor year's deployed-year cohort over its service life;
+the anchor year is the base year plus ten, or the window's last year.
+- **Avoid:** ground truth, parity
 
-**bus** - The spacecraft platform supporting the node, including power,
-thermal, communications, and orbital service functions as modeled.
+### node
+The data-center unit: GPU packages (NVIDIA's as-sold unit) and their hardware on a bus, one per launch.
+- **Avoid:** rack
 
-**default scenario** - The investor-selected assumption set in
-`code/scenarios/default.yaml`. It is reviewable, replaceable, and not a claim
-that Rocket Lab has announced those values.
+### deployed-year cohort versus living fleet
+A cohort is one year's deployment; the living fleet is the cohorts still in service, each retiring
+at once when its life ends (the cohort cliff).
 
-**Neutron-centered scenario** - A data-center investigation scenario that uses
-Neutron because it is the relevant Rocket Lab medium-lift vehicle for this
-scale today. Electron is not modeled for the data-center case because it is not
-a plausible fit for the required payload scale.
+### revenue multiple (R)
+The data-center rule: a cohort's revenue is its annualized full cost times R, so R sets the margin.
 
-**promoted model** - The reviewed JSON artifact copied into
-`data_center/models/...` for public use. The current default space artifact is
-`data_center/models/space/default.json`.
+### margin
+The percentage of revenue left after the full build and launch cost (in communications, replacement
+too) spread over the service life; a dollar figure is profit.
+- **Avoid:** gross margin, gross profit
 
-**source status** - The evidence classification attached to claims and inputs.
-The public taxonomy is `certified`, `sourced_estimate`, `derived_estimate`,
-`projection`, `extrapolation`, `scenario`, `placeholder`, and `stale`.
+### device class
+A device tier shown side by side with the others (IoT, phone class, small terminal, mounted
+terminal); the engine computes three radio tiers, and IoT counts devices, never people.
+- **Avoid:** phone users
 
-**static conclusion** - The human-reviewed conclusion tied to the current
-promoted default JSON. If the default scenario or promoted model changes, the
-static conclusion must be reviewed before it is treated as current.
+### frequency versus bandwidth
+Frequency is where the signal sits (about 1.6 GHz); bandwidth, the width held (about 8 MHz), sets capacity.
 
-## Capacity Language
+### coverage floor
+The fewest satellites for a quality link over the populated band (95 percent coverage).
 
-Use "deployed-year cohort" for a year's new orbital capacity, "living fleet"
-for active installed orbital capacity, and "market reference" for external data
-center capacity. Do not describe the modeled deployment as a market-share
-thesis. The default 2036 deployment is a small annual cohort measured against a
-large external market reference so readers can sanity-check scale.
+### saturation
+Where the owned spectrum serves no more people in a device class; an inherited cap stands in today.
+- **Avoid:** saturation cap, for a derived bound
+- **Relates to:** coverage floor, device class
 
-## Communications Terms
+### treadmill
+The communications fleet engine (also "build-and-hold"): build to the target, then replace each retiring cohort.
 
-**communications application** - The second modeled application: model
-families organized by communication paradigm under `communications/`. The
-first family is the Iridium model. Avoid: "Model B" except as a historical
-alias.
+### ARPU buckets (Sheet A)
+The published Iridium revenue case: four buckets (standard, premium, IoT, government) as mix shares
+of one capacity pool, times investor-set prices; the buckets are not the device classes.
 
-**the Iridium model** - The maximum practical performance of Iridium's owned
-L-band on a Neutron-launched next-generation fleet: the promoted default is
-`communications/models/iridium/default.json`. Avoid: calling it a
-direct-to-cell or unmodified-phone model; it is the MSS lane.
+### full sell-through
+Every seat sold: each slot the built fleet can serve is sold, so revenue rises with the fleet.
+- **Avoid:** take rate, adoption, capture
 
-**High-Bandwidth Cellular Pure Play model** - The kept second family (formerly
-Model A): phones on cellular spectrum versus ground. Its defaults are the
-shared config defaults; the equality tripwire test rides them.
+### all-in deployment
+A case at the full modeled Neutron cadence, run as if it had the shared launch ramp to itself.
+- **Relates to:** cadence spine, full sell-through
 
-**the three lanes** - Cellular (unmodified phones on cellular spectrum),
-broadband (a dish on Ku/Ka), and MSS (purpose-built or in-chipset devices on
-Iridium's owned L-band). Never blur them; a claim true in one lane is not a
-claim about another.
+### cadence spine
+The shared Neutron launch ramp and its cadence-indexed launch cost (`code/src/common/cadence.py`).
 
-**frequency versus bandwidth** - Frequency is where the signal sits on the
-dial (~1.6 GHz for Iridium); bandwidth is the width held (~8 MHz exclusive,
-10.5 coordinated). Capacity comes from the width, reach from the position.
-Avoid: quoting either number as if it were the other.
+### equality tripwire
+The frozen test that, on config defaults, the Iridium family and the cellular default share one trajectory.
+- **Avoid:** parity test (the data-center golden trajectory's name)
 
-**beam pool** - The per-beam data pool (bandwidth times spectral efficiency,
-5.2 Mbps at phone class on 8 MHz) and the hard per-person ceiling. The
-satellite total (about 150 beam reuses) multiplies people served, never one
-person's rate.
+### investor-set
+A value the investor chose as a model input, labeled apart from sourced fact (status `scenario`).
+- **Avoid:** investor-selected, creator-selected
 
-**subscribers versus IoT devices** - Subscribers are people; IoT are devices.
-They are counted separately and never summed. With the ARPU case on, the
-published IoT count derives from the revenue mix.
+### default scenario
+The scenario a model publishes as `default`, sourced values and investor-set dials together.
 
-**ARPU buckets (Sheet A)** - The published four-bucket revenue case (standard
-personal, premium tier, IoT devices, government): investor-set mix percentages
-over one capacity-anchored pool plus investor-set prices, all scaling with the
-satellite count. The premium tier is a price tier, never a platform adoption
-claim.
+### assumptions ledger
+An application's stated assumptions (the investor's "assumptions document"): a row per dial in
+communications; in the data center, a row per release-critical default or public claim.
 
-**equality tripwire** - The frozen test asserting the Iridium baseline and the
-cellular default share the same trajectory on config defaults. It proves the
-shared machinery; scenario overrides (the flat cost dials) deliberately do not
-touch it.
+### promoted JSON
+A model output file (the code's "artifact") that promotion writes into `data_center/models/` or `communications/models/`.
+- **Avoid:** promoted model, model JSON
+
+### provenance cell
+The wrapper on a data-center output value: value, unit, formula, uses, sources, status, description.
+
+### claim ID
+A row ID in `research/SOURCE_INDEX.md`, the source ledger (`RLDC-*`, `NTR-*`, `COMM-*` and others).
+- **Avoid:** claim ledger, source index (for the file)
+- **Relates to:** source status
+
+### source status
+The public evidence class of a claim or input; public documents never cite `placeholder` or `stale`.
+
+## Ambiguities
+
+- **gross.** The `gross_profit_*` fields, their query questions, the `--brief` headline and the
+  communications margin fields say gross for a full-cost figure; read as gross, margins compare wrongly.
+- **workstream, application.** Folder front pages say workstream, the charter and README mostly
+  application: two words split search and prose.
+- **saturation.** Public prose calls the inherited 2,000 cap the spectrum's saturation; agents
+  would quote a cap as physics.
+- **floor.** The coverage floor sizes the Iridium fleet; the conservative floor is the most conservative
+  published reading (such as the Iridium phone-class figures), shown but never leading; mixing them misreads both.
+- **terminal names.** Code's `terminal_class` is the mounted terminal; the small terminal is also
+  "the puck": side-by-side tables need one name per class.
+- **calculator.** Code docstrings call the data-center package a calculator; agents would call the
+  promoted JSON calculator output.
+- **founder.** Older research says founder; agents copy it, and the person is the investor.
+- **rack.** Older research calls the unit a rack; agents would size it in racks, not GPU packages.
+- **fleet, in communications.** The fleet target, the built fleet (the margin's basis) and the
+  living fleet differ when a build falls short; mixing them misstates the margin.
+- **source class, source status.** Constants use source classes (`INVESTOR_SET`, `ESTIMATE`), the
+  ledgers source statuses; they do not map one to one, so never quote one as the other.

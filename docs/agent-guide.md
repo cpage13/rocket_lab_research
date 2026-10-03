@@ -1,5 +1,9 @@
 # Agent Guide
 
+> **Migrated.** This guide's agent content now lives in `AGENTS.md` (the
+> charter) and `atlas/map.md`, with one page per piece in `atlas/pieces/`.
+> This file is marked for removal; read those instead.
+
 This guide is for future coding or analysis agents working in Rocket Lab
 Research. The repository-level umbrella is broader than the current
 data-center workstream; the first public investigation is the
@@ -25,7 +29,7 @@ Start with this path before editing or interpreting claims:
   `communications/assumptions.md` and `communications/design.md` beside them.
 - `research/README.md` for the research wiki front door.
 - `code/README.md` for run, promote, test, and query commands.
-- `docs/architecture-intent.md` for system invariants.
+- `atlas/map.md` for system invariants.
 - Relevant ADRs under `docs/adr/` before changing public artifact policy.
 
 The root repository is Rocket Lab Research. TWO applications are modeled and

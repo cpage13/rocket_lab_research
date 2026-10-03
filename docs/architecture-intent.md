@@ -1,5 +1,10 @@
 # Architecture Intent
 
+> **Migrated.** What and why now live in `AGENTS.md` (the charter); the
+> invariants and flows in `atlas/map.md`; each piece's state, open concerns
+> and tests in `atlas/pieces/`. This file is marked for removal; read those
+> instead.
+
 This repository is the agent-first research and modeling system for Rocket Lab
 Research. The repository-level umbrella covers Rocket Lab-focused research,
 communications, and future rocket-related investigations. Two applications are
@@ -140,9 +145,9 @@ Static docs:
 - `communications/design.md`
 - `communications/assumptions.md`
 - `communications/conclusion.md`
-- `docs/architecture-intent.md`
+- `AGENTS.md`
+- `atlas/map.md` and `atlas/pieces/*.md`
 - `docs/adr/*.md`
-- `docs/agent-guide.md`
 
 Dynamic model artifacts:
 

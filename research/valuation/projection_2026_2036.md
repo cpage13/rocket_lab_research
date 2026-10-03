@@ -10,8 +10,8 @@
 > **Contract note (2026-09-23).** The model contract this file describes has
 > since changed: 16 V-rules now run (V11 `no_legacy_r_scalar` was removed),
 > the central R band is flat at 1.5x, and the radiator and cost dials were
-> rebased 2026-07-14; read `docs/agent-guide.md` and `code/README.md` for the
-> current contract.
+> rebased 2026-07-14; read `atlas/pieces/data-center-model.md` and
+> `code/README.md` for the current contract.
 
 > **Path note (2026-05-25).** This projection was first drafted against an
 > earlier calculator location. The current Python generator lives under `code/`,
@@ -31,8 +31,8 @@ the retired path as current navigation.
 
 > **Historical path warning.** The paragraph above describes the original
 > generator contract for this artifact. For current work, read
-> `docs/agent-guide.md`, `code/README.md`, and the promoted JSON query examples
-> before quoting or regenerating values.
+> `atlas/pieces/promotion.md`, `code/README.md`, and the promoted
+> JSON query examples before quoting or regenerating values.
 
 ## What this projects (read this first)
 
