@@ -171,8 +171,14 @@ _WINDOW_MARGIN_CELLS: Final[int] = 1
 cell whose centre lies in view is never cut off by rounding."""
 
 _WINDOW_LATITUDE_CAP_DEG: Final[float] = 89.0
-"""The latitude a search window's width is computed at when the view reaches nearer a
-pole, so the window stays finite (the curve's pinned convention)."""
+"""The latitude from which a search window takes every column: a view's span in longitude
+is its width over the cosine of its poleward edge's latitude, which grows without bound
+toward a pole, so a satellite whose view reaches this latitude searches the whole turn. It
+decides no pair (every pair in view is found either way); it bounds the search's work."""
+
+_WINDOW_SIDES: Final[int] = 2
+"""A search window reaches as many columns east of its satellite's column as west, so one
+turn of longitude takes half the grid's columns (rounded up) on each side."""
 
 _COSINE_BOUNDS: Final[tuple[float, float]] = (-1.0, 1.0)
 """A cosine's range: a dot product of unit vectors is clipped into it before the arccos,
@@ -678,10 +684,13 @@ def _pairs_in_view(
 ) -> _Pairs:
     """Return every pair whose cell centre sees its satellite above the mask.
 
-    Each satellite searches a window of grid cells around the cell under it, wide enough to
-    hold its whole view at the window's poleward edge, and keeps the demand cells within
-    the central-angle limit. A window can reach a cell twice (rows clipped at a pole, or
-    columns wrapped past the antimeridian), so each pair is kept once.
+    Each satellite searches a window of grid cells around the cell under it: every row the
+    view reaches, and the columns the view spans at the window's poleward edge, plus a
+    margin; when the view reaches :data:`_WINDOW_LATITUDE_CAP_DEG`, every column. A window
+    never spans more than one turn of longitude, and every satellite of a chunk searches the
+    chunk's widest window. The demand cells within the central-angle limit are kept. A window
+    can reach a cell twice (rows clipped at a pole, or columns wrapped past the
+    antimeridian), so each pair is kept once.
 
     Args:
         satellites: The satellites.
@@ -698,6 +707,7 @@ def _pairs_in_view(
     row_offsets = np.arange(-half_rows, half_rows + 1)
     cos_limit = math.cos(max_central_angle_rad)
     window_cap_rad = math.radians(_WINDOW_LATITUDE_CAP_DEG)
+    full_turn_half_cols = math.ceil(n_lon / _WINDOW_SIDES)
     satellite_xyz = _unit_vectors(satellites.lat_rad, satellites.lon_rad)
     found_satellite: list[npt.NDArray[np.int64]] = [np.empty(0, dtype=np.int64)]
     found_cell: list[npt.NDArray[np.int64]] = [np.empty(0, dtype=np.int64)]
@@ -707,9 +717,12 @@ def _pairs_in_view(
         lon = satellites.lon_rad[start : start + _PAIR_SEARCH_CHUNK_SATELLITES]
         centre_row = np.floor((cells.lat_top_deg - np.degrees(lat)) / cell_deg).astype(np.int64)
         centre_col = np.floor((np.degrees(lon) - cells.lon_left_deg) / cell_deg).astype(np.int64)
-        edge_lat = np.minimum(np.abs(lat) + max_central_angle_rad, window_cap_rad)
-        half_cols_each = np.ceil(limit_deg / np.cos(edge_lat) / cell_deg).astype(np.int64)
-        half_cols = int(half_cols_each.max()) + _WINDOW_MARGIN_CELLS
+        edge_lat = np.abs(lat) + max_central_angle_rad
+        if edge_lat.max() >= window_cap_rad:
+            half_cols = full_turn_half_cols
+        else:
+            half_cols_each = np.ceil(limit_deg / np.cos(edge_lat) / cell_deg).astype(np.int64)
+            half_cols = min(int(half_cols_each.max()) + _WINDOW_MARGIN_CELLS, full_turn_half_cols)
         col_offsets = np.arange(-half_cols, half_cols + 1)
         rows = np.clip(centre_row[:, None, None] + row_offsets[None, :, None], 0, n_lat - 1)
         cols = (centre_col[:, None, None] + col_offsets[None, None, :]) % n_lon

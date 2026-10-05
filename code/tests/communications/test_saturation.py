@@ -31,6 +31,7 @@ import math
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from itertools import pairwise
 from pathlib import Path
 
@@ -85,6 +86,14 @@ STAMP = "test"
 
 PHONE = DeviceClass.PHONE_CLASS
 """The class this part computes."""
+
+PeopleAt = Callable[[np.ndarray, np.ndarray], np.ndarray]
+"""People per cell from the cell centres' latitudes and longitudes, degrees (the input of
+``conftest.py``'s grid builder)."""
+
+GridBuilder = Callable[[float, PeopleAt], PopulationGrid]
+"""The ``synthetic_population_grid`` fixture: a cell size and the people per cell in, a
+global grid out."""
 
 
 def _phone_inputs() -> ClassInputs:
@@ -1063,3 +1072,112 @@ def test_capacity_per_satellite_may_rise_within_the_snapshot_noise() -> None:
     sat._check_capacity_per_satellite(PHONE, rows(0.019))
     with pytest.raises(SaturationInvariantError, match="capacity per satellite rises"):
         sat._check_capacity_per_satellite(PHONE, rows(0.021))
+
+
+# ---------------------------------------------------------------------------
+# The pair search against brute force, and every limit element by element
+# ---------------------------------------------------------------------------
+
+NARROW_VIEW_SHELL = ShellInputs(altitude_km=300.0, inclination_deg=30.0, elevation_mask_deg=60.0)
+"""A shell with a narrow view (about 1.48 degrees): near a pole its view reaches past the
+search window's cap latitude while spanning only a few degrees."""
+
+EDGE_SATELLITES_DEG = (
+    (90.0, 0.0),
+    (-90.0, 45.0),
+    (89.99, 123.0),
+    (-89.9, -170.0),
+    (88.0, 180.0),
+    (0.0, -180.0),
+    (0.0, 179.9999),
+    (45.0, 180.0),
+    (85.0, 90.0),
+    (60.2, 0.0),
+)
+"""Hand-placed satellites at the poles, near them, and across the antimeridian, degrees."""
+
+BOUNDARY_SLACK = 1e-12
+"""Pairs within this of the view's limit, in cosine, may fall either way under rounding."""
+
+
+def brute_force_pair_keys(
+    satellites: sat._SatellitePositions, cells: sat._DemandCells, limit_rad: float, slack: float
+) -> np.ndarray:
+    """Every pair whose cosine is at least cos(limit) + slack, by testing every cell against
+    every satellite, as sorted keys satellite x (cells + 1) + cell."""
+    satellite_xyz = sat._unit_vectors(satellites.lat_rad, satellites.lon_rad)
+    cosine = cells.xyz @ satellite_xyz.T
+    cell, satellite = np.nonzero(cosine >= math.cos(limit_rad) + slack)
+    return np.sort(satellite.astype(np.int64) * (cells.count + 1) + cell)
+
+
+def everywhere_people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+    """One resident in every cell."""
+    return np.ones_like(lat)
+
+
+@pytest.mark.parametrize(
+    "shell", [ShellInputs(), NARROW_VIEW_SHELL], ids=["central", "narrow view"]
+)
+def test_pair_search_finds_exactly_the_pairs_a_brute_force_search_finds(
+    synthetic_population_grid: Callable[[float, PeopleAt], PopulationGrid], shell: ShellInputs
+) -> None:
+    """Objective: the windowed pair search misses no pair in view and keeps none out of view,
+    at the poles and across the antimeridian too; no runtime check could see a miss, since L,
+    the ceiling and the supply are built on the same pairs.
+
+    Sample: every 1 degree cell populated; the central shell and a narrow-view shell (300 km,
+    a 60 degree mask), each at 400 requested satellites at two times, plus satellites placed
+    at and near both poles and across the antimeridian.
+
+    Expected outcome: the pairs equal a brute-force search over every cell and satellite, up
+    to pairs within 1e-12 of the limit in cosine, each listed once, ordered by satellite then
+    cell.
+    """
+    cells = sat._demand_cells(synthetic_population_grid(1.0, everywhere_people), 1e-12)
+    limit = sat._central_angle_limit(shell)
+    shells = [sat._walker_positions(shell, 400, time_s) for time_s in (0.0, 4321.0)]
+    edges = satellites_at(EDGE_SATELLITES_DEG)
+    satellites = sat._SatellitePositions(
+        lat_rad=np.concatenate([part.lat_rad for part in (*shells, edges)]),
+        lon_rad=np.concatenate([part.lon_rad for part in (*shells, edges)]),
+    )
+    pairs = sat._pairs_in_view(satellites, cells, limit)
+    found = pairs.satellite * (cells.count + 1) + pairs.cell
+    assert np.all(np.diff(found) > 0)
+    surely_in = brute_force_pair_keys(satellites, cells, limit, BOUNDARY_SLACK)
+    maybe_in = brute_force_pair_keys(satellites, cells, limit, -BOUNDARY_SLACK)
+    assert np.setdiff1d(surely_in, found).size == 0
+    assert np.setdiff1d(found, maybe_in).size == 0
+
+
+def test_every_limit_holds_satellite_by_satellite_and_cell_by_cell(
+    real_grid: PopulationGrid,
+) -> None:
+    """Objective: no limit is broken where the totals would hide it: no satellite over B, no
+    cell over its area or its people cap, no pair over one layer, no negative beam.
+
+    Sample: the shipped grid at the investor's usage, 992 satellites (requested 1,000) at one
+    time, B = 150.
+
+    Expected outcome: per satellite at most B, and some satellite at B (the limit binds); per
+    cell at most its area and its people cap; per pair at most one layer (1e-9 relative); no
+    negative beam; L the sum of the pairs' beams and at most min(ceiling, supply).
+    """
+    cells = sat._demand_cells(real_grid, SaturationInputs().demand.density_threshold_per_km2)
+    limits = seam_limits(150.0)
+    satellites = sat._walker_positions(SaturationInputs().shell, 1_000, 1_111.0)
+    allocation = sat._allocate(satellites, cells, limits)
+    beams = allocation.beams
+    assert np.all(beams >= 0)
+    per_satellite = np.bincount(allocation.satellite, weights=beams, minlength=satellites.count)
+    assert per_satellite.max() <= 150.0 * (1 + 1e-9)
+    assert per_satellite.max() == pytest.approx(150.0, rel=1e-9)
+    footprint = allocation.footprint_km2
+    covered = np.bincount(allocation.cell, weights=beams * footprint, minlength=cells.count)
+    assert np.all(covered <= cells.area_km2 * (1 + 1e-9))
+    per_cell = np.bincount(allocation.cell, weights=beams, minlength=cells.count)
+    assert np.all(per_cell <= cells.people / PHONE_PEOPLE_PER_BEAM * (1 + 1e-9) + 1e-12)
+    assert np.all(beams * footprint / cells.area_km2[allocation.cell] <= 1 + 1e-9)
+    assert allocation.useful_beams == pytest.approx(float(beams.sum()), rel=1e-12)
+    assert allocation.useful_beams <= min(allocation.ceiling_beams, allocation.supply_beams)
