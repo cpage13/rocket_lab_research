@@ -215,7 +215,8 @@ class ShellInputs(BaseModel):
     Attributes:
         altitude_km: The circular shell's altitude, km.
         inclination_deg: Its inclination, degrees.
-        elevation_mask_deg: The lowest elevation at which a device uses a satellite.
+        elevation_mask_deg: The lowest elevation at which a device uses a satellite,
+            degrees, above 0 (a beam's footprint grows without bound toward the horizon).
         carrier_hz: The carrier, Hz.
         beamwidth_factor: The beam's half-power width, in wavelengths over the aperture's
             side (0.886 for uniform illumination, the central beam).
@@ -231,7 +232,7 @@ class ShellInputs(BaseModel):
     inclination_deg: float = Field(
         default=ORBIT_INCLINATION_DEG_SCENARIO, gt=0, le=_RIGHT_ANGLE_DEG
     )
-    elevation_mask_deg: float = Field(default=ELEVATION_MASK_DEG, ge=0, lt=_RIGHT_ANGLE_DEG)
+    elevation_mask_deg: float = Field(default=ELEVATION_MASK_DEG, gt=0, lt=_RIGHT_ANGLE_DEG)
     carrier_hz: float = Field(default=CARRIER_FREQUENCY_HZ, gt=0)
     beamwidth_factor: float = Field(default=UNIFORM_BEAMWIDTH_FACTOR, gt=0)
     reuse_calibration_gbps_per_mhz_per_se: float = Field(
