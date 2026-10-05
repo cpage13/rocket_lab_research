@@ -272,6 +272,15 @@ main satellite and any-share serving sets of the diagnostic (rule D3)."""
 _MEDIAN_WEIGHT_SHARE: Final[float] = 0.5
 """A weighted median is the value at which the cumulative weight first reaches half."""
 
+_FULL_SUM_BATCH_PAIRS: Final[int] = 4_000_000
+"""The most ordered pairs of sub-pairs the full-sum pricing expands at once (cells are
+batched whole), which bounds its temporary arrays: about 150 bytes a pair at the peak, so
+about 0.6 GB; the prices do not depend on it."""
+
+_NO_NEIGHBOUR_COSINE: Final[float] = -2.0
+"""Below any cosine: the nearest-layer cosine of a sub-pair whose cell holds no served
+sub-pair in another sector."""
+
 # ===========================================================================
 # The checks, the markers and the run's memory budget
 # ===========================================================================
@@ -1786,6 +1795,148 @@ def _stacked_layers(
             serving_pairs = np.concatenate([serving_pairs, joins])
             serving_lookup = _serving_index(serving_pairs, pairs.cell, cells.count)
     return _StackedLayers(beams=stacked, serving=serving)
+
+
+def _pattern_gain(
+    cos_angle: npt.NDArray[np.float64], rules: _DirectionalRules
+) -> npt.NDArray[np.float64]:
+    """Return the terminal's gain relative to its peak at the given angles off its beam's axis:
+    a Gaussian main lobe, 10^(max(-12 (theta / HPBW)^2, floor) / 10) (rule D5)."""
+    theta = np.arccos(np.clip(cos_angle, *_COSINE_BOUNDS))
+    gain_db = np.maximum(
+        _GAUSSIAN_LOBE_DB_PER_BEAMWIDTH_SQUARED * (theta / rules.beamwidth_rad) ** 2,
+        rules.pattern_floor_db,
+    )
+    gain: npt.NDArray[np.float64] = 10 ** (gain_db / _DECIBELS_PER_DECADE)
+    return gain
+
+
+@dataclass(frozen=True, eq=False)
+class _Pricing:
+    """The full-sum pricing of one snapshot's layers (rule D5).
+
+    A sub-pair is a pair's first-layer part or its stacked part, priced when it places more
+    than :data:`_SERVED_BEAMS_FLOOR` beams: every stacked sub-pair, and the first-layer
+    sub-pairs of the cells that carry stacked beams (elsewhere every beam is a first-layer
+    beam at the central SE).
+
+    Attributes:
+        pair: Each sub-pair's pair, the sub-pairs ordered by cell.
+        is_first_layer: Whether it is a first-layer sub-pair.
+        beams: Its beams.
+        interference: Its full-sum interference over its own signal: the sum over the cell's
+            other sub-pairs p it counts of p's share of the cell x the gain toward p.
+        nearest_cosine: The cosine of the angle to the nearest served sub-pair of its cell in
+            another sector (:data:`_NO_NEIGHBOUR_COSINE` when there is none).
+        spectral_efficiency: Its SE, anchor x log2(1 + SINR), SINR = 1 / (1 / SINR_1 +
+            interference), bps/Hz.
+        stacked_capacity: Each cell's sum of beams x SE over its sub-pairs (beams x bps/Hz;
+            zero for a cell without stacked beams).
+        has_stack: Whether each cell carries stacked beams (more than the floor).
+    """
+
+    pair: npt.NDArray[np.int64]
+    is_first_layer: npt.NDArray[np.bool_]
+    beams: npt.NDArray[np.float64]
+    interference: npt.NDArray[np.float64]
+    nearest_cosine: npt.NDArray[np.float64]
+    spectral_efficiency: npt.NDArray[np.float64]
+    stacked_capacity: npt.NDArray[np.float64]
+    has_stack: npt.NDArray[np.bool_]
+
+
+def _price_layers(
+    pairs: _Pairs,
+    footprint_km2: npt.NDArray[np.float64],
+    sector: npt.NDArray[np.int64],
+    directions: _PairDirections,
+    cells: _DemandCells,
+    first_beams: npt.NDArray[np.float64],
+    stacked_beams: npt.NDArray[np.float64],
+    rules: _DirectionalRules,
+) -> _Pricing:
+    """Price every served sub-pair of the cells that carry stacked beams by the full sum (D5).
+
+    For each sub-pair q, SINR_q = 1 / (1 / SINR_1 + the sum over the cell's other sub-pairs p
+    of f_p x g(theta_pq)), f_p the share of the cell p covers and g the victim terminal's gain
+    toward p's satellite (:func:`_pattern_gain`). First-layer sub-pairs do not count against
+    each other (they tile the cell as one layer), nor do sub-pairs in the same sector (they
+    tile the sector's layer). SE_q = anchor x log2(1 + SINR_q). The ordered pairs of each cell's
+    sub-pairs are expanded :data:`_FULL_SUM_BATCH_PAIRS` at most at a time, whole cells.
+
+    Args:
+        pairs: The pairs in view.
+        footprint_km2: Each pair's footprint.
+        sector: Each pair's sky sector.
+        directions: The pairs' directions.
+        cells: The demand cells.
+        first_beams: Each pair's first-layer beams.
+        stacked_beams: Each pair's stacked beams.
+        rules: The class's rules.
+
+    Returns:
+        The pricing.
+    """
+    has_stack = (
+        np.bincount(pairs.cell, weights=stacked_beams, minlength=cells.count) > _SERVED_BEAMS_FLOOR
+    )
+    first_part = np.flatnonzero((first_beams > _SERVED_BEAMS_FLOOR) & has_stack[pairs.cell])
+    stacked_part = np.flatnonzero(stacked_beams > _SERVED_BEAMS_FLOOR)
+    pair = np.concatenate([first_part, stacked_part])
+    is_first = np.concatenate(
+        [np.ones(first_part.size, dtype=bool), np.zeros(stacked_part.size, dtype=bool)]
+    )
+    beams = np.concatenate([first_beams[first_part], stacked_beams[stacked_part]])
+    by_cell = np.argsort(pairs.cell[pair], kind="stable")
+    pair, is_first, beams = pair[by_cell], is_first[by_cell], beams[by_cell]
+    cell = pairs.cell[pair]
+    share = _layer_share(beams, footprint_km2[pair], cells.area_km2[cell])
+    sub_sector = sector[pair]
+    direction = directions.of(pair)
+    interference = np.zeros(pair.size)
+    nearest_cosine = np.full(pair.size, _NO_NEIGHBOUR_COSINE)
+    if pair.size:
+        opens = np.flatnonzero(np.r_[True, cell[1:] != cell[:-1]])
+        sizes = np.diff(np.r_[opens, pair.size])
+        expanded = np.cumsum(sizes.astype(np.int64) ** 2)
+        first_cell = 0
+        while first_cell < sizes.size:
+            before = expanded[first_cell - 1] if first_cell else 0
+            last_cell = max(
+                first_cell + 1,
+                int(np.searchsorted(expanded, before + _FULL_SUM_BATCH_PAIRS, side="right")),
+            )
+            low = int(opens[first_cell])
+            high = int(opens[last_cell]) if last_cell < sizes.size else pair.size
+            batch_sizes = sizes[first_cell:last_cell]
+            run = np.repeat(batch_sizes, batch_sizes)
+            u = np.repeat(np.arange(low, high), run)
+            run_start = np.repeat(np.repeat(opens[first_cell:last_cell], batch_sizes), run)
+            segment = np.cumsum(run) - run
+            v = run_start + np.arange(u.size) - np.repeat(segment, run)
+            counted = (u != v) & (sub_sector[u] != sub_sector[v]) & ~(is_first[u] & is_first[v])
+            cosine = np.einsum("ij,ij->i", direction[u], direction[v])
+            contribution = np.where(counted, share[v] * _pattern_gain(cosine, rules), 0.0)
+            interference[low:high] = np.add.reduceat(contribution, segment)
+            nearest_cosine[low:high] = np.maximum.reduceat(
+                np.where(counted, cosine, _NO_NEIGHBOUR_COSINE), segment
+            )
+            first_cell = last_cell
+    spectral_efficiency = rules.se_anchor_bps_per_hz * np.log2(
+        1 + 1 / (1 / rules.single_layer_sinr + interference)
+    )
+    return _Pricing(
+        pair=pair,
+        is_first_layer=is_first,
+        beams=beams,
+        interference=interference,
+        nearest_cosine=nearest_cosine,
+        spectral_efficiency=spectral_efficiency,
+        stacked_capacity=np.bincount(
+            cell, weights=beams * spectral_efficiency, minlength=cells.count
+        ),
+        has_stack=has_stack,
+    )
 
 
 # ===========================================================================
