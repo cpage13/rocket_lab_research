@@ -748,23 +748,23 @@ PHONE_CLASS_DIRECTIVITY_DBI: Final[float] = 0.0
 serves a place."""
 
 SMALL_TERMINAL_CLASS_SECTOR_WEDGES_PER_RING: Final[tuple[int, ...]] = (1, 2)
-"""DERIVED (the saturation design's rule D1, from
+"""DERIVED (the saturation strategy's rule D1, the sky sectors, from
 :data:`SMALL_TERMINAL_CLASS_DIRECTIVITY_DBI`). The small terminal's sky above the
 elevation mask in sectors of equal solid angle, ring by ring from the zenith: a zenith cap,
 then one ring in two azimuth halves. A beam of directivity D spans about 4 pi / D sr, so
 about 3 such beams fit in the sky above the mask, one per sector."""
 
 MOUNTED_TERMINAL_CLASS_SECTOR_WEDGES_PER_RING: Final[tuple[int, ...]] = (1, 3, 5)
-"""DERIVED (the saturation design's rule D1, from
+"""DERIVED (the saturation strategy's rule D1, the sky sectors, from
 :data:`MOUNTED_TERMINAL_CLASS_DIRECTIVITY_DBI`). The mounted terminal's sky above the
 elevation mask in sectors of equal solid angle, ring by ring from the zenith: a zenith cap,
 a ring of 3, then a ring of 5 down to the mask. About 9 of its beams fit in the sky above
 the mask, one per sector."""
 
 PHONE_CLASS_SECTOR_WEDGES_PER_RING: Final[tuple[int, ...]] = ()
-"""DERIVED (the saturation design's rule D1, from :data:`PHONE_CLASS_DIRECTIVITY_DBI`). No
-sky sectors: a 0 dBi device takes one co-channel layer, so co-channel footprints on the
-same ground must not overlap."""
+"""DERIVED (the saturation strategy's rule D1, the sky sectors, from
+:data:`PHONE_CLASS_DIRECTIVITY_DBI`). No sky sectors: a 0 dBi device takes one co-channel
+layer, so co-channel footprints on the same ground must not overlap."""
 
 SATURATION_SE_ANCHOR_BPS_PER_HZ: Final[float] = 0.65
 """SOURCED_ESTIMATE (COMM-428 / COMM-429). The anchor of the curve's link mapping, SE =

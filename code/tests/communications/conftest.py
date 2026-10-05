@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol
 
 import numpy as np
 import pytest
@@ -54,6 +55,22 @@ cells may hold far fewer people per km^2 than the central threshold of 1."""
 PeopleAt = Callable[[np.ndarray, np.ndarray], np.ndarray]
 """People per cell from the cell centres' latitudes and longitudes, degrees: two arrays of
 the grid's shape in, one array of that shape out."""
+
+
+class SaturationInputsBuilder(Protocol):
+    """The builder ``synthetic_saturation_inputs`` returns: a grid and the sweep in, the
+    curve's inputs out."""
+
+    def __call__(
+        self,
+        grid: PopulationGrid,
+        *,
+        fleets: tuple[int, ...],
+        snapshots: int = ...,
+        beams_per_satellite: float | None = ...,
+    ) -> SaturationInputs:
+        """Return the inputs for a synthetic grid at the given sweep."""
+        ...
 
 
 @pytest.fixture
@@ -112,7 +129,7 @@ def synthetic_population_grid() -> Callable[[float, PeopleAt], PopulationGrid]:
 
 
 @pytest.fixture(scope="session")
-def synthetic_saturation_inputs() -> Callable[..., SaturationInputs]:
+def synthetic_saturation_inputs() -> SaturationInputsBuilder:
     """Return a builder of the curve's inputs for a synthetic grid.
 
     The builder takes the grid and, by keyword, the requested ``fleets``, the phone class's

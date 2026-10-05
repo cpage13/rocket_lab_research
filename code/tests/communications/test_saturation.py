@@ -26,14 +26,16 @@ their inputs from ``synthetic_saturation_inputs`` (``conftest.py``).
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import math
 import os
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from itertools import pairwise
 from pathlib import Path
+from typing import Protocol
 
 import numpy as np
 import pytest
@@ -58,10 +60,15 @@ from communications.saturation import (
 )
 from communications.saturation_curve import (
     SATURATION_CURVE_SCHEMA_VERSION,
+    BandCurve,
     BandName,
+    ClassCurve,
     ClassInputs,
+    ClassMarkers,
+    CurveProvenance,
     CurveRow,
     DirectionalDiagnostics,
+    RunMeasurement,
     SaturationCurve,
     SaturationInputs,
     ShellInputs,
@@ -94,6 +101,21 @@ PeopleAt = Callable[[np.ndarray, np.ndarray], np.ndarray]
 GridBuilder = Callable[[float, PeopleAt], PopulationGrid]
 """The ``synthetic_population_grid`` fixture: a cell size and the people per cell in, a
 global grid out."""
+
+
+class SaturationInputsBuilder(Protocol):
+    """The ``synthetic_saturation_inputs`` fixture (``conftest.py`` defines the same shape)."""
+
+    def __call__(
+        self,
+        grid: PopulationGrid,
+        *,
+        fleets: tuple[int, ...],
+        snapshots: int = ...,
+        beams_per_satellite: float | None = ...,
+    ) -> SaturationInputs:
+        """Return the inputs for a synthetic grid at the given sweep."""
+        ...
 
 
 def _phone_inputs() -> ClassInputs:
@@ -151,7 +173,7 @@ def log_log_fleet(rows: tuple[CurveRow, ...], target: float) -> float | None:
     return None
 
 
-def phone_curve(curve: SaturationCurve):
+def phone_curve(curve: SaturationCurve) -> ClassCurve:
     """The phone class's curve, found by its key (a curve lists every class it has)."""
     (found,) = [entry for entry in curve.classes if entry.device_class is PHONE]
     return found
@@ -216,13 +238,15 @@ def mid_band_people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
 
 
 @pytest.fixture(scope="module")
-def uniform_band(synthetic_population_grid) -> PopulationGrid:
+def uniform_band(synthetic_population_grid: GridBuilder) -> PopulationGrid:
     """The uniform band's grid."""
     return synthetic_population_grid(BAND_CELL_DEG, band_people)
 
 
 @pytest.fixture(scope="module")
-def uniform_band_curve(uniform_band, synthetic_saturation_inputs) -> SaturationCurve:
+def uniform_band_curve(
+    uniform_band: PopulationGrid, synthetic_saturation_inputs: SaturationInputsBuilder
+) -> SaturationCurve:
     """The uniform band's curve: B = 1, fleets 1,000 and 10,000, one snapshot."""
     inputs = synthetic_saturation_inputs(
         uniform_band, fleets=BAND_FLEETS, beams_per_satellite=ONE_BEAM
@@ -231,13 +255,15 @@ def uniform_band_curve(uniform_band, synthetic_saturation_inputs) -> SaturationC
 
 
 @pytest.fixture(scope="module")
-def two_band_world(synthetic_population_grid) -> PopulationGrid:
+def two_band_world(synthetic_population_grid: GridBuilder) -> PopulationGrid:
     """The two-band world's grid."""
     return synthetic_population_grid(BAND_CELL_DEG, two_band_people)
 
 
 @pytest.fixture(scope="module")
-def two_band_world_curve(two_band_world, synthetic_saturation_inputs) -> SaturationCurve:
+def two_band_world_curve(
+    two_band_world: PopulationGrid, synthetic_saturation_inputs: SaturationInputsBuilder
+) -> SaturationCurve:
     """The two-band world's curve: B = 1, fleets 1,000 and 10,000, one snapshot."""
     inputs = synthetic_saturation_inputs(
         two_band_world, fleets=BAND_FLEETS, beams_per_satellite=ONE_BEAM
@@ -247,7 +273,7 @@ def two_band_world_curve(two_band_world, synthetic_saturation_inputs) -> Saturat
 
 @pytest.fixture(scope="module")
 def mid_band_curves(
-    synthetic_population_grid, synthetic_saturation_inputs
+    synthetic_population_grid: GridBuilder, synthetic_saturation_inputs: SaturationInputsBuilder
 ) -> tuple[SaturationCurve, ...]:
     """The dense mid-latitude band's two curves, one per sweep, at the central B (150)."""
     grid = synthetic_population_grid(MID_BAND_CELL_DEG, mid_band_people)
@@ -264,7 +290,9 @@ def mid_band_curves(
 # ---------------------------------------------------------------------------
 
 
-def test_supply_bound_on_a_uniform_band_is_the_time_fraction_over_land(uniform_band_curve):
+def test_supply_bound_on_a_uniform_band_is_the_time_fraction_over_land(
+    uniform_band_curve: SaturationCurve,
+) -> None:
     """Objective: the supply bound counts a satellite's beams where it can reach people.
 
     Sample: the uniform band (2 degree cells within 4 degrees of the equator, 1.25 beams of
@@ -292,7 +320,9 @@ def test_supply_bound_on_a_uniform_band_is_the_time_fraction_over_land(uniform_b
     assert first.ocean_factor == pytest.approx(share, rel=0.01)
 
 
-def test_a_class_whose_crossing_is_not_reached_reports_the_last_fleet(uniform_band_curve):
+def test_a_class_whose_crossing_is_not_reached_reports_the_last_fleet(
+    uniform_band_curve: SaturationCurve,
+) -> None:
     """Objective: a curve that has not flattened by its last row reports no spectrum bound.
 
     Sample: the uniform band's curve (fleets 992 and 10,000), whose capacity still grows
@@ -312,8 +342,8 @@ def test_a_class_whose_crossing_is_not_reached_reports_the_last_fleet(uniform_ba
 
 
 def test_maximum_use_matches_its_closed_form_on_a_two_band_world(
-    two_band_world, two_band_world_curve
-):
+    two_band_world: PopulationGrid, two_band_world_curve: SaturationCurve
+) -> None:
     """Objective: maximum use is the closed form, every cell served by the best satellite the
     shell can ever offer it, one layer, capped by its people; it ignores the fleet.
 
@@ -353,7 +383,9 @@ def test_maximum_use_matches_its_closed_form_on_a_two_band_world(
     assert markers.maximum_use_beams == pytest.approx(expected, rel=1e-6)
 
 
-def test_ninety_percent_fleet_reads_maximum_use_never_a_sweeps_last_ceiling(mid_band_curves):
+def test_ninety_percent_fleet_reads_maximum_use_never_a_sweeps_last_ceiling(
+    mid_band_curves: tuple[SaturationCurve, ...],
+) -> None:
     """Objective: the 90 percent marker's denominator is maximum use, which does not move with
     the sweep (the strategy's failure mode "The denominator moves with the sweep").
 
@@ -383,8 +415,10 @@ def test_ninety_percent_fleet_reads_maximum_use_never_a_sweeps_last_ceiling(mid_
 
 
 def test_capacity_does_not_fall_more_than_two_percent_between_rows(
-    mid_band_curves, uniform_band_curve, two_band_world_curve
-):
+    mid_band_curves: tuple[SaturationCurve, ...],
+    uniform_band_curve: SaturationCurve,
+    two_band_world_curve: SaturationCurve,
+) -> None:
     """Objective: capacity grows with the fleet, or holds, up to the snapshots' spread.
 
     Sample: every synthetic curve here: the dense band's two sweeps, the uniform band and the
@@ -397,7 +431,9 @@ def test_capacity_does_not_fall_more_than_two_percent_between_rows(
             assert later.capacity_gbps >= 0.98 * earlier.capacity_gbps
 
 
-def test_two_runs_under_the_fixed_seed_are_equal(uniform_band, synthetic_saturation_inputs):
+def test_two_runs_under_the_fixed_seed_are_equal(
+    uniform_band: PopulationGrid, synthetic_saturation_inputs: SaturationInputsBuilder
+) -> None:
     """Objective: the curve is deterministic: the snapshot draw is fixed by the seed and the
     order the workers finish in changes nothing.
 
@@ -423,7 +459,9 @@ def test_two_runs_under_the_fixed_seed_are_equal(uniform_band, synthetic_saturat
     assert any(row.useful_beams_spread > 0 for row in phone_curve(first).rows)
 
 
-def test_compute_saturation_refuses_a_grid_its_inputs_do_not_name(uniform_band):
+def test_compute_saturation_refuses_a_grid_its_inputs_do_not_name(
+    uniform_band: PopulationGrid,
+) -> None:
     """Objective: a curve is computed only on the grid its inputs name.
 
     Sample: the default inputs, which name the shipped grid's SHA-256, with the uniform band.
@@ -460,7 +498,7 @@ def seam_limits(beams_per_satellite: float) -> sat._AllocationLimits:
     )
 
 
-def satellites_at(points_deg) -> sat._SatellitePositions:
+def satellites_at(points_deg: Sequence[tuple[float, float]]) -> sat._SatellitePositions:
     """Satellites over the given (latitude, longitude) points, degrees."""
     lat, lon = np.radians(np.array(points_deg, dtype=np.float64)).T
     return sat._SatellitePositions(
@@ -468,7 +506,7 @@ def satellites_at(points_deg) -> sat._SatellitePositions:
     )
 
 
-def patch_people(cell_deg: float, half_cells: int):
+def patch_people(cell_deg: float, half_cells: int) -> PeopleAt:
     """People in a square patch of cells around the patch centre (half_cells either side)."""
     reach = (half_cells + 0.5) * cell_deg
 
@@ -486,8 +524,11 @@ def patch_people(cell_deg: float, half_cells: int):
     [(0.25, 150.0, "the cell's area"), (2.0, 150.0, "the satellite's beams")],
 )
 def test_one_patch_under_one_overhead_satellite(
-    synthetic_population_grid, cell_deg, beams_per_satellite, binding
-):
+    synthetic_population_grid: GridBuilder,
+    cell_deg: float,
+    beams_per_satellite: float,
+    binding: str,
+) -> None:
     """Objective: a satellite overhead a populated patch fills it one layer deep, up to its
     beams.
 
@@ -521,7 +562,9 @@ def test_one_patch_under_one_overhead_satellite(
 
 
 @pytest.fixture(scope="module")
-def crowded_patch(synthetic_population_grid):
+def crowded_patch(
+    synthetic_population_grid: GridBuilder,
+) -> tuple[sat._DemandCells, sat._Allocation]:
     """A 3 x 3 patch of 0.25 degree cells under five satellites (CROWD_OFFSETS_DEG), B = 150.
 
     Returns the demand cells and the allocation.
@@ -535,7 +578,9 @@ def crowded_patch(synthetic_population_grid):
     return cells, sat._allocate(satellites_at(points), cells, seam_limits(150.0))
 
 
-def test_co_channel_area_never_exceeds_a_cells_area(crowded_patch):
+def test_co_channel_area_never_exceeds_a_cells_area(
+    crowded_patch: tuple[sat._DemandCells, sat._Allocation],
+) -> None:
     """Objective: one co-channel layer per cell for a 0 dBi device: the footprints placed on
     a cell never cover more than the cell.
 
@@ -561,7 +606,9 @@ def test_co_channel_area_never_exceeds_a_cells_area(crowded_patch):
     assert max(satellites_per_cell) >= 2
 
 
-def test_one_satellite_adds_at_most_one_layer_to_a_cell(crowded_patch):
+def test_one_satellite_adds_at_most_one_layer_to_a_cell(
+    crowded_patch: tuple[sat._DemandCells, sat._Allocation],
+) -> None:
     """Objective: one satellite adds at most one layer to a cell.
 
     Sample: the crowded patch.
@@ -618,12 +665,12 @@ COARSE_REAL_MAXIMUM_USE = 380946.7365253218
 
 
 @pytest.fixture(scope="module")
-def real_grid(repo_dir) -> PopulationGrid:
+def real_grid(repo_dir: Path) -> PopulationGrid:
     """The shipped population grid."""
     return load_population_grid(repo_dir / POPULATION_GRID_PATH, POPULATION_GRID_SHA256)
 
 
-def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid):
+def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) -> None:
     """Objective: the module's numbers on the shipped grid do not drift.
 
     Sample: the default inputs (the investor's usage) at fleets 340, 1,000 and 2,000 and one
@@ -707,7 +754,7 @@ def _numpy_loaded_after_importing(modules: tuple[str, ...], code_dir: Path) -> b
     return result.returncode == 0
 
 
-def test_numpy_stays_inside_the_saturation_module(code_dir):
+def test_numpy_stays_inside_the_saturation_module(code_dir: Path) -> None:
     """Objective: numpy stays inside ``communications.saturation`` (ADR 010), transitive
     imports included, which a grep would miss.
 
@@ -732,7 +779,9 @@ def test_numpy_stays_inside_the_saturation_module(code_dir):
         (DeviceClass.PHONE_CLASS, 832.0 / 3.0),
     ],
 )
-def test_people_per_beam_is_the_beam_rate_over_the_busy_hour_load(device_class, people_per_beam):
+def test_people_per_beam_is_the_beam_rate_over_the_busy_hour_load(
+    device_class: DeviceClass, people_per_beam: float
+) -> None:
     """Objective: people per beam at d = 1 is 8 MHz x the class's central SE over its busy-hour
     load (its rate while active x its busy-hour share).
 
@@ -749,7 +798,7 @@ def test_people_per_beam_is_the_beam_rate_over_the_busy_hour_load(device_class, 
     )
 
 
-def test_each_class_off_peak_share_is_at_most_its_busy_hour_share():
+def test_each_class_off_peak_share_is_at_most_its_busy_hour_share() -> None:
     """Objective: the class constants are whole and coherent.
 
     Sample: ``CLASS_USAGE`` and ``CLASS_SE_CENTRAL``.
@@ -829,7 +878,9 @@ def _row(fleet: int, useful: float, capacity: float) -> CurveRow:
         "saturation before the first midpoint",
     ],
 )
-def test_each_check_refuses_a_curve_that_breaks_it(refused, message):
+def test_each_check_refuses_a_curve_that_breaks_it(
+    refused: Callable[[], object], message: str
+) -> None:
     """Objective: the guards fire: each check raises its typed error on a curve breaking it.
 
     Sample: hand-built snapshots or rows: L above min(ceiling, supply); a ceiling above
@@ -848,7 +899,7 @@ def test_each_check_refuses_a_curve_that_breaks_it(refused, message):
 # ---------------------------------------------------------------------------
 
 
-def test_load_population_grid_reads_the_shipped_grid(real_grid):
+def test_load_population_grid_reads_the_shipped_grid(real_grid: PopulationGrid) -> None:
     """Objective: the shipped grid loads as ATTRIBUTION.md describes it.
 
     Sample: ``communications/data/ghs_pop_e2030_0p25deg.npz`` with its recorded SHA-256.
@@ -871,7 +922,9 @@ def test_load_population_grid_reads_the_shipped_grid(real_grid):
 
 
 @pytest.mark.parametrize("case", ["missing file", "another digest", "not an archive"])
-def test_load_population_grid_refuses_a_file_it_cannot_trust(tmp_path, repo_dir, case):
+def test_load_population_grid_refuses_a_file_it_cannot_trust(
+    tmp_path: Path, repo_dir: Path, case: str
+) -> None:
     """Objective: the loader refuses what it cannot read, and a grid that is not the one
     expected, with the typed error the commands report.
 
@@ -897,7 +950,7 @@ def test_load_population_grid_refuses_a_file_it_cannot_trust(tmp_path, repo_dir,
             load_population_grid(text, digest)
 
 
-def test_saturation_inputs_for_reads_only_the_held_spectrum():
+def test_saturation_inputs_for_reads_only_the_held_spectrum() -> None:
     """Objective: a config's Iridium dials reach the curve's inputs only through the held
     spectrum; the defaults are the named constants in the class key's order.
 
@@ -947,7 +1000,9 @@ def test_saturation_inputs_for_reads_only_the_held_spectrum():
         "a whole float in the mounted extension",
     ],
 )
-def test_the_contract_refuses_inputs_out_of_shape(build):
+def test_the_contract_refuses_inputs_out_of_shape(
+    build: Callable[[SaturationInputs], object],
+) -> None:
     """Objective: the contract's validators hold the inputs to their shape.
 
     Sample: the default inputs with one rule broken each.
@@ -1223,3 +1278,141 @@ def test_a_supporting_marker_before_the_first_row_never_takes_the_saturation_num
     assert "at or before the first row" in limits[1]
     low_rows = rows_with_elasticities(MARKER_FLEETS, elasticities, (100.0, 200.0, 300.0, 400.0))
     assert len(sat._unplaced_marker_limits(PHONE, low_rows, 1_000.0)) == 1
+
+
+def bare_markers(**changes: int | None) -> ClassMarkers:
+    """Markers with no crossing (not reached by 992), but for the changes asked."""
+    fields: dict[str, float | int | None] = {
+        "maximum_use_beams": 1_000.0,
+        "saturation_number": None,
+        "saturation_not_reached_by": 992,
+        "elasticity_under_0p25_fleet": None,
+        "fleet_at_90pct_of_maximum_use": None,
+    }
+    return ClassMarkers.model_validate({**fields, **changes})
+
+
+BARE_ROWS = (_row(342, 10.0, 1.0), _row(992, 20.0, 2.0))
+"""Two valid rows, 342 and 992 satellites."""
+
+
+def bare_class_curve(
+    device_class: DeviceClass, rows: tuple[CurveRow, ...] = BARE_ROWS
+) -> ClassCurve:
+    """A class curve on the bare rows and markers."""
+    return ClassCurve(device_class=device_class, rows=rows, markers=bare_markers())
+
+
+def bare_band_curve(name: BandName, rows: tuple[CurveRow, ...] = BARE_ROWS) -> BandCurve:
+    """A band point's curve (its default point) on the bare rows and markers."""
+    (point,) = [entry for entry in SaturationInputs().bands if entry.name is name]
+    return BandCurve(point=point, rows=rows, markers=bare_markers())
+
+
+def bare_curve(classes: tuple[ClassCurve, ...], bands: tuple[BandCurve, ...]) -> SaturationCurve:
+    """A curve of the default inputs holding the given class and band curves."""
+    inputs = SaturationInputs()
+    return SaturationCurve(
+        schema_version=SATURATION_CURVE_SCHEMA_VERSION,
+        version_stamp=STAMP,
+        parameters=inputs,
+        input_hash=curve_input_hash(inputs),
+        provenance=CurveProvenance(
+            grid_file_name="ghs_pop_e2030_0p25deg.npz",
+            grid_sha256=POPULATION_GRID_SHA256,
+            citations=(),
+            licence="CC BY 4.0",
+            method="test",
+            checks_passed=(),
+            run_measurement=RunMeasurement(wall_time_s=0.0, peak_memory_mb=0.0),
+        ),
+        classes=classes,
+        bands=bands,
+        limits=(),
+    )
+
+
+def test_a_curve_built_in_order_validates() -> None:
+    """Objective: the curve-side validators accept what the contract allows, so their
+    refusals below are refusals of the broken rule alone.
+
+    Sample: the three classes in the class key's order and two band points in their order,
+    each on two increasing rows; and a curve with no class or band yet (a curve being built).
+
+    Expected outcome: both validate, the classes small terminal, mounted terminal, phone class.
+    """
+    curve = bare_curve(
+        tuple(bare_class_curve(device_class) for device_class in DeviceClass),
+        (bare_band_curve(BandName.TAPER), bare_band_curve(BandName.BEAMS_48)),
+    )
+    assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
+    assert bare_curve((), ()).classes == ()
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda: bare_curve((bare_class_curve(PHONE), bare_class_curve(PHONE)), ()),
+        lambda: bare_curve(
+            (bare_class_curve(PHONE), bare_class_curve(DeviceClass.SMALL_TERMINAL_CLASS)), ()
+        ),
+        lambda: bare_curve(
+            (), (bare_band_curve(BandName.BEAMS_48), bare_band_curve(BandName.TAPER))
+        ),
+        lambda: bare_class_curve(PHONE, (BARE_ROWS[1], BARE_ROWS[0])),
+        lambda: bare_band_curve(BandName.TAPER, (BARE_ROWS[0], BARE_ROWS[0])),
+        lambda: bare_markers(saturation_number=20_000),
+        lambda: bare_markers(saturation_not_reached_by=None),
+    ],
+    ids=[
+        "a class twice",
+        "classes out of the class key's order",
+        "band points out of their order",
+        "a class's rows falling",
+        "a band's rows repeating",
+        "markers with both saturation readings",
+        "markers with neither saturation reading",
+    ],
+)
+def test_the_contract_refuses_a_curve_out_of_shape(build: Callable[[], object]) -> None:
+    """Objective: the curve-side validators of the frozen contract hold (p3, p4 and p6 edit
+    the contract, and a broken validator would go unseen).
+
+    Sample: the bare curve above with one rule broken each.
+
+    Expected outcome: a pydantic ValidationError (a ValueError).
+    """
+    with pytest.raises(ValueError, match="validation error"):
+        build()
+
+
+def test_compute_saturation_refuses_requests_that_realize_one_row(
+    uniform_band: PopulationGrid, synthetic_saturation_inputs: SaturationInputsBuilder
+) -> None:
+    """Objective: requests that strictly increase but realize the same P x S are refused
+    before any computation, since each row is keyed by its realized fleet.
+
+    Sample: the uniform band's inputs at the requests 992 and 993, both 31 x 32 = 992.
+
+    Expected outcome: SaturationInvariantError naming both, the realized fleets not strictly
+    increasing.
+    """
+    inputs = synthetic_saturation_inputs(uniform_band, fleets=(992, 993))
+    with pytest.raises(SaturationInvariantError, match="do not strictly increase"):
+        compute_saturation(inputs, uniform_band, version_stamp=STAMP)
+
+
+def test_compute_saturation_refuses_a_grid_that_is_not_global(
+    uniform_band: PopulationGrid, synthetic_saturation_inputs: SaturationInputsBuilder
+) -> None:
+    """Objective: the pair search wraps longitudes and clips at the poles, so the curve is
+    computed only on a global grid from 90 degrees north.
+
+    Sample: the uniform band's grid and digest, its northern edge moved to 89.75 degrees.
+
+    Expected outcome: PopulationGridError asking for a global grid from 90 degrees north.
+    """
+    shifted = dataclasses.replace(uniform_band, lat_top_deg=89.75)
+    inputs = synthetic_saturation_inputs(uniform_band, fleets=BAND_FLEETS)
+    with pytest.raises(PopulationGridError, match="global grid from 90 degrees north"):
+        compute_saturation(inputs, shifted, version_stamp=STAMP)

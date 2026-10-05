@@ -11,48 +11,56 @@ engine applies d and the scenario's panel when it reads the curve. This version 
 the phone class's central curve, whose allocation is also the first layer every
 directional class builds on.
 
-The stages, for one class on one set of inputs:
+The stages, numbered as the saturation strategy's locked stage order numbers them (its § 2),
+for one class on one set of inputs; this version runs stages 2 to 6 and 8 to 11 for the
+phone class:
 
-1. **Demand cells.** Every cell of the shipped grid (ADR 009) with at least the threshold's
+1. **Inputs**, held by the contract: :class:`~communications.saturation_curve.SaturationInputs`.
+2. **Demand cells.** Every cell of the shipped grid (ADR 009) with at least the threshold's
    people per km^2: its centre, its area on the sphere, its people, and its people cap in
    beams, people x take-up / people per beam, where people per beam is the spectrum times the
    class's central SE (a beam's rate) over the class's busy-hour load per person.
-2. **The shell and the snapshots.** A circular Walker Delta shell: P = round(sqrt(N)) planes
+3. **The shell and the snapshots.** A circular Walker Delta shell: P = round(sqrt(N)) planes
    of S = round(N / P) satellites (Python's ``round``, an exact half to the even neighbour,
    as the reference shell has it; the contract's ``walker_shape``), the realized fleet P x S
-   keying the row and the request carried on it, phasing F = 1,
-   two-body motion with the Earth turning under it. The snapshot times are drawn once per
-   run, ``numpy.random.default_rng(seed).uniform(0, sidereal day, n)``, and shared by every
-   fleet.
-3. **The view and the beam.** The elevation mask's central-angle limit; a square aperture's
+   keying the row and the request carried on it, phasing F = 1, two-body motion with the
+   Earth turning under it. The snapshot times are drawn once per run,
+   ``numpy.random.default_rng(seed).uniform(0, sidereal day, n)``, and shared by every fleet.
+4. **The view and the beam.** The elevation mask's central-angle limit; a square aperture's
    half-power beam, beamwidth factor x wavelength / side, and its footprint, pi / 4 x (r
    theta) x (r theta / (cos(scan) sin(elevation))) with r the slant range, tabulated against
    the central angle and read by linear interpolation; the beams per satellite B derived
    from the capacity calibration and the panel, never set.
-4. **The pairs in view.** Every satellite-cell pair whose cell centre sees the satellite
+5. **The pairs in view.** Every satellite-cell pair whose cell centre sees the satellite
    above the mask.
-5. **The allocation, smallest footprint first.** A snapshot's pairs fall into geometric
-   footprint bands with edges ``geomspace(min footprint x 0.999, max footprint x 1.001,
-   bands + 1)``. Band by band from the smallest, each pair asks for min(one layer, the
+6. **The allocation, phone class, smallest footprint first.** A snapshot's pairs fall into
+   geometric footprint bands with edges ``geomspace(min footprint x 0.999, max footprint x
+   1.001, bands + 1)``. Band by band from the smallest, each pair asks for min(one layer, the
    cell's area left / its footprint); a few alternating passes scale the band by every
    satellite's beams left, then by every cell's area and people left; the band is committed
    before the next. Limits: B beams per satellite; one co-channel layer per cell (its area);
    the cell's people cap; one layer per satellite per cell. Small overhead footprints fit
    the most beams into the same land, so this order maximizes capacity; a proportional
-   fill stalls near saturation.
-6. **The rows.** At each fleet, the snapshot means of L and of capacity (L x the spectrum x
-   the class's SE), the spread of L, the ocean factor U = L / (N x B), and the two bounds:
-   the ceiling (each cell in view served by its smallest footprint in view, capped by its
-   people) and the supply (each satellite's beams, capped by what its cells could take).
-7. **Maximum use**, in closed form and independent of the fleet: every cell served by the
-   best satellite the shell can ever offer it, at central angle max(0, |latitude| -
-   inclination), capped by its people.
-8. **The markers**, on the rows: the elasticity of capacity, d ln C / d ln N, at each
-   interval's geometric midpoint; the saturation number is the first crossing under 0.10,
-   interpolated in ln N between the midpoints that straddle it and rounded half up (or the
-   last fleet when it is not reached); beside it the crossing under 0.25 and the fleet at
-   which L reaches 90 percent of maximum use (log-log between rows). The markers read
-   maximum use, never a sweep-dependent ceiling.
+   fill stalls near saturation. It is also every directional class's first layer.
+7. **The allocation, directional classes** (the strategy's rules D1 to D6): not computed by
+   this version.
+8. **Capacity (d = 1).** A phone beam carries the spectrum times the class's central SE, so
+   a snapshot's capacity is L times that.
+9. **The rows.** At each fleet, the snapshot means of L and of capacity, the spread of L,
+   the ocean factor U = L / (N x B), and the two bounds: the ceiling (each cell in view
+   served by its smallest footprint in view, capped by its people) and the supply (each
+   satellite's beams, capped by what its cells could take).
+10. **Maximum use**, in closed form and independent of the fleet: every cell served by the
+    best satellite the shell can ever offer it, at central angle max(0, |latitude| -
+    inclination), capped by its people.
+11. **The markers**, on the rows: the elasticity of capacity, d ln C / d ln N, at each
+    interval's geometric midpoint; the saturation number is the first crossing under 0.10,
+    interpolated in ln N between the midpoints that straddle it and rounded half up (or the
+    last fleet when it is not reached); beside it the crossing under 0.25 and the fleet at
+    which L reaches 90 percent of maximum use (log-log between rows), each None when not
+    reached or when it lies before the first row (the curve's limits then say so). The
+    markers read maximum use, never a sweep-dependent ceiling.
+12. **The interference trim**: not computed by this version.
 
 The checks raise :class:`SaturationInvariantError`: the bounds (L at most min(ceiling,
 supply) and the ceiling at most maximum use, at every snapshot, 1e-9 relative); the stall
@@ -396,7 +404,7 @@ def load_population_grid(path: Path, expected_sha256: str) -> PopulationGrid:
 
 
 # ===========================================================================
-# 1. Demand cells, the beam and the shell
+# Stages 2 to 4: the demand cells, the beam and the shell
 # ===========================================================================
 
 
@@ -660,7 +668,7 @@ def _walker_positions(
 
 
 # ===========================================================================
-# 2. The allocation (the seam) and its bounds
+# Stages 5, 6, 9 and 10: the pairs, the allocation (the seam), its bounds, maximum use
 # ===========================================================================
 
 
@@ -958,7 +966,7 @@ def _maximum_use(cells: _DemandCells, limits: _AllocationLimits, inclination_deg
 
 
 # ===========================================================================
-# 3. The sweep, in separate processes under the memory budget
+# The sweep, in separate processes under the memory budget
 # ===========================================================================
 
 
@@ -1103,7 +1111,7 @@ def _run_sweep(tasks: Sequence[_SnapshotTask], context: _SweepContext) -> _Sweep
 
 
 # ===========================================================================
-# 4. The rows, the checks and the markers
+# Stages 8, 9 and 11: the rows, the checks and the markers
 # ===========================================================================
 
 
@@ -1417,7 +1425,7 @@ def _unplaced_marker_limits(
 
 
 # ===========================================================================
-# 5. The curve
+# The curve
 # ===========================================================================
 
 
@@ -1506,8 +1514,9 @@ def compute_saturation(
 ) -> SaturationCurve:
     """Compute the saturation curve on a population grid.
 
-    Runs the stages of the module docstring for the phone class, checks the bounds, the
-    stall floor and capacity per satellite, reads the markers against maximum use, and
+    Runs stages 2 to 6 and 8 to 11 of the module docstring for the phone class, checks the
+    bounds, the stall floor and capacity per satellite, reads the markers against maximum
+    use, states any supporting marker that lies before the first row among the limits, and
     records the run's wall time and peak-memory bound.
 
     Args:
