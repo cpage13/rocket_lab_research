@@ -141,10 +141,9 @@ def log_log_fleet(rows: tuple[CurveRow, ...], target: float) -> float | None:
 
 
 def phone_curve(curve: SaturationCurve):
-    """The phone class's curve, the one class this part computes."""
-    (only,) = curve.classes
-    assert only.device_class is PHONE
-    return only
+    """The phone class's curve, found by its key (a curve lists every class it has)."""
+    (found,) = [entry for entry in curve.classes if entry.device_class is PHONE]
+    return found
 
 
 # ---------------------------------------------------------------------------
@@ -663,6 +662,7 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid):
     assert provenance.run_measurement.wall_time_s > 0
     assert provenance.run_measurement.peak_memory_mb > 0
     assert len(curve.limits) >= 8
+    assert [entry.device_class for entry in curve.classes] == [PHONE]
     assert curve.bands == ()
 
 
@@ -884,7 +884,7 @@ def test_load_population_grid_refuses_a_file_it_cannot_trust(tmp_path, repo_dir,
         text = tmp_path / "not_a_grid.npz"
         text.write_bytes(b"not a population grid")
         digest = hashlib.sha256(text.read_bytes()).hexdigest()
-        with pytest.raises(ModelFileError, match="not"):
+        with pytest.raises(ModelFileError, match="not a readable population grid"):
             load_population_grid(text, digest)
 
 
