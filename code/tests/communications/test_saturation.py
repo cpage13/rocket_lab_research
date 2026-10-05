@@ -820,10 +820,6 @@ def _row(fleet: int, useful: float, capacity: float) -> CurveRow:
             ),
             "the saturation number: the elasticity is already",
         ),
-        (
-            lambda: sat._markers(PHONE, (_row(342, 950.0, 1.0), _row(992, 2_000.0, 2.0)), 1_000.0),
-            "the 90 percent fleet: L is already",
-        ),
     ],
     ids=[
         "L above min(ceiling, supply)",
@@ -831,7 +827,6 @@ def _row(fleet: int, useful: float, capacity: float) -> CurveRow:
         "stalled allocation",
         "capacity per satellite rising",
         "saturation before the first midpoint",
-        "90 percent at the first row",
     ],
 )
 def test_each_check_refuses_a_curve_that_breaks_it(refused, message):
@@ -840,7 +835,7 @@ def test_each_check_refuses_a_curve_that_breaks_it(refused, message):
     Sample: hand-built snapshots or rows: L above min(ceiling, supply); a ceiling above
     maximum use; L at 0.90 of its bound at 20,022 satellites against the 0.98 floor; capacity
     per satellite rising from 1.0 / 342 to 4.0 / 992; an elasticity of 0.01 at the first
-    midpoint; L at 0.95 of maximum use at the first row.
+    midpoint (the saturation number cannot be placed).
 
     Expected outcome: SaturationInvariantError, its message naming the breach.
     """
@@ -1181,3 +1176,50 @@ def test_every_limit_holds_satellite_by_satellite_and_cell_by_cell(
     assert np.all(beams * footprint / cells.area_km2[allocation.cell] <= 1 + 1e-9)
     assert allocation.useful_beams == pytest.approx(float(beams.sum()), rel=1e-12)
     assert allocation.useful_beams <= min(allocation.ceiling_beams, allocation.supply_beams)
+
+
+def rows_with_elasticities(
+    fleets: tuple[int, ...], elasticities: tuple[float, ...], useful_beams: tuple[float, ...]
+) -> tuple[CurveRow, ...]:
+    """Rows at the given fleets whose capacity has the given elasticity over each interval."""
+    capacity = [100.0]
+    for (low, high), elasticity in zip(pairwise(fleets), elasticities, strict=True):
+        capacity.append(capacity[-1] * (high / low) ** elasticity)
+    return tuple(
+        _row(fleet, useful, value)
+        for fleet, useful, value in zip(fleets, useful_beams, capacity, strict=True)
+    )
+
+
+MARKER_FLEETS = (342, 992, 1_980, 3_969)
+"""Fleets for the hand-built marker rows (each realizes as itself when requested)."""
+
+
+def test_a_supporting_marker_before_the_first_row_never_takes_the_saturation_number() -> None:
+    """Objective: the saturation number is placed first and is the one marker that refuses a
+    curve; a supporting marker that lies before the first row is None, and the curve's limits
+    say so (the numerics review's m2).
+
+    Sample: rows whose elasticity falls 0.20, 0.12, 0.02 (under 0.25 already at the first
+    midpoint, crossing 0.10 between the second and third), with L at 950, 960, 970 and 980
+    beams against a maximum use of 1,000 (90 percent reached at the first row); then the same
+    elasticities with L far under 90 percent.
+
+    Expected outcome: the saturation number is placed (between the second and third
+    midpoints); the 0.25 marker and the 90 percent fleet are None; the unplaced-marker limits
+    name both; with L under 90 percent at the first row, only the 0.25 limit is stated.
+    """
+    elasticities = (0.20, 0.12, 0.02)
+    rows = rows_with_elasticities(MARKER_FLEETS, elasticities, (950.0, 960.0, 970.0, 980.0))
+    markers = sat._markers(PHONE, rows, 1_000.0)
+    midpoints = [math.sqrt(low * high) for low, high in pairwise(MARKER_FLEETS)]
+    assert markers.saturation_number is not None
+    assert midpoints[1] < markers.saturation_number < midpoints[2]
+    assert markers.elasticity_under_0p25_fleet is None
+    assert markers.fleet_at_90pct_of_maximum_use is None
+    limits = sat._unplaced_marker_limits(PHONE, rows, 1_000.0)
+    assert len(limits) == 2
+    assert "crossing under it lies before the first row" in limits[0]
+    assert "at or before the first row" in limits[1]
+    low_rows = rows_with_elasticities(MARKER_FLEETS, elasticities, (100.0, 200.0, 300.0, 400.0))
+    assert len(sat._unplaced_marker_limits(PHONE, low_rows, 1_000.0)) == 1

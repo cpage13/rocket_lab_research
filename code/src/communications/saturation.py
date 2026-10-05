@@ -1289,19 +1289,12 @@ def _first_crossing_under(
 
 
 def _fleet_reaching(
-    fleets: Sequence[int], useful_beams: Sequence[float], target: float, what: str
+    fleets: Sequence[int], useful_beams: Sequence[float], target: float
 ) -> float | None:
     """Return the fleet at which L first reaches the target (log-log between rows), or None.
 
-    Raises:
-        SaturationInvariantError: If the first row already reaches the target, so the fleet
-            lies at or below the curve's first row.
+    The caller handles a target the first row already reaches (:func:`_reached_at_first_row`).
     """
-    if useful_beams[0] >= target:
-        raise SaturationInvariantError(
-            f"{what}: L is already {useful_beams[0]} at the first row ({fleets[0]} satellites), "
-            f"at or above the target {target}; the sweep must start lower"
-        )
     for (low_fleet, low_beams), (high_fleet, high_beams) in pairwise(
         zip(fleets, useful_beams, strict=True)
     ):
@@ -1311,19 +1304,17 @@ def _fleet_reaching(
     return None
 
 
-def _markers(
-    device_class: DeviceClass, rows: Sequence[CurveRow], maximum_use: float
-) -> ClassMarkers:
-    """Return a curve's markers, read on its rows against maximum use.
+def _elasticity(
+    device_class: DeviceClass, rows: Sequence[CurveRow]
+) -> tuple[list[float], list[float]]:
+    """Return the rows' interval midpoints and the elasticity of capacity at each.
 
-    The elasticity of capacity, ln(C_i+1 / C_i) / ln(N_i+1 / N_i), sits at each interval's
-    geometric midpoint. The saturation number is the first crossing under 0.10 rounded half
-    up, or, when not reached, the last row's fleet as ``saturation_not_reached_by``; beside it
-    the first crossing under 0.25 and the fleet at which L reaches 90 percent of maximum use.
+    The elasticity ln(C_i+1 / C_i) / ln(N_i+1 / N_i) sits at the interval's geometric
+    midpoint, sqrt(N_i x N_i+1).
 
     Raises:
         SaturationInvariantError: If a row's capacity is not positive (the elasticity needs
-            its logarithm), or a marker lies before the rows can place it.
+            its logarithm).
     """
     fleets = [row.fleet for row in rows]
     capacity = [row.capacity_gbps for row in rows]
@@ -1339,18 +1330,55 @@ def _markers(
             zip(fleets, capacity, strict=True)
         )
     ]
+    return midpoints, elasticity
+
+
+def _crosses_before_first_midpoint(elasticity: Sequence[float], threshold: float) -> bool:
+    """Return whether the elasticity is already under the threshold at the first midpoint."""
+    return elasticity[0] < threshold
+
+
+def _reached_at_first_row(useful_beams: Sequence[float], target: float) -> bool:
+    """Return whether L already reaches the target at the first row."""
+    return useful_beams[0] >= target
+
+
+def _markers(
+    device_class: DeviceClass, rows: Sequence[CurveRow], maximum_use: float
+) -> ClassMarkers:
+    """Return a curve's markers, read on its rows against maximum use.
+
+    The saturation number, placed first, is the first crossing of the elasticity under 0.10,
+    rounded half up, or, when not reached, the last row's fleet as
+    ``saturation_not_reached_by``; it is the one marker that refuses a curve whose rows cannot
+    place it. Beside it, the first crossing under 0.25 and the fleet at which L reaches 90
+    percent of maximum use: each is None when not reached, and None too when it lies before
+    the first row (:func:`_unplaced_marker_limits` states that in the curve's limits).
+
+    Raises:
+        SaturationInvariantError: If a row's capacity is not positive (the elasticity needs
+            its logarithm), or the saturation number's crossing lies before the first
+            midpoint.
+    """
+    fleets = [row.fleet for row in rows]
+    midpoints, elasticity = _elasticity(device_class, rows)
     name = device_class.value
     saturation = _first_crossing_under(
         midpoints, elasticity, _SATURATION_ELASTICITY, f"{name}, the saturation number"
     )
-    supporting = _first_crossing_under(
-        midpoints, elasticity, _SUPPORTING_ELASTICITY, f"{name}, the crossing under 0.25"
+    supporting = (
+        None
+        if _crosses_before_first_midpoint(elasticity, _SUPPORTING_ELASTICITY)
+        else _first_crossing_under(
+            midpoints, elasticity, _SUPPORTING_ELASTICITY, f"{name}, the crossing under 0.25"
+        )
     )
-    ninety = _fleet_reaching(
-        fleets,
-        [row.useful_beams for row in rows],
-        _MAXIMUM_USE_MARKER_SHARE * maximum_use,
-        f"{name}, the 90 percent fleet",
+    useful_beams = [row.useful_beams for row in rows]
+    target = _MAXIMUM_USE_MARKER_SHARE * maximum_use
+    ninety = (
+        None
+        if _reached_at_first_row(useful_beams, target)
+        else _fleet_reaching(fleets, useful_beams, target)
     )
     return ClassMarkers(
         maximum_use_beams=maximum_use,
@@ -1359,6 +1387,33 @@ def _markers(
         elasticity_under_0p25_fleet=None if supporting is None else round_half_up(supporting),
         fleet_at_90pct_of_maximum_use=None if ninety is None else round_half_up(ninety),
     )
+
+
+def _unplaced_marker_limits(
+    device_class: DeviceClass, rows: Sequence[CurveRow], maximum_use: float
+) -> tuple[str, ...]:
+    """Return the limits a curve states for its supporting markers that lie before its rows.
+
+    Such a marker is None in the markers, like one not reached; this says which it is.
+    """
+    _, elasticity = _elasticity(device_class, rows)
+    name = device_class.value
+    limits = []
+    if _crosses_before_first_midpoint(elasticity, _SUPPORTING_ELASTICITY):
+        limits.append(
+            f"The {name} elasticity is already under {_SUPPORTING_ELASTICITY:g} at the first "
+            "midpoint, so its crossing under it lies before the first row and is not "
+            "reported; a sweep starting lower would place it."
+        )
+    if _reached_at_first_row(
+        [row.useful_beams for row in rows], _MAXIMUM_USE_MARKER_SHARE * maximum_use
+    ):
+        limits.append(
+            f"The {name} useful beams already reach {_MAXIMUM_USE_MARKER_SHARE:g} of maximum "
+            "use at the first row, so the fleet at which they reach it lies at or before the "
+            "first row and is not reported; a sweep starting lower would place it."
+        )
+    return tuple(limits)
 
 
 # ===========================================================================
@@ -1558,7 +1613,7 @@ def compute_saturation(
         ),
         classes=(ClassCurve(device_class=device_class, rows=rows, markers=markers),),
         bands=(),
-        limits=_curve_limits(inputs),
+        limits=(*_curve_limits(inputs), *_unplaced_marker_limits(device_class, rows, maximum_use)),
     )
 
 
