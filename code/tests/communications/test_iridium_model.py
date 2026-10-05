@@ -306,7 +306,7 @@ def test_device_class_resolves_all_three_central_se_values() -> None:
         IridiumDials(device_class=DeviceClass.SMALL_TERMINAL_CLASS)
     )
     terminal = resolve_device_spectral_efficiency(
-        IridiumDials(device_class=DeviceClass.TERMINAL_CLASS)
+        IridiumDials(device_class=DeviceClass.MOUNTED_TERMINAL_CLASS)
     )
     assert phone == pytest.approx(EXPECTED_SE_PHONE)
     assert small == pytest.approx(EXPECTED_SE_SMALL_TERMINAL)
@@ -531,7 +531,10 @@ def test_rich_tier_reports_below_target_truthfully_then_completes_all_in(
             IridiumDials(device_class=DeviceClass.SMALL_TERMINAL_CLASS),
             EXPECTED_SUBS_PER_SAT_SMALL_TERMINAL,
         ),
-        (IridiumDials(device_class=DeviceClass.TERMINAL_CLASS), EXPECTED_SUBS_PER_SAT_TERMINAL),
+        (
+            IridiumDials(device_class=DeviceClass.MOUNTED_TERMINAL_CLASS),
+            EXPECTED_SUBS_PER_SAT_TERMINAL,
+        ),
     ],
     ids=["coordinated_10_5_mhz", "small_terminal", "terminal"],
 )
@@ -577,7 +580,7 @@ def test_degenerate_density_fails_with_a_clear_error(tmp_path: Path) -> None:
 def test_iridium_terminal_class_capacity() -> None:
     """The large-terminal class resolves SE 2.5 and reproduces the 3.0 Gbps per-satellite anchor."""
     traj = run_comms_model(
-        CommsConfig(iridium=IridiumDials(device_class=DeviceClass.TERMINAL_CLASS))
+        CommsConfig(iridium=IridiumDials(device_class=DeviceClass.MOUNTED_TERMINAL_CLASS))
     )
     assert traj.iridium is not None
     assert traj.iridium.spectral_efficiency_bps_per_hz == pytest.approx(EXPECTED_SE_TERMINAL)

@@ -97,9 +97,9 @@ class DeviceClass(StrEnum):
     elements; no user pointing, no moving parts; investor decision 2026-07-10),
     purpose-built with NO chipset assumption
     (SE band 1.5 to 2.5, central :data:`SMALL_TERMINAL_CLASS_SE_CENTRAL`).
-    ``TERMINAL_CLASS`` is the LARGE boosted / custom-antenna tier: mounted or pointed,
+    ``MOUNTED_TERMINAL_CLASS`` is the LARGE boosted / custom-antenna tier: mounted or pointed,
     15+ dBi (drones, fixed sites, vehicles; SE band 2.0 to 3.0, central
-    :data:`TERMINAL_CLASS_SE_CENTRAL`). See the ecosystem assumption
+    :data:`MOUNTED_TERMINAL_CLASS_SE_CENTRAL`). See the ecosystem assumption
     (:data:`ECOSYSTEM_ASSUMPTION_NOTE`): the Iridium model reaches purpose-built or
     in-chipset devices on Iridium's owned L-band (the MSS lane), NEVER an unmodified
     phone (that is the cellular lane, the High-Bandwidth Cellular Pure Play model,
@@ -108,7 +108,7 @@ class DeviceClass(StrEnum):
 
     PHONE_CLASS = "phone_class"
     SMALL_TERMINAL_CLASS = "small_terminal_class"
-    TERMINAL_CLASS = "terminal_class"
+    MOUNTED_TERMINAL_CLASS = "mounted_terminal_class"
 
 
 # ===========================================================================
@@ -397,17 +397,17 @@ SMALL_TERMINAL_CLASS_SE_HIGH: Final[float] = 2.5
 spectral-efficiency sweep band (it meets the large tier's central; the bands overlap,
 the centrals are ordered 0.65 < 2.0 < 2.5)."""
 
-TERMINAL_CLASS_SE_CENTRAL: Final[float] = 2.5
+MOUNTED_TERMINAL_CLASS_SE_CENTRAL: Final[float] = 2.5
 """SOURCED_ESTIMATE (COMM-650). Central of the 2.0 to 3.0 bps/Hz band for the LARGE
 boosted / custom-antenna tier: mounted or pointed, 15+ dBi (drones, fixed sites,
 vehicles; the AST-class anchor). Value untouched from the corpus; wording updated for
 the three-tier device ladder."""
 
-TERMINAL_CLASS_SE_LOW: Final[float] = 2.0
+MOUNTED_TERMINAL_CLASS_SE_LOW: Final[float] = 2.0
 """SOURCED_ESTIMATE (COMM-650). Low edge of the documented large-tier
 spectral-efficiency sweep band."""
 
-TERMINAL_CLASS_SE_HIGH: Final[float] = 3.0
+MOUNTED_TERMINAL_CLASS_SE_HIGH: Final[float] = 3.0
 """SOURCED_ESTIMATE (COMM-650). High edge of the documented large-tier
 spectral-efficiency sweep band."""
 
@@ -677,9 +677,9 @@ __all__ = [
     "SMALL_TERMINAL_CLASS_SE_HIGH",
     "SMALL_TERMINAL_CLASS_SE_LOW",
     "SPECTRUM_MHZ_DEFAULT",
-    "TERMINAL_CLASS_SE_CENTRAL",
-    "TERMINAL_CLASS_SE_HIGH",
-    "TERMINAL_CLASS_SE_LOW",
+    "MOUNTED_TERMINAL_CLASS_SE_CENTRAL",
+    "MOUNTED_TERMINAL_CLASS_SE_HIGH",
+    "MOUNTED_TERMINAL_CLASS_SE_LOW",
     # The shipped population grid (ADR 009).
     "POPULATION_GRID_PATH",
     "POPULATION_GRID_SHA256",
