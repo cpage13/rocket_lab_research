@@ -96,6 +96,7 @@ from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass
+from enum import StrEnum
 from itertools import pairwise, repeat
 from multiprocessing import get_context
 from pathlib import Path
@@ -243,6 +244,33 @@ _GLOBE_LONGITUDE_SPAN_DEG: Final[float] = 360.0
 
 _HZ_PER_GHZ: Final[float] = 1e9
 """Hertz per gigahertz, for stating the carrier in the method text."""
+
+_GAUSSIAN_BEAM_SOLID_ANGLE_FACTOR: Final[float] = 1.133
+"""SOURCED_FACT (standard antenna theory): a circular Gaussian beam's solid angle is pi / (4
+ln 2), about 1.133, times the square of its half-power beamwidth. A terminal of directivity D
+spans 4 pi / D sr, so its half-power beamwidth is sqrt(4 pi / (1.133 x D)): 60.3 degrees at
+10 dBi and 33.9 at 15 dBi, COMM-718's main lobes. Four figures, the curve's pinned convention
+(the saturation strategy's rule D4)."""
+
+_SPHERE_SOLID_ANGLE_SR: Final[float] = 4 * math.pi
+"""The whole sphere's solid angle, sr: a beam of directivity D spans it over D."""
+
+_GAUSSIAN_LOBE_DB_PER_BEAMWIDTH_SQUARED: Final[float] = -12.0
+"""SOURCED_FACT (standard antenna theory): a Gaussian main lobe's gain falls as -12 (theta /
+HPBW)^2 dB, so -3 dB at half the beamwidth, the definition of the half-power beamwidth
+(COMM-718's Gaussian main lobe; the saturation strategy's rule D5)."""
+
+_DECIBELS_PER_DECADE: Final[float] = 10.0
+"""A power ratio in decibels is ten times its base-10 logarithm."""
+
+_SERVED_BEAMS_FLOOR: Final[float] = 1e-9
+"""The reference's convention (its full-sum check's threshold): a pair places a layer when it
+places more than this many beams; less is the passes' rounding, not a layer. It decides which
+sub-pairs the full sum prices and which cells carry stacked beams (rules D5 and D6), and the
+main satellite and any-share serving sets of the diagnostic (rule D3)."""
+
+_MEDIAN_WEIGHT_SHARE: Final[float] = 0.5
+"""A weighted median is the value at which the cumulative weight first reaches half."""
 
 # ===========================================================================
 # The checks, the markers and the run's memory budget
@@ -1352,6 +1380,188 @@ def _maximum_use(cells: _DemandCells, limits: _AllocationLimits, inclination_deg
     )
     people_cap = _people_cap(cells, limits)[reachable]
     return float(np.minimum(cells.area_km2[reachable] / best_footprint, people_cap).sum())
+
+
+# ===========================================================================
+# Stage 7: the directional classes' allocation (the saturation strategy's rules D1 to D6)
+# ===========================================================================
+
+
+class _ServingRule(StrEnum):
+    """Which satellites serve a cell: the reference set of the pairwise admission (rule D3).
+
+    The module allocates at :attr:`AT_SERVING_SHARE`. The other two exist for the mounted
+    terminal's diagnostic (the saturation strategy's reproduction protocol), which reruns the
+    module's allocation with the set at the cell's main satellite only and at any positive
+    share.
+    """
+
+    AT_SERVING_SHARE = "at_serving_share"
+    """A satellite serves a cell when its committed layer covers at least f_serve of the
+    cell's area (rule D3)."""
+
+    MAIN_SATELLITE = "main_satellite"
+    """Only the cell's main first-layer satellite (the most first-layer area) serves it, and
+    no stacked layer joins: the prototype's reference set."""
+
+    ANY_SHARE = "any_share"
+    """Every satellite that places a layer in the cell serves it."""
+
+
+@dataclass(frozen=True)
+class _DirectionalRules:
+    """A directional class's rules D1 to D6, each value derived from the curve's inputs.
+
+    Attributes:
+        layout: The terminal's sky sectors (D1).
+        beamwidth_rad: Its half-power beamwidth, sqrt(4 pi / (1.133 x D)), D the linear
+            directivity (D4, D5).
+        single_layer_sinr: SINR_1 = 2^(SE_central / anchor) - 1, the single-layer operating
+            point that gives the class's central SE (D5).
+        serving_share: f_serve = 1 / SINR_1, the share at which a co-directional interferer
+            alone costs a victim 3 dB (D3).
+        se_anchor_bps_per_hz: The link mapping's anchor, SE = anchor x log2(1 + SINR) (D5).
+        se_central_bps_per_hz: The class's central SE: a first-layer beam alone (D6).
+        pattern_floor_db: The terminal pattern's floor, dB below its peak (D5).
+        serving_rule: Which satellites serve a cell (D3); the module's is
+            :attr:`_ServingRule.AT_SERVING_SHARE`.
+    """
+
+    layout: _SectorLayout
+    beamwidth_rad: float
+    single_layer_sinr: float
+    serving_share: float
+    se_anchor_bps_per_hz: float
+    se_central_bps_per_hz: float
+    pattern_floor_db: float
+    serving_rule: _ServingRule
+
+
+def _directional_rules(
+    inputs: SaturationInputs, class_inputs: ClassInputs
+) -> _DirectionalRules | None:
+    """Return a class's directional rules, or None for a class without sky sectors (the phone
+    class, which takes one co-channel layer).
+
+    Args:
+        inputs: The curve's inputs (the SE anchor, the pattern floor, the mask).
+        class_inputs: The class (its central SE, directivity and sector layout).
+
+    Returns:
+        The rules, at the module's serving rule.
+    """
+    if not class_inputs.sector_wedges_per_ring:
+        return None
+    directivity = 10 ** (class_inputs.directivity_dbi / _DECIBELS_PER_DECADE)
+    single_layer_sinr = (
+        2 ** (class_inputs.spectral_efficiency_bps_per_hz / inputs.se_anchor_bps_per_hz) - 1
+    )
+    return _DirectionalRules(
+        layout=_sector_layout(class_inputs.sector_wedges_per_ring, inputs.shell.elevation_mask_deg),
+        beamwidth_rad=math.sqrt(
+            _SPHERE_SOLID_ANGLE_SR / (_GAUSSIAN_BEAM_SOLID_ANGLE_FACTOR * directivity)
+        ),
+        single_layer_sinr=single_layer_sinr,
+        serving_share=1 / single_layer_sinr,
+        se_anchor_bps_per_hz=inputs.se_anchor_bps_per_hz,
+        se_central_bps_per_hz=class_inputs.spectral_efficiency_bps_per_hz,
+        pattern_floor_db=inputs.sidelobe_floor_db,
+        serving_rule=_ServingRule.AT_SERVING_SHARE,
+    )
+
+
+def _layer_share(
+    beams: npt.NDArray[np.float64],
+    footprint_km2: npt.NDArray[np.float64],
+    cell_area_km2: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
+    """Return the share of its cell's area each pair's beams cover: beams x footprint / area."""
+    return beams * footprint_km2 / cell_area_km2
+
+
+def _main_first_layer_pairs(
+    cell: npt.NDArray[np.int64],
+    first_beams: npt.NDArray[np.float64],
+    footprint_km2: npt.NDArray[np.float64],
+) -> npt.NDArray[np.bool_]:
+    """Return which pairs are their cell's main first-layer satellite: the most first-layer
+    area in the cell (the lowest pair index on a tie), when it places a layer."""
+    main = np.zeros(cell.size, dtype=bool)
+    if cell.size == 0:
+        return main
+    order = np.lexsort((-(first_beams * footprint_km2), cell))
+    sorted_cell = cell[order]
+    main[order[np.r_[True, sorted_cell[1:] != sorted_cell[:-1]]]] = True
+    return main & (first_beams > _SERVED_BEAMS_FLOOR)
+
+
+def _initial_serving_set(
+    pairs: _Pairs,
+    footprint_km2: npt.NDArray[np.float64],
+    cells: _DemandCells,
+    first_beams: npt.NDArray[np.float64],
+    rules: _DirectionalRules,
+) -> npt.NDArray[np.bool_]:
+    """Return which pairs serve their cell after stage 1 (rule D3).
+
+    At the module's rule, a cell's first-layer satellites whose layer covers at least f_serve
+    of its area; at the diagnostic's, its main first-layer satellite, or every first-layer
+    satellite that places a layer.
+
+    Args:
+        pairs: The pairs in view.
+        footprint_km2: Each pair's footprint.
+        cells: The demand cells.
+        first_beams: Each pair's first-layer beams.
+        rules: The class's rules.
+
+    Returns:
+        Whether each pair serves its cell.
+    """
+    match rules.serving_rule:
+        case _ServingRule.AT_SERVING_SHARE:
+            share = _layer_share(first_beams, footprint_km2, cells.area_km2[pairs.cell])
+            serving: npt.NDArray[np.bool_] = share >= rules.serving_share
+            return serving
+        case _ServingRule.MAIN_SATELLITE:
+            return _main_first_layer_pairs(pairs.cell, first_beams, footprint_km2)
+        case _ServingRule.ANY_SHARE:
+            placing: npt.NDArray[np.bool_] = first_beams > _SERVED_BEAMS_FLOOR
+            return placing
+
+
+def _joins_serving_set(
+    first_beams: npt.NDArray[np.float64],
+    stacked_beams: npt.NDArray[np.float64],
+    footprint_km2: npt.NDArray[np.float64],
+    cell_area_km2: npt.NDArray[np.float64],
+    rules: _DirectionalRules,
+) -> npt.NDArray[np.bool_]:
+    """Return which of a band's admitted pairs join their cell's serving set after its fill
+    (rule D3): at the module's rule, when the pair's first-layer and stacked beams together
+    cover at least f_serve of the cell; at the diagnostic's any-share rule, when it placed a
+    stacked layer; at its main-satellite rule, never.
+
+    Args:
+        first_beams: The admitted pairs' first-layer beams.
+        stacked_beams: Their stacked beams, just placed.
+        footprint_km2: Their footprints.
+        cell_area_km2: Their cells' areas.
+        rules: The class's rules.
+
+    Returns:
+        Whether each admitted pair joins.
+    """
+    match rules.serving_rule:
+        case _ServingRule.AT_SERVING_SHARE:
+            share = _layer_share(first_beams + stacked_beams, footprint_km2, cell_area_km2)
+            joins: npt.NDArray[np.bool_] = share >= rules.serving_share
+            return joins
+        case _ServingRule.MAIN_SATELLITE:
+            return np.zeros(first_beams.size, dtype=bool)
+        case _ServingRule.ANY_SHARE:
+            placing: npt.NDArray[np.bool_] = stacked_beams > _SERVED_BEAMS_FLOOR
+            return placing
 
 
 # ===========================================================================
