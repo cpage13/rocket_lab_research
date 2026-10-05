@@ -1043,3 +1043,23 @@ def test_strict_fleets_still_load_from_json() -> None:
     default = SaturationInputs()
     assert SaturationInputs.model_validate_json(default.model_dump_json()) == default
     assert SaturationInputs.model_validate(default.model_dump(mode="json")) == default
+
+
+def test_capacity_per_satellite_may_rise_within_the_snapshot_noise() -> None:
+    """Objective: capacity per satellite may rise between consecutive rows by up to 2 percent
+    of the earlier row, the snapshots' noise, and no more (amendment A6).
+
+    Sample: rows at 342 and 992 satellites whose capacity per satellite rises 1.9 and 2.1
+    percent.
+
+    Expected outcome: the 1.9 percent rise passes; the 2.1 percent rise raises
+    SaturationInvariantError naming the rise.
+    """
+    per_satellite = 1.0 / 342
+
+    def rows(rise: float) -> tuple[CurveRow, CurveRow]:
+        return (_row(342, 10.0, 1.0), _row(992, 10.0, 992 * per_satellite * (1 + rise)))
+
+    sat._check_capacity_per_satellite(PHONE, rows(0.019))
+    with pytest.raises(SaturationInvariantError, match="capacity per satellite rises"):
+        sat._check_capacity_per_satellite(PHONE, rows(0.021))

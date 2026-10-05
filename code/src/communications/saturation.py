@@ -58,7 +58,7 @@ The checks raise :class:`SaturationInvariantError`: the bounds (L at most min(ce
 supply) and the ceiling at most maximum use, at every snapshot, 1e-9 relative); the stall
 floor (the phone class's L at least the sweep's floor x min(ceiling, supply) from 20,000
 satellites up, at every snapshot and in the means); capacity per satellite never rising
-between consecutive rows (1e-6 relative).
+between consecutive rows by more than 2 percent of the earlier row (the snapshots' noise).
 
 The fleets' snapshots run in separate processes. The largest fleet's first snapshot runs
 alone and measures a worker's peak memory; then as many workers run at once as keep the
@@ -220,9 +220,14 @@ _BOUNDS_RELATIVE_TOLERANCE: Final[float] = 1e-9
 """The relative tolerance of the bounds check: L <= min(ceiling, supply) and ceiling <=
 maximum use hold exactly in arithmetic, and only rounding may carry them past."""
 
-_CAPACITY_PER_SATELLITE_RELATIVE_TOLERANCE: Final[float] = 1e-6
-"""The relative tolerance within which capacity per satellite may appear to rise between
-consecutive rows before the check refuses the curve."""
+_CAPACITY_PER_SATELLITE_RISE_TOLERANCE: Final[float] = 0.02
+"""A design rule (the build's amendment A6, from its numerics review of this module, finding
+M2): the most capacity per satellite may rise from one row to the next, relative to the
+earlier row, before the check refuses the curve. The reason is snapshot noise: on the
+shipped grid one snapshot's spread of L at the first row (342 satellites) measured 1.9
+percent, about as much as capacity per satellite falls over the first interval, so a
+tighter tolerance refused correct curves on some draws of the snapshot times. At 2 percent
+a first row under-filled by 10 percent is still refused on every draw."""
 
 _STALL_FLOOR_FROM_FLEET: Final[int] = 20_000
 """The realized fleet from which the stall floor applies (the saturation design's rule:
@@ -1227,16 +1232,21 @@ def _phone_rows(
 def _check_capacity_per_satellite(device_class: DeviceClass, rows: Sequence[CurveRow]) -> None:
     """Refuse a curve whose capacity per satellite rises between consecutive rows.
 
+    A rise of up to :data:`_CAPACITY_PER_SATELLITE_RISE_TOLERANCE` of the earlier row's value
+    is the snapshots' noise and passes; a larger one means an allocation that under-fills a
+    row (which the stall floor, from 20,000 satellites up, cannot see).
+
     Raises:
         SaturationInvariantError: Naming the class, the two fleets and the two values.
     """
     for earlier, later in pairwise(rows):
         before = earlier.capacity_gbps / earlier.fleet
         after = later.capacity_gbps / later.fleet
-        if _exceeds(after, before, _CAPACITY_PER_SATELLITE_RELATIVE_TOLERANCE):
+        if after - before > _CAPACITY_PER_SATELLITE_RISE_TOLERANCE * before:
             raise SaturationInvariantError(
                 f"{device_class.value}: capacity per satellite rises from {before} Gbps at "
-                f"{earlier.fleet} satellites to {after} Gbps at {later.fleet}"
+                f"{earlier.fleet} satellites to {after} Gbps at {later.fleet}, more than "
+                f"{_CAPACITY_PER_SATELLITE_RISE_TOLERANCE:g} relative"
             )
 
 
@@ -1392,8 +1402,9 @@ def _checks_passed(inputs: SaturationInputs) -> tuple[str, ...]:
         f"stall floor: from {_STALL_FLOOR_FROM_FLEET:,} satellites up, the phone class's useful "
         f"beams at least {inputs.sweep.stall_floor:g} x min(ceiling, supply), at every "
         "snapshot and in the snapshot means",
-        "capacity per satellite never rises between consecutive rows of any class, within "
-        f"{_CAPACITY_PER_SATELLITE_RELATIVE_TOLERANCE:g} relative",
+        "capacity per satellite never rises between consecutive rows of any class by more "
+        f"than {_CAPACITY_PER_SATELLITE_RISE_TOLERANCE:g} relative to the earlier row (the "
+        "snapshots' noise)",
     )
 
 
