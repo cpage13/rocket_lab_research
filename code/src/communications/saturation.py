@@ -173,8 +173,24 @@ _NOT_DEMAND: Final[int] = -1
 """The demand-cell index a grid cell holds when it is not demand."""
 
 _PAIR_SEARCH_CHUNK_SATELLITES: Final[int] = 500
-"""Satellites whose grid windows are searched at once, which bounds the search's
-temporary arrays; the pairs found do not depend on it."""
+"""The most satellites whose grid windows are searched at once; fewer when their windows
+would exceed :data:`_PAIR_SEARCH_CHUNK_ELEMENTS`. The pairs found do not depend on it."""
+
+_PAIR_SEARCH_CHUNK_ELEMENTS: Final[int] = 12_000_000
+"""The most window elements (satellites x window rows x window columns) one chunk of the
+pair search holds, which bounds its temporary arrays: about 80 bytes an element at the
+worst, every window cell a demand cell (measured with ``tracemalloc``), so one chunk stays
+under 1 GB, a sixteenth of the run's 16 GB budget (the strategy's budget, SR-21), and even
+sixteen workers searching at once fit. A wide view near a pole spans every column, so it
+takes fewer satellites a chunk; the central shell's 500-satellite chunks hold about 3.6
+million. The pairs found do not depend on it."""
+
+_SKY_CHUNK_PAIRS: Final[int] = 2_000_000
+"""Pairs whose sky sectors are computed at once, which bounds the temporary arrays (about
+ten of 8 bytes a pair, so about 160 MB); the sectors do not depend on it."""
+
+_ZENITH_ELEVATION_RAD: Final[float] = math.pi / 2
+"""The zenith's elevation, radians: the top of a terminal's sky and of its first ring."""
 
 _WINDOW_MARGIN_CELLS: Final[int] = 1
 """Cells added beyond the view's reach on every side of a satellite's search window, so a
@@ -537,12 +553,14 @@ class _BeamModel:
     """The view's limit and the beam's footprint against the central angle.
 
     Attributes:
+        orbit_radius_km: The shell's orbit radius, km (the Earth's radius plus the altitude).
         max_central_angle_rad: The largest central angle at which a cell sees a satellite
             above the mask.
         central_angle_rad: The footprint table's central angles, overhead to the mask.
         footprint_km2: The footprint at each, km^2.
     """
 
+    orbit_radius_km: float
     max_central_angle_rad: float
     central_angle_rad: npt.NDArray[np.float64]
     footprint_km2: npt.NDArray[np.float64]
@@ -553,6 +571,28 @@ def _central_angle_limit(shell: ShellInputs) -> float:
     mask_rad = math.radians(shell.elevation_mask_deg)
     orbit_radius_km = _EARTH_RADIUS_KM + shell.altitude_km
     return math.acos(_EARTH_RADIUS_KM * math.cos(mask_rad) / orbit_radius_km) - mask_rad
+
+
+def _elevation_rad(
+    central_angle_rad: npt.NDArray[np.float64], orbit_radius_km: float
+) -> npt.NDArray[np.float64]:
+    """Return the elevation at which a ground point sees a satellite at each central angle.
+
+    The satellite stands r cos(g) - R above the point's horizon plane and r sin(g) along it
+    (R the Earth's radius, r the orbit's), so its elevation is the angle of that offset.
+    """
+    return np.arctan2(
+        orbit_radius_km * np.cos(central_angle_rad) - _EARTH_RADIUS_KM,
+        orbit_radius_km * np.sin(central_angle_rad),
+    )
+
+
+def _central_angle_at_elevation(
+    elevation_rad: npt.NDArray[np.float64], orbit_radius_km: float
+) -> npt.NDArray[np.float64]:
+    """Return the central angle at which a satellite stands at each elevation (the inverse of
+    :func:`_elevation_rad`, by the law of sines)."""
+    return np.arccos(_EARTH_RADIUS_KM * np.cos(elevation_rad) / orbit_radius_km) - elevation_rad
 
 
 def _beam_model(shell: ShellInputs) -> _BeamModel:
@@ -578,13 +618,14 @@ def _beam_model(shell: ShellInputs) -> _BeamModel:
     height_km = orbit_radius_km * np.cos(central_angle) - _EARTH_RADIUS_KM
     offset_km = orbit_radius_km * np.sin(central_angle)
     slant_km = np.hypot(height_km, offset_km)
-    elevation = np.arctan2(height_km, offset_km)
+    elevation = _elevation_rad(central_angle, orbit_radius_km)
     cos_scan = np.sin(elevation + central_angle)
     wavelength_m = _SPEED_OF_LIGHT_M_S / shell.carrier_hz
     beamwidth_rad = shell.beamwidth_factor * wavelength_m / math.sqrt(shell.reference_aperture_m2)
     across_km = slant_km * beamwidth_rad
     along_km = across_km / (cos_scan * np.sin(elevation))
     return _BeamModel(
+        orbit_radius_km=orbit_radius_km,
         max_central_angle_rad=limit_rad,
         central_angle_rad=central_angle,
         footprint_km2=_ELLIPSE_AREA_FACTOR * across_km * along_km,
@@ -703,6 +744,59 @@ class _Pairs:
     central_angle_rad: npt.NDArray[np.float64]
 
 
+def _window_half_rows(cells: _DemandCells, max_central_angle_rad: float) -> int:
+    """Return the rows either side of a satellite's row that its search window spans: the
+    view's reach in rows, plus the margin."""
+    return math.ceil(math.degrees(max_central_angle_rad) / cells.cell_deg) + _WINDOW_MARGIN_CELLS
+
+
+def _search_chunks(
+    satellites: _SatellitePositions, cells: _DemandCells, max_central_angle_rad: float
+) -> list[tuple[int, int, int]]:
+    """Return the pair search's chunks: (first satellite, one past the last, window half-columns).
+
+    Satellites are taken in order, at most :data:`_PAIR_SEARCH_CHUNK_SATELLITES` a chunk, and
+    fewer when the chunk's windows would hold more than :data:`_PAIR_SEARCH_CHUNK_ELEMENTS`
+    elements (never fewer than one satellite). Every satellite of a chunk searches the
+    chunk's widest window: the columns its view spans at its poleward edge plus the margin,
+    or one full turn when the view reaches :data:`_WINDOW_LATITUDE_CAP_DEG`, never more.
+
+    Args:
+        satellites: The satellites.
+        cells: The demand cells (their grid's layout).
+        max_central_angle_rad: The view's central-angle limit.
+
+    Returns:
+        The chunks, tiling the satellites in order.
+    """
+    n_lon = cells.index.shape[1]
+    limit_deg = math.degrees(max_central_angle_rad)
+    window_cap_rad = math.radians(_WINDOW_LATITUDE_CAP_DEG)
+    full_turn_half_cols: int = math.ceil(n_lon / _WINDOW_SIDES)
+    window_rows = 2 * _window_half_rows(cells, max_central_angle_rad) + 1
+
+    def widest_half_columns(lat: npt.NDArray[np.float64]) -> int:
+        """The columns either side of centre that the widest window of these satellites spans."""
+        edge_lat = np.abs(lat) + max_central_angle_rad
+        if edge_lat.max() >= window_cap_rad:
+            return full_turn_half_cols
+        half_cols_each = np.ceil(limit_deg / np.cos(edge_lat) / cells.cell_deg).astype(np.int64)
+        return min(int(half_cols_each.max()) + _WINDOW_MARGIN_CELLS, full_turn_half_cols)
+
+    chunks = []
+    start = 0
+    while start < satellites.count:
+        stop = min(start + _PAIR_SEARCH_CHUNK_SATELLITES, satellites.count)
+        half_cols = widest_half_columns(satellites.lat_rad[start:stop])
+        allowed = max(1, _PAIR_SEARCH_CHUNK_ELEMENTS // (window_rows * (2 * half_cols + 1)))
+        if stop - start > allowed:
+            stop = start + allowed
+            half_cols = widest_half_columns(satellites.lat_rad[start:stop])
+        chunks.append((start, stop, half_cols))
+        start = stop
+    return chunks
+
+
 def _pairs_in_view(
     satellites: _SatellitePositions, cells: _DemandCells, max_central_angle_rad: float
 ) -> _Pairs:
@@ -712,9 +806,11 @@ def _pairs_in_view(
     view reaches, and the columns the view spans at the window's poleward edge, plus a
     margin; when the view reaches :data:`_WINDOW_LATITUDE_CAP_DEG`, every column. A window
     never spans more than one turn of longitude, and every satellite of a chunk searches the
-    chunk's widest window. The demand cells within the central-angle limit are kept. A window
-    can reach a cell twice (rows clipped at a pole, or columns wrapped past the
-    antimeridian), so each pair is kept once.
+    chunk's widest window; a chunk holds at most :data:`_PAIR_SEARCH_CHUNK_SATELLITES`
+    satellites, and fewer when their windows would hold more than
+    :data:`_PAIR_SEARCH_CHUNK_ELEMENTS` elements (at least one satellite). The demand cells
+    within the central-angle limit are kept. A window can reach a cell twice (rows clipped at
+    a pole, or columns wrapped past the antimeridian), so each pair is kept once.
 
     Args:
         satellites: The satellites.
@@ -725,28 +821,19 @@ def _pairs_in_view(
         The pairs, ordered by satellite, then cell.
     """
     n_lat, n_lon = cells.index.shape
-    cell_deg = cells.cell_deg
-    limit_deg = math.degrees(max_central_angle_rad)
-    half_rows = math.ceil(limit_deg / cell_deg) + _WINDOW_MARGIN_CELLS
+    half_rows = _window_half_rows(cells, max_central_angle_rad)
     row_offsets = np.arange(-half_rows, half_rows + 1)
     cos_limit = math.cos(max_central_angle_rad)
-    window_cap_rad = math.radians(_WINDOW_LATITUDE_CAP_DEG)
-    full_turn_half_cols = math.ceil(n_lon / _WINDOW_SIDES)
     satellite_xyz = _unit_vectors(satellites.lat_rad, satellites.lon_rad)
     found_satellite: list[npt.NDArray[np.int64]] = [np.empty(0, dtype=np.int64)]
     found_cell: list[npt.NDArray[np.int64]] = [np.empty(0, dtype=np.int64)]
     found_angle: list[npt.NDArray[np.float64]] = [np.empty(0, dtype=np.float64)]
-    for start in range(0, satellites.count, _PAIR_SEARCH_CHUNK_SATELLITES):
-        lat = satellites.lat_rad[start : start + _PAIR_SEARCH_CHUNK_SATELLITES]
-        lon = satellites.lon_rad[start : start + _PAIR_SEARCH_CHUNK_SATELLITES]
+    cell_deg = cells.cell_deg
+    for start, stop, half_cols in _search_chunks(satellites, cells, max_central_angle_rad):
+        lat = satellites.lat_rad[start:stop]
+        lon = satellites.lon_rad[start:stop]
         centre_row = np.floor((cells.lat_top_deg - np.degrees(lat)) / cell_deg).astype(np.int64)
         centre_col = np.floor((np.degrees(lon) - cells.lon_left_deg) / cell_deg).astype(np.int64)
-        edge_lat = np.abs(lat) + max_central_angle_rad
-        if edge_lat.max() >= window_cap_rad:
-            half_cols = full_turn_half_cols
-        else:
-            half_cols_each = np.ceil(limit_deg / np.cos(edge_lat) / cell_deg).astype(np.int64)
-            half_cols = min(int(half_cols_each.max()) + _WINDOW_MARGIN_CELLS, full_turn_half_cols)
         col_offsets = np.arange(-half_cols, half_cols + 1)
         rows = np.clip(centre_row[:, None, None] + row_offsets[None, :, None], 0, n_lat - 1)
         cols = (centre_col[:, None, None] + col_offsets[None, None, :]) % n_lon
@@ -766,6 +853,168 @@ def _pairs_in_view(
     _, first = np.unique(key, return_index=True)
     return _Pairs(
         satellite=satellite_all[first], cell=cell_all[first], central_angle_rad=angle_all[first]
+    )
+
+
+@dataclass(frozen=True)
+class _SectorLayout:
+    """A directional class's sky sectors (the saturation strategy's rule D1).
+
+    The terminal's sky above the elevation mask in sectors of equal solid angle, ring by
+    ring from the zenith; each ring splits into equal azimuth wedges counted from north.
+
+    Attributes:
+        wedges_per_ring: Each ring's wedges, from the zenith down.
+        lower_edges_rad: Each ring's lower elevation, radians, from the zenith down; the last
+            is the mask.
+    """
+
+    wedges_per_ring: tuple[int, ...]
+    lower_edges_rad: tuple[float, ...]
+
+    @property
+    def count(self) -> int:
+        """The number of sectors."""
+        return sum(self.wedges_per_ring)
+
+
+def _sector_layout(wedges_per_ring: tuple[int, ...], elevation_mask_deg: float) -> _SectorLayout:
+    """Return a class's sky sectors of equal solid angle (rule D1).
+
+    The sky above the mask spans 2 pi (1 - sin(mask)) sr and each of the n sectors takes
+    Omega, that over n. A zone between two elevations spans 2 pi |sin(top) - sin(bottom)|, so
+    the rings' lower edges run top down from sin(low) = sin(high) - w x Omega / (2 pi), w the
+    ring's wedges, and the last ring ends exactly at the mask (rounding aside).
+
+    Args:
+        wedges_per_ring: The class's wedges per ring, from the zenith down.
+        elevation_mask_deg: The elevation mask, degrees.
+
+    Returns:
+        The layout.
+    """
+    mask_rad = math.radians(elevation_mask_deg)
+    sector_share = (math.sin(_ZENITH_ELEVATION_RAD) - math.sin(mask_rad)) / sum(wedges_per_ring)
+    edges = []
+    sin_high = math.sin(_ZENITH_ELEVATION_RAD)
+    for wedges in wedges_per_ring:
+        sin_low = sin_high - wedges * sector_share
+        edges.append(math.asin(sin_low))
+        sin_high = sin_low
+    edges[-1] = mask_rad
+    return _SectorLayout(wedges_per_ring=wedges_per_ring, lower_edges_rad=tuple(edges))
+
+
+def _sector_of(
+    elevation_rad: npt.NDArray[np.float64],
+    azimuth_rad: npt.NDArray[np.float64],
+    layout: _SectorLayout,
+) -> npt.NDArray[np.int64]:
+    """Return the sky sector of each direction: its ring by elevation, then its azimuth wedge.
+
+    A ring holds the elevations from its lower edge (included) up to the ring above's lower
+    edge (excluded), the first ring up to the zenith; an elevation under the last edge (the
+    mask, which rounding at the view's limit can cross) falls in the last ring. A wedge is an
+    equal slice of the ring's azimuths, counted from north through east. Sectors are numbered
+    ring by ring from the zenith, each ring's wedges from north.
+
+    Args:
+        elevation_rad: The directions' elevations, radians.
+        azimuth_rad: Their azimuths from north through east, radians, in [0, 2 pi).
+        layout: The class's sectors.
+
+    Returns:
+        Each direction's sector.
+    """
+    lower = np.array(layout.lower_edges_rad)
+    ring: npt.NDArray[np.int64] = np.minimum(
+        np.searchsorted(-lower, -elevation_rad, side="left"), len(layout.wedges_per_ring) - 1
+    )
+    ring_wedges = np.array(layout.wedges_per_ring, dtype=np.int64)
+    wedges = ring_wedges[ring]
+    first_of_ring = (np.cumsum(ring_wedges) - ring_wedges)[ring]
+    wedge = np.minimum((azimuth_rad / (math.tau / wedges)).astype(np.int64), wedges - 1)
+    sector: npt.NDArray[np.int64] = first_of_ring + wedge
+    return sector
+
+
+def _pair_sectors(
+    pairs: _Pairs,
+    satellites: _SatellitePositions,
+    cells: _DemandCells,
+    orbit_radius_km: float,
+    layout: _SectorLayout,
+) -> npt.NDArray[np.int64]:
+    """Return each pair's sky sector as its cell sees its satellite (rule D1).
+
+    The satellite's elevation follows from the pair's central angle; its azimuth is the
+    initial bearing of the great circle from the cell's centre to the sub-satellite point,
+    from north through east. Computed :data:`_SKY_CHUNK_PAIRS` pairs at a time.
+
+    Args:
+        pairs: The pairs in view.
+        satellites: The satellites.
+        cells: The demand cells.
+        orbit_radius_km: The shell's orbit radius, km.
+        layout: The class's sectors.
+
+    Returns:
+        Each pair's sector.
+    """
+    sector = np.empty(pairs.satellite.size, dtype=np.int64)
+    for start in range(0, pairs.satellite.size, _SKY_CHUNK_PAIRS):
+        part = slice(start, start + _SKY_CHUNK_PAIRS)
+        satellite, cell = pairs.satellite[part], pairs.cell[part]
+        lat_cell, lat_satellite = cells.lat_rad[cell], satellites.lat_rad[satellite]
+        dlon = satellites.lon_rad[satellite] - cells.lon_rad[cell]
+        azimuth = np.mod(
+            np.arctan2(
+                np.sin(dlon) * np.cos(lat_satellite),
+                np.cos(lat_cell) * np.sin(lat_satellite)
+                - np.sin(lat_cell) * np.cos(lat_satellite) * np.cos(dlon),
+            ),
+            math.tau,
+        )
+        elevation = _elevation_rad(pairs.central_angle_rad[part], orbit_radius_km)
+        sector[part] = _sector_of(elevation, azimuth, layout)
+    return sector
+
+
+@dataclass(frozen=True, eq=False)
+class _PairDirections:
+    """Each pair's direction from its cell's centre to its satellite, computed when needed.
+
+    The angle between two satellites as a cell sees them is the arccos of the dot product of
+    their two directions from it; the directions are formed for the pairs a rule asks about,
+    never stored for every pair.
+
+    Attributes:
+        satellite: Each pair's satellite index.
+        cell: Each pair's demand-cell index.
+        satellite_km: The satellites' Earth-centred positions, km.
+        cell_km: The demand cells' Earth-centred centres, km.
+    """
+
+    satellite: npt.NDArray[np.int64]
+    cell: npt.NDArray[np.int64]
+    satellite_km: npt.NDArray[np.float64]
+    cell_km: npt.NDArray[np.float64]
+
+    def of(self, index: npt.NDArray[np.int64]) -> npt.NDArray[np.float64]:
+        """Return the unit directions of the pairs at ``index``, one row each."""
+        offset = self.satellite_km[self.satellite[index]] - self.cell_km[self.cell[index]]
+        return offset / np.linalg.norm(offset, axis=1, keepdims=True)
+
+
+def _pair_directions(
+    pairs: _Pairs, satellites: _SatellitePositions, cells: _DemandCells, orbit_radius_km: float
+) -> _PairDirections:
+    """Return the pairs' directions, from the satellites' and the cells' positions."""
+    return _PairDirections(
+        satellite=pairs.satellite,
+        cell=pairs.cell,
+        satellite_km=orbit_radius_km * _unit_vectors(satellites.lat_rad, satellites.lon_rad),
+        cell_km=_EARTH_RADIUS_KM * cells.xyz,
     )
 
 

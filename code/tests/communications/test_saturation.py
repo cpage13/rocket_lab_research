@@ -32,8 +32,9 @@ import math
 import os
 import subprocess
 import sys
+import tracemalloc
 from collections.abc import Callable, Sequence
-from itertools import pairwise
+from itertools import combinations, pairwise
 from pathlib import Path
 from typing import Protocol
 
@@ -1452,3 +1453,230 @@ def test_load_population_grid_names_a_missing_member_once(tmp_path: Path) -> Non
     message = str(refused.value)
     assert "not a readable population grid" not in message
     assert message.count(str(archive)) == 1
+
+
+# ---------------------------------------------------------------------------
+# The sky sectors (rule D1), the pairs' sky geometry and the pair search's chunks
+# ---------------------------------------------------------------------------
+
+SMALL = DeviceClass.SMALL_TERMINAL_CLASS
+"""The small terminal, the first directional class."""
+
+MOUNTED = DeviceClass.MOUNTED_TERMINAL_CLASS
+"""The mounted terminal, the second directional class."""
+
+MASK_DEG = SaturationInputs().shell.elevation_mask_deg
+"""The default elevation mask, 25 degrees."""
+
+
+def class_inputs(device_class: DeviceClass) -> ClassInputs:
+    """A class's default inputs."""
+    return next(entry for entry in SaturationInputs().classes if entry.device_class is device_class)
+
+
+def satellite_seen_at(
+    cell_deg: tuple[float, float], elevation_deg: float, azimuth_deg: float, shell: ShellInputs
+) -> tuple[float, float]:
+    """The sub-satellite point, (latitude, longitude) degrees, of a satellite that a cell centre
+    sees at the given elevation and azimuth (from north through east): the point at the central
+    angle of that elevation, along the great circle leaving the cell at that bearing."""
+    orbit = EARTH_RADIUS_KM + shell.altitude_km
+    elevation = math.radians(elevation_deg)
+    central = math.acos(EARTH_RADIUS_KM * math.cos(elevation) / orbit) - elevation
+    lat1, lon1 = math.radians(cell_deg[0]), math.radians(cell_deg[1])
+    azimuth = math.radians(azimuth_deg)
+    lat2 = math.asin(
+        math.sin(lat1) * math.cos(central) + math.cos(lat1) * math.sin(central) * math.cos(azimuth)
+    )
+    lon2 = lon1 + math.atan2(
+        math.sin(azimuth) * math.sin(central) * math.cos(lat1),
+        math.cos(central) - math.sin(lat1) * math.sin(lat2),
+    )
+    return math.degrees(lat2), math.degrees(lon2)
+
+
+@pytest.mark.parametrize(
+    ("device_class", "edges_deg"), [(SMALL, (53.9, 25.0)), (MOUNTED, (69.4, 48.0, 25.0))]
+)
+def test_sky_sectors_split_the_sky_above_the_mask_into_equal_solid_angles(
+    device_class: DeviceClass, edges_deg: tuple[float, ...]
+) -> None:
+    """Objective: rule D1: a directional terminal's sky above the mask splits into sectors of
+    equal solid angle, ring by ring from the zenith, the last ring ending exactly at the mask.
+
+    Sample: each directional class's default wedges per ring, (1, 2) and (1, 3, 5), at the
+    default 25 degree mask.
+
+    Expected outcome: the strategy's ring edges (the small terminal's cap above 53.9 degrees;
+    the mounted terminal's cap above 69.4 and its ring of 3 down to 48.0), within 0.05 degree,
+    the last edge exactly the mask; every sector's solid angle, 2 pi (sin(top) - sin(bottom))
+    over its ring's wedges, equal to the sky's 2 pi (1 - sin 25 degrees) over the sector count
+    (1e-12 relative).
+    """
+    wedges = class_inputs(device_class).sector_wedges_per_ring
+    layout = sat._sector_layout(wedges, MASK_DEG)
+    assert [math.degrees(edge) for edge in layout.lower_edges_rad] == pytest.approx(
+        edges_deg, abs=0.05
+    )
+    assert layout.lower_edges_rad[-1] == math.radians(MASK_DEG)
+    assert layout.count == sum(wedges)
+    sky_per_sector = 2 * math.pi * (1 - math.sin(math.radians(MASK_DEG))) / sum(wedges)
+    tops = (math.pi / 2, *layout.lower_edges_rad[:-1])
+    for top, bottom, count in zip(tops, layout.lower_edges_rad, wedges, strict=True):
+        solid_angle = 2 * math.pi * (math.sin(top) - math.sin(bottom)) / count
+        assert solid_angle == pytest.approx(sky_per_sector, rel=1e-12)
+
+
+def test_a_direction_falls_in_its_ring_by_elevation_then_its_azimuth_wedge() -> None:
+    """Objective: rule D1's assignment: a direction's sector is its ring by elevation (each
+    ring's lower edge included), then its equal azimuth wedge counted from north through east.
+
+    Sample: the mounted terminal's layout (a cap; a ring of 3 wedges of 120 degrees down to
+    48.0 degrees; a ring of 5 wedges of 72 degrees down to the mask), its sectors numbered from
+    the cap (0), the ring of 3 (1 to 3), the ring of 5 (4 to 8); directions at the zenith, on
+    and a hair under each lower edge, either side of wedge boundaries, and a hair under the
+    mask (rounding at the view's limit).
+
+    Expected outcome: the zenith 0; on the cap's lower edge at 200 degrees 0, a hair under it
+    2; at 60 degrees elevation, azimuth 0 gives 1, 239.9 gives 2 and 240.1 gives 3; on the ring
+    of 3's lower edge at 359 degrees, 3; at 30 degrees elevation, 71.9 gives 4, 72.1 gives 5
+    and 359.9 gives 8; on the mask at 144.1 degrees, 6; a hair under it at 300 degrees, 8.
+    """
+    layout = sat._sector_layout(class_inputs(MOUNTED).sector_wedges_per_ring, MASK_DEG)
+    cap_edge, ring_edge, mask = layout.lower_edges_rad
+    hair = 1e-9
+    cases = (
+        (math.pi / 2, 0.0, 0),
+        (cap_edge, 200.0, 0),
+        (cap_edge - hair, 200.0, 2),
+        (math.radians(60.0), 0.0, 1),
+        (math.radians(60.0), 239.9, 2),
+        (math.radians(60.0), 240.1, 3),
+        (ring_edge, 359.0, 3),
+        (math.radians(30.0), 71.9, 4),
+        (math.radians(30.0), 72.1, 5),
+        (math.radians(30.0), 359.9, 8),
+        (mask, 144.1, 6),
+        (mask - hair, 300.0, 8),
+    )
+    elevation = np.array([case[0] for case in cases])
+    azimuth = np.radians([case[1] for case in cases])
+    assert sat._sector_of(elevation, azimuth, layout).tolist() == [case[2] for case in cases]
+
+
+SKY_DIRECTIONS_DEG = ((90.0, 0.0), (60.0, 10.0), (60.0, 130.0), (30.0, 200.0), (27.0, 75.0))
+"""Directions (elevation, azimuth from north) at which the sky-geometry test places its
+satellites, as the patch's cell centre sees them."""
+
+
+def test_each_pair_sees_its_satellite_in_its_sector_at_the_true_angles(
+    synthetic_population_grid: GridBuilder,
+) -> None:
+    """Objective: the pairs' sky geometry: the elevation and azimuth a cell sees each satellite
+    at place the pair in its sector (rule D1), and the angle between two satellites seen from a
+    cell is the true one (the separations of rule D4 and the gains of rule D5).
+
+    Sample: one populated 0.25 degree cell; five satellites placed where its centre sees them at
+    (elevation, azimuth) (90, 0), (60, 10), (60, 130), (30, 200) and (27, 75) degrees; the
+    mounted terminal's sectors.
+
+    Expected outcome: each pair's sector is that of its intended direction (0, 1, 2, 6 and 5);
+    the angle between every two of them, from the pairs' directions, equals the spherical
+    angle between their intended directions, cos = sin e1 sin e2 + cos e1 cos e2 cos(a1 - a2),
+    within 1e-9 radian.
+    """
+    grid = synthetic_population_grid(0.25, patch_people(0.25, 0))
+    cells = sat._demand_cells(grid, 1.0)
+    shell = SaturationInputs().shell
+    centre = (float(np.degrees(cells.lat_rad[0])), float(np.degrees(cells.lon_rad[0])))
+    satellites = satellites_at(
+        [satellite_seen_at(centre, el, az, shell) for el, az in SKY_DIRECTIONS_DEG]
+    )
+    beam = sat._beam_model(shell)
+    pairs = sat._pairs_in_view(satellites, cells, beam.max_central_angle_rad)
+    assert pairs.satellite.tolist() == list(range(len(SKY_DIRECTIONS_DEG)))
+    layout = sat._sector_layout(class_inputs(MOUNTED).sector_wedges_per_ring, MASK_DEG)
+    intended = sat._sector_of(
+        np.radians([el for el, _ in SKY_DIRECTIONS_DEG]),
+        np.radians([az for _, az in SKY_DIRECTIONS_DEG]),
+        layout,
+    )
+    assert intended.tolist() == [0, 1, 2, 6, 5]
+    sectors = sat._pair_sectors(pairs, satellites, cells, beam.orbit_radius_km, layout)
+    assert sectors.tolist() == intended.tolist()
+    directions = sat._pair_directions(pairs, satellites, cells, beam.orbit_radius_km).of(
+        np.arange(pairs.satellite.size)
+    )
+    for (u, (e1, a1)), (v, (e2, a2)) in combinations(enumerate(SKY_DIRECTIONS_DEG), 2):
+        e1, a1, e2, a2 = (math.radians(angle) for angle in (e1, a1, e2, a2))
+        expected = math.acos(
+            math.sin(e1) * math.sin(e2) + math.cos(e1) * math.cos(e2) * math.cos(a1 - a2)
+        )
+        found = math.acos(min(1.0, float(directions[u] @ directions[v])))
+        assert found == pytest.approx(expected, abs=1e-9)
+
+
+WIDE_VIEW_SHELL = ShellInputs(altitude_km=1200.0, inclination_deg=70.0, elevation_mask_deg=5.0)
+"""A wide-view shell (about a 28 degree view): near a pole its search windows span every
+column, the pair search's worst case for memory (the p1 review's scenario S1.8)."""
+
+LOWERED_CHUNK_ELEMENTS = 700_000
+"""A lowered element budget: two of the wide view's polar windows (229 rows x 1,441 columns,
+about 330,000 elements each) to a chunk."""
+
+BYTES_PER_WINDOW_ELEMENT = 80
+"""The pair search's working memory per window element at the worst, every window cell a
+demand cell (measured with tracemalloc at about 70 bytes, 80 with the pairs found)."""
+
+BYTES_PER_PAIR_FOUND = 120
+"""The memory a pair found holds by the end of the search: its satellite, cell and angle as
+found and as kept, and the deduplication's keys and sort (measured at about 107 bytes)."""
+
+
+def test_the_pair_search_chunks_hold_their_element_budget_and_change_no_pair(
+    synthetic_population_grid: GridBuilder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Objective: the pair search's chunks bound its working memory (the p1 review's scenario
+    S1.8): every chunk's windows hold at most the element budget, and chunking changes no pair.
+
+    Sample: every 0.25 degree cell populated (every window cell a demand cell, the worst case
+    for memory); the wide-view shell (1,200 km, a 5 degree mask), whose view near a pole spans
+    the whole turn of longitude; 8 satellites at 70 degrees north; the budget lowered to
+    700,000 elements; then the central shell at 5,400 requested satellites at the default
+    budget.
+
+    Expected outcome: the wide view's chunks tile the satellites in order, two to a chunk, each
+    within the lowered budget; the pairs equal those of one unbudgeted chunk; the traced peak
+    stays within 80 bytes a budgeted element plus 120 bytes a pair found, which one chunk of
+    all eight windows (2.6 million elements) would break; the central shell keeps chunks of
+    500 satellites (the last 402), well within the default budget.
+    """
+    cells = sat._demand_cells(synthetic_population_grid(0.25, everywhere_people), 1e-12)
+    limit = sat._central_angle_limit(WIDE_VIEW_SHELL)
+    satellites = satellites_at([(70.0, lon) for lon in np.linspace(-170.0, 170.0, 8)])
+    window_rows = 2 * sat._window_half_rows(cells, limit) + 1
+    monkeypatch.setattr(sat, "_PAIR_SEARCH_CHUNK_ELEMENTS", 10**12)
+    unbudgeted = sat._pairs_in_view(satellites, cells, limit)
+    monkeypatch.setattr(sat, "_PAIR_SEARCH_CHUNK_ELEMENTS", LOWERED_CHUNK_ELEMENTS)
+    chunks = sat._search_chunks(satellites, cells, limit)
+    assert [(start, stop) for start, stop, _ in chunks] == [(0, 2), (2, 4), (4, 6), (6, 8)]
+    for start, stop, half_cols in chunks:
+        assert (stop - start) * window_rows * (2 * half_cols + 1) <= LOWERED_CHUNK_ELEMENTS
+    tracemalloc.start()
+    budgeted = sat._pairs_in_view(satellites, cells, limit)
+    _, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    for field in ("satellite", "cell", "central_angle_rad"):
+        assert np.array_equal(getattr(budgeted, field), getattr(unbudgeted, field))
+    bound = (
+        LOWERED_CHUNK_ELEMENTS * BYTES_PER_WINDOW_ELEMENT
+        + budgeted.satellite.size * BYTES_PER_PAIR_FOUND
+    )
+    one_chunk = satellites.count * window_rows * (2 * chunks[0][2] + 1)
+    assert peak <= bound < one_chunk * BYTES_PER_WINDOW_ELEMENT
+    monkeypatch.undo()
+    central = sat._walker_positions(SaturationInputs().shell, 5_400, 0.0)
+    central_chunks = sat._search_chunks(
+        central, cells, sat._central_angle_limit(SaturationInputs().shell)
+    )
+    assert [stop - start for start, stop, _ in central_chunks] == [500] * 10 + [402]
