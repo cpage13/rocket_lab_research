@@ -97,9 +97,9 @@ class DeviceClass(StrEnum):
     elements; no user pointing, no moving parts; investor decision 2026-07-10),
     purpose-built with NO chipset assumption
     (SE band 1.5 to 2.5, central :data:`SMALL_TERMINAL_CLASS_SE_CENTRAL`).
-    ``TERMINAL_CLASS`` is the LARGE boosted / custom-antenna tier: mounted or pointed,
+    ``MOUNTED_TERMINAL_CLASS`` is the LARGE boosted / custom-antenna tier: mounted or pointed,
     15+ dBi (drones, fixed sites, vehicles; SE band 2.0 to 3.0, central
-    :data:`TERMINAL_CLASS_SE_CENTRAL`). See the ecosystem assumption
+    :data:`MOUNTED_TERMINAL_CLASS_SE_CENTRAL`). See the ecosystem assumption
     (:data:`ECOSYSTEM_ASSUMPTION_NOTE`): the Iridium model reaches purpose-built or
     in-chipset devices on Iridium's owned L-band (the MSS lane), NEVER an unmodified
     phone (that is the cellular lane, the High-Bandwidth Cellular Pure Play model,
@@ -108,7 +108,7 @@ class DeviceClass(StrEnum):
 
     PHONE_CLASS = "phone_class"
     SMALL_TERMINAL_CLASS = "small_terminal_class"
-    TERMINAL_CLASS = "terminal_class"
+    MOUNTED_TERMINAL_CLASS = "mounted_terminal_class"
 
 
 # ===========================================================================
@@ -397,17 +397,17 @@ SMALL_TERMINAL_CLASS_SE_HIGH: Final[float] = 2.5
 spectral-efficiency sweep band (it meets the large tier's central; the bands overlap,
 the centrals are ordered 0.65 < 2.0 < 2.5)."""
 
-TERMINAL_CLASS_SE_CENTRAL: Final[float] = 2.5
+MOUNTED_TERMINAL_CLASS_SE_CENTRAL: Final[float] = 2.5
 """SOURCED_ESTIMATE (COMM-650). Central of the 2.0 to 3.0 bps/Hz band for the LARGE
 boosted / custom-antenna tier: mounted or pointed, 15+ dBi (drones, fixed sites,
 vehicles; the AST-class anchor). Value untouched from the corpus; wording updated for
 the three-tier device ladder."""
 
-TERMINAL_CLASS_SE_LOW: Final[float] = 2.0
+MOUNTED_TERMINAL_CLASS_SE_LOW: Final[float] = 2.0
 """SOURCED_ESTIMATE (COMM-650). Low edge of the documented large-tier
 spectral-efficiency sweep band."""
 
-TERMINAL_CLASS_SE_HIGH: Final[float] = 3.0
+MOUNTED_TERMINAL_CLASS_SE_HIGH: Final[float] = 3.0
 """SOURCED_ESTIMATE (COMM-650). High edge of the documented large-tier
 spectral-efficiency sweep band."""
 
@@ -602,6 +602,26 @@ validator): it absorbs float representation error (e.g. 82.805 has no exact bina
 form) without admitting a materially wrong sheet (a 99- or 101-sum sheet fails
 loudly, off by 1.0). A fixed epsilon, not a tunable."""
 
+# ===========================================================================
+# The shipped population grid (the saturation curve's demand map, ADR 009)
+# ===========================================================================
+
+POPULATION_GRID_PATH: Final[str] = "communications/data/ghs_pop_e2030_0p25deg.npz"
+"""The shipped population grid, repository-relative: people per 0.25 degree cell
+(720 rows from 90N, 1440 columns from 180W, float32), the EC JRC GHS-POP R2023A
+2030 projection summed from 30 arc-seconds, shared under CC BY 4.0 with its credit,
+citations and the change made in ``communications/data/ATTRIBUTION.md``. The demand
+map of ADR 009 (``docs/adr/009-demand-every-resident-on-a-shipped-grid.md``): every
+resident of an inhabited cell. A fixed file location, not a tunable."""
+
+POPULATION_GRID_SHA256: Final[str] = (
+    "33a42880010757c1eb5c19ef6e092111753866b670d9bc38fa9e802aa8d12e25"
+)
+"""The SHA-256 of the grid at :data:`POPULATION_GRID_PATH` as shipped (705,701 bytes),
+recorded when it was committed with ``communications/data/ATTRIBUTION.md`` (ADR 009):
+the file's identity, so a reader can confirm the grid it loads is the one shipped. A
+fixed identity, not a tunable."""
+
 __all__ = [
     "ARPU_USD_PER_MONTH_DEFAULT",
     "BASE_YEAR_DEFAULT",
@@ -649,6 +669,9 @@ __all__ = [
     "IOT_DEVICES_DEFAULT",
     "IRIDIUM_OPERATIONS_COST_MUSD",
     "IRIDIUM_SCENARIO_NAME_DEFAULT",
+    "MOUNTED_TERMINAL_CLASS_SE_CENTRAL",
+    "MOUNTED_TERMINAL_CLASS_SE_HIGH",
+    "MOUNTED_TERMINAL_CLASS_SE_LOW",
     "PHONE_CLASS_SE_CENTRAL",
     "PHONE_CLASS_SE_HIGH",
     "PHONE_CLASS_SE_LOW",
@@ -657,7 +680,7 @@ __all__ = [
     "SMALL_TERMINAL_CLASS_SE_HIGH",
     "SMALL_TERMINAL_CLASS_SE_LOW",
     "SPECTRUM_MHZ_DEFAULT",
-    "TERMINAL_CLASS_SE_CENTRAL",
-    "TERMINAL_CLASS_SE_HIGH",
-    "TERMINAL_CLASS_SE_LOW",
+    # The shipped population grid (ADR 009).
+    "POPULATION_GRID_PATH",
+    "POPULATION_GRID_SHA256",
 ]

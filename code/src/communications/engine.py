@@ -137,6 +137,9 @@ from communications.constants import (
     GBPS_TO_MBPS,
     IRIDIUM_OPERATIONS_COST_MUSD,
     MONTHS_PER_YEAR,
+    MOUNTED_TERMINAL_CLASS_SE_CENTRAL,
+    MOUNTED_TERMINAL_CLASS_SE_HIGH,
+    MOUNTED_TERMINAL_CLASS_SE_LOW,
     PHONE_CLASS_SE_CENTRAL,
     PHONE_CLASS_SE_HIGH,
     PHONE_CLASS_SE_LOW,
@@ -144,9 +147,6 @@ from communications.constants import (
     SMALL_TERMINAL_CLASS_SE_CENTRAL,
     SMALL_TERMINAL_CLASS_SE_HIGH,
     SMALL_TERMINAL_CLASS_SE_LOW,
-    TERMINAL_CLASS_SE_CENTRAL,
-    TERMINAL_CLASS_SE_HIGH,
-    TERMINAL_CLASS_SE_LOW,
     BindingRegime,
     DeviceClass,
 )
@@ -346,8 +346,8 @@ def resolve_device_spectral_efficiency(dials: IridiumDials) -> float:
     otherwise the central spectral-efficiency tier for the ``device_class`` (the
     investor's three device categories, a three-row mapping): ``PHONE_CLASS`` to
     :data:`PHONE_CLASS_SE_CENTRAL` (0.65), ``SMALL_TERMINAL_CLASS`` to
-    :data:`SMALL_TERMINAL_CLASS_SE_CENTRAL` (2.0), ``TERMINAL_CLASS`` to
-    :data:`TERMINAL_CLASS_SE_CENTRAL` (2.5).
+    :data:`SMALL_TERMINAL_CLASS_SE_CENTRAL` (2.0), ``MOUNTED_TERMINAL_CLASS`` to
+    :data:`MOUNTED_TERMINAL_CLASS_SE_CENTRAL` (2.5).
 
     Args:
         dials: The Iridium-model :class:`~communications.config.IridiumDials` block
@@ -361,7 +361,7 @@ def resolve_device_spectral_efficiency(dials: IridiumDials) -> float:
     class_central: dict[DeviceClass, float] = {
         DeviceClass.PHONE_CLASS: PHONE_CLASS_SE_CENTRAL,
         DeviceClass.SMALL_TERMINAL_CLASS: SMALL_TERMINAL_CLASS_SE_CENTRAL,
-        DeviceClass.TERMINAL_CLASS: TERMINAL_CLASS_SE_CENTRAL,
+        DeviceClass.MOUNTED_TERMINAL_CLASS: MOUNTED_TERMINAL_CLASS_SE_CENTRAL,
     }
     return class_central[dials.device_class]
 
@@ -1348,9 +1348,9 @@ def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
             f"band is {PHONE_CLASS_SE_LOW} to {PHONE_CLASS_SE_HIGH}, the "
             f"small-terminal-class band {SMALL_TERMINAL_CLASS_SE_LOW} to "
             f"{SMALL_TERMINAL_CLASS_SE_HIGH}, the large-terminal-class band "
-            f"{TERMINAL_CLASS_SE_LOW} to {TERMINAL_CLASS_SE_HIGH} bps/Hz (class "
+            f"{MOUNTED_TERMINAL_CLASS_SE_LOW} to {MOUNTED_TERMINAL_CLASS_SE_HIGH} bps/Hz (class "
             f"centrals {PHONE_CLASS_SE_CENTRAL} / {SMALL_TERMINAL_CLASS_SE_CENTRAL} / "
-            f"{TERMINAL_CLASS_SE_CENTRAL})."
+            f"{MOUNTED_TERMINAL_CLASS_SE_CENTRAL})."
         ),
         (
             f"The reuse calibration ({REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE} Gbps per "

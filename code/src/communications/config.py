@@ -639,7 +639,7 @@ class IridiumDials(BaseModel):
             "The device class that sets the spectral-efficiency tier: PHONE_CLASS "
             "(0 dBi in-chipset, the ecosystem-assumption baseline, SE ~0.65), "
             "SMALL_TERMINAL_CLASS (paperback/puck ~10 dBi purpose-built, SE ~2.0), or "
-            "TERMINAL_CLASS (large boosted / custom antenna, 15+ dBi, SE ~2.5). Default "
+            "MOUNTED_TERMINAL_CLASS (large boosted / custom antenna, 15+ dBi, SE ~2.5). Default "
             "PHONE_CLASS; one class per run in v1 (no mixed fleet). Flagged. "
             "Configurable."
         ),

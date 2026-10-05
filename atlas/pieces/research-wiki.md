@@ -79,7 +79,9 @@ study (see `CONTEXT.md`).
   research B lists them for a fix at promotion, on the investor's go
   (`.agent/other/flatellite_dimensions_09_29/RESEARCH_TRACKER.md` (local)).
   The root `rocket_lab_primer.md` quotes the same 13 t and first-flight
-  figures. The experiment's own validated findings are not yet promoted here.
+  figures. The experiment's panel and per-launch counts are now repo rows
+  (COMM-711 to COMM-713, `research/rocket_lab/flatellite_panel_and_stack.md`);
+  the Neutron items above stay open.
 - A low-priority follow-up from the 09-24 review: record the guide's
   Figure 13 volume read-off under `research/rocket_lab/neutron/`
   (`.agent/lifecycle/review_fixes_session_state_09_24.md` (local)).
