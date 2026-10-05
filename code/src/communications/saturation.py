@@ -1179,22 +1179,20 @@ def _fill_band(
     n_satellites = remaining.satellite_beams.size
     n_keys = remaining.key_area_km2.size
     n_cells = remaining.cell_beams.size
-    asked = np.minimum(asked_cap, remaining.key_area_km2[key] / footprint_km2)
+    satellite_beams = remaining.satellite_beams[satellite]
+    key_area_km2 = remaining.key_area_km2[key]
+    cell_beams = remaining.cell_beams[cell]
+    asked = np.minimum(asked_cap, key_area_km2 / footprint_km2)
     for _ in range(passes):
-        satellite_want = np.bincount(satellite, weights=asked, minlength=n_satellites)
-        satellite_scale = np.minimum(
-            _FULL_SCALE, remaining.satellite_beams / np.maximum(satellite_want, _DIVISION_FLOOR)
+        satellite_want = np.bincount(satellite, weights=asked, minlength=n_satellites)[satellite]
+        asked = asked * np.minimum(
+            _FULL_SCALE, satellite_beams / np.maximum(satellite_want, _DIVISION_FLOOR)
         )
-        asked = asked * satellite_scale[satellite]
-        area_want = np.bincount(key, weights=asked * footprint_km2, minlength=n_keys)
-        beam_want = np.bincount(cell, weights=asked, minlength=n_cells)
-        key_scale = np.minimum(
-            _FULL_SCALE, remaining.key_area_km2 / np.maximum(area_want, _DIVISION_FLOOR)
-        )
-        cell_scale = np.minimum(
-            _FULL_SCALE, remaining.cell_beams / np.maximum(beam_want, _DIVISION_FLOOR)
-        )
-        asked = asked * np.minimum(key_scale[key], cell_scale[cell])
+        area_want = np.bincount(key, weights=asked * footprint_km2, minlength=n_keys)[key]
+        beam_want = np.bincount(cell, weights=asked, minlength=n_cells)[cell]
+        key_scale = np.minimum(_FULL_SCALE, key_area_km2 / np.maximum(area_want, _DIVISION_FLOOR))
+        cell_scale = np.minimum(_FULL_SCALE, cell_beams / np.maximum(beam_want, _DIVISION_FLOOR))
+        asked = asked * np.minimum(key_scale, cell_scale)
     np.subtract(
         remaining.satellite_beams,
         np.bincount(satellite, weights=asked, minlength=n_satellites),
@@ -1562,6 +1560,232 @@ def _joins_serving_set(
         case _ServingRule.ANY_SHARE:
             placing: npt.NDArray[np.bool_] = stacked_beams > _SERVED_BEAMS_FLOOR
             return placing
+
+
+@dataclass(frozen=True, eq=False)
+class _ServingIndex:
+    """The serving pairs grouped by cell, for the pairwise admission's lookups.
+
+    Attributes:
+        pairs: The serving pairs, ordered by cell (by pair index within a cell).
+        counts: Each cell's number of serving pairs.
+        starts: Where each cell's serving pairs start in ``pairs``.
+    """
+
+    pairs: npt.NDArray[np.int64]
+    counts: npt.NDArray[np.int64]
+    starts: npt.NDArray[np.int64]
+
+
+def _serving_index(
+    serving_pairs: npt.NDArray[np.int64], pair_cell: npt.NDArray[np.int64], n_cells: int
+) -> _ServingIndex:
+    """Return the serving pairs grouped by cell."""
+    cell = pair_cell[serving_pairs]
+    counts = np.bincount(cell, minlength=n_cells)
+    return _ServingIndex(
+        pairs=serving_pairs[np.argsort(cell, kind="stable")],
+        counts=counts,
+        starts=np.cumsum(counts) - counts,
+    )
+
+
+def _admitted(
+    candidates: npt.NDArray[np.int64],
+    pair_cell: npt.NDArray[np.int64],
+    sector: npt.NDArray[np.int64],
+    directions: _PairDirections,
+    serving: _ServingIndex,
+    cos_beamwidth: float,
+) -> npt.NDArray[np.bool_]:
+    """Return which of a band's candidates the pairwise rule admits (rule D4).
+
+    The candidates come in the order (cell, footprint, satellite index). A candidate is
+    admitted only if its satellite sits at least one terminal beamwidth from every satellite
+    serving its cell in another sector, and from every candidate of its cell admitted earlier
+    in the band in another sector; satellites in the same sector tile that sector's one layer,
+    so they are exempt from each other. The angle is between the unit directions from the
+    cell to the two satellites (closer than a beamwidth when its cosine exceeds the
+    beamwidth's). The second test is sequential within a cell, so the candidates are taken
+    rank by rank within their cells, every cell at once.
+
+    Args:
+        candidates: The band's candidates, in the order above.
+        pair_cell: Every pair's cell.
+        sector: Every pair's sector.
+        directions: The pairs' directions.
+        serving: The serving pairs, grouped by cell.
+        cos_beamwidth: The cosine of the terminal's half-power beamwidth.
+
+    Returns:
+        Whether each candidate is admitted.
+    """
+    cand_cell = pair_cell[candidates]
+    cand_sector = sector[candidates]
+    cand_direction = directions.of(candidates)
+    blocked = np.zeros(candidates.size, dtype=bool)
+    per_candidate = serving.counts[cand_cell]
+    total = int(per_candidate.sum())
+    if total:
+        row = np.repeat(np.arange(candidates.size), per_candidate)
+        offset = np.arange(total) - np.repeat(
+            np.cumsum(per_candidate) - per_candidate, per_candidate
+        )
+        server = serving.pairs[serving.starts[cand_cell[row]] + offset]
+        close = np.einsum("ij,ij->i", directions.of(server), cand_direction[row]) > cos_beamwidth
+        blocked[row[close & (sector[server] != cand_sector[row])]] = True
+    alive = np.flatnonzero(~blocked)
+    admitted = np.zeros(candidates.size, dtype=bool)
+    if alive.size == 0:
+        return admitted
+    alive_cell = cand_cell[alive]
+    opens_group = np.r_[True, alive_cell[1:] != alive_cell[:-1]]
+    group_start = np.flatnonzero(opens_group)
+    group = np.cumsum(opens_group) - 1
+    rank = np.arange(alive.size) - group_start[group]
+    kept = rank == 0
+    top_rank = int(rank.max())
+    if top_rank:
+        by_rank = np.argsort(rank, kind="stable")
+        rank_starts = np.searchsorted(rank[by_rank], np.arange(top_rank + 2))
+        alive_direction = cand_direction[alive]
+        alive_sector = cand_sector[alive]
+        for at_rank in range(1, top_rank + 1):
+            at = by_rank[rank_starts[at_rank] : rank_starts[at_rank + 1]]
+            earlier = group_start[group[at]][:, None] + np.arange(at_rank)
+            close_earlier = (
+                np.einsum("ijk,ik->ij", alive_direction[earlier], alive_direction[at])
+                > cos_beamwidth
+            )
+            other_sector = alive_sector[earlier] != alive_sector[at][:, None]
+            kept[at] = ~np.any(kept[earlier] & other_sector & close_earlier, axis=1)
+    admitted[alive[kept]] = True
+    return admitted
+
+
+@dataclass(frozen=True, eq=False)
+class _StackedLayers:
+    """Stage 2's result: the stacked layers (rule D4).
+
+    Attributes:
+        beams: Each pair's stacked beams as placed (rule D6 may later drop a cell's).
+        serving: Whether each pair's satellite serves its cell at the end of stage 2.
+    """
+
+    beams: npt.NDArray[np.float64]
+    serving: npt.NDArray[np.bool_]
+
+
+def _stacked_layers(
+    pairs: _Pairs,
+    footprint_km2: npt.NDArray[np.float64],
+    sector: npt.NDArray[np.int64],
+    directions: _PairDirections,
+    cells: _DemandCells,
+    first: _FirstLayer,
+    bands: _FootprintBands,
+    rules: _DirectionalRules,
+    passes: int,
+) -> _StackedLayers:
+    """Spend the satellites' remaining beams on extra layers, one per sky sector (rule D4).
+
+    The same banded fill as stage 1, on the snapshot's band edges, over (cell, sector) keys,
+    all keys at once: a key's area is its cell's area less the first layer's area from that
+    sector's satellites; a pair's cap is one layer less its first-layer beams; the people cap
+    and each satellite's remaining beams carry over from stage 1. Before each band's fill its
+    candidates, the pairs that could place more than :data:`_SERVED_BEAMS_FLOOR` beams at the
+    band's start (by their cap, their key's area, their satellite's beams and their cell's
+    people cap left), are taken in the order (cell, footprint, satellite index) and admitted
+    by the pairwise rule (:func:`_admitted`); only the admitted fill. After the fill, an
+    admitted pair joins its cell's serving set by the serving rule (rule D3).
+
+    Args:
+        pairs: The pairs in view.
+        footprint_km2: Each pair's footprint.
+        sector: Each pair's sky sector.
+        directions: The pairs' directions.
+        cells: The demand cells.
+        first: Stage 1's layer and what it left.
+        bands: The snapshot's footprint bands.
+        rules: The class's rules.
+        passes: The proportional passes.
+
+    Returns:
+        The stacked beams and the final serving set.
+    """
+    n_sectors = rules.layout.count
+    key_area_km2 = np.repeat(cells.area_km2, n_sectors) - np.bincount(
+        pairs.cell * n_sectors + sector,
+        weights=first.beams * footprint_km2,
+        minlength=cells.count * n_sectors,
+    )
+    remaining = _Remaining(
+        satellite_beams=first.remaining.satellite_beams.copy(),
+        key_area_km2=np.maximum(key_area_km2, _NONE_LEFT),
+        cell_beams=first.remaining.cell_beams.copy(),
+    )
+    stacked = np.zeros(footprint_km2.size)
+    serving = _initial_serving_set(pairs, footprint_km2, cells, first.beams, rules)
+    serving_pairs = np.flatnonzero(serving)
+    serving_lookup = _serving_index(serving_pairs, pairs.cell, cells.count)
+    cos_beamwidth = math.cos(rules.beamwidth_rad)
+    for band in range(bands.count):
+        members = bands.members(band)
+        if members.size == 0:
+            continue
+        cell = pairs.cell[members]
+        footprint = footprint_km2[members]
+        cap = np.maximum(cells.area_km2[cell] / footprint - first.beams[members], _NONE_LEFT)
+        could_place = np.minimum(
+            np.minimum(cap, remaining.key_area_km2[cell * n_sectors + sector[members]] / footprint),
+            np.minimum(
+                remaining.satellite_beams[pairs.satellite[members]], remaining.cell_beams[cell]
+            ),
+        )
+        candidates = members[could_place > _SERVED_BEAMS_FLOOR]
+        if candidates.size == 0:
+            continue
+        candidates = candidates[
+            np.lexsort(
+                (pairs.satellite[candidates], footprint_km2[candidates], pairs.cell[candidates])
+            )
+        ]
+        chosen = np.sort(
+            candidates[
+                _admitted(candidates, pairs.cell, sector, directions, serving_lookup, cos_beamwidth)
+            ]
+        )
+        if chosen.size == 0:
+            continue
+        chosen_cell = pairs.cell[chosen]
+        chosen_footprint = footprint_km2[chosen]
+        placed = _fill_band(
+            np.maximum(
+                cells.area_km2[chosen_cell] / chosen_footprint - first.beams[chosen], _NONE_LEFT
+            ),
+            pairs.satellite[chosen],
+            chosen_cell * n_sectors + sector[chosen],
+            chosen_cell,
+            chosen_footprint,
+            remaining,
+            passes,
+        )
+        stacked[chosen] = placed
+        joins = chosen[
+            _joins_serving_set(
+                first.beams[chosen],
+                placed,
+                chosen_footprint,
+                cells.area_km2[chosen_cell],
+                rules,
+            )
+            & ~serving[chosen]
+        ]
+        if joins.size:
+            serving[joins] = True
+            serving_pairs = np.concatenate([serving_pairs, joins])
+            serving_lookup = _serving_index(serving_pairs, pairs.cell, cells.count)
+    return _StackedLayers(beams=stacked, serving=serving)
 
 
 # ===========================================================================
