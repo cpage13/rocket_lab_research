@@ -602,6 +602,26 @@ validator): it absorbs float representation error (e.g. 82.805 has no exact bina
 form) without admitting a materially wrong sheet (a 99- or 101-sum sheet fails
 loudly, off by 1.0). A fixed epsilon, not a tunable."""
 
+# ===========================================================================
+# The shipped population grid (the saturation curve's demand map, ADR 009)
+# ===========================================================================
+
+POPULATION_GRID_PATH: Final[str] = "communications/data/ghs_pop_e2030_0p25deg.npz"
+"""The shipped population grid, repository-relative: people per 0.25 degree cell
+(720 rows from 90N, 1440 columns from 180W, float32), the EC JRC GHS-POP R2023A
+2030 projection summed from 30 arc-seconds, shared under CC BY 4.0 with its credit,
+citations and the change made in ``communications/data/ATTRIBUTION.md``. The demand
+map of ADR 009 (``docs/adr/009-demand-every-resident-on-a-shipped-grid.md``): every
+resident of an inhabited cell. A fixed file location, not a tunable."""
+
+POPULATION_GRID_SHA256: Final[str] = (
+    "33a42880010757c1eb5c19ef6e092111753866b670d9bc38fa9e802aa8d12e25"
+)
+"""The SHA-256 of the grid at :data:`POPULATION_GRID_PATH` as shipped (705,701 bytes),
+recorded when it was committed with ``communications/data/ATTRIBUTION.md`` (ADR 009):
+the file's identity, so a reader can confirm the grid it loads is the one shipped. A
+fixed identity, not a tunable."""
+
 __all__ = [
     "ARPU_USD_PER_MONTH_DEFAULT",
     "BASE_YEAR_DEFAULT",
@@ -660,4 +680,7 @@ __all__ = [
     "TERMINAL_CLASS_SE_CENTRAL",
     "TERMINAL_CLASS_SE_HIGH",
     "TERMINAL_CLASS_SE_LOW",
+    # The shipped population grid (ADR 009).
+    "POPULATION_GRID_PATH",
+    "POPULATION_GRID_SHA256",
 ]
