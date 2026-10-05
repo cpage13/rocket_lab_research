@@ -1064,73 +1064,198 @@ class _Allocation:
     supply_beams: float
 
 
-def _fill_smallest_footprint_first(
+@dataclass(frozen=True, eq=False)
+class _FootprintBands:
+    """A snapshot's geometric footprint bands, which order every fill smallest footprint first.
+
+    Attributes:
+        order: The pairs sorted by band (stable, so by pair index within a band).
+        starts: Band b's pairs are ``order[starts[b]:starts[b + 1]]``.
+    """
+
+    order: npt.NDArray[np.int64]
+    starts: npt.NDArray[np.int64]
+
+    @property
+    def count(self) -> int:
+        """The number of bands."""
+        return int(self.starts.size) - 1
+
+    def members(self, band: int) -> npt.NDArray[np.int64]:
+        """Return the pairs of one band."""
+        return self.order[self.starts[band] : self.starts[band + 1]]
+
+
+def _footprint_bands(footprint_km2: npt.NDArray[np.float64], bands: int) -> _FootprintBands:
+    """Return the snapshot's footprint bands: edges ``geomspace(min footprint x 0.999, max
+    footprint x 1.001, bands + 1)`` over every pair in view (none when no pair is in view)."""
+    if footprint_km2.size == 0:
+        return _FootprintBands(
+            order=np.empty(0, dtype=np.int64), starts=np.zeros(bands + 1, dtype=np.int64)
+        )
+    edges = np.geomspace(
+        footprint_km2.min() * _BAND_EDGE_LOW_FACTOR,
+        footprint_km2.max() * _BAND_EDGE_HIGH_FACTOR,
+        bands + 1,
+    )
+    band = np.clip(np.searchsorted(edges, footprint_km2, side="right") - 1, 0, bands - 1)
+    order = np.argsort(band, kind="stable")
+    return _FootprintBands(order=order, starts=np.searchsorted(band[order], np.arange(bands + 1)))
+
+
+@dataclass(frozen=True, eq=False)
+class _Remaining:
+    """What the fills have left, drawn down in place band by band.
+
+    Attributes:
+        satellite_beams: Each satellite's beams left.
+        key_area_km2: Each key's co-channel area left: a cell's for the first layer (one layer
+            each), a cell's sky sector's for the stacked layers (rule D4).
+        cell_beams: Each cell's people cap left, beams.
+    """
+
+    satellite_beams: npt.NDArray[np.float64]
+    key_area_km2: npt.NDArray[np.float64]
+    cell_beams: npt.NDArray[np.float64]
+
+
+def _fill_band(
+    asked_cap: npt.NDArray[np.float64],
+    satellite: npt.NDArray[np.int64],
+    key: npt.NDArray[np.int64],
+    cell: npt.NDArray[np.int64],
+    footprint_km2: npt.NDArray[np.float64],
+    remaining: _Remaining,
+    passes: int,
+) -> npt.NDArray[np.float64]:
+    """Fill one footprint band's pairs; draw ``remaining`` down in place; return their beams.
+
+    Each pair asks for min(its cap, its key's area left / its footprint); the passes scale
+    the band by every satellite's beams left, then by the tighter of every key's area left and
+    every cell's people cap left (each scale at most 1); then the band is committed, so the
+    next band sees only what remains. With a cell as its own key this is the phone
+    allocation's band (p1's arithmetic, step for step).
+
+    Args:
+        asked_cap: Each pair's cap, beams.
+        satellite: Each pair's satellite.
+        key: Each pair's key (an index into ``remaining.key_area_km2``).
+        cell: Each pair's cell.
+        footprint_km2: Each pair's footprint.
+        remaining: What is left, drawn down in place.
+        passes: The proportional passes.
+
+    Returns:
+        Each pair's beams placed.
+    """
+    n_satellites = remaining.satellite_beams.size
+    n_keys = remaining.key_area_km2.size
+    n_cells = remaining.cell_beams.size
+    asked = np.minimum(asked_cap, remaining.key_area_km2[key] / footprint_km2)
+    for _ in range(passes):
+        satellite_want = np.bincount(satellite, weights=asked, minlength=n_satellites)
+        satellite_scale = np.minimum(
+            _FULL_SCALE, remaining.satellite_beams / np.maximum(satellite_want, _DIVISION_FLOOR)
+        )
+        asked = asked * satellite_scale[satellite]
+        area_want = np.bincount(key, weights=asked * footprint_km2, minlength=n_keys)
+        beam_want = np.bincount(cell, weights=asked, minlength=n_cells)
+        key_scale = np.minimum(
+            _FULL_SCALE, remaining.key_area_km2 / np.maximum(area_want, _DIVISION_FLOOR)
+        )
+        cell_scale = np.minimum(
+            _FULL_SCALE, remaining.cell_beams / np.maximum(beam_want, _DIVISION_FLOOR)
+        )
+        asked = asked * np.minimum(key_scale[key], cell_scale[cell])
+    np.subtract(
+        remaining.satellite_beams,
+        np.bincount(satellite, weights=asked, minlength=n_satellites),
+        out=remaining.satellite_beams,
+    )
+    np.subtract(
+        remaining.key_area_km2,
+        np.bincount(key, weights=asked * footprint_km2, minlength=n_keys),
+        out=remaining.key_area_km2,
+    )
+    np.subtract(
+        remaining.cell_beams,
+        np.bincount(cell, weights=asked, minlength=n_cells),
+        out=remaining.cell_beams,
+    )
+    np.maximum(remaining.satellite_beams, _NONE_LEFT, out=remaining.satellite_beams)
+    np.maximum(remaining.key_area_km2, _NONE_LEFT, out=remaining.key_area_km2)
+    np.maximum(remaining.cell_beams, _NONE_LEFT, out=remaining.cell_beams)
+    return asked
+
+
+@dataclass(frozen=True, eq=False)
+class _FirstLayer:
+    """Stage 1's result: one co-channel layer per cell (the phone allocation; rule D2).
+
+    Attributes:
+        beams: Each pair's beams.
+        useful_beams: L, summed band by band.
+        remaining: What it leaves: each satellite's beams, each cell's area and people cap.
+    """
+
+    beams: npt.NDArray[np.float64]
+    useful_beams: float
+    remaining: _Remaining
+
+
+def _first_layer(
     n_satellites: int,
     pairs: _Pairs,
     footprint_km2: npt.NDArray[np.float64],
     cells: _DemandCells,
     people_cap: npt.NDArray[np.float64],
+    bands: _FootprintBands,
     limits: _AllocationLimits,
-) -> tuple[npt.NDArray[np.float64], float]:
-    """Fill one snapshot's pairs smallest footprint first; return each pair's beams and L.
+) -> _FirstLayer:
+    """Fill one snapshot's pairs one layer deep, smallest footprint first (stage 6; rule D2).
 
-    Band by band from the smallest footprints, each pair asks for min(one layer, the cell's
-    area left / its footprint); the passes scale the band by every satellite's beams left,
-    then by every cell's area and people left (each scale at most 1); the band is committed
-    and the next sees only what remains. L is summed band by band.
+    Band by band from the smallest footprints, each pair's cap is one layer (the cell's area
+    over its footprint) and its key is its cell: per satellite at most B beams, per cell its
+    area once and its people cap. The phone class's allocation, and, at a directional class's
+    own people cap, that class's first layer.
+
+    Args:
+        n_satellites: The satellites in the snapshot.
+        pairs: The pairs in view.
+        footprint_km2: Each pair's footprint.
+        cells: The demand cells.
+        people_cap: Each cell's people cap, beams (the class's).
+        bands: The snapshot's footprint bands.
+        limits: B and the passes.
+
+    Returns:
+        The first layer and what it leaves.
     """
     beams = np.zeros(footprint_km2.size)
-    if footprint_km2.size == 0:
-        return beams, 0.0
-    n_cells = cells.count
-    satellite_left = np.full(n_satellites, limits.beams_per_satellite)
-    area_left = cells.area_km2.copy()
-    people_left = people_cap.copy()
+    remaining = _Remaining(
+        satellite_beams=np.full(n_satellites, limits.beams_per_satellite),
+        key_area_km2=cells.area_km2.copy(),
+        cell_beams=people_cap.copy(),
+    )
     one_layer = cells.area_km2[pairs.cell] / footprint_km2
-    edges = np.geomspace(
-        footprint_km2.min() * _BAND_EDGE_LOW_FACTOR,
-        footprint_km2.max() * _BAND_EDGE_HIGH_FACTOR,
-        limits.footprint_bands + 1,
-    )
-    band = np.clip(
-        np.searchsorted(edges, footprint_km2, side="right") - 1, 0, limits.footprint_bands - 1
-    )
-    order = np.argsort(band, kind="stable")
-    starts = np.searchsorted(band[order], np.arange(limits.footprint_bands + 1))
     placed = 0.0
-    for band_index in range(limits.footprint_bands):
-        members = order[starts[band_index] : starts[band_index + 1]]
+    for band in range(bands.count):
+        members = bands.members(band)
         if members.size == 0:
             continue
-        satellite = pairs.satellite[members]
         cell = pairs.cell[members]
-        footprint = footprint_km2[members]
-        asked = np.minimum(one_layer[members], area_left[cell] / footprint)
-        for _ in range(limits.passes):
-            satellite_want = np.bincount(satellite, weights=asked, minlength=n_satellites)
-            satellite_scale = np.minimum(
-                _FULL_SCALE, satellite_left / np.maximum(satellite_want, _DIVISION_FLOOR)
-            )
-            asked = asked * satellite_scale[satellite]
-            area_want = np.bincount(cell, weights=asked * footprint, minlength=n_cells)
-            beam_want = np.bincount(cell, weights=asked, minlength=n_cells)
-            cell_scale = np.minimum(
-                _FULL_SCALE,
-                np.minimum(
-                    area_left / np.maximum(area_want, _DIVISION_FLOOR),
-                    people_left / np.maximum(beam_want, _DIVISION_FLOOR),
-                ),
-            )
-            asked = asked * cell_scale[cell]
-        satellite_left -= np.bincount(satellite, weights=asked, minlength=n_satellites)
-        area_left -= np.bincount(cell, weights=asked * footprint, minlength=n_cells)
-        people_left -= np.bincount(cell, weights=asked, minlength=n_cells)
-        np.maximum(satellite_left, _NONE_LEFT, out=satellite_left)
-        np.maximum(area_left, _NONE_LEFT, out=area_left)
-        np.maximum(people_left, _NONE_LEFT, out=people_left)
+        asked = _fill_band(
+            one_layer[members],
+            pairs.satellite[members],
+            cell,
+            cell,
+            footprint_km2[members],
+            remaining,
+            limits.passes,
+        )
         beams[members] = asked
         placed += float(asked.sum())
-    return beams, placed
+    return _FirstLayer(beams=beams, useful_beams=placed, remaining=remaining)
 
 
 def _ceiling(
@@ -1195,15 +1320,14 @@ def _allocate(
         pairs.central_angle_rad, limits.beam.central_angle_rad, limits.beam.footprint_km2
     )
     people_cap = _people_cap(cells, limits)
-    beams, useful_beams = _fill_smallest_footprint_first(
-        satellites.count, pairs, footprint_km2, cells, people_cap, limits
-    )
+    bands = _footprint_bands(footprint_km2, limits.footprint_bands)
+    first = _first_layer(satellites.count, pairs, footprint_km2, cells, people_cap, bands, limits)
     return _Allocation(
         satellite=pairs.satellite,
         cell=pairs.cell,
         footprint_km2=footprint_km2,
-        beams=beams,
-        useful_beams=useful_beams,
+        beams=first.beams,
+        useful_beams=first.useful_beams,
         ceiling_beams=_ceiling(pairs, footprint_km2, cells, people_cap),
         supply_beams=_supply(
             satellites.count, pairs, footprint_km2, cells, people_cap, limits.beams_per_satellite
