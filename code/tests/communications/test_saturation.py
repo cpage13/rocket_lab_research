@@ -174,6 +174,19 @@ def log_log_fleet(rows: tuple[CurveRow, ...], target: float) -> float | None:
     return None
 
 
+def small_sweep(inputs: SaturationInputs, snapshots_directional: int = 1) -> SaturationInputs:
+    """The inputs with no mounted-terminal extension and the directional classes at the given
+    snapshots, so a synthetic world's curve stays small and fast."""
+    sweep = SweepInputs.model_validate(
+        {
+            **inputs.sweep.model_dump(),
+            "mounted_terminal_extension": (),
+            "snapshots_directional": snapshots_directional,
+        }
+    )
+    return inputs.model_copy(update={"sweep": sweep})
+
+
 def phone_curve(curve: SaturationCurve) -> ClassCurve:
     """The phone class's curve, found by its key (a curve lists every class it has)."""
     (found,) = [entry for entry in curve.classes if entry.device_class is PHONE]
@@ -252,7 +265,7 @@ def uniform_band_curve(
     inputs = synthetic_saturation_inputs(
         uniform_band, fleets=BAND_FLEETS, beams_per_satellite=ONE_BEAM
     )
-    return compute_saturation(inputs, uniform_band, version_stamp=STAMP)
+    return compute_saturation(small_sweep(inputs), uniform_band, version_stamp=STAMP)
 
 
 @pytest.fixture(scope="module")
@@ -269,7 +282,7 @@ def two_band_world_curve(
     inputs = synthetic_saturation_inputs(
         two_band_world, fleets=BAND_FLEETS, beams_per_satellite=ONE_BEAM
     )
-    return compute_saturation(inputs, two_band_world, version_stamp=STAMP)
+    return compute_saturation(small_sweep(inputs), two_band_world, version_stamp=STAMP)
 
 
 @pytest.fixture(scope="module")
@@ -280,7 +293,7 @@ def mid_band_curves(
     grid = synthetic_population_grid(MID_BAND_CELL_DEG, mid_band_people)
     return tuple(
         compute_saturation(
-            synthetic_saturation_inputs(grid, fleets=fleets), grid, version_stamp=STAMP
+            small_sweep(synthetic_saturation_inputs(grid, fleets=fleets)), grid, version_stamp=STAMP
         )
         for fleets in MID_BAND_SWEEPS
     )
@@ -444,8 +457,11 @@ def test_two_runs_under_the_fixed_seed_are_equal(
     of wall time and memory (which the comparison sets to the first run's), and the two
     snapshots differ (a spread above zero), so the comparison covers the shared draw.
     """
-    inputs = synthetic_saturation_inputs(
-        uniform_band, fleets=BAND_FLEETS, snapshots=2, beams_per_satellite=ONE_BEAM
+    inputs = small_sweep(
+        synthetic_saturation_inputs(
+            uniform_band, fleets=BAND_FLEETS, snapshots=2, beams_per_satellite=ONE_BEAM
+        ),
+        snapshots_directional=2,
     )
     first = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
     second = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
@@ -496,6 +512,9 @@ def seam_limits(beams_per_satellite: float) -> sat._AllocationLimits:
         beam=sat._beam_model(inputs.shell),
         footprint_bands=inputs.sweep.footprint_bands,
         passes=inputs.sweep.passes,
+        spectrum_mhz=inputs.spectrum_mhz,
+        spectral_efficiency_bps_per_hz=_phone_inputs().spectral_efficiency_bps_per_hz,
+        directional=None,
     )
 
 
@@ -684,7 +703,12 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
     limits, and the phone class alone with no band yet.
     """
     inputs = SaturationInputs(
-        sweep=SweepInputs(fleets=COARSE_REAL_FLEETS, snapshots_phone_central=1)
+        sweep=SweepInputs(
+            fleets=COARSE_REAL_FLEETS,
+            mounted_terminal_extension=(),
+            snapshots_phone_central=1,
+            snapshots_directional=1,
+        )
     )
     curve = compute_saturation(inputs, real_grid, version_stamp=STAMP)
     rows = phone_curve(curve).rows
@@ -722,7 +746,7 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
     assert provenance.run_measurement.wall_time_s > 0
     assert provenance.run_measurement.peak_memory_mb > 0
     assert len(curve.limits) == 8
-    assert [entry.device_class for entry in curve.classes] == [PHONE]
+    assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
     assert curve.bands == ()
 
 
@@ -840,19 +864,19 @@ def _row(fleet: int, useful: float, capacity: float) -> CurveRow:
     [
         (
             lambda: sat._check_bounds(
-                PHONE, (sat._FleetSnapshots(342, (11.0,), (10.0,), (20.0,)),), 100.0
+                PHONE, (sat._FleetSnapshots(342, (11.0,), (10.0,), (20.0,), (1.0,), ()),), 100.0
             ),
             "useful beams 11.0 exceed",
         ),
         (
             lambda: sat._check_bounds(
-                PHONE, (sat._FleetSnapshots(342, (5.0,), (150.0,), (20.0,)),), 100.0
+                PHONE, (sat._FleetSnapshots(342, (5.0,), (150.0,), (20.0,), (1.0,), ()),), 100.0
             ),
             "the ceiling 150.0 exceeds maximum use",
         ),
         (
             lambda: sat._check_stall_floor(
-                (sat._FleetSnapshots(20_022, (90.0,), (100.0,), (200.0,)),), 0.98
+                (sat._FleetSnapshots(20_022, (90.0,), (100.0,), (200.0,), (1.0,), ()),), 0.98
             ),
             "under the stall floor",
         ),

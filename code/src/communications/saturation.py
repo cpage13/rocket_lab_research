@@ -1,19 +1,20 @@
 """The saturation curve: how many co-channel beams a Walker shell keeps lit over people.
 
-The one module that imports numpy (ADR 010). For a device class on one set of inputs
+The one module that imports numpy (ADR 010). For each device class on one set of inputs
 (:class:`~communications.saturation_curve.SaturationInputs`) it computes, at each fleet of
-the sweep, L: the most co-channel beams the shell can keep lit over the places people live
-without two co-channel footprints overlapping on the same ground (a 0 dBi device cannot
-tell satellites apart). L rises with the fleet, then flattens as every inhabited place is
-served by its best satellite; the knee is the class's spectrum bound (ADR 005). Everything
-is computed with the band in full-time use (d = 1, ADR 008) at the reference panel; the
-engine applies d and the scenario's panel when it reads the curve. This version computes
-the phone class's central curve, whose allocation is also the first layer every
-directional class builds on.
+the sweep, L: the most co-channel beams the shell can keep lit over the places people live,
+and their capacity. A 0 dBi phone-class device cannot tell satellites apart, so its
+co-channel footprints must not overlap on the same ground; a directional terminal can, so
+its class stacks further layers from satellites its beam separates (the small terminal and
+the mounted terminal, by the saturation strategy's sky-sector rules D1 to D6). L rises with
+the fleet, then flattens as every inhabited place is served by its best satellites; the
+knee is the class's spectrum bound (ADR 005). Everything is computed with the band in
+full-time use (d = 1, ADR 008) at the reference panel; the engine applies d and the
+scenario's panel when it reads the curve.
 
 The stages, numbered as the saturation strategy's locked stage order numbers them (its § 2),
-for one class on one set of inputs; this version runs stages 2 to 6 and 8 to 11 for the
-phone class:
+for one class on one set of inputs; this version runs stages 2 to 11 for every class (stage
+7 for the two directional classes):
 
 1. **Inputs**, held by the contract: :class:`~communications.saturation_curve.SaturationInputs`.
 2. **Demand cells.** Every cell of the shipped grid (ADR 009) with at least the threshold's
@@ -25,14 +26,16 @@ phone class:
    as the reference shell has it; the contract's ``walker_shape``), the realized fleet P x S
    keying the row and the request carried on it, phasing F = 1, two-body motion with the
    Earth turning under it. The snapshot times are drawn once per run,
-   ``numpy.random.default_rng(seed).uniform(0, sidereal day, n)``, and shared by every fleet.
+   ``numpy.random.default_rng(seed).uniform(0, sidereal day, n)``, and shared by every fleet
+   and class (a class at fewer snapshots takes the first of them).
 4. **The view and the beam.** The elevation mask's central-angle limit; a square aperture's
    half-power beam, beamwidth factor x wavelength / side, and its footprint, pi / 4 x (r
    theta) x (r theta / (cos(scan) sin(elevation))) with r the slant range, tabulated against
    the central angle and read by linear interpolation; the beams per satellite B derived
    from the capacity calibration and the panel, never set.
 5. **The pairs in view.** Every satellite-cell pair whose cell centre sees the satellite
-   above the mask.
+   above the mask; for a directional class, the elevation and azimuth at which the cell sees
+   the satellite (they place the pair in a sky sector) and the direction between them.
 6. **The allocation, phone class, smallest footprint first.** A snapshot's pairs fall into
    geometric footprint bands with edges ``geomspace(min footprint x 0.999, max footprint x
    1.001, bands + 1)``. Band by band from the smallest, each pair asks for min(one layer, the
@@ -41,18 +44,36 @@ phone class:
    before the next. Limits: B beams per satellite; one co-channel layer per cell (its area);
    the cell's people cap; one layer per satellite per cell. Small overhead footprints fit
    the most beams into the same land, so this order maximizes capacity; a proportional
-   fill stalls near saturation. It is also every directional class's first layer.
-7. **The allocation, directional classes** (the strategy's rules D1 to D6): not computed by
-   this version.
+   fill stalls near saturation. At a directional class's own people cap it is that class's
+   first layer (rule D2).
+7. **The allocation, directional classes** (the strategy's rules D1 to D6). D1: the
+   terminal's sky above the mask splits into sectors of equal solid angle, ring by ring from
+   the zenith, each ring in equal azimuth wedges from north. D3: a satellite serves a cell
+   when its committed layer covers at least f_serve = 1 / SINR_1 of the cell's area. D4: the
+   remaining beams are spent by the same banded fill over (cell, sector) keys, a key's area
+   the cell's less the first layer's from that sector, a pair's cap one layer less its
+   first-layer beams; before each band its candidates, taken by (cell, footprint,
+   satellite), are admitted only at least one terminal beamwidth from every satellite
+   serving the cell in another sector and from every candidate of the cell admitted earlier
+   in the band in another sector (same-sector satellites exempt).
 8. **Capacity (d = 1).** A phone beam carries the spectrum times the class's central SE, so
-   a snapshot's capacity is L times that.
+   a snapshot's capacity is L times that. A directional cell's sub-pairs are priced by the
+   full sum of its other layers (D5: first layers not against each other, nor same-sector
+   layers; each weighted by its share of the cell at the terminal's Gaussian main lobe,
+   floored at the pattern floor), and a cell keeps its stacked layers only when they do not
+   lower its capacity (D6: the dropped beams stay spent, and L counts only kept beams).
 9. **The rows.** At each fleet, the snapshot means of L and of capacity, the spread of L,
    the ocean factor U = L / (N x B), and the two bounds: the ceiling (each cell in view
-   served by its smallest footprint in view, capped by its people) and the supply (each
-   satellite's beams, capped by what its cells could take).
+   served by its smallest footprint in view, one layer for the phone class and one per sky
+   sector for a directional class, capped by its people) and the supply (each satellite's
+   beams, capped by what its cells could take); for a directional class, its kept stacked
+   share, their median separation from their cell's nearest layer in another sector and
+   their mean full-sum interference.
 10. **Maximum use**, in closed form and independent of the fleet: every cell served by the
     best satellite the shell can ever offer it, at central angle max(0, |latitude| -
-    inclination), capped by its people.
+    inclination), capped by its people; for a directional class one layer per sky sector,
+    each at the best its ring allows (an upper bound: whether its azimuth is reachable is
+    ignored).
 11. **The markers**, on the rows: the elasticity of capacity, d ln C / d ln N, at each
     interval's geometric midpoint; the saturation number is the first crossing under 0.10,
     interpolated in ln N between the midpoints that straddle it and rounded half up (or the
@@ -65,16 +86,20 @@ phone class:
 12. **The interference trim**: not computed by this version.
 
 The checks raise :class:`SaturationInvariantError`: the bounds (L at most min(ceiling,
-supply) and the ceiling at most maximum use, at every snapshot, 1e-9 relative); the stall
-floor (the phone class's L at least the sweep's floor x min(ceiling, supply) from 20,000
-satellites up, at every snapshot and in the means); capacity per satellite never rising
-between consecutive rows by more than 2 percent of the earlier row (the snapshots' noise).
+supply) and the ceiling at most maximum use, at every snapshot of every class, 1e-9
+relative); the stall floor (the phone class's L at least the sweep's floor x min(ceiling,
+supply) from 20,000 satellites up, at every snapshot and in the means); capacity per
+satellite never rising between consecutive rows of any class by more than 2 percent of the
+earlier row (the snapshots' noise).
 
-The fleets' snapshots run in separate processes. The largest fleet's first snapshot runs
-alone and measures a worker's peak memory; then as many workers run at once as keep the
-parent's peak plus their summed peaks under the 16 GB budget, at most one per CPU. The
-curve records the wall time and that bound (each worker reports its own peak; the bound is
-the parent's peak plus the summed peaks of the largest set of workers alive at once).
+The classes' snapshots run in separate processes. Each class's largest task runs first and
+measures a worker's peak memory; then as many workers run at once as keep the parent's peak
+plus their summed peaks under the 16 GB budget, at most one per CPU: every other task in one
+pool when the budget allows a worker per CPU, otherwise each class in memory tiers down its
+fleets, each tier sized by its own largest task (one process at a time only at the top of the
+grid). The curve records the wall time and that bound (each worker reports its own peak; the
+bound is the parent's peak plus the summed peaks of the largest set of workers alive at
+once).
 
 Public: :func:`load_population_grid`, :class:`PopulationGrid`, :func:`compute_saturation`,
 :class:`PopulationGridError` and :class:`SaturationInvariantError`. Everything else is
@@ -92,7 +117,7 @@ import resource
 import sys
 import time
 import zipfile
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass
@@ -115,6 +140,7 @@ from communications.saturation_curve import (
     ClassMarkers,
     CurveProvenance,
     CurveRow,
+    DirectionalDiagnostics,
     RunMeasurement,
     SaturationCurve,
     SaturationInputs,
@@ -331,6 +357,13 @@ _RU_MAXRSS_UNIT_BYTES_OTHER: Final[int] = 1024
 _MIN_WORKERS: Final[int] = 1
 """The fewest workers a sweep runs with, even when one worker's peak alone exceeds the
 budget (the bound then exceeds it too, and the run says so)."""
+
+_SWEEP_TIER_FLEET_RATIO: Final[float] = 2.0
+"""A memory tier of the sweep spans one class's largest remaining requested fleet down to
+that over this ratio. A worker's peak grows about linearly with the fleet (the strategy's
+budget, SR-21), so a tier's measured largest task bounds the rest of it, and each lower tier
+measures again and runs more workers at once (one process at a time only at the top of the
+grid, where one worker's peak nears the budget)."""
 
 # ===========================================================================
 # The grid's provenance and the curve's stated limits
@@ -622,14 +655,6 @@ def _elevation_rad(
         orbit_radius_km * np.cos(central_angle_rad) - _EARTH_RADIUS_KM,
         orbit_radius_km * np.sin(central_angle_rad),
     )
-
-
-def _central_angle_at_elevation(
-    elevation_rad: npt.NDArray[np.float64], orbit_radius_km: float
-) -> npt.NDArray[np.float64]:
-    """Return the central angle at which a satellite stands at each elevation (the inverse of
-    :func:`_elevation_rad`, by the law of sines)."""
-    return np.arccos(_EARTH_RADIUS_KM * np.cos(elevation_rad) / orbit_radius_km) - elevation_rad
 
 
 def _beam_model(shell: ShellInputs) -> _BeamModel:
@@ -1057,15 +1082,19 @@ def _pair_directions(
 
 @dataclass(frozen=True, eq=False)
 class _AllocationLimits:
-    """What limits one class's allocation besides the cells' own areas.
+    """What limits one class's allocation besides the cells' own areas, and how it is priced.
 
     Attributes:
         beams_per_satellite: B, the beams each satellite can light.
-        people_per_beam: The people one beam serves at d = 1.
+        people_per_beam: The people one beam serves at d = 1 (the class's).
         take_up: The share of a cell's residents counted as potential users.
         beam: The view's limit and the footprint table.
         footprint_bands: The fill's geometric footprint bands.
         passes: The proportional passes inside each band.
+        spectrum_mhz: The held spectrum, MHz: a beam carries it times its SE.
+        spectral_efficiency_bps_per_hz: The class's central SE, a one-layer beam's.
+        directional: The class's rules D1 to D6; None for the phone class, which takes one
+            co-channel layer.
     """
 
     beams_per_satellite: float
@@ -1074,22 +1103,31 @@ class _AllocationLimits:
     beam: _BeamModel
     footprint_bands: int
     passes: int
+    spectrum_mhz: float
+    spectral_efficiency_bps_per_hz: float
+    directional: _DirectionalRules | None
 
 
 @dataclass(frozen=True, eq=False)
 class _Allocation:
-    """One snapshot's allocation (d = 1), pair by pair, with its two bounds.
+    """One snapshot's allocation (d = 1), pair by pair, with its capacity and its two bounds.
 
     Attributes:
         satellite: Each pair's satellite index (the pairs in view, by satellite then cell).
         cell: Each pair's demand-cell index.
         footprint_km2: Each pair's footprint.
-        beams: The beams each pair placed.
-        useful_beams: L, the beams placed in all.
+        beams: The beams each pair placed: its first layer, and for a directional class its
+            stacked beams too, kept or dropped.
+        useful_beams: L, the beams placed and kept.
+        capacity_mbps: The beams' capacity: a phone beam carries the spectrum times the
+            central SE; a directional cell, its kept layers priced by the full sum.
         ceiling_beams: The most the cells in view could use: each served by its smallest
-            footprint in view, one layer, capped by its people.
+            footprint in view, one layer for the phone class, one per sky sector for a
+            directional class (the sector-rule ceiling), capped by its people.
         supply_beams: The most the satellites could place: each satellite's B, capped by
             what its cells could take one layer at a time.
+        directional: The directional class's layers, prices and statistics; None for the
+            phone class.
     """
 
     satellite: npt.NDArray[np.int64]
@@ -1097,8 +1135,10 @@ class _Allocation:
     footprint_km2: npt.NDArray[np.float64]
     beams: npt.NDArray[np.float64]
     useful_beams: float
+    capacity_mbps: float
     ceiling_beams: float
     supply_beams: float
+    directional: _DirectionalAllocation | None
 
 
 @dataclass(frozen=True, eq=False)
@@ -1309,6 +1349,27 @@ def _ceiling(
     return float(np.minimum(cells.area_km2[seen] / best[seen], people_cap[seen]).sum())
 
 
+def _sector_ceiling(
+    pairs: _Pairs,
+    footprint_km2: npt.NDArray[np.float64],
+    sector: npt.NDArray[np.int64],
+    n_sectors: int,
+    cells: _DemandCells,
+    people_cap: npt.NDArray[np.float64],
+) -> float:
+    """Return the sector-rule ceiling (stage 9): the most a directional class's cells in view
+    could use. Per cell in view, the sum over its sky sectors of its area over the sector's
+    smallest footprint in view (a sector with no pair in view adds nothing), capped by its
+    people cap.
+    """
+    best = np.full(cells.count * n_sectors, np.inf)
+    np.minimum.at(best, pairs.cell * n_sectors + sector, footprint_km2)
+    per_sector = np.repeat(cells.area_km2, n_sectors) / best
+    per_cell = per_sector.reshape(cells.count, n_sectors).sum(axis=1)
+    seen = np.bincount(pairs.cell, minlength=cells.count) > 0
+    return float(np.minimum(per_cell[seen], people_cap[seen]).sum())
+
+
 def _supply(
     n_satellites: int,
     pairs: _Pairs,
@@ -1337,18 +1398,21 @@ def _people_cap(cells: _DemandCells, limits: _AllocationLimits) -> npt.NDArray[n
 def _allocate(
     satellites: _SatellitePositions, cells: _DemandCells, limits: _AllocationLimits
 ) -> _Allocation:
-    """Allocate one snapshot's beams, smallest footprint first, and compute its bounds.
+    """Allocate one snapshot's beams, smallest footprint first, price them and bound them.
 
     The private seam: it takes explicit satellite positions, so a test can place a
-    satellite where it chooses.
+    satellite where it chooses. Stage 1 lays one layer at the class's people cap (rule D2;
+    the phone class's whole allocation, a beam carrying the spectrum times its central SE);
+    a directional class then stacks, prices and keeps by rules D1 and D3 to D6.
 
     Args:
         satellites: The satellites' sub-satellite points.
         cells: The demand cells.
-        limits: B, the people per beam and take-up, the beam model, the bands and passes.
+        limits: B, the people per beam and take-up, the beam model, the bands and passes,
+            the spectrum and the central SE, and a directional class's rules.
 
     Returns:
-        The allocation, pair by pair, with L, the ceiling and the supply.
+        The allocation, pair by pair, with L, its capacity, the ceiling and the supply.
     """
     pairs = _pairs_in_view(satellites, cells, limits.beam.max_central_angle_rad)
     footprint_km2 = np.interp(
@@ -1357,36 +1421,88 @@ def _allocate(
     people_cap = _people_cap(cells, limits)
     bands = _footprint_bands(footprint_km2, limits.footprint_bands)
     first = _first_layer(satellites.count, pairs, footprint_km2, cells, people_cap, bands, limits)
+    supply_beams = _supply(
+        satellites.count, pairs, footprint_km2, cells, people_cap, limits.beams_per_satellite
+    )
+    rules = limits.directional
+    if rules is None:
+        return _Allocation(
+            satellite=pairs.satellite,
+            cell=pairs.cell,
+            footprint_km2=footprint_km2,
+            beams=first.beams,
+            useful_beams=first.useful_beams,
+            capacity_mbps=first.useful_beams
+            * limits.spectrum_mhz
+            * limits.spectral_efficiency_bps_per_hz,
+            ceiling_beams=_ceiling(pairs, footprint_km2, cells, people_cap),
+            supply_beams=supply_beams,
+            directional=None,
+        )
+    directional = _directional_allocation(
+        satellites,
+        pairs,
+        footprint_km2,
+        cells,
+        first,
+        bands,
+        limits.beam.orbit_radius_km,
+        limits.spectrum_mhz,
+        rules,
+        limits.passes,
+    )
     return _Allocation(
         satellite=pairs.satellite,
         cell=pairs.cell,
         footprint_km2=footprint_km2,
-        beams=first.beams,
-        useful_beams=first.useful_beams,
-        ceiling_beams=_ceiling(pairs, footprint_km2, cells, people_cap),
-        supply_beams=_supply(
-            satellites.count, pairs, footprint_km2, cells, people_cap, limits.beams_per_satellite
+        beams=directional.first_layer_beams + directional.stacked_beams,
+        useful_beams=directional.useful_beams,
+        capacity_mbps=directional.capacity_mbps,
+        ceiling_beams=_sector_ceiling(
+            pairs, footprint_km2, directional.sector, rules.layout.count, cells, people_cap
         ),
+        supply_beams=supply_beams,
+        directional=directional,
     )
 
 
 def _maximum_use(cells: _DemandCells, limits: _AllocationLimits, inclination_deg: float) -> float:
-    """Return maximum use: every cell served by the best satellite the shell can offer it.
+    """Return maximum use: every cell served by the best satellites the shell can offer it.
 
     A shell of inclination i never flies above latitude i, so the best a cell at latitude
     lat can see is a satellite at central angle max(0, |lat| - i); a cell beyond the view's
-    limit from there adds nothing. One layer, capped by the cell's people. It does not
-    depend on the fleet.
+    limit from there adds nothing. For the phone class, one layer from that satellite. For a
+    directional class (stage 10), one layer per sky sector: the zenith cap's at that best
+    satellite, each lower ring's at the ring's top edge, or at the best satellite where that
+    stands lower, every wedge of a ring at its ring's footprint (an upper bound: whether each
+    sector's azimuth is reachable is ignored), a ring the best satellite cannot reach adding
+    nothing. Either way capped by the cell's people; it does not depend on the fleet.
     """
     best_angle = np.maximum(
         _OVERHEAD_CENTRAL_ANGLE_RAD, np.abs(cells.lat_rad) - math.radians(inclination_deg)
     )
     reachable = best_angle <= limits.beam.max_central_angle_rad
-    best_footprint = np.interp(
-        best_angle[reachable], limits.beam.central_angle_rad, limits.beam.footprint_km2
-    )
-    people_cap = _people_cap(cells, limits)[reachable]
-    return float(np.minimum(cells.area_km2[reachable] / best_footprint, people_cap).sum())
+    people_cap = _people_cap(cells, limits)
+    rules = limits.directional
+    if rules is None:
+        best_footprint = np.interp(
+            best_angle[reachable], limits.beam.central_angle_rad, limits.beam.footprint_km2
+        )
+        return float(
+            np.minimum(cells.area_km2[reachable] / best_footprint, people_cap[reachable]).sum()
+        )
+    orbit_radius_km = limits.beam.orbit_radius_km
+    best_elevation = _elevation_rad(best_angle, orbit_radius_km)
+    beams = np.zeros(cells.count)
+    top = _ZENITH_ELEVATION_RAD
+    for low, wedges in zip(rules.layout.lower_edges_rad, rules.layout.wedges_per_ring, strict=True):
+        within = reachable & (np.minimum(best_elevation, top) >= low)
+        top_angle = math.acos(_EARTH_RADIUS_KM * math.cos(top) / orbit_radius_km) - top
+        angle = np.where(best_elevation <= top, best_angle, top_angle)[within]
+        footprint = np.interp(angle, limits.beam.central_angle_rad, limits.beam.footprint_km2)
+        beams[within] += wedges * cells.area_km2[within] / footprint
+        top = low
+    return float(np.minimum(beams, people_cap)[reachable].sum())
 
 
 # ===========================================================================
@@ -2090,15 +2206,17 @@ def _directional_allocation(
 
 @dataclass(frozen=True)
 class _SnapshotTask:
-    """One fleet at one snapshot time.
+    """One class at one fleet at one snapshot time.
 
     Attributes:
-        fleet_index: The fleet's position in the sweep.
+        device_class: The class.
+        fleet_index: The fleet's position in the class's sweep.
         requested_fleet: The requested fleet N.
         snapshot_index: The snapshot's position in the draw.
         time_s: The snapshot time, s.
     """
 
+    device_class: DeviceClass
     fleet_index: int
     requested_fleet: int
     snapshot_index: int
@@ -2107,11 +2225,11 @@ class _SnapshotTask:
 
 @dataclass(frozen=True, eq=False)
 class _SweepContext:
-    """What every snapshot task needs: the shell, the demand cells and the class's limits."""
+    """What every snapshot task needs: the shell, the demand cells and each class's limits."""
 
     shell: ShellInputs
     cells: _DemandCells
-    limits: _AllocationLimits
+    limits: Mapping[DeviceClass, _AllocationLimits]
 
 
 @dataclass(frozen=True)
@@ -2122,8 +2240,10 @@ class _SnapshotResult:
         task: The task.
         realized_fleet: The realized fleet, P x S.
         useful_beams: L.
-        ceiling_beams: The ceiling.
+        capacity_mbps: The capacity, d = 1.
+        ceiling_beams: The ceiling (the sector-rule ceiling for a directional class).
         supply_beams: The supply.
+        statistics: A directional class's kept stacked layers; None for the phone class.
         worker_pid: The worker's process id.
         worker_peak_mb: The worker's peak resident memory so far, MB.
     """
@@ -2131,8 +2251,10 @@ class _SnapshotResult:
     task: _SnapshotTask
     realized_fleet: int
     useful_beams: float
+    capacity_mbps: float
     ceiling_beams: float
     supply_beams: float
+    statistics: _StackStatistics | None
     worker_pid: int
     worker_peak_mb: float
 
@@ -2146,15 +2268,17 @@ def _own_peak_mb() -> float:
 
 
 def _run_snapshot(task: _SnapshotTask, context: _SweepContext) -> _SnapshotResult:
-    """Run one fleet at one snapshot time (a worker's task)."""
+    """Run one class at one fleet at one snapshot time (a worker's task)."""
     satellites = _walker_positions(context.shell, task.requested_fleet, task.time_s)
-    allocation = _allocate(satellites, context.cells, context.limits)
+    allocation = _allocate(satellites, context.cells, context.limits[task.device_class])
     return _SnapshotResult(
         task=task,
         realized_fleet=satellites.count,
         useful_beams=allocation.useful_beams,
+        capacity_mbps=allocation.capacity_mbps,
         ceiling_beams=allocation.ceiling_beams,
         supply_beams=allocation.supply_beams,
+        statistics=None if allocation.directional is None else allocation.directional.statistics,
         worker_pid=os.getpid(),
         worker_peak_mb=_own_peak_mb(),
     )
@@ -2166,8 +2290,9 @@ class _SweepRun:
 
     Attributes:
         results: Every task's result, in the tasks' order.
-        workers: The workers that ran at once after the first task.
-        workers_peak_mb: The summed peaks of the largest set of workers alive at once, MB.
+        workers: The most workers any tier ran at once.
+        workers_peak_mb: The largest summed peak of a set of workers alive at once, MB (the
+            tiers run one after another, so the largest of their bounds).
     """
 
     results: tuple[_SnapshotResult, ...]
@@ -2185,46 +2310,134 @@ def _worker_count(task_peak_mb: float, remaining_tasks: int) -> int:
     return max(_MIN_WORKERS, min(affordable, cpus, remaining_tasks))
 
 
-def _run_sweep(tasks: Sequence[_SnapshotTask], context: _SweepContext) -> _SweepRun:
-    """Run every task in separate processes, the largest fleet's first task alone.
+def _memory_binds(task_peak_mb: float) -> bool:
+    """Return whether the budget, not the CPUs, limits the workers at this worker peak."""
+    cpus = os.process_cpu_count() or _MIN_WORKERS
+    return math.floor((_MEMORY_BUDGET_MB - _own_peak_mb()) / task_peak_mb) < cpus
 
-    The largest fleet's first snapshot runs first, alone, and its worker's peak sets how
-    many workers then run at once under the budget. Each worker reports its own peak (a
-    process's peak only grows, so its last report is its peak); the workers of the second
-    pool are alive at once, so their peaks sum.
+
+def _sector_count(limits: _AllocationLimits) -> int:
+    """Return a class's sky sectors (none for the phone class): the sweep measures the classes
+    in this order, the lightest first, since stage 2's keys grow with it."""
+    return 0 if limits.directional is None else limits.directional.layout.count
+
+
+def _run_pool(
+    indices: Sequence[int],
+    tasks: Sequence[_SnapshotTask],
+    context: _SweepContext,
+    task_peak_mb: float,
+    results: dict[int, _SnapshotResult],
+) -> tuple[int, float]:
+    """Run the tasks at ``indices`` in a fresh pool sized to ``task_peak_mb``; store their results.
+
+    Returns:
+        The pool's worker count and the summed peaks of its workers, MB (they are alive at
+        once; a process's peak only grows, so each worker's last report is its peak).
+    """
+    workers = _worker_count(task_peak_mb, len(indices))
+    worker_peaks: dict[int, float] = {}
+    with ProcessPoolExecutor(max_workers=workers, mp_context=get_context("spawn")) as pool:
+        for index, result in zip(
+            indices,
+            pool.map(_run_snapshot, [tasks[i] for i in indices], repeat(context)),
+            strict=True,
+        ):
+            results[index] = result
+            worker_peaks[result.worker_pid] = max(
+                worker_peaks.get(result.worker_pid, result.worker_peak_mb),
+                result.worker_peak_mb,
+            )
+    return workers, sum(worker_peaks.values())
+
+
+def _run_alone(
+    indices: Sequence[int],
+    tasks: Sequence[_SnapshotTask],
+    context: _SweepContext,
+    results: dict[int, _SnapshotResult],
+) -> None:
+    """Run the tasks at ``indices`` one after another in one fresh process; store their results.
+
+    The process's peak only grows, so each result's worker peak bounds its own task's.
+    """
+    with ProcessPoolExecutor(max_workers=_MIN_WORKERS, mp_context=get_context("spawn")) as alone:
+        for index in indices:
+            results[index] = alone.submit(_run_snapshot, tasks[index], context).result()
+
+
+def _run_sweep(tasks: Sequence[_SnapshotTask], context: _SweepContext) -> _SweepRun:
+    """Run every task in separate processes, the largest tasks first and measured.
+
+    A worker's peak grows about linearly with the fleet and differs by class. Each class's
+    largest task runs first, the lightest class's first, one after another in one fresh
+    process, so each one's reading bounds every other task of its class. When the budget does
+    not limit the workers at the largest reading, every other task then runs in one pool
+    under it. Otherwise each class runs from its largest fleet down in tiers: a tier holds the
+    tasks whose requested fleet exceeds its largest over :data:`_SWEEP_TIER_FLEET_RATIO` and
+    runs under its largest's reading, each lower tier's largest task running alone first in a
+    fresh process, until the budget no longer limits the workers and the rest of the class
+    runs in one pool. Every pool is fresh, a pool's workers are alive at once so their peaks
+    sum, and the pools run one after another.
 
     Raises:
         BrokenProcessPool: If a worker dies (logged with the task count before it rises).
     """
-    order = sorted(range(len(tasks)), key=lambda i: (-tasks[i].requested_fleet, i))
-    spawn = get_context("spawn")
     results: dict[int, _SnapshotResult] = {}
+    by_class = {
+        device_class: sorted(
+            (i for i, task in enumerate(tasks) if task.device_class is device_class),
+            key=lambda i: (-tasks[i].requested_fleet, i),
+        )
+        for device_class in DeviceClass
+    }
+    by_class = {device_class: order for device_class, order in by_class.items() if order}
+    tops = [
+        order[0]
+        for _, order in sorted(
+            by_class.items(), key=lambda item: _sector_count(context.limits[item[0]])
+        )
+    ]
+    widest = _MIN_WORKERS
     try:
-        with ProcessPoolExecutor(max_workers=_MIN_WORKERS, mp_context=spawn) as first_pool:
-            first = first_pool.submit(_run_snapshot, tasks[order[0]], context).result()
-        results[order[0]] = first
-        rest = order[1:]
-        workers = _worker_count(first.worker_peak_mb, len(rest)) if rest else _MIN_WORKERS
-        worker_peaks: dict[int, float] = {}
-        if rest:
-            with ProcessPoolExecutor(max_workers=workers, mp_context=spawn) as pool:
-                for index, result in zip(
-                    rest,
-                    pool.map(_run_snapshot, [tasks[i] for i in rest], repeat(context)),
-                    strict=True,
-                ):
-                    results[index] = result
-                    worker_peaks[result.worker_pid] = max(
-                        worker_peaks.get(result.worker_pid, result.worker_peak_mb),
-                        result.worker_peak_mb,
-                    )
+        _run_alone(tops, tasks, context, results)
+        bounds = {
+            device_class: results[order[0]].worker_peak_mb
+            for device_class, order in by_class.items()
+        }
+        peak_bound_mb = max(bounds.values(), default=0.0)
+        rest = [i for order in by_class.values() for i in order[1:]]
+        if rest and not _memory_binds(peak_bound_mb):
+            widest, pool_peak_mb = _run_pool(rest, tasks, context, peak_bound_mb, results)
+            peak_bound_mb = max(peak_bound_mb, pool_peak_mb)
+        elif rest:
+            for device_class, order in by_class.items():
+                bound_mb = bounds[device_class]
+                floor_fleet = tasks[order[0]].requested_fleet / _SWEEP_TIER_FLEET_RATIO
+                pending = order[1:]
+                while pending:
+                    if _memory_binds(bound_mb):
+                        tier = [i for i in pending if tasks[i].requested_fleet > floor_fleet]
+                        pending = [i for i in pending if tasks[i].requested_fleet <= floor_fleet]
+                    else:
+                        tier, pending = pending, []
+                    if tier:
+                        workers, pool_peak_mb = _run_pool(tier, tasks, context, bound_mb, results)
+                        widest = max(widest, workers)
+                        peak_bound_mb = max(peak_bound_mb, pool_peak_mb)
+                    if pending:
+                        top, pending = pending[0], pending[1:]
+                        _run_alone([top], tasks, context, results)
+                        bound_mb = results[top].worker_peak_mb
+                        peak_bound_mb = max(peak_bound_mb, bound_mb)
+                        floor_fleet = tasks[top].requested_fleet / _SWEEP_TIER_FLEET_RATIO
     except BrokenProcessPool:
         logger.error("a saturation worker died during a sweep of %d snapshot tasks", len(tasks))
         raise
     return _SweepRun(
         results=tuple(results[i] for i in range(len(tasks))),
-        workers=workers,
-        workers_peak_mb=max(first.worker_peak_mb, sum(worker_peaks.values())),
+        workers=widest,
+        workers_peak_mb=peak_bound_mb,
     )
 
 
@@ -2235,23 +2448,28 @@ def _run_sweep(tasks: Sequence[_SnapshotTask], context: _SweepContext) -> _Sweep
 
 @dataclass(frozen=True)
 class _FleetSnapshots:
-    """One fleet's snapshots, in the draw's order.
+    """One class's fleet's snapshots, in the draw's order.
 
     Attributes:
         fleet: The realized fleet, P x S.
         useful_beams: L at each snapshot.
         ceiling_beams: The ceiling at each.
         supply_beams: The supply at each.
+        capacity_mbps: The capacity at each, d = 1.
+        statistics: A directional class's kept stacked layers at each; empty for the phone
+            class.
     """
 
     fleet: int
     useful_beams: tuple[float, ...]
     ceiling_beams: tuple[float, ...]
     supply_beams: tuple[float, ...]
+    capacity_mbps: tuple[float, ...]
+    statistics: tuple[_StackStatistics, ...]
 
 
 def _by_fleet(results: Sequence[_SnapshotResult], n_fleets: int) -> tuple[_FleetSnapshots, ...]:
-    """Group the snapshot results by fleet, each fleet's snapshots in the draw's order."""
+    """Group one class's snapshot results by fleet, each fleet's snapshots in the draw's order."""
     grouped: list[list[_SnapshotResult]] = [[] for _ in range(n_fleets)]
     for result in results:
         grouped[result.task.fleet_index].append(result)
@@ -2264,6 +2482,10 @@ def _by_fleet(results: Sequence[_SnapshotResult], n_fleets: int) -> tuple[_Fleet
                 useful_beams=tuple(result.useful_beams for result in snapshots),
                 ceiling_beams=tuple(result.ceiling_beams for result in snapshots),
                 supply_beams=tuple(result.supply_beams for result in snapshots),
+                capacity_mbps=tuple(result.capacity_mbps for result in snapshots),
+                statistics=tuple(
+                    result.statistics for result in snapshots if result.statistics is not None
+                ),
             )
         )
     return tuple(fleets)
@@ -2332,24 +2554,54 @@ def _check_stall_floor(fleets: Sequence[_FleetSnapshots], stall_floor: float) ->
                 )
 
 
-def _phone_rows(
+def _directional_diagnostics(fleet: _FleetSnapshots) -> DirectionalDiagnostics:
+    """Return a directional row's stacking diagnostics, from its snapshots.
+
+    The kept stacked share is the snapshot mean of each snapshot's kept stacked layers over
+    its L; the median separation and the mean full-sum interference are the means over the
+    snapshots that keep stacked layers, None when none does (as the prototype averaged its
+    snapshots).
+    """
+    shares = [
+        statistics.beams / useful if useful > _NONE_LEFT else _NONE_LEFT
+        for statistics, useful in zip(fleet.statistics, fleet.useful_beams, strict=True)
+    ]
+    separations = [
+        statistics.median_separation_deg
+        for statistics in fleet.statistics
+        if statistics.median_separation_deg is not None
+    ]
+    interference = [
+        statistics.mean_interference_db
+        for statistics in fleet.statistics
+        if statistics.mean_interference_db is not None
+    ]
+    return DirectionalDiagnostics(
+        kept_stacked_share=float(np.mean(shares)),
+        median_separation_deg=float(np.mean(separations)) if separations else None,
+        mean_full_sum_interference_db=float(np.mean(interference)) if interference else None,
+    )
+
+
+def _class_rows(
     fleets: Sequence[_FleetSnapshots],
     requested_fleets: Sequence[int],
     *,
-    spectrum_mhz: float,
-    spectral_efficiency_bps_per_hz: float,
     beams_per_satellite: float,
+    directional: bool,
 ) -> tuple[CurveRow, ...]:
-    """Return the phone class's rows: the snapshot means, the spread of L, U and the bounds.
+    """Return a class's rows: the snapshot means, the spread of L, U, the bounds and, for a
+    directional class, its stacking diagnostics.
 
     Each row carries the request its shell was built from (the sweep's fleet, in the order
-    the tasks were made), so a reader can rebuild it. A phone beam carries the spectrum times
-    the class's central SE, so a snapshot's capacity is L times that (Gbps).
+    the tasks were made), so a reader can rebuild it. Each snapshot's capacity is its own (a
+    phone beam carries the spectrum times the class's central SE; a directional cell, its
+    kept layers by the full sum), and the row's is their mean (Gbps).
     """
     rows = []
     for fleet, requested_fleet in zip(fleets, requested_fleets, strict=True):
         useful = np.array(fleet.useful_beams)
-        capacity_gbps = useful * spectrum_mhz * spectral_efficiency_bps_per_hz / GBPS_TO_MBPS
+        capacity_gbps = np.array(fleet.capacity_mbps) / GBPS_TO_MBPS
         useful_mean = float(np.mean(useful))
         rows.append(
             CurveRow(
@@ -2361,7 +2613,7 @@ def _phone_rows(
                 ocean_factor=useful_mean / (fleet.fleet * beams_per_satellite),
                 ceiling_beams=float(np.mean(fleet.ceiling_beams)),
                 supply_beams=float(np.mean(fleet.supply_beams)),
-                directional=None,
+                directional=_directional_diagnostics(fleet) if directional else None,
                 trim=None,
             )
         )
@@ -2549,11 +2801,6 @@ def _unplaced_marker_limits(
 # ===========================================================================
 
 
-def _class_inputs(inputs: SaturationInputs, device_class: DeviceClass) -> ClassInputs:
-    """Return one class's inputs (the contract holds exactly one per class)."""
-    return next(entry for entry in inputs.classes if entry.device_class is device_class)
-
-
 def _check_realized_fleets(requested: Sequence[int]) -> None:
     """Refuse requested fleets whose realized fleets, P x S, do not strictly increase.
 
@@ -2575,8 +2822,24 @@ def _method(inputs: SaturationInputs) -> str:
         "Smallest footprint first, per snapshot: the satellite-cell pairs in view are filled "
         f"in {sweep.footprint_bands} geometric footprint bands from the smallest, "
         f"{sweep.passes} proportional passes in each, every band committed before the next; "
-        "per satellite at most its beams, per cell one co-channel layer for the phone class "
-        "(its area) and its people cap, per pair one layer. A circular Walker Delta shell at "
+        "per satellite at most its beams, per cell one co-channel layer (its area) and the "
+        "class's people cap, per pair one layer: the phone class's allocation, and each "
+        "directional class's first layer at its own people cap. A directional class then "
+        "stacks layers under sky sectors: its terminal's sky above the mask split into "
+        "sectors of equal solid angle, ring by ring from the zenith; a second banded fill on "
+        "the same band edges over (cell, sector) keys, a key's area the cell's less its first "
+        "layer's from that sector, a pair's cap one layer less its first-layer beams; before "
+        "each band its candidates are taken by (cell, footprint, satellite), and one is "
+        "admitted only at least one terminal beamwidth, sqrt(4 pi / (1.133 x D)), from every "
+        "satellite serving its cell in another sector and from every candidate of its cell "
+        "admitted earlier in the band in another sector (a satellite serves a cell when its "
+        "layer covers at least 1 / SINR_1 of it). Each served sub-pair is priced by the full "
+        "sum of its cell's other layers in other sectors (first layers not against each "
+        "other), each weighted by its share of the cell at the terminal's Gaussian main lobe "
+        f"floored at {inputs.sidelobe_floor_db:g} dB: SE = {inputs.se_anchor_bps_per_hz:g} x "
+        "log2(1 + SINR), the single-layer SINR_1 = 2^(central SE / that anchor) - 1; a cell "
+        "keeps its stacked layers only when they do not lower its capacity, the dropped beams "
+        "spent. A circular Walker Delta shell at "
         f"{shell.altitude_km:g} km and {shell.inclination_deg:g} degrees (P = round(sqrt(N)) "
         "planes of S = round(N / P), the realized N = P x S, phasing F = 1) with a "
         f"{shell.elevation_mask_deg:g} degree mask; a square {shell.reference_aperture_m2:g} "
@@ -2585,8 +2848,10 @@ def _method(inputs: SaturationInputs) -> str:
         "derived from the capacity calibration and the panel. Each fleet's row averages its "
         "snapshots, drawn once over a sidereal day from seed "
         f"{sweep.seed}. Maximum use in closed form (every cell served by the best satellite "
-        "the shell can ever offer it); the markers on the elasticity of capacity at the "
-        "geometric midpoints of the rows, interpolated in ln N."
+        "the shell can ever offer it; for a directional class one layer per sky sector, each "
+        "at the best its ring allows, whether its azimuth is reachable ignored); the markers "
+        "on the elasticity of capacity at the geometric midpoints of the rows, interpolated "
+        "in ln N."
     )
 
 
@@ -2594,7 +2859,8 @@ def _checks_passed(inputs: SaturationInputs) -> tuple[str, ...]:
     """Return the checks a computed curve passed, each stated as its rule."""
     return (
         "bounds: at every snapshot of every class, useful beams at most min(ceiling, supply) "
-        f"and the ceiling at most maximum use, within {_BOUNDS_RELATIVE_TOLERANCE:g} relative",
+        "and the ceiling at most maximum use (for a directional class, the sector-rule "
+        f"ceiling and its maximum use), within {_BOUNDS_RELATIVE_TOLERANCE:g} relative",
         f"stall floor: from {_STALL_FLOOR_FROM_FLEET:,} satellites up, the phone class's useful "
         f"beams at least {inputs.sweep.stall_floor:g} x min(ceiling, supply), at every "
         "snapshot and in the snapshot means",
@@ -2632,12 +2898,15 @@ def _curve_limits(inputs: SaturationInputs) -> tuple[str, ...]:
 def compute_saturation(
     inputs: SaturationInputs, population: PopulationGrid, *, version_stamp: str
 ) -> SaturationCurve:
-    """Compute the saturation curve on a population grid.
+    """Compute the saturation curve on a population grid: every class, in the class key's order.
 
-    Runs stages 2 to 6 and 8 to 11 of the module docstring for the phone class, checks the
-    bounds, the stall floor and capacity per satellite, reads the markers against maximum
-    use, states any supporting marker the rows cannot place among the limits, and
-    records the run's wall time and peak-memory bound.
+    Runs stages 2 to 11 of the module docstring for each class, the small terminal and the
+    mounted terminal by rules D1 to D6 at the sweep's directional snapshots (the mounted
+    terminal over its extension too) and the phone class at its central snapshots; checks
+    the bounds and capacity per satellite for every class and the stall floor for the phone
+    class; reads each class's markers against its maximum use, states any supporting marker
+    the rows cannot place among the limits, and records the run's wall time and peak-memory
+    bound.
 
     Args:
         inputs: The curve's inputs.
@@ -2645,12 +2914,12 @@ def compute_saturation(
         version_stamp: The stamp the curve carries.
 
     Returns:
-        The curve, with the phone class's rows and markers.
+        The curve, with every class's rows and markers.
 
     Raises:
         PopulationGridError: If the grid is not the one the inputs name, or not global.
-        SaturationInvariantError: If a check fails, the realized fleets do not strictly
-            increase, or a marker lies before the rows can place it.
+        SaturationInvariantError: If a check fails, a class's realized fleets do not strictly
+            increase, or a saturation number lies before the rows can place it.
     """
     started = time.perf_counter()
     if population.sha256 != inputs.demand.grid_sha256:
@@ -2658,64 +2927,100 @@ def compute_saturation(
             f"the population grid {population.file_name} has SHA-256 {population.sha256}, "
             f"but the inputs expect {inputs.demand.grid_sha256}"
         )
-    _check_realized_fleets(inputs.sweep.fleets)
-    device_class = DeviceClass.PHONE_CLASS
-    phone = _class_inputs(inputs, device_class)
+    sweep = inputs.sweep
+    fleets_of = {
+        entry.device_class: (
+            sweep.fleets + sweep.mounted_terminal_extension
+            if entry.device_class is DeviceClass.MOUNTED_TERMINAL_CLASS
+            else sweep.fleets
+        )
+        for entry in inputs.classes
+    }
+    for requested in fleets_of.values():
+        _check_realized_fleets(requested)
     cells = _demand_cells(population, inputs.demand.density_threshold_per_km2)
-    limits = _AllocationLimits(
-        beams_per_satellite=_beams_per_satellite(inputs.shell),
-        people_per_beam=_people_per_beam(inputs.spectrum_mhz, phone),
-        take_up=inputs.demand.take_up,
-        beam=_beam_model(inputs.shell),
-        footprint_bands=inputs.sweep.footprint_bands,
-        passes=inputs.sweep.passes,
-    )
-    maximum_use = _maximum_use(cells, limits, inputs.shell.inclination_deg)
-    times = np.random.default_rng(inputs.sweep.seed).uniform(
-        _DAY_START_S, _SIDEREAL_DAY_S, inputs.sweep.snapshots_phone_central
+    beam = _beam_model(inputs.shell)
+    beams_per_satellite = _beams_per_satellite(inputs.shell)
+    limits = {
+        entry.device_class: _AllocationLimits(
+            beams_per_satellite=beams_per_satellite,
+            people_per_beam=_people_per_beam(inputs.spectrum_mhz, entry),
+            take_up=inputs.demand.take_up,
+            beam=beam,
+            footprint_bands=sweep.footprint_bands,
+            passes=sweep.passes,
+            spectrum_mhz=inputs.spectrum_mhz,
+            spectral_efficiency_bps_per_hz=entry.spectral_efficiency_bps_per_hz,
+            directional=_directional_rules(inputs, entry),
+        )
+        for entry in inputs.classes
+    }
+    snapshots_of = {
+        device_class: (
+            sweep.snapshots_phone_central
+            if class_limits.directional is None
+            else sweep.snapshots_directional
+        )
+        for device_class, class_limits in limits.items()
+    }
+    times = np.random.default_rng(sweep.seed).uniform(
+        _DAY_START_S, _SIDEREAL_DAY_S, max(snapshots_of.values())
     )
     tasks = [
         _SnapshotTask(
+            device_class=device_class,
             fleet_index=fleet_index,
             requested_fleet=fleet,
             snapshot_index=snapshot_index,
-            time_s=float(time_s),
+            time_s=float(times[snapshot_index]),
         )
-        for fleet_index, fleet in enumerate(inputs.sweep.fleets)
-        for snapshot_index, time_s in enumerate(times)
+        for device_class in limits
+        for fleet_index, fleet in enumerate(fleets_of[device_class])
+        for snapshot_index in range(snapshots_of[device_class])
     ]
     logger.info(
-        "saturation: %s, %d fleets x %d snapshots on %d demand cells of %s; maximum use %.0f beams",
-        device_class.value,
-        len(inputs.sweep.fleets),
-        len(times),
+        "saturation: %d classes, %d snapshot tasks on %d demand cells of %s",
+        len(limits),
+        len(tasks),
         cells.count,
         population.file_name,
-        maximum_use,
     )
-    sweep = _run_sweep(tasks, _SweepContext(shell=inputs.shell, cells=cells, limits=limits))
-    fleets = _by_fleet(sweep.results, len(inputs.sweep.fleets))
-    _check_bounds(device_class, fleets, maximum_use)
-    _check_stall_floor(fleets, inputs.sweep.stall_floor)
-    rows = _phone_rows(
-        fleets,
-        inputs.sweep.fleets,
-        spectrum_mhz=inputs.spectrum_mhz,
-        spectral_efficiency_bps_per_hz=phone.spectral_efficiency_bps_per_hz,
-        beams_per_satellite=limits.beams_per_satellite,
-    )
-    _check_capacity_per_satellite(device_class, rows)
-    markers = _markers(device_class, rows, maximum_use)
+    run = _run_sweep(tasks, _SweepContext(shell=inputs.shell, cells=cells, limits=limits))
+    curves = []
+    marker_limits: list[str] = []
+    for device_class, class_limits in limits.items():
+        fleets = _by_fleet(
+            [result for result in run.results if result.task.device_class is device_class],
+            len(fleets_of[device_class]),
+        )
+        maximum_use = _maximum_use(cells, class_limits, inputs.shell.inclination_deg)
+        _check_bounds(device_class, fleets, maximum_use)
+        if device_class is DeviceClass.PHONE_CLASS:
+            _check_stall_floor(fleets, sweep.stall_floor)
+        rows = _class_rows(
+            fleets,
+            fleets_of[device_class],
+            beams_per_satellite=beams_per_satellite,
+            directional=class_limits.directional is not None,
+        )
+        _check_capacity_per_satellite(device_class, rows)
+        markers = _markers(device_class, rows, maximum_use)
+        curves.append(ClassCurve(device_class=device_class, rows=rows, markers=markers))
+        marker_limits.extend(_unplaced_marker_limits(device_class, rows, maximum_use))
+        logger.info(
+            "saturation: %s, maximum use %.0f beams, saturation number %s",
+            device_class.value,
+            maximum_use,
+            markers.saturation_number
+            if markers.saturation_number is not None
+            else f"not reached by {markers.saturation_not_reached_by}",
+        )
     wall_time_s = time.perf_counter() - started
-    peak_memory_mb = _own_peak_mb() + sweep.workers_peak_mb
+    peak_memory_mb = _own_peak_mb() + run.workers_peak_mb
     logger.info(
-        "saturation: %s saturation number %s; %d workers at once after the first task; peak "
-        "memory bound %.0f MB (budget %.0f MB); %.1f s",
-        device_class.value,
-        markers.saturation_number
-        if markers.saturation_number is not None
-        else f"not reached by {markers.saturation_not_reached_by}",
-        sweep.workers,
+        "saturation: at most %d workers at once; peak memory bound %.0f MB (budget %.0f MB); "
+        "%.1f s",
+        run.workers,
         peak_memory_mb,
         _MEMORY_BUDGET_MB,
         wall_time_s,
@@ -2740,9 +3045,9 @@ def compute_saturation(
             checks_passed=_checks_passed(inputs),
             run_measurement=RunMeasurement(wall_time_s=wall_time_s, peak_memory_mb=peak_memory_mb),
         ),
-        classes=(ClassCurve(device_class=device_class, rows=rows, markers=markers),),
+        classes=tuple(curves),
         bands=(),
-        limits=(*_curve_limits(inputs), *_unplaced_marker_limits(device_class, rows, maximum_use)),
+        limits=(*_curve_limits(inputs), *marker_limits),
     )
 
 
