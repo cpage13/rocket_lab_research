@@ -304,6 +304,16 @@ _GRID_MEMBERS: Final[tuple[str, ...]] = (
 )
 """The members a population grid archive holds (``communications/data/ATTRIBUTION.md``)."""
 
+_GRID_PARSE_ERRORS: Final[tuple[type[Exception], ...]] = (
+    OSError,
+    ValueError,
+    TypeError,
+    EOFError,
+    zipfile.BadZipFile,
+)
+"""What parsing a malformed archive can raise (numpy's loader, its zip reader, a member that
+is not a scalar); each becomes one :class:`~common.file_io.ModelFileError`."""
+
 
 class PopulationGridError(ValueError):
     """A population grid the curve cannot use: not the one expected, or not a global grid."""
@@ -343,7 +353,8 @@ def load_population_grid(path: Path, expected_sha256: str) -> PopulationGrid:
     """Load a population grid archive, refusing one that is not the grid expected.
 
     The archive is read once, its SHA-256 checked, then parsed from those bytes with
-    ``allow_pickle=False``.
+    ``allow_pickle=False``. Only the parsing calls sit inside a ``try``, so each refusal
+    is raised once, never caught and wrapped again.
 
     Args:
         path: The archive (an ``.npz`` holding the members ATTRIBUTION.md lists).
@@ -370,20 +381,23 @@ def load_population_grid(path: Path, expected_sha256: str) -> PopulationGrid:
         )
     try:
         loaded = np.load(io.BytesIO(data), allow_pickle=False)
-        if not isinstance(loaded, np.lib.npyio.NpzFile):
-            raise ModelFileError(path, "not an .npz archive of named arrays")
-        with loaded as archive:
-            missing = [member for member in _GRID_MEMBERS if member not in archive.files]
-            if missing:
-                raise ModelFileError(path, f"the population grid lacks {missing}")
+    except _GRID_PARSE_ERRORS as exc:
+        raise ModelFileError(path, f"not a readable population grid ({exc})") from exc
+    if not isinstance(loaded, np.lib.npyio.NpzFile):
+        raise ModelFileError(path, "not an .npz archive of named arrays")
+    with loaded as archive:
+        missing = [member for member in _GRID_MEMBERS if member not in archive.files]
+        if missing:
+            raise ModelFileError(path, f"the population grid lacks {missing}")
+        try:
             population = np.asarray(archive["population"])
             lat_top_deg = float(archive["lat_top_deg"])
             lon_left_deg = float(archive["lon_left_deg"])
             cell_deg = float(archive["cell_deg"])
             source = str(archive["source"])
             citation = str(archive["citation"])
-    except (OSError, ValueError, TypeError, EOFError, zipfile.BadZipFile) as exc:
-        raise ModelFileError(path, f"not a readable population grid ({exc})") from exc
+        except _GRID_PARSE_ERRORS as exc:
+            raise ModelFileError(path, f"not a readable population grid ({exc})") from exc
     if population.ndim != _GRID_DIMENSIONS or population.dtype != np.float32:
         raise ModelFileError(
             path,

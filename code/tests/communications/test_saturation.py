@@ -1416,3 +1416,22 @@ def test_compute_saturation_refuses_a_grid_that_is_not_global(
     inputs = synthetic_saturation_inputs(uniform_band, fleets=BAND_FLEETS)
     with pytest.raises(PopulationGridError, match="global grid from 90 degrees north"):
         compute_saturation(inputs, shifted, version_stamp=STAMP)
+
+
+def test_load_population_grid_names_a_missing_member_once(tmp_path: Path) -> None:
+    """Objective: the loader's own refusal of a malformed archive reaches the caller as it
+    was raised, never caught and wrapped again by the parse errors' handler.
+
+    Sample: an ``.npz`` holding only a population array, against its own digest.
+
+    Expected outcome: ModelFileError naming the missing members, its message the path once
+    and the reason, with no "not a readable population grid" wrapper.
+    """
+    archive = tmp_path / "population_only.npz"
+    np.savez(archive, population=np.zeros((2, 2), dtype=np.float32))
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    with pytest.raises(ModelFileError, match="the population grid lacks") as refused:
+        load_population_grid(archive, digest)
+    message = str(refused.value)
+    assert "not a readable population grid" not in message
+    assert message.count(str(archive)) == 1
