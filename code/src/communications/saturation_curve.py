@@ -614,7 +614,8 @@ class ClassMarkers(BaseModel):
             reached on the curve; None when it is.
         elasticity_under_0p25_fleet: The fleet at the first crossing under 0.25 (fragile to
             the demand definition), rounded half up; None when not reached by the last row,
-            or when the crossing lies before the first row (the curve's limits then say so).
+            or when the crossing lies before the first midpoint (the geometric mean of the
+            first two rows), where the rows cannot place it (the curve's limits then say so).
         fleet_at_90pct_of_maximum_use: The fleet at which L reaches 90 percent of maximum
             use, rounded half up; None when not reached by the last row, or when the first
             row already reaches it (the curve's limits then say so).

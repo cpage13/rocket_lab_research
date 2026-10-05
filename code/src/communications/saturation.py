@@ -58,8 +58,10 @@ phone class:
     interpolated in ln N between the midpoints that straddle it and rounded half up (or the
     last fleet when it is not reached); beside it the crossing under 0.25 and the fleet at
     which L reaches 90 percent of maximum use (log-log between rows), each None when not
-    reached or when it lies before the first row (the curve's limits then say so). The
-    markers read maximum use, never a sweep-dependent ceiling.
+    reached, or when the rows cannot place it: the 0.25 crossing when it lies before the
+    first midpoint (the geometric mean of the first two rows), the 90 percent fleet when the
+    first row already reaches it (the curve's limits then say so). The markers read maximum
+    use, never a sweep-dependent ceiling.
 12. **The interference trim**: not computed by this version.
 
 The checks raise :class:`SaturationInvariantError`: the bounds (L at most min(ceiling,
@@ -1374,8 +1376,9 @@ def _markers(
     rounded half up, or, when not reached, the last row's fleet as
     ``saturation_not_reached_by``; it is the one marker that refuses a curve whose rows cannot
     place it. Beside it, the first crossing under 0.25 and the fleet at which L reaches 90
-    percent of maximum use: each is None when not reached, and None too when it lies before
-    the first row (:func:`_unplaced_marker_limits` states that in the curve's limits).
+    percent of maximum use: each is None when not reached, and None too when the rows cannot
+    place it (the 0.25 crossing before the first midpoint, the 90 percent fleet at or before
+    the first row; :func:`_unplaced_marker_limits` states that in the curve's limits).
 
     Raises:
         SaturationInvariantError: If a row's capacity is not positive (the elasticity needs
@@ -1414,7 +1417,7 @@ def _markers(
 def _unplaced_marker_limits(
     device_class: DeviceClass, rows: Sequence[CurveRow], maximum_use: float
 ) -> tuple[str, ...]:
-    """Return the limits a curve states for its supporting markers that lie before its rows.
+    """Return the limits a curve states for its supporting markers that its rows cannot place.
 
     Such a marker is None in the markers, like one not reached; this says which it is.
     """
@@ -1422,10 +1425,11 @@ def _unplaced_marker_limits(
     name = device_class.value
     limits = []
     if _crosses_before_first_midpoint(elasticity, _SUPPORTING_ELASTICITY):
+        class_in_prose = device_class.value.replace("_", " ")
         limits.append(
-            f"The {name} elasticity is already under {_SUPPORTING_ELASTICITY:g} at the first "
-            "midpoint, so its crossing under it lies before the first row and is not "
-            "reported; a sweep starting lower would place it."
+            f"The {class_in_prose}'s crossing under {_SUPPORTING_ELASTICITY:g} lies before the "
+            "first midpoint (the geometric mean of the first two rows), where the rows cannot "
+            "place it, so it is not reported; a sweep starting lower would place it."
         )
     if _reached_at_first_row(
         [row.useful_beams for row in rows], _MAXIMUM_USE_MARKER_SHARE * maximum_use
@@ -1530,7 +1534,7 @@ def compute_saturation(
 
     Runs stages 2 to 6 and 8 to 11 of the module docstring for the phone class, checks the
     bounds, the stall floor and capacity per satellite, reads the markers against maximum
-    use, states any supporting marker that lies before the first row among the limits, and
+    use, states any supporting marker the rows cannot place among the limits, and
     records the run's wall time and peak-memory bound.
 
     Args:

@@ -720,7 +720,7 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
     assert len(provenance.checks_passed) == 3
     assert provenance.run_measurement.wall_time_s > 0
     assert provenance.run_measurement.peak_memory_mb > 0
-    assert len(curve.limits) >= 8
+    assert len(curve.limits) == 8
     assert [entry.device_class for entry in curve.classes] == [PHONE]
     assert curve.bands == ()
 
@@ -1252,8 +1252,9 @@ MARKER_FLEETS = (342, 992, 1_980, 3_969)
 
 def test_a_supporting_marker_before_the_first_row_never_takes_the_saturation_number() -> None:
     """Objective: the saturation number is placed first and is the one marker that refuses a
-    curve; a supporting marker that lies before the first row is None, and the curve's limits
-    say so (the numerics review's m2).
+    curve; a supporting marker the rows cannot place is None, and the curve's limits say so
+    (the numerics review's m2); a supporting marker the rows can place is placed, with no
+    limit.
 
     Sample: rows whose elasticity falls 0.20, 0.12, 0.02 (under 0.25 already at the first
     midpoint, crossing 0.10 between the second and third), with L at 950, 960, 970 and 980
@@ -1262,7 +1263,10 @@ def test_a_supporting_marker_before_the_first_row_never_takes_the_saturation_num
 
     Expected outcome: the saturation number is placed (between the second and third
     midpoints); the 0.25 marker and the 90 percent fleet are None; the unplaced-marker limits
-    name both; with L under 90 percent at the first row, only the 0.25 limit is stated.
+    name both; with L under 90 percent at the first row, only the 0.25 limit is stated. Rows
+    falling 0.40, 0.20, 0.05 with L under 90 percent place the 0.25 marker between the first
+    two midpoints (the crossing's value rounded half up), the saturation number between the
+    second and third, and state no limit.
     """
     elasticities = (0.20, 0.12, 0.02)
     rows = rows_with_elasticities(MARKER_FLEETS, elasticities, (950.0, 960.0, 970.0, 980.0))
@@ -1274,10 +1278,23 @@ def test_a_supporting_marker_before_the_first_row_never_takes_the_saturation_num
     assert markers.fleet_at_90pct_of_maximum_use is None
     limits = sat._unplaced_marker_limits(PHONE, rows, 1_000.0)
     assert len(limits) == 2
-    assert "crossing under it lies before the first row" in limits[0]
+    assert limits[0].startswith("The phone class's crossing under 0.25 lies before the first")
+    assert "first midpoint (the geometric mean of the first two rows), where the rows" in limits[0]
     assert "at or before the first row" in limits[1]
     low_rows = rows_with_elasticities(MARKER_FLEETS, elasticities, (100.0, 200.0, 300.0, 400.0))
     assert len(sat._unplaced_marker_limits(PHONE, low_rows, 1_000.0)) == 1
+    placed_rows = rows_with_elasticities(
+        MARKER_FLEETS, (0.40, 0.20, 0.05), (100.0, 200.0, 300.0, 400.0)
+    )
+    placed = sat._markers(PHONE, placed_rows, 1_000.0)
+    module_midpoints, module_elasticity = sat._elasticity(PHONE, placed_rows)
+    crossing = sat._first_crossing_under(module_midpoints, module_elasticity, 0.25, "0.25")
+    assert crossing is not None
+    assert placed.elasticity_under_0p25_fleet == round_half_up(crossing)
+    assert midpoints[0] < placed.elasticity_under_0p25_fleet < midpoints[1]
+    assert placed.saturation_number is not None
+    assert midpoints[1] < placed.saturation_number < midpoints[2]
+    assert sat._unplaced_marker_limits(PHONE, placed_rows, 1_000.0) == ()
 
 
 def bare_markers(**changes: int | None) -> ClassMarkers:
