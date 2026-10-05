@@ -1939,6 +1939,150 @@ def _price_layers(
     )
 
 
+@dataclass(frozen=True, eq=False)
+class _StackStatistics:
+    """The kept stacked layers' statistics in one snapshot (the curve's directional diagnostics).
+
+    A kept stacked layer here is a stacked sub-pair of a cell that keeps its stack and that
+    sits on a layer of another sector in its cell; a stacked sub-pair that shares its sector
+    with every other layer of its cell completes that sector's one layer (rule D5 prices it so)
+    and counts in L, not here.
+
+    Attributes:
+        beams: The kept stacked layers' beams.
+        median_separation_deg: Their beam-weighted median separation from their cell's nearest
+            layer of another sector, degrees; None when there are none.
+        mean_interference_db: Their beam-weighted mean full-sum interference, dB; None when
+            there are none.
+    """
+
+    beams: float
+    median_separation_deg: float | None
+    mean_interference_db: float | None
+
+
+def _stack_statistics(
+    pricing: _Pricing, keeps_stack: npt.NDArray[np.bool_], pair_cell: npt.NDArray[np.int64]
+) -> _StackStatistics:
+    """Return the kept stacked layers' beams, median separation and mean interference."""
+    kept = (
+        ~pricing.is_first_layer
+        & keeps_stack[pair_cell[pricing.pair]]
+        & (pricing.nearest_cosine > _NO_NEIGHBOUR_COSINE)
+    )
+    weight = pricing.beams[kept]
+    total = float(weight.sum())
+    if total <= _NONE_LEFT:
+        return _StackStatistics(beams=0.0, median_separation_deg=None, mean_interference_db=None)
+    separation = np.degrees(np.arccos(np.clip(pricing.nearest_cosine[kept], *_COSINE_BOUNDS)))
+    order = np.argsort(separation)
+    cumulative = np.cumsum(weight[order]) / total
+    median = float(separation[order][np.searchsorted(cumulative, _MEDIAN_WEIGHT_SHARE)])
+    mean_interference = float(np.sum(weight * pricing.interference[kept]) / total)
+    return _StackStatistics(
+        beams=total,
+        median_separation_deg=median,
+        mean_interference_db=_DECIBELS_PER_DECADE * math.log10(mean_interference),
+    )
+
+
+@dataclass(frozen=True, eq=False)
+class _DirectionalAllocation:
+    """The directional part of one snapshot's allocation (rules D1 to D6), d = 1.
+
+    Attributes:
+        sector: Each pair's sky sector (D1).
+        first_layer_beams: Each pair's first-layer beams (D2).
+        stacked_beams: Each pair's stacked beams as placed, kept or dropped (D4); a dropped
+            cell's stay spent from their satellites.
+        serving: Whether each pair's satellite serves its cell at the end of stage 2 (D3).
+        keeps_stack: Whether each cell keeps its stacked beams (D6).
+        stacked_capacity_mbps: Each cell's capacity with its stacked layers, by the full sum
+            (D5); its first layer alone where it carries none.
+        cell_capacity_mbps: Each cell's capacity as kept (D6).
+        useful_beams: L: every first-layer beam and the kept stacked beams.
+        capacity_mbps: The cells' capacity as kept.
+        statistics: The kept stacked layers' beams, separation and interference.
+    """
+
+    sector: npt.NDArray[np.int64]
+    first_layer_beams: npt.NDArray[np.float64]
+    stacked_beams: npt.NDArray[np.float64]
+    serving: npt.NDArray[np.bool_]
+    keeps_stack: npt.NDArray[np.bool_]
+    stacked_capacity_mbps: npt.NDArray[np.float64]
+    cell_capacity_mbps: npt.NDArray[np.float64]
+    useful_beams: float
+    capacity_mbps: float
+    statistics: _StackStatistics
+
+
+def _directional_allocation(
+    satellites: _SatellitePositions,
+    pairs: _Pairs,
+    footprint_km2: npt.NDArray[np.float64],
+    cells: _DemandCells,
+    first: _FirstLayer,
+    bands: _FootprintBands,
+    orbit_radius_km: float,
+    spectrum_mhz: float,
+    rules: _DirectionalRules,
+    passes: int,
+) -> _DirectionalAllocation:
+    """Allocate a directional class's stacked layers on its first layer and price the cells.
+
+    Rules D1 (the sectors), D3 and D4 (stage 2 under the pairwise admission), D5 (the full-sum
+    pricing) and D6, the keep rule: a cell whose priced capacity with its stacked layers is
+    below its first layer alone (every first-layer beam at the central SE) keeps its first
+    layer only. Its dropped stacked beams stay spent, never returned or re-spent (nothing is
+    filled after the keep rule), and L counts only kept beams, so L can fall while capacity
+    rises. A beam carries the spectrum times its SE.
+
+    Args:
+        satellites: The satellites.
+        pairs: The pairs in view.
+        footprint_km2: Each pair's footprint.
+        cells: The demand cells.
+        first: Stage 1's layer at the class's people cap (D2) and what it left.
+        bands: The snapshot's footprint bands.
+        orbit_radius_km: The shell's orbit radius, km.
+        spectrum_mhz: The held spectrum, MHz.
+        rules: The class's rules.
+        passes: The proportional passes.
+
+    Returns:
+        The directional allocation.
+    """
+    sector = _pair_sectors(pairs, satellites, cells, orbit_radius_km, rules.layout)
+    directions = _pair_directions(pairs, satellites, cells, orbit_radius_km)
+    stacked = _stacked_layers(
+        pairs, footprint_km2, sector, directions, cells, first, bands, rules, passes
+    )
+    pricing = _price_layers(
+        pairs, footprint_km2, sector, directions, cells, first.beams, stacked.beams, rules
+    )
+    first_alone = (
+        np.bincount(pairs.cell, weights=first.beams, minlength=cells.count)
+        * rules.se_central_bps_per_hz
+    )
+    keeps_stack = pricing.has_stack & (pricing.stacked_capacity >= first_alone)
+    stacked_capacity = np.where(pricing.has_stack, pricing.stacked_capacity, first_alone)
+    cell_capacity = np.where(keeps_stack, pricing.stacked_capacity, first_alone)
+    cell_capacity_mbps = cell_capacity * spectrum_mhz
+    return _DirectionalAllocation(
+        sector=sector,
+        first_layer_beams=first.beams,
+        stacked_beams=stacked.beams,
+        serving=stacked.serving,
+        keeps_stack=keeps_stack,
+        stacked_capacity_mbps=stacked_capacity * spectrum_mhz,
+        cell_capacity_mbps=cell_capacity_mbps,
+        useful_beams=first.useful_beams + float(stacked.beams[keeps_stack[pairs.cell]].sum()),
+        capacity_mbps=float(cell_capacity_mbps.sum()),
+        statistics=_stack_statistics(pricing, keeps_stack, pairs.cell),
+    )
+
+
 # ===========================================================================
 # The sweep, in separate processes under the memory budget
 # ===========================================================================
