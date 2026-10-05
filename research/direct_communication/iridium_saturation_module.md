@@ -12,15 +12,15 @@
 
 ## 1. The inputs whose only source was local research
 
-Eight values, each a constant the module or the engine reads. Three are computed (`derived_estimate`). Four are engineering estimates with no external source: their rows take `scenario`, a chosen modeling assumption, and they are not investor-set. One is a standard's value whose text is not yet read into the wiki (`sourced_estimate`).
+Eight values, each a constant the module or the engine reads. Three are computed (`derived_estimate`). Four are engineering estimates with no external source: their rows take `scenario`, a chosen modeling assumption, and they are not investor-set. One is a standard's exact value, `certified` on two credible secondary sources that cite the standard's clauses.
 
-### 1.1 The NB-IoT single-tone uplink subcarrier: 3.75 kHz (COMM-714)
+### 1.1 NB-IoT's narrowest uplink subcarrier: 3.75 kHz (COMM-714)
 
-**What it is.** NB-IoT's narrowest uplink allocation: one subcarrier, or tone, 3.75 kHz wide. The 8 MHz band holds about 2,133 such tones (8,000 kHz / 3.75 kHz).
+**What it is.** NB-IoT's narrowest uplink allocation: one subcarrier, or tone, 3.75 kHz wide, used only by single-tone transmissions (single-tone also runs at 15 kHz, and multi-tone at 15 kHz only). NB-IoT's 180 kHz carrier holds 48 such tones, or 12 at 15 kHz; the 8 MHz band holds about 2,133 (8,000 kHz / 3.75 kHz).
 
 **How the model uses it.** The IoT reading counts each message's channel time on one tone against the tones the uplink share of the band carries.
 
-**Basis.** A 3GPP NB-IoT value. The design's IoT check (its § 1.8) and its prototype (`iot_headroom.py`, local) carry it, and the independent number audit of the strategy judged it "a correct standard NB-IoT value" that needed its own citation. The standard's own text is not yet read into the wiki; the document to read is 3GPP TS 36.211, the physical-layer specification, in its NB-IoT clauses. Until then the row is `sourced_estimate`; read from the standard, it becomes `certified`.
+**Basis.** A 3GPP NB-IoT value: TS 36.211, Section 10.1.2.1 and Table 10.1.2.3-1 (the NB-IoT uplink numerology and its resource units), as two independent technical references state and cite it. MathWorks' "NB-IoT Uplink Waveform Generation" states that single-tone transmissions use either 15 kHz or 3.75 kHz spacing and multi-tone transmissions 15 kHz, with a 2 ms slot at 3.75 kHz, citing Table 10.1.2.3-1. ShareTechnote's "LTE-NB: Physical Layer: Uplink: Frame Structure" gives the two spacings, 48 subcarriers of 3.75 kHz in the 180 kHz carrier and single-subcarrier resource units at 3.75 kHz, citing Section 10.1.2.1 and showing Table 10.1.2.3-1. The row is `certified` on those two sources, as this ledger certifies other standard and textbook facts (COMM-569, COMM-662); the standard's own text was not read. The design's IoT check (its § 1.8) and its prototype (`iot_headroom.py`, local) carry the value, and the independent number audit of the strategy judged it a correct standard NB-IoT value.
 
 ### 1.2 The interference trim's conservative array floor: -0.4 dBi (COMM-715)
 
@@ -48,13 +48,13 @@ Eight values, each a constant the module or the engine reads. Three are computed
 
 ### 1.6 The IoT airtime: 4 to 7 s per 340-byte message on one tone (COMM-719)
 
-**What it is.** How long one minimal-packet IoT message (340 bytes, the SBD message size of COMM-620) holds one 3.75 kHz uplink tone, at the NB-IoT NTN coverage class that closes a low-power, low-gain device at the 25 degree mask: about 20 dB of repetition coding, itself an estimate.
+**What it is.** How long one minimal-packet IoT message (340 bytes, the SBD message size of COMM-620) holds one 3.75 kHz uplink tone.
 
-**Basis.** ESTIMATE: the design review's figure (round 1), with no working written down. The corpus's 1 to 2 kbps NB-IoT NTN envelope (COMM-665) gives 2,720 bits in 1.4 to 2.7 s before repetition and overhead; the step from there to 4 to 7 s is not derived. It feeds only the IoT reading, which sizes nothing. A worked NB-IoT NTN repetition budget would source it.
+**Basis.** ESTIMATE: the design reviewer's figure (round 1, RV-16), with no working written down. It is 1.5 to 5 times the 1.4 to 2.7 s that the corpus's 1 to 2 kbps NB-IoT NTN envelope (COMM-665) gives for 2,720 bits before repetition and overhead. It is conservative against the physics loop's uplink budget: C-204's 0.2 W, 0 dBi device nets +4.2 dB at the 450 km mask edge over a 1.54 MHz channel, and one 3.75 kHz tone is about 26 dB narrower, so an outdoor device at the mask needs little or no repetition, and its airtime sits near the no-repetition figure. It feeds only the IoT reading, which sizes nothing. A worked NB-IoT NTN airtime budget on this array would source it.
 
 ### 1.7 The taper's beamwidth factor: 1.0934 lambda / D (COMM-720)
 
-**What it is.** A real array tapers its illumination to control sidelobes, which widens the beam. The realistic-array band's taper point uses a 3 dB beamwidth of 1.0934 lambda / D on the 5 m square aperture at 1.621 GHz, 2.32 degrees, against the uniform beam's 0.886 lambda / D, 1.88 degrees. Its footprint is (1.0934 / 0.886)^2 = 1.52 times the uniform beam's area. The uniform beam, footprints touching, stays the band's central point and its upper bound.
+**What it is.** The realistic-array band, the design's F9, carries the effective ground area per beam as three points: the uniform beam, central (footprints touching, the upper bound on the beams in use); the 2.32 degree taper, x 1.52; and the taper with wider spacing, x 2.3. A real array tapers its illumination to control sidelobes, which widens the beam. The taper point uses a 3 dB beamwidth of 1.0934 lambda / D on the 5 m square aperture at 1.621 GHz, 2.32 degrees, against the uniform beam's 0.886 lambda / D, 1.88 degrees. Its footprint is (1.0934 / 0.886)^2 = 1.52 times the uniform beam's area.
 
 **Derivation.** 1.0934 = 0.886 x 2.32 / 1.88. The 2.32 degrees is the physics loop's C-102: the tapered 70 lambda / D convention (COMM-569's beamwidth rule) on the 25 m^2 panel's equal-area diameter, 5.64 m, at 1.6 GHz, where uniform illumination gives 1.94 degrees. Cross-check: blind derivation B's own taper, 1.10 lambda / D, gives an area 1.54 times the uniform beam's.
 
@@ -69,11 +69,11 @@ Eight values, each a constant the module or the engine reads. Three are computed
 ## Sources
 
 - Corpus rows: COMM-569 (gain and beamwidth), COMM-620 (the 340-byte SBD message), COMM-665 (NB-IoT NTN's 1 to 2 kbps), and COMM-662 (Iridium's band is time-division duplex, so the uplink and the downlink share its tones in time).
-- The Iridium physics loop (local, validated in July 2026): C-101 (the panel's gain), C-102 (its beamwidth, uniform and tapered), C-401 (the calibrated array's error-sidelobe floor), C-409 (the interference-budget wall at that floor).
+- The Iridium physics loop (local, validated in July 2026): C-101 (the panel's gain), C-102 (its beamwidth, uniform and tapered), C-204 (the uplink budget of a 0.2 W, 0 dBi device), C-401 (the calibrated array's error-sidelobe floor), C-409 (the interference-budget wall at that floor).
 - The phased-array error-floor estimate (Mailloux; Skolnik), as C-401 applies it; not re-read for this note.
 - The saturation design (local): § 1.7 "Power and the uplink", § 1.8 (the IoT row and its channel-time check), § 2 (the beam, the effective-area band and the directional rules), F9 (the realistic-array band); its round-1 and round-2 reviews; its prototypes `interference_trim.py`, `iot_headroom.py`, `directional_sim.py` and `reach_sim.py`, the round-2 check `review_r2/layers_check.py`, and blind derivations A and B (`blind_a/derivation.md`, `blind_b/derivation.md`), all under `.agent/other/saturation_reach_09_28/` (local).
 - The independent number audit of the strategy (local), which asked that the tone get its own citation and that the airtime, the pattern floor and the scan roll-off be labeled estimates.
-- 3GPP TS 36.211 (the NB-IoT physical layer): named as the document to read for COMM-714; not yet read into the wiki.
+- For COMM-714: [MathWorks, "NB-IoT Uplink Waveform Generation"](https://www.mathworks.com/help/lte/ug/nb-iot-uplink-waveform-generation.html) and [ShareTechnote, "LTE-NB: Physical Layer: Uplink: Frame Structure"](https://www.sharetechnote.com/html/Handbook_LTE_NB_FrameStructure_UL.html), both read 2026-10-05, both citing 3GPP TS 36.211, Section 10.1.2.1 and Table 10.1.2.3-1; the standard's own text was not read.
 
 ---
 
@@ -81,11 +81,11 @@ Eight values, each a constant the module or the engine reads. Three are computed
 
 The same rows as `research/SOURCE_INDEX.md`, "The saturation module's locally sourced inputs (COMM-714..721)".
 
-- **COMM-714**: The **NB-IoT single-tone uplink subcarrier is 3.75 kHz** (a 3GPP value), so Iridium's 8 MHz holds about **2,133 tones**; the IoT reading counts message channel time in these tones. [FACT in the standard; carried here from the design and its prototype, the standard's text not yet read into the wiki] Sources: the saturation design's § 1.8 and `iot_headroom.py` (local); the strategy's number audit (local); 3GPP TS 36.211 to read.
+- **COMM-714**: NB-IoT's narrowest uplink allocation is **one 3.75 kHz subcarrier** (single-tone only; single-tone also runs at 15 kHz, and multi-tone at 15 kHz only), so Iridium's 8 MHz holds about **2,133 tones**; the IoT reading counts message channel time in these tones. [FACT, two secondary sources that cite the standard] Sources: MathWorks, "NB-IoT Uplink Waveform Generation"; ShareTechnote, "LTE-NB: Physical Layer: Uplink: Frame Structure"; 3GPP TS 36.211, Section 10.1.2.1 and Table 10.1.2.3-1, as both cite them.
 - **COMM-715**: The interference trim's **conservative array floor is -0.4 dBi**: the 25 m^2 panel's 39.6 dBi broadside directivity at 1.621 GHz less C-401's conservative -40 dB edge of a calibrated array's sigma^2 / N error-sidelobe floor, the floor at which C-409 places its interference-budget wall. [DERIVED on an ESTIMATE floor] Sources: the physics loop's C-101, C-401, C-409 (local); Mailloux and Skolnik as C-401 applies them.
 - **COMM-716**: The trim's **calibrated-array band is -2 to -8 dBi**: 39.6 dBi less C-401's 41.5 to 47.6 dB, the sigma^2 / N floor of about 2,848 elements at 20 to 5 percent per-element error power. [DERIVED on an ESTIMATE floor] Sources: the physics loop's C-401 (local).
 - **COMM-717**: The array's **scan roll-off is g = cos^1.3(eta)**, weighting each beam's power and sidelobes by scan angle in the trim. [ESTIMATE: chosen independently by blind derivations A and B; also in the design's uplink link budget] Sources: blind A § 3, blind B § 7, the design's 1.7 "Power and the uplink" (local).
 - **COMM-718**: The directional terminals' **pattern floor is -20 dB** below the main-lobe peak (a Gaussian main lobe of 60.3 degrees for the small terminal, 33.9 degrees for the mounted terminal); optimistic for the small terminal, whose side levels the design earlier put at -10 to -15 dB. [ESTIMATE: the design's round-2 reviewer's value] Sources: the design's § 2, rule 3; `directional_sim.py` and `review_r2/layers_check.py` (local).
-- **COMM-719**: A **340-byte IoT message holds one 3.75 kHz tone for about 4 to 7 s** at the NB-IoT NTN coverage class that closes a low-power device at the 25 degree mask (about 20 dB of repetition). COMM-665's 1 to 2 kbps gives 1.4 to 2.7 s before repetition and overhead; the step to 4 to 7 s is not derived. [ESTIMATE: the design review's figure] Sources: the design's round-1 review (RV-16) and § 1.8, `iot_headroom.py` (local); COMM-620, COMM-665.
+- **COMM-719**: A **340-byte minimal-packet IoT message holds one 3.75 kHz uplink tone for about 4 to 7 s**: 1.5 to 5 times the 1.4 to 2.7 s that COMM-665's 1 to 2 kbps NB-IoT NTN envelope gives before repetition and overhead, and conservative against the physics loop's uplink budget (C-204), under which an outdoor device at the mask needs little or no repetition. [ESTIMATE: the design reviewer's figure, RV-16] Sources: the design's round-1 review (RV-16) and § 1.8, `iot_headroom.py`, C-204 (local); COMM-620, COMM-665.
 - **COMM-720**: The taper point's **beamwidth factor is 1.0934 lambda / D**, 2.32 degrees on the 5 m aperture at 1.621 GHz against the uniform 0.886 lambda / D (1.88 degrees), so its **footprint is 1.52 times** the uniform beam's area; 2.32 degrees is C-102's tapered 70 lambda / D convention. Blind derivation B's independent taper, 1.10 lambda / D, gives x 1.54. [DERIVED] Sources: the physics loop's C-102 (local); COMM-569; `reach_sim.py` and the design's F9 (local); blind B § 7 (local).
 - **COMM-721**: The band's **co-channel spacing gives each beam 1.5 times its ground area**; with the taper, **2.3 times** the uniform beam's (1.52 x 1.5). [ESTIMATE: blind derivation B's rule; the 2.3 DERIVED] Sources: blind B § 7; the design's § 2 and F9 (local).
