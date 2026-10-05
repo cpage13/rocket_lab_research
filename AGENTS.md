@@ -1,4 +1,3 @@
-<!-- Draft on branch atlas-10-03: What, Why, Objectives, Goals, Quality bar, Ideal outcome and Project rules await the investor's OK (the drafts are listed in .agent/other/run_atlas_10_03/NOTES.md (local)). Delete this comment at landing. -->
 # Rocket Lab Research
 
 The charter: purpose, rules and pieces. Read it first, then `atlas/map.md`.
