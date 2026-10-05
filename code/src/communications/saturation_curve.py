@@ -1,4 +1,4 @@
-"""The saturation curve's contract (foundation v1): its inputs, its result and its hash.
+"""The saturation curve's contract (foundation v2): its inputs, its result and its hash.
 
 The saturation module (:mod:`communications.saturation`, the one module that imports
 numpy, ADR 010) computes, for each device class, how many co-channel beams a Walker shell
@@ -14,15 +14,19 @@ family can read a curve without importing numpy:
   :data:`SATURATION_CURVE_SCHEMA_VERSION`. It is also ``compute_saturation``'s return type,
   so the promoted curve has one schema and no mirror;
 * :func:`saturation_inputs_for`, the inputs a config's Iridium dials imply (only the held
-  spectrum), and :func:`curve_input_hash`, the SHA-256 of the inputs' canonical JSON.
+  spectrum), and :func:`curve_input_hash`, the SHA-256 of the inputs' canonical JSON;
+* :func:`walker_shape`, the shell's pinned planes and satellites per plane for a requested
+  fleet, which the module builds every shell with and the contract checks every row by.
 
 Every model is a frozen pydantic model with ``extra="forbid"`` that refuses a NaN or an
 infinity, so a curve's JSON is standard JSON. The validators that belong to the contract:
 the inputs carry exactly one class per :class:`~communications.constants.DeviceClass` and
 one band point per :class:`BandName`, each in its enum's order; the sweep's fleets strictly
-increase and the mounted terminal's extension starts above the last of them; a curve
-carries each class and each band point at most once, in its enum's order, and every tuple
-of rows strictly increases in fleet. A curve may lack classes, band points or trims while
+increase, as strict integers, and the mounted terminal's extension starts above the last of
+them; a curve carries each class and each band point at most once, in its enum's order;
+every tuple of rows strictly increases in fleet; each row's fleet is the realized P x S of
+its requested fleet; and a directional row's two stacking statistics exist exactly when it
+keeps stacked beams. A curve may lack classes, band points or trims while
 it is being built (the phone class first, the directional classes, then the bands and the
 trim); the promotion's completeness check is what a promoted curve must pass.
 
@@ -34,11 +38,12 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from itertools import pairwise
 from types import MappingProxyType
-from typing import Final, Self
+from typing import Annotated, Final, Self
 
 from pydantic import (
     BaseModel,
@@ -180,6 +185,29 @@ def _check_strictly_increasing(values: Sequence[int], what: str) -> None:
         raise ValueError(f"{what} must strictly increase; got {list(values)}")
 
 
+_RequestedFleet = Annotated[int, Field(strict=True, gt=0)]
+"""A requested fleet: a positive integer, strictly (a boolean or a whole float is refused)."""
+
+
+def walker_shape(requested_fleet: int) -> tuple[int, int]:
+    """Return the Walker shell's planes and satellites per plane for a requested fleet.
+
+    P = round(sqrt(N)) planes of S = round(N / P) satellites, with Python's ``round`` (an exact
+    half goes to the even neighbour): the curve's pinned convention. The realized fleet P x S
+    keys a row, but the request builds its shell, and a realized count requested again can
+    build another shell (1,000 gives 32 x 31 = 992, while 992 gives 31 x 32). So a reader
+    rebuilds a row from its ``requested_fleet``, never from its ``fleet``.
+
+    Args:
+        requested_fleet: The requested fleet N.
+
+    Returns:
+        The planes P and the satellites per plane S.
+    """
+    planes = round(math.sqrt(requested_fleet))
+    return planes, round(requested_fleet / planes)
+
+
 # ===========================================================================
 # 1. The curve's inputs
 # ===========================================================================
@@ -264,10 +292,11 @@ class SweepInputs(BaseModel):
     """The fleets and the numerical method the curve is computed with.
 
     Attributes:
-        fleets: The requested fleets, strictly increasing (at least two, since a marker
-            reads the elasticity between rows); each row is keyed by the realized fleet.
-        mounted_terminal_extension: The mounted terminal's extra requested fleets,
-            strictly increasing and above the last of ``fleets``.
+        fleets: The requested fleets, strict integers, strictly increasing (at least two,
+            since a marker reads the elasticity between rows); each row is keyed by its
+            realized fleet and carries its request.
+        mounted_terminal_extension: The mounted terminal's extra requested fleets, strict
+            integers, strictly increasing and above the last of ``fleets``.
         snapshots_phone_central: Snapshot times averaged at each fleet of the phone
             class's central curve.
         snapshots_directional: The same for the two directional classes.
@@ -282,8 +311,8 @@ class SweepInputs(BaseModel):
 
     model_config = _CONTRACT_MODEL_CONFIG
 
-    fleets: tuple[PositiveInt, ...] = Field(default=SATURATION_FLEETS, min_length=2)
-    mounted_terminal_extension: tuple[PositiveInt, ...] = SATURATION_MOUNTED_TERMINAL_EXTENSION
+    fleets: tuple[_RequestedFleet, ...] = Field(default=SATURATION_FLEETS, min_length=2)
+    mounted_terminal_extension: tuple[_RequestedFleet, ...] = SATURATION_MOUNTED_TERMINAL_EXTENSION
     snapshots_phone_central: PositiveInt = SATURATION_SNAPSHOTS_PHONE_CENTRAL
     snapshots_directional: PositiveInt = SATURATION_SNAPSHOTS_DIRECTIONAL
     snapshots_bands: PositiveInt = SATURATION_SNAPSHOTS_BANDS
@@ -485,16 +514,34 @@ class DirectionalDiagnostics(BaseModel):
     Attributes:
         kept_stacked_share: The share of the kept useful beams that are stacked layers.
         median_separation_deg: The median separation of a stacked layer from the cell's
-            other layers, degrees.
+            other layers, degrees; None exactly when the row keeps no stacked beam (a
+            statistic of no beams does not exist).
         mean_full_sum_interference_db: The mean full-sum interference a beam sees from its
-            cell's other layers, dB.
+            cell's other layers, dB; None exactly when the row keeps no stacked beam.
     """
 
     model_config = _CONTRACT_MODEL_CONFIG
 
     kept_stacked_share: float = Field(ge=0, le=1.0)
-    median_separation_deg: float = Field(ge=0)
-    mean_full_sum_interference_db: float
+    median_separation_deg: Annotated[float, Field(ge=0)] | None
+    mean_full_sum_interference_db: float | None
+
+    @model_validator(mode="after")
+    def _statistics_exactly_when_stacked(self) -> Self:
+        """Refuse statistics of no stacked beams, or stacked beams without their statistics."""
+        stacked = self.kept_stacked_share > 0
+        present = (
+            self.median_separation_deg is not None,
+            self.mean_full_sum_interference_db is not None,
+        )
+        if present != (stacked, stacked):
+            raise ValueError(
+                "the median separation and the mean full-sum interference must be set exactly "
+                f"when stacked beams are kept; got a kept stacked share of "
+                f"{self.kept_stacked_share} with {self.median_separation_deg} and "
+                f"{self.mean_full_sum_interference_db}"
+            )
+        return self
 
 
 class TrimAtFloor(BaseModel):
@@ -516,7 +563,9 @@ class CurveRow(BaseModel):
     """One fleet's row of a curve (d = 1, the reference panel).
 
     Attributes:
-        fleet: The realized fleet, P x S.
+        fleet: The realized fleet, P x S of the request: the row's key.
+        requested_fleet: The requested fleet N the row's shell is built from
+            (:func:`walker_shape`). A reader rebuilds a row from it, never from ``fleet``.
         useful_beams: L, the snapshot mean of the co-channel beams placed over demand.
         useful_beams_spread: The snapshot spread of L (the standard deviation).
         capacity_gbps: The snapshot mean of the beams' capacity, Gbps.
@@ -530,6 +579,7 @@ class CurveRow(BaseModel):
     model_config = _CONTRACT_MODEL_CONFIG
 
     fleet: PositiveInt
+    requested_fleet: PositiveInt
     useful_beams: float = Field(ge=0)
     useful_beams_spread: float = Field(ge=0)
     capacity_gbps: float = Field(ge=0)
@@ -538,6 +588,18 @@ class CurveRow(BaseModel):
     supply_beams: float = Field(ge=0)
     directional: DirectionalDiagnostics | None
     trim: tuple[TrimAtFloor, ...] | None
+
+    @model_validator(mode="after")
+    def _fleet_is_the_realized_request(self) -> Self:
+        """Refuse a row whose fleet is not the realized P x S of its requested fleet."""
+        realized = math.prod(walker_shape(self.requested_fleet))
+        if self.fleet != realized:
+            raise ValueError(
+                f"a row's fleet must be the realized P x S of its requested fleet: "
+                f"{self.requested_fleet} realizes as {realized}, but the row's fleet is "
+                f"{self.fleet}"
+            )
+        return self
 
 
 class ClassMarkers(BaseModel):
@@ -551,9 +613,11 @@ class ClassMarkers(BaseModel):
         saturation_not_reached_by: The last row's fleet when the 0.10 crossing is not
             reached on the curve; None when it is.
         elasticity_under_0p25_fleet: The fleet at the first crossing under 0.25 (fragile to
-            the demand definition), rounded half up; None when not reached.
+            the demand definition), rounded half up; None when not reached by the last row,
+            or when the crossing lies before the first row (the curve's limits then say so).
         fleet_at_90pct_of_maximum_use: The fleet at which L reaches 90 percent of maximum
-            use, rounded half up; None when not reached.
+            use, rounded half up; None when not reached by the last row, or when the first
+            row already reaches it (the curve's limits then say so).
     """
 
     model_config = _CONTRACT_MODEL_CONFIG
@@ -771,4 +835,5 @@ __all__ = [
     "TrimInputs",
     "curve_input_hash",
     "saturation_inputs_for",
+    "walker_shape",
 ]

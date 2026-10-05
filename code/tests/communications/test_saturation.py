@@ -60,12 +60,14 @@ from communications.saturation_curve import (
     BandName,
     ClassInputs,
     CurveRow,
+    DirectionalDiagnostics,
     SaturationCurve,
     SaturationInputs,
     ShellInputs,
     SweepInputs,
     curve_input_hash,
     saturation_inputs_for,
+    walker_shape,
 )
 
 # ---------------------------------------------------------------------------
@@ -630,6 +632,7 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid):
     curve = compute_saturation(inputs, real_grid, version_stamp=STAMP)
     rows = phone_curve(curve).rows
     assert [row.fleet for row in rows] == [frozen[0] for frozen in COARSE_REAL_ROWS]
+    assert [row.requested_fleet for row in rows] == list(COARSE_REAL_FLEETS)
     for row, (_, useful, capacity, ocean, ceiling, supply) in zip(
         rows, COARSE_REAL_ROWS, strict=True
     ):
@@ -757,9 +760,11 @@ def test_each_class_off_peak_share_is_at_most_its_busy_hour_share():
 
 
 def _row(fleet: int, useful: float, capacity: float) -> CurveRow:
-    """A bare curve row for the checks' refusals."""
+    """A bare curve row for the checks' refusals, requested at its own realized fleet (each
+    fleet used here realizes as itself when requested)."""
     return CurveRow(
         fleet=fleet,
+        requested_fleet=fleet,
         useful_beams=useful,
         useful_beams_spread=0.0,
         capacity_gbps=capacity,
@@ -921,6 +926,9 @@ def test_saturation_inputs_for_reads_only_the_held_spectrum():
         lambda d: SweepInputs(fleets=(340,)),
         lambda d: SweepInputs(fleets=(340, 50_000)),
         lambda d: SaturationInputs(spectrum_mhz=float("nan")),
+        lambda d: SweepInputs(fleets=(True, 340)),
+        lambda d: SweepInputs(fleets=(340.0, 500)),
+        lambda d: SweepInputs(mounted_terminal_extension=(48_000.0, 64_000)),
     ],
     ids=[
         "classes out of order",
@@ -930,6 +938,9 @@ def test_saturation_inputs_for_reads_only_the_held_spectrum():
         "one fleet",
         "the mounted extension below the last fleet",
         "a NaN",
+        "a boolean fleet",
+        "a whole float fleet",
+        "a whole float in the mounted extension",
     ],
 )
 def test_the_contract_refuses_inputs_out_of_shape(build):
@@ -942,3 +953,93 @@ def test_the_contract_refuses_inputs_out_of_shape(build):
     """
     with pytest.raises(ValueError, match="validation error"):
         build(SaturationInputs())
+
+
+TRANSPOSING_REQUESTS = (
+    (1_000, (32, 31)),
+    (1_500, (39, 38)),
+    (2_000, (45, 44)),
+    (12_000, (110, 109)),
+)
+"""The grid's requests whose realized count, requested again, builds the transposed shell."""
+
+
+def test_a_row_is_rebuilt_from_its_request_never_from_its_key() -> None:
+    """Objective: each row carries the request its shell is built from, and the contract
+    checks the row's key is that request realized (foundation v2, amendment A5).
+
+    Sample: the grid's requests 1,000, 1,500, 2,000 and 12,000, whose realized counts (992,
+    1,482, 1,980, 11,990), requested again, build the transposed shells; rows keyed 992.
+
+    Expected outcome: each request gives its shell and the realized count gives the
+    transpose (so the key alone cannot rebuild the row); a row of fleet 992 on request 1,000
+    validates; a row of fleet 1,000 on request 1,000 is refused, naming the realized 992.
+    """
+    for requested, shape in TRANSPOSING_REQUESTS:
+        assert walker_shape(requested) == shape
+        assert walker_shape(math.prod(shape)) == shape[::-1]
+    row = CurveRow.model_validate({**_row(992, 1.0, 1.0).model_dump(), "requested_fleet": 1_000})
+    assert (row.fleet, row.requested_fleet) == (992, 1_000)
+    with pytest.raises(ValueError, match="1000 realizes as 992"):
+        CurveRow.model_validate(
+            {**_row(992, 1.0, 1.0).model_dump(), "fleet": 1_000, "requested_fleet": 1_000}
+        )
+
+
+@pytest.mark.parametrize(
+    ("share", "separation_deg", "interference_db", "valid"),
+    [
+        (0.0, None, None, True),
+        (0.1, 60.0, -18.0, True),
+        (0.0, 60.0, -18.0, False),
+        (0.0, None, -18.0, False),
+        (0.1, None, None, False),
+        (0.1, 60.0, None, False),
+    ],
+    ids=[
+        "nothing stacked, no statistics",
+        "stacked, both statistics",
+        "nothing stacked, both statistics",
+        "nothing stacked, one statistic",
+        "stacked, no statistics",
+        "stacked, one statistic",
+    ],
+)
+def test_directional_statistics_exist_exactly_when_stacked_beams_are_kept(
+    share: float, separation_deg: float | None, interference_db: float | None, valid: bool
+) -> None:
+    """Objective: a row that keeps no stacked beam has no stacking statistics, never a made-up
+    value (foundation v2, amendment A5).
+
+    Sample: a kept stacked share of 0 or 0.1 with each combination of the median separation
+    and the mean full-sum interference set or None.
+
+    Expected outcome: valid exactly when both statistics are None at a share of 0, or both set
+    at a positive share; otherwise a validation error.
+    """
+
+    def build() -> DirectionalDiagnostics:
+        return DirectionalDiagnostics(
+            kept_stacked_share=share,
+            median_separation_deg=separation_deg,
+            mean_full_sum_interference_db=interference_db,
+        )
+
+    if valid:
+        assert build().kept_stacked_share == share
+    else:
+        with pytest.raises(ValueError, match="exactly when stacked beams are kept"):
+            build()
+
+
+def test_strict_fleets_still_load_from_json() -> None:
+    """Objective: the strict integer fleets refuse a boolean or a float, yet a curve's inputs
+    still load from their own JSON (a promoted curve's parameters).
+
+    Sample: the default inputs dumped to JSON text and to a JSON-shaped mapping (lists).
+
+    Expected outcome: both load back equal to the default.
+    """
+    default = SaturationInputs()
+    assert SaturationInputs.model_validate_json(default.model_dump_json()) == default
+    assert SaturationInputs.model_validate(default.model_dump(mode="json")) == default

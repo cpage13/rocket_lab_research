@@ -19,7 +19,8 @@ The stages, for one class on one set of inputs:
    class's central SE (a beam's rate) over the class's busy-hour load per person.
 2. **The shell and the snapshots.** A circular Walker Delta shell: P = round(sqrt(N)) planes
    of S = round(N / P) satellites (Python's ``round``, an exact half to the even neighbour,
-   as the reference shell has it), the realized fleet P x S keying the row, phasing F = 1,
+   as the reference shell has it; the contract's ``walker_shape``), the realized fleet P x S
+   keying the row and the request carried on it, phasing F = 1,
    two-body motion with the Earth turning under it. The snapshot times are drawn once per
    run, ``numpy.random.default_rng(seed).uniform(0, sidereal day, n)``, and shared by every
    fleet.
@@ -109,6 +110,7 @@ from communications.saturation_curve import (
     ShellInputs,
     curve_input_hash,
 )
+from communications.saturation_curve import walker_shape as _walker_shape
 
 logger = logging.getLogger(__name__)
 
@@ -602,16 +604,6 @@ class _SatellitePositions:
     def count(self) -> int:
         """The number of satellites."""
         return int(self.lat_rad.size)
-
-
-def _walker_shape(requested_fleet: int) -> tuple[int, int]:
-    """Return the Walker shell's planes and satellites per plane for a requested fleet.
-
-    P = round(sqrt(N)), S = round(N / P), with Python's ``round`` (an exact half to the
-    even neighbour), the curve's pinned convention; the realized fleet is P x S.
-    """
-    planes = round(math.sqrt(requested_fleet))
-    return planes, round(requested_fleet / planes)
 
 
 def _walker_positions(
@@ -1198,6 +1190,7 @@ def _check_stall_floor(fleets: Sequence[_FleetSnapshots], stall_floor: float) ->
 
 def _phone_rows(
     fleets: Sequence[_FleetSnapshots],
+    requested_fleets: Sequence[int],
     *,
     spectrum_mhz: float,
     spectral_efficiency_bps_per_hz: float,
@@ -1205,17 +1198,19 @@ def _phone_rows(
 ) -> tuple[CurveRow, ...]:
     """Return the phone class's rows: the snapshot means, the spread of L, U and the bounds.
 
-    A phone beam carries the spectrum times the class's central SE, so a snapshot's capacity
-    is L times that (Gbps).
+    Each row carries the request its shell was built from (the sweep's fleet, in the order
+    the tasks were made), so a reader can rebuild it. A phone beam carries the spectrum times
+    the class's central SE, so a snapshot's capacity is L times that (Gbps).
     """
     rows = []
-    for fleet in fleets:
+    for fleet, requested_fleet in zip(fleets, requested_fleets, strict=True):
         useful = np.array(fleet.useful_beams)
         capacity_gbps = useful * spectrum_mhz * spectral_efficiency_bps_per_hz / GBPS_TO_MBPS
         useful_mean = float(np.mean(useful))
         rows.append(
             CurveRow(
                 fleet=fleet.fleet,
+                requested_fleet=requested_fleet,
                 useful_beams=useful_mean,
                 useful_beams_spread=float(np.std(useful)),
                 capacity_gbps=float(np.mean(capacity_gbps)),
@@ -1496,6 +1491,7 @@ def compute_saturation(
     _check_stall_floor(fleets, inputs.sweep.stall_floor)
     rows = _phone_rows(
         fleets,
+        inputs.sweep.fleets,
         spectrum_mhz=inputs.spectrum_mhz,
         spectral_efficiency_bps_per_hz=phone.spectral_efficiency_bps_per_hz,
         beams_per_satellite=limits.beams_per_satellite,
