@@ -35,7 +35,10 @@ ceil(subscriber_target / subscribers_per_satellite)))``.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Final
 
 from common.input_manifest import SourceStatus
@@ -89,9 +92,9 @@ class BindingRegime(StrEnum):
 class DeviceClass(StrEnum):
     """The Iridium model (formerly Model B) device class, which sets the SE tier.
 
-    The investor's three device categories (2026-07-07; the 9c device ladder).
-    ``PHONE_CLASS`` is the cell phone: the 0-dBi in-chipset phone-form-factor baseline
-    (SE band 0.5 to 0.8 bps/Hz, central :data:`PHONE_CLASS_SE_CENTRAL`).
+    The investor's three device categories (2026-07-07; the 9c device ladder). The
+    member order is the order every list of classes takes (E11: small terminal, mounted
+    terminal, phone class), so every block that lists the classes iterates this enum.
     ``SMALL_TERMINAL_CLASS`` is the small boosted antenna: paperback/puck size, ~20 cm
     integrated patch, ~10 dBi on a self-orienting mount (a fixed tilt or switched
     elements; no user pointing, no moving parts; investor decision 2026-07-10),
@@ -99,16 +102,19 @@ class DeviceClass(StrEnum):
     (SE band 1.5 to 2.5, central :data:`SMALL_TERMINAL_CLASS_SE_CENTRAL`).
     ``MOUNTED_TERMINAL_CLASS`` is the LARGE boosted / custom-antenna tier: mounted or pointed,
     15+ dBi (drones, fixed sites, vehicles; SE band 2.0 to 3.0, central
-    :data:`MOUNTED_TERMINAL_CLASS_SE_CENTRAL`). See the ecosystem assumption
-    (:data:`ECOSYSTEM_ASSUMPTION_NOTE`): the Iridium model reaches purpose-built or
-    in-chipset devices on Iridium's owned L-band (the MSS lane), NEVER an unmodified
+    :data:`MOUNTED_TERMINAL_CLASS_SE_CENTRAL`).
+    ``PHONE_CLASS`` is the cell phone: the 0-dBi in-chipset phone-form-factor baseline
+    (SE band 0.5 to 0.8 bps/Hz, central :data:`PHONE_CLASS_SE_CENTRAL`). See the ecosystem
+    assumption (:data:`ECOSYSTEM_ASSUMPTION_NOTE`): the Iridium model reaches purpose-built
+    or in-chipset devices on Iridium's owned L-band (the MSS lane), NEVER an unmodified
     phone (that is the cellular lane, the High-Bandwidth Cellular Pure Play model,
-    formerly Model A). One class per run in v1 (no mixed fleet).
+    formerly Model A). The engine runs one class per run today (no mixed fleet); the
+    saturation curve carries every class.
     """
 
-    PHONE_CLASS = "phone_class"
     SMALL_TERMINAL_CLASS = "small_terminal_class"
     MOUNTED_TERMINAL_CLASS = "mounted_terminal_class"
+    PHONE_CLASS = "phone_class"
 
 
 # ===========================================================================
@@ -171,10 +177,12 @@ ORBIT_ALTITUDE_KM_SCENARIO: Final[float] = 450.0
 """SCENARIO (Part 7 physics loop, 2026-07-10). The published fleet altitude, km.
 Four couplings favor about 450 km (path loss, coverage economy, the saturation
 ceiling, the sun-angle power floor), robustly on the link budget and latency.
-A stated scenario input to the published orbit posture, NOT an engine input:
-nothing downstream computes from it. The promoted artifact carries it in the
-labeled ``orbit_scenario`` block (schema iridium-v4) so the public orbit claim
-has a typed model-contract anchor with its limitations attached."""
+A stated scenario input to the published orbit posture, NOT an engine input: the
+engine computes nothing from it. The saturation curve's shell is computed at it
+(the default of ``SaturationInputs.shell.altitude_km``). The promoted artifact
+carries it in the labeled ``orbit_scenario`` block (schema iridium-v4) so the
+public orbit claim has a typed model-contract anchor with its limitations
+attached."""
 
 ORBIT_INCLINATION_DEG_SCENARIO: Final[float] = 53.0
 """SCENARIO (Part 7 physics loop, 2026-07-10). The published fleet inclination,
@@ -182,7 +190,9 @@ degrees. Chosen because people live at mid-latitudes: the covered band holds
 about 99.6 percent of the world's population, and the project coverage
 simulation needs about 10 percent fewer satellites at 53 degrees than polar
 (341 versus 375 at the 95 percent threshold, 450 km, 25 degree mask). Same
-posture as the altitude: a stated scenario input, not an engine input."""
+posture as the altitude: a stated scenario input, not an engine input; the
+saturation curve's shell is computed at it (the default of
+``SaturationInputs.shell.inclination_deg``)."""
 
 ORBIT_SCENARIO_SOURCE_STATUS: Final[SourceStatus] = SourceStatus.SCENARIO
 """The assumptions-ledger source status carried on the promoted orbit block:
@@ -622,6 +632,314 @@ recorded when it was committed with ``communications/data/ATTRIBUTION.md`` (ADR 
 the file's identity, so a reader can confirm the grid it loads is the one shipped. A
 fixed identity, not a tunable."""
 
+# ===========================================================================
+# The saturation curve's inputs (ADRs 005, 008, 009): each class's usage and antenna,
+# the shell and the beam, the demand map, the sweep, the trim and the bands
+# ===========================================================================
+#
+# Every default of ``communications.saturation_curve.SaturationInputs`` lives here. The
+# curve is computed with the band in full-time use (d = 1, ADR 008) at the reference
+# panel :data:`APERTURE_REFERENCE_M2`; a scenario sets none of these values. The classes
+# run in :class:`DeviceClass` order (small terminal, mounted terminal, phone class).
+
+SMALL_TERMINAL_CLASS_ACTIVE_RATE_MBPS: Final[float] = 2.0
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). The small terminal's data rate
+while its user is active, Mbps; its busy-hour load per person is this times
+:data:`SMALL_TERMINAL_CLASS_CONCURRENCY_PEAK`."""
+
+SMALL_TERMINAL_CLASS_CONCURRENCY_PEAK: Final[float] = 0.025
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). The small terminal's busy-hour
+share: the fraction of its users active at once in the busy hour."""
+
+SMALL_TERMINAL_CLASS_CONCURRENCY_OFFPEAK: Final[float] = 0.005
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). The small terminal's off-peak
+share, at most its busy-hour share (off peak is the quieter hour)."""
+
+MOUNTED_TERMINAL_CLASS_ACTIVE_RATE_MBPS: Final[float] = 5.0
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). The mounted terminal's data rate
+while its user is active, Mbps; its busy-hour load per person is this times
+:data:`MOUNTED_TERMINAL_CLASS_CONCURRENCY_PEAK`."""
+
+MOUNTED_TERMINAL_CLASS_CONCURRENCY_PEAK: Final[float] = 0.10
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). The mounted terminal's busy-hour
+share: the fraction of its users active at once in the busy hour."""
+
+MOUNTED_TERMINAL_CLASS_CONCURRENCY_OFFPEAK: Final[float] = 0.02
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). The mounted terminal's off-peak
+share, at most its busy-hour share (off peak is the quieter hour)."""
+
+PHONE_CLASS_ACTIVE_RATE_MBPS: Final[float] = 0.75
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). The phone class's data rate while
+its user is active, Mbps; its busy-hour load per person is this times
+:data:`PHONE_CLASS_CONCURRENCY_PEAK`."""
+
+PHONE_CLASS_CONCURRENCY_PEAK: Final[float] = 0.025
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). The phone class's busy-hour share:
+the fraction of its users active at once in the busy hour."""
+
+PHONE_CLASS_CONCURRENCY_OFFPEAK: Final[float] = 0.005
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). The phone class's off-peak share,
+at most its busy-hour share (off peak is the quieter hour)."""
+
+
+@dataclass(frozen=True)
+class ClassUsage:
+    """One device class's usage: its rate while active and its two concurrency shares.
+
+    Attributes:
+        active_rate_mbps: The data rate while a user is active, Mbps.
+        concurrency_peak: The busy-hour share of users active at once.
+        concurrency_offpeak: The off-peak share, at most ``concurrency_peak``.
+    """
+
+    active_rate_mbps: float
+    concurrency_peak: float
+    concurrency_offpeak: float
+
+
+CLASS_USAGE: Final[Mapping[DeviceClass, ClassUsage]] = MappingProxyType(
+    {
+        DeviceClass.SMALL_TERMINAL_CLASS: ClassUsage(
+            active_rate_mbps=SMALL_TERMINAL_CLASS_ACTIVE_RATE_MBPS,
+            concurrency_peak=SMALL_TERMINAL_CLASS_CONCURRENCY_PEAK,
+            concurrency_offpeak=SMALL_TERMINAL_CLASS_CONCURRENCY_OFFPEAK,
+        ),
+        DeviceClass.MOUNTED_TERMINAL_CLASS: ClassUsage(
+            active_rate_mbps=MOUNTED_TERMINAL_CLASS_ACTIVE_RATE_MBPS,
+            concurrency_peak=MOUNTED_TERMINAL_CLASS_CONCURRENCY_PEAK,
+            concurrency_offpeak=MOUNTED_TERMINAL_CLASS_CONCURRENCY_OFFPEAK,
+        ),
+        DeviceClass.PHONE_CLASS: ClassUsage(
+            active_rate_mbps=PHONE_CLASS_ACTIVE_RATE_MBPS,
+            concurrency_peak=PHONE_CLASS_CONCURRENCY_PEAK,
+            concurrency_offpeak=PHONE_CLASS_CONCURRENCY_OFFPEAK,
+        ),
+    }
+)
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). Each class's usage, one entry per
+:class:`DeviceClass` in its order, read-only: the named constants above, assembled."""
+
+CLASS_SE_CENTRAL: Final[Mapping[DeviceClass, float]] = MappingProxyType(
+    {
+        DeviceClass.SMALL_TERMINAL_CLASS: SMALL_TERMINAL_CLASS_SE_CENTRAL,
+        DeviceClass.MOUNTED_TERMINAL_CLASS: MOUNTED_TERMINAL_CLASS_SE_CENTRAL,
+        DeviceClass.PHONE_CLASS: PHONE_CLASS_SE_CENTRAL,
+    }
+)
+"""Each class's central spectral efficiency, bps/Hz, one entry per :class:`DeviceClass` in
+its order, read-only: the one home the saturation curve reads. Each value keeps its own
+constant's source class (:data:`SMALL_TERMINAL_CLASS_SE_CENTRAL`,
+:data:`MOUNTED_TERMINAL_CLASS_SE_CENTRAL`, :data:`PHONE_CLASS_SE_CENTRAL`)."""
+
+SMALL_TERMINAL_CLASS_DIRECTIVITY_DBI: Final[float] = 10.0
+"""INVESTOR_SET (the device spec of 2026-07-10, as :data:`SMALL_TERMINAL_CLASS_SE_CENTRAL`
+states). The small terminal's antenna directivity, dBi: a ~20 cm integrated patch on a
+self-orienting mount. It sets the terminal's beamwidth and its sky sectors."""
+
+MOUNTED_TERMINAL_CLASS_DIRECTIVITY_DBI: Final[float] = 15.0
+"""INVESTOR_SET (the device ladder's 15+ dBi tier, taken at its floor; COMM-650 for the
+tier's SE band). The mounted terminal's antenna directivity, dBi: a mounted or pointed
+antenna. It sets the terminal's beamwidth and its sky sectors."""
+
+PHONE_CLASS_DIRECTIVITY_DBI: Final[float] = 0.0
+"""SOURCED_ESTIMATE (COMM-428 / COMM-429). The phone class's antenna directivity, dBi: the
+0 dBi in-chipset antenna of a phone-form-factor device (COMM-429: a weak terminal, about
+0.2 W into about 0 dBi), which cannot tell satellites apart, so one co-channel layer
+serves a place."""
+
+SMALL_TERMINAL_CLASS_SECTOR_WEDGES_PER_RING: Final[tuple[int, ...]] = (1, 2)
+"""DERIVED (the saturation strategy's rule D1, the sky sectors, from
+:data:`SMALL_TERMINAL_CLASS_DIRECTIVITY_DBI`). The small terminal's sky above the
+elevation mask in sectors of equal solid angle, ring by ring from the zenith: a zenith cap,
+then one ring in two azimuth halves. A beam of directivity D spans about 4 pi / D sr, so
+about 3 such beams fit in the sky above the mask, one per sector."""
+
+MOUNTED_TERMINAL_CLASS_SECTOR_WEDGES_PER_RING: Final[tuple[int, ...]] = (1, 3, 5)
+"""DERIVED (the saturation strategy's rule D1, the sky sectors, from
+:data:`MOUNTED_TERMINAL_CLASS_DIRECTIVITY_DBI`). The mounted terminal's sky above the
+elevation mask in sectors of equal solid angle, ring by ring from the zenith: a zenith cap,
+a ring of 3, then a ring of 5 down to the mask. About 9 of its beams fit in the sky above
+the mask, one per sector."""
+
+PHONE_CLASS_SECTOR_WEDGES_PER_RING: Final[tuple[int, ...]] = ()
+"""DERIVED (the saturation strategy's rule D1, the sky sectors, from
+:data:`PHONE_CLASS_DIRECTIVITY_DBI`). No sky sectors: a 0 dBi device takes one co-channel
+layer, so co-channel footprints on the same ground must not overlap."""
+
+SATURATION_SE_ANCHOR_BPS_PER_HZ: Final[float] = 0.65
+"""SOURCED_ESTIMATE (COMM-428 / COMM-429). The anchor of the curve's link mapping, SE =
+anchor x log2(1 + SINR), bps/Hz: a 0 dBi device at the measured median SINR of 0 dB
+(COMM-429) reads it. Each directional class's single-layer SINR follows from its central SE
+through it."""
+
+TERMINAL_PATTERN_FLOOR_DB: Final[float] = -20.0
+"""ESTIMATE (COMM-718, a ``scenario`` row: an engineering choice, not investor-set). The
+directional terminals' pattern floor, dB below the main-lobe peak, under a Gaussian main
+lobe; optimistic for the small terminal, whose side levels may sit at -10 to -15 dB."""
+
+ELEVATION_MASK_DEG: Final[float] = 25.0
+"""SCENARIO (the coverage floor's basis: the coverage-floor row of
+``communications/assumptions.md``, the project coverage simulation at a 25 degree mask;
+COMM-217 for how the mask moves the floor). The lowest elevation at which a device uses a
+satellite, degrees: it sets the view's central-angle limit and the largest footprint."""
+
+CARRIER_FREQUENCY_HZ: Final[float] = 1.621e9
+"""DERIVED (COMM-611). The carrier, Hz: the centre of Iridium's 1616 to 1626.5 MHz L-band
+block (1,621.25 MHz) to four figures. With the aperture it sets the beam's width."""
+
+UNIFORM_BEAMWIDTH_FACTOR: Final[float] = 0.886
+"""SOURCED_FACT (standard antenna theory). The half-power beamwidth of a uniformly
+illuminated aperture, in wavelengths over the aperture's side: the curve's central beam
+(uniform illumination, co-channel footprints touching)."""
+
+DEMAND_DENSITY_THRESHOLD_PER_KM2: Final[float] = 1.0
+"""SCENARIO (ADR 009). A grid cell is demand when it holds at least this many people per
+km^2; the band points :data:`BAND_DENSITY_THRESHOLD_10_PER_KM2` and
+:data:`BAND_DENSITY_THRESHOLD_100_PER_KM2` sit beside it."""
+
+DEMAND_TAKE_UP: Final[float] = 1.0
+"""SCENARIO (ADR 009). The share of an inhabited cell's residents counted as potential
+users: every resident, the maximal-demand bound, since the capacity the curve finds is
+assumed used (the model has no purchase or market model)."""
+
+SATURATION_FLEETS: Final[tuple[int, ...]] = (
+    340,
+    500,
+    750,
+    1_000,
+    1_500,
+    2_000,
+    3_000,
+    4_000,
+    5_400,
+    6_000,
+    8_000,
+    10_000,
+    12_000,
+    14_000,
+    16_000,
+    18_000,
+    20_000,
+    22_000,
+    24_000,
+    26_000,
+    28_000,
+    30_000,
+    34_000,
+    40_000,
+)
+"""SCENARIO (the saturation design's fleet grid, a design rule). The requested fleets every
+class's curve is computed at: from the coverage floor (340) to 40,000, dense where the
+markers fall. A curve's rows are keyed by the realized fleet, P x S."""
+
+SATURATION_MOUNTED_TERMINAL_EXTENSION: Final[tuple[int, ...]] = (48_000, 64_000)
+"""SCENARIO (the saturation design's fleet grid, a design rule). The mounted terminal's
+two requested fleets past :data:`SATURATION_FLEETS`, whose rows its 0.10 crossing needs,
+since its narrow beam keeps stacking useful layers to near the common grid's end."""
+
+SATURATION_SNAPSHOTS_PHONE_CENTRAL: Final[int] = 4
+"""SCENARIO (design rule). The snapshot times averaged at each fleet of the phone class's
+central curve."""
+
+SATURATION_SNAPSHOTS_DIRECTIONAL: Final[int] = 2
+"""SCENARIO (design rule). The snapshot times averaged at each fleet of the two directional
+classes' curves."""
+
+SATURATION_SNAPSHOTS_BANDS: Final[int] = 2
+"""SCENARIO (design rule). The snapshot times averaged at each fleet of a band point's
+curve."""
+
+SATURATION_SNAPSHOTS_TRIM: Final[int] = 1
+"""SCENARIO (design rule). The snapshots the interference trim prices at each row: the
+first of the draw."""
+
+SATURATION_SEED: Final[int] = 20260928
+"""SCENARIO (design rule). The seed of the snapshot draw, numpy's
+``default_rng(seed).uniform`` over one sidereal day, drawn once per run and shared by every
+fleet, so a run repeats exactly."""
+
+SATURATION_FOOTPRINT_BANDS: Final[int] = 40
+"""SCENARIO (the saturation design's allocation rule). Smallest footprint first fills each
+snapshot's satellite-cell pairs in this many geometric footprint bands, committing each
+band before the next."""
+
+SATURATION_PASSES: Final[int] = 4
+"""SCENARIO (the saturation design's allocation rule). The alternating proportional
+passes inside each footprint band: each scales the band's beams by every satellite's
+remaining beams, then by every cell's remaining area and people."""
+
+SATURATION_STALL_FLOOR: Final[float] = 0.98
+"""SCENARIO (design rule). From 20,000 satellites up the phone class's useful beams must
+reach at least this share of min(ceiling, supply) at every snapshot, so a stalled
+allocation cannot fake a plateau."""
+
+TRIM_VICTIMS: Final[int] = 3_000
+"""SCENARIO (design rule). The served cells the interference trim samples at each row,
+drawn without replacement in proportion to their beams."""
+
+TRIM_SEED: Final[int] = 11
+"""SCENARIO (design rule). The seed of each row's fresh victim draw, so a row does not
+depend on the order of the fleets."""
+
+TRIM_FLOOR_CONSERVATIVE_DBI: Final[float] = -0.4
+"""DERIVED (COMM-715). The panel's conservative far-sidelobe floor, dBi: the interference
+trim's conservative edge."""
+
+TRIM_FLOOR_CALIBRATED_HIGH_DBI: Final[float] = -2.0
+"""DERIVED (COMM-716). The high end of a calibrated array's far-sidelobe band, dBi."""
+
+TRIM_FLOOR_CALIBRATED_LOW_DBI: Final[float] = -8.0
+"""DERIVED (COMM-716). The low end of a calibrated array's far-sidelobe band, dBi."""
+
+TRIM_FLOORS_DBI: Final[tuple[float, ...]] = (
+    TRIM_FLOOR_CONSERVATIVE_DBI,
+    TRIM_FLOOR_CALIBRATED_HIGH_DBI,
+    TRIM_FLOOR_CALIBRATED_LOW_DBI,
+)
+"""DERIVED (COMM-715, COMM-716). The far-sidelobe floors the interference trim is reported
+at: the conservative edge, then the calibrated band's two ends."""
+
+TRIM_SCAN_EXPONENT: Final[float] = 1.3
+"""ESTIMATE (COMM-717, a ``scenario`` row: an engineering choice, not investor-set). The
+exponent of the array's scan roll-off, g = cos^exponent of the scan angle, weighting each
+beam's power and sidelobes in the interference trim."""
+
+TAPER_BEAMWIDTH_FACTOR: Final[float] = 1.0934
+"""DERIVED (COMM-720). The tapered array's half-power beamwidth, in wavelengths over the
+aperture's side, against the uniform :data:`UNIFORM_BEAMWIDTH_FACTOR`: its footprint is
+1.52 times the uniform beam's. The band's taper point."""
+
+SPACING_AREA_FACTOR_TOUCHING: Final[float] = 1.0
+"""SCENARIO (design rule). The ground area a co-channel beam occupies over its 3 dB
+footprint when co-channel footprints touch: the central curve's, and every band point's but
+the spaced one."""
+
+SPACING_AREA_FACTOR_WIDE: Final[float] = 1.5
+"""ESTIMATE (COMM-721, a ``scenario`` row: an engineering choice, not investor-set). Wider
+co-channel spacing gives each beam this times its ground area; the band's third point,
+with the taper."""
+
+BAND_DENSITY_THRESHOLD_10_PER_KM2: Final[float] = 10.0
+"""SCENARIO (ADR 009: the curve's bands carry the density thresholds' spread). A band
+point's demand threshold, people per km^2."""
+
+BAND_DENSITY_THRESHOLD_100_PER_KM2: Final[float] = 100.0
+"""SCENARIO (ADR 009: the curve's bands carry the density thresholds' spread). A band
+point's demand threshold, people per km^2."""
+
+GRID_AGGREGATION_SHIPPED: Final[int] = 1
+"""SCENARIO (ADR 009). The shipped grid as it is (no aggregation): the central curve's and
+every band point's but the coarse-grid one."""
+
+GRID_AGGREGATION_0P5_DEG: Final[int] = 2
+"""SCENARIO (ADR 009: the curve's bands carry the grid's spread). The coarse-grid band
+point: the shipped 0.25 degree grid summed 2 x 2 into 0.5 degree cells."""
+
+IRIDIUM_NEXT_BEAMS_PER_SATELLITE: Final[int] = 48
+"""SOURCED_FACT (COMM-635). Iridium NEXT's single L-band phased array forms 48 beams
+(Starlink's flying direct-to-cell array forms 48 too, COMM-408): the band's low beam
+count, against the central count the calibration derives at the reference panel."""
+
 __all__ = [
     "ARPU_USD_PER_MONTH_DEFAULT",
     "BASE_YEAR_DEFAULT",
@@ -683,4 +1001,55 @@ __all__ = [
     # The shipped population grid (ADR 009).
     "POPULATION_GRID_PATH",
     "POPULATION_GRID_SHA256",
+    # The saturation curve's inputs (ADRs 005, 008, 009).
+    "BAND_DENSITY_THRESHOLD_100_PER_KM2",
+    "BAND_DENSITY_THRESHOLD_10_PER_KM2",
+    "CARRIER_FREQUENCY_HZ",
+    "CLASS_SE_CENTRAL",
+    "CLASS_USAGE",
+    "ClassUsage",
+    "DEMAND_DENSITY_THRESHOLD_PER_KM2",
+    "DEMAND_TAKE_UP",
+    "ELEVATION_MASK_DEG",
+    "GRID_AGGREGATION_0P5_DEG",
+    "GRID_AGGREGATION_SHIPPED",
+    "IRIDIUM_NEXT_BEAMS_PER_SATELLITE",
+    "MOUNTED_TERMINAL_CLASS_ACTIVE_RATE_MBPS",
+    "MOUNTED_TERMINAL_CLASS_CONCURRENCY_OFFPEAK",
+    "MOUNTED_TERMINAL_CLASS_CONCURRENCY_PEAK",
+    "MOUNTED_TERMINAL_CLASS_DIRECTIVITY_DBI",
+    "MOUNTED_TERMINAL_CLASS_SECTOR_WEDGES_PER_RING",
+    "PHONE_CLASS_ACTIVE_RATE_MBPS",
+    "PHONE_CLASS_CONCURRENCY_OFFPEAK",
+    "PHONE_CLASS_CONCURRENCY_PEAK",
+    "PHONE_CLASS_DIRECTIVITY_DBI",
+    "PHONE_CLASS_SECTOR_WEDGES_PER_RING",
+    "SATURATION_FLEETS",
+    "SATURATION_FOOTPRINT_BANDS",
+    "SATURATION_MOUNTED_TERMINAL_EXTENSION",
+    "SATURATION_PASSES",
+    "SATURATION_SE_ANCHOR_BPS_PER_HZ",
+    "SATURATION_SEED",
+    "SATURATION_SNAPSHOTS_BANDS",
+    "SATURATION_SNAPSHOTS_DIRECTIONAL",
+    "SATURATION_SNAPSHOTS_PHONE_CENTRAL",
+    "SATURATION_SNAPSHOTS_TRIM",
+    "SATURATION_STALL_FLOOR",
+    "SMALL_TERMINAL_CLASS_ACTIVE_RATE_MBPS",
+    "SMALL_TERMINAL_CLASS_CONCURRENCY_OFFPEAK",
+    "SMALL_TERMINAL_CLASS_CONCURRENCY_PEAK",
+    "SMALL_TERMINAL_CLASS_DIRECTIVITY_DBI",
+    "SMALL_TERMINAL_CLASS_SECTOR_WEDGES_PER_RING",
+    "SPACING_AREA_FACTOR_TOUCHING",
+    "SPACING_AREA_FACTOR_WIDE",
+    "TAPER_BEAMWIDTH_FACTOR",
+    "TERMINAL_PATTERN_FLOOR_DB",
+    "TRIM_FLOOR_CALIBRATED_HIGH_DBI",
+    "TRIM_FLOOR_CALIBRATED_LOW_DBI",
+    "TRIM_FLOOR_CONSERVATIVE_DBI",
+    "TRIM_FLOORS_DBI",
+    "TRIM_SCAN_EXPONENT",
+    "TRIM_SEED",
+    "TRIM_VICTIMS",
+    "UNIFORM_BEAMWIDTH_FACTOR",
 ]
