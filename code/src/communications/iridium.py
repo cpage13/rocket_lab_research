@@ -491,39 +491,39 @@ class IridiumRun:
 
 
 @dataclass(frozen=True)
-class _IotLine:
-    """What one IoT line sends a day per device (engine-internal).
+class _IotUsage:
+    """What one IoT device sends a day (engine-internal): its usage, apart from any count.
+
+    The IoT check takes a line's device count beside it (:func:`_iot_row`), so the shares a
+    usage gives read at whatever count a caller supplies.
 
     Attributes:
-        devices: The line's fixed count.
-        bytes_per_day: Its daily volume per device, bytes.
-        attempts_per_day: Its access attempts a day per device, one per message or burst.
+        bytes_per_day: The device's daily volume, bytes.
+        attempts_per_day: Its access attempts a day, one per message or burst.
         single_tone_messages_per_day: Its messages a day on single tones, None when its traffic
             is not single-tone messages (data IoT's bursts).
     """
 
-    devices: int
     bytes_per_day: int
     attempts_per_day: int
     single_tone_messages_per_day: int | None
 
 
-_MINIMAL_PACKET_IOT: Final[_IotLine] = _IotLine(
-    devices=MINIMAL_PACKET_IOT_DEVICES,
+_MINIMAL_PACKET_IOT_USAGE: Final[_IotUsage] = _IotUsage(
     bytes_per_day=MINIMAL_PACKET_IOT_MESSAGES_PER_DAY * MINIMAL_PACKET_IOT_MESSAGE_BYTES,
     attempts_per_day=MINIMAL_PACKET_IOT_MESSAGES_PER_DAY,
     single_tone_messages_per_day=MINIMAL_PACKET_IOT_MESSAGES_PER_DAY,
 )
-"""Minimal-packet IoT: 48 messages of 340 bytes a day, each on one tone."""
+"""A minimal-packet IoT device: 48 messages of 340 bytes a day, each on one tone."""
 
-_DATA_IOT: Final[_IotLine] = _IotLine(
-    devices=DATA_IOT_DEVICES,
+_DATA_IOT_USAGE: Final[_IotUsage] = _IotUsage(
     bytes_per_day=DATA_IOT_BURSTS_PER_DAY * DATA_IOT_BURST_BYTES
     + MINIMAL_PACKET_IOT_MESSAGES_PER_DAY * MINIMAL_PACKET_IOT_MESSAGE_BYTES,
     attempts_per_day=DATA_IOT_BURSTS_PER_DAY + MINIMAL_PACKET_IOT_MESSAGES_PER_DAY,
     single_tone_messages_per_day=None,
 )
-"""Data IoT: 4 bursts of 100 KB a day beside the 48 messages; its bursts are not single-tone."""
+"""A data IoT device: 4 bursts of 100 KB a day beside the 48 messages; its bursts are not
+single-tone."""
 
 
 def iridium_dials_of(config: CommsConfig) -> IridiumDials:
@@ -844,15 +844,19 @@ def _reading(
 
 
 def _iot_row(
-    line: _IotLine,
+    usage: _IotUsage,
     reading: ReadingRecord,
     *,
+    devices: int,
     coverage_floor: int,
     uplink_bits_per_beam_day: float,
     uplink_tone_seconds_per_beam_day: float,
 ) -> IotCheckRowRecord:
-    """One IoT line at one reported fleet, spread over the phone class's useful beams.
+    """One IoT line at one reported fleet: ``devices`` of one usage, spread over the phone
+    class's useful beams.
 
+    The count is an argument apart from the per-device usage, and every share is the devices
+    a beam times that usage over the beam's uplink, so the same usage reads at any count.
     Every field but the fleet is None below the coverage floor (the books are not sold there)
     and wherever its denominator does not exist (no useful beam; an uplink with no time).
     """
@@ -871,15 +875,15 @@ def _iot_row(
             uplink_tone_share_low=None,
             uplink_tone_share_high=None,
         )
-    per_beam = line.devices / phone_beams
+    per_beam = devices / phone_beams
     bits_share = (
-        per_beam * line.bytes_per_day * BITS_PER_BYTE / uplink_bits_per_beam_day
+        per_beam * usage.bytes_per_day * BITS_PER_BYTE / uplink_bits_per_beam_day
         if uplink_bits_per_beam_day > 0
         else None
     )
     tone_shares: tuple[float | None, float | None] = (None, None)
-    if line.single_tone_messages_per_day is not None and uplink_tone_seconds_per_beam_day > 0:
-        messages = per_beam * line.single_tone_messages_per_day
+    if usage.single_tone_messages_per_day is not None and uplink_tone_seconds_per_beam_day > 0:
+        messages = per_beam * usage.single_tone_messages_per_day
         tone_shares = (
             messages * IOT_MESSAGE_AIRTIME_LOW_S / uplink_tone_seconds_per_beam_day,
             messages * IOT_MESSAGE_AIRTIME_HIGH_S / uplink_tone_seconds_per_beam_day,
@@ -889,7 +893,7 @@ def _iot_row(
         devices_per_useful_beam=per_beam,
         uplink_bits_share=bits_share,
         uplink_bits_share_with_mac=None if bits_share is None else bits_share / IOT_MAC_EFFICIENCY,
-        access_attempts_per_second_per_beam=per_beam * line.attempts_per_day / SECONDS_PER_DAY,
+        access_attempts_per_second_per_beam=per_beam * usage.attempts_per_day / SECONDS_PER_DAY,
         uplink_tone_share_low=tone_shares[0],
         uplink_tone_share_high=tone_shares[1],
     )
@@ -914,12 +918,13 @@ def _iot_check(
     )
     uplink_tone_seconds_per_beam_day = width_hz / NB_IOT_TONE_HZ * uplink_share * SECONDS_PER_DAY
 
-    def rows(line: _IotLine) -> tuple[IotCheckRowRecord, ...]:
-        """The line's row at each reported fleet."""
+    def rows(usage: _IotUsage, devices: int) -> tuple[IotCheckRowRecord, ...]:
+        """A line's row at each reported fleet: its count of devices of its usage."""
         return tuple(
             _iot_row(
-                line,
+                usage,
                 reading,
+                devices=devices,
                 coverage_floor=coverage_floor,
                 uplink_bits_per_beam_day=uplink_bits_per_beam_day,
                 uplink_tone_seconds_per_beam_day=uplink_tone_seconds_per_beam_day,
@@ -927,7 +932,10 @@ def _iot_check(
             for reading in readings
         )
 
-    return IotCheckRecord(minimal_packet_iot=rows(_MINIMAL_PACKET_IOT), data_iot=rows(_DATA_IOT))
+    return IotCheckRecord(
+        minimal_packet_iot=rows(_MINIMAL_PACKET_IOT_USAGE, MINIMAL_PACKET_IOT_DEVICES),
+        data_iot=rows(_DATA_IOT_USAGE, DATA_IOT_DEVICES),
+    )
 
 
 def _marginal_intervals(
