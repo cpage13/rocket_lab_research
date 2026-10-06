@@ -5,8 +5,9 @@ the High-Bandwidth Cellular Pure Play family does not. Every Iridium path starts
 its config with :func:`iridium_dials_of`, which returns the Iridium dials or refuses a config
 of the other family with :class:`NotAnIridiumConfigError`, so one condition and one error
 guard every path: the saturation command (``python -m communications.saturation``) calls it
-before it reads the dials the curve depends on, and the Iridium entry before anything else.
-The message is the one the Iridium promotion command gives today.
+before it reads the dials the curve depends on, the Iridium promotion command
+(``python -m communications.json_output``) before it loads the curve, and the Iridium entry
+before anything else. The message is the one the Iridium promotion command gives today.
 
 The Iridium entry, :func:`run_iridium_model`, takes the config and its saturation curve, both
 required, so a run without a curve cannot be written. On every run it narrows the config, then

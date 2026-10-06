@@ -1,7 +1,8 @@
 """Promoted JSON artifact writer for the Iridium model (formerly Model B).
 
-Runs the Iridium scenario through :func:`communications.engine.run_comms_model`
-and writes the promoted JSON artifact: a small provenance header, the shared
+Runs an Iridium scenario through the Iridium entry,
+:func:`communications.iridium.run_iridium_model`, on its saturation curve, and
+writes the promoted JSON artifact: a small provenance header, the shared
 trajectory summary (the headline fields every comms run reports), the Iridium
 physics block (the :class:`~communications.engine.IridiumResult` fields), and
 the stated-assumptions lines from
@@ -10,6 +11,18 @@ promotion pattern (``data_center.json_output`` + the ``rklb-value --promote``
 path): a typed Pydantic artifact serialized by the shared
 :func:`common.file_io.render_artifact_json`, written into the repo-root
 ``communications/models/`` workstream.
+
+The command is the Iridium promotion command only. It loads the scenario and
+narrows it to its Iridium dials first
+(:func:`communications.iridium.iridium_dials_of`), so a scenario without an
+``iridium:`` block fails with the family's message before any curve is read or
+any model runs. It then loads the promoted saturation curve that the scenario's
+``iridium.saturation.curve_path`` names, with
+:func:`communications.saturation_curve.load_saturation_curve` (an absolute path
+is used as given; a relative one is anchored to the REPO ROOT, like the output
+path), and runs the Iridium entry, which refuses a curve computed for other
+inputs (the identity check) before the run. The cellular entry has no
+command-line caller.
 
 Command-line usage, from the repo root::
 
@@ -25,8 +38,10 @@ output); it defaults to today's ISO date.
 
 The command follows the shared CLI conventions (:mod:`common.cli`): the status
 line and any error are log records on stderr; an unreadable or invalid
-scenario, a scenario the model cannot run, or a failed write is one ``ERROR:``
-line and exit status 1, never a traceback; a usage error exits with status 2.
+scenario, a scenario of the cellular family, a saturation curve that cannot be
+read or was computed for other inputs, a scenario the model cannot run, or a
+failed write is one ``ERROR:`` line and exit status 1, never a traceback; a
+usage error exits with status 2.
 The one artifact is written through
 :func:`common.file_io.write_files_with_rollback`: staged in full beside its
 destination, then renamed over it in one atomic rename, so a failure leaves
@@ -53,6 +68,7 @@ from common.cli import (
 )
 from common.file_io import (
     ModelFileError,
+    SourceCheckout,
     artifact_write,
     locate_source_checkout,
     write_files_with_rollback,
@@ -74,9 +90,10 @@ from communications.engine import (
     arpu_stated_assumptions,
     iridium_assumptions,
     margin_pct,
-    run_comms_model,
     usd_per_person,
 )
+from communications.iridium import iridium_dials_of, run_iridium_model
+from communications.saturation_curve import load_saturation_curve
 
 logger = logging.getLogger(__name__)
 
@@ -637,21 +654,34 @@ def build_iridium_artifact(
     )
 
 
+def _anchored(checkout: SourceCheckout, path: str | Path) -> Path:
+    """Return a path as given when it is absolute, else anchored to the repository root (the
+    promoted files, the curve and the artifact, live there, never under ``code/``)."""
+    given = Path(path)
+    return given if given.is_absolute() else checkout.repo_dir / given
+
+
 def export_iridium_json(
     scenario_path: str | Path,
     output_path: str | Path,
     version_stamp: str | None = None,
 ) -> Path:
-    """Run an Iridium scenario and write the promoted JSON artifact.
+    """Run an Iridium scenario on its saturation curve and write the promoted JSON artifact.
 
-    Loads the scenario, runs :func:`~communications.engine.run_comms_model`,
-    assembles the artifact, and writes it through
+    Loads the scenario and narrows it to its Iridium dials before anything else
+    (:func:`~communications.iridium.iridium_dials_of`: a scenario without an
+    ``iridium:`` block fails there, before any curve is read or any model runs);
+    loads the saturation curve its ``iridium.saturation.curve_path`` names with
+    :func:`~communications.saturation_curve.load_saturation_curve`; runs the
+    Iridium entry, :func:`~communications.iridium.run_iridium_model`, which first
+    checks that the curve was computed for the scenario's own inputs; assembles
+    the artifact, and writes it through
     :func:`common.file_io.write_files_with_rollback` (staged in full, then one
     atomic rename, so a failed write leaves any existing file as it was; an
     output path that is a symbolic link or not a regular file is refused). A
-    relative ``output_path`` is anchored to the REPO ROOT of the source
-    checkout (the promoted ``communications/models/`` workstream lives there,
-    never under ``code/``); an absolute path is used as-is. The
+    relative ``output_path`` or curve path is anchored to the REPO ROOT of the
+    source checkout (the promoted ``communications/models/`` workstream lives
+    there, never under ``code/``); an absolute path is used as-is. The
     ``scenario_path`` resolves against the working directory as usual and is
     recorded repository-relative in the provenance header.
 
@@ -667,16 +697,23 @@ def export_iridium_json(
 
     Raises:
         common.file_io.ModelFileError: If the module is not running from a
-            source checkout, the scenario YAML is missing, unreadable, or
-            malformed, or the artifact cannot be written.
+            source checkout, the scenario YAML or the saturation curve is
+            missing, unreadable, or not parseable, or the artifact cannot be
+            written.
         ValueError: If the scenario is invalid (a
-            :class:`pydantic.ValidationError`), does not select the Iridium
-            model, or cannot be run.
+            :class:`pydantic.ValidationError`) or does not select the Iridium
+            model (:class:`~communications.iridium.NotAnIridiumConfigError`), its
+            saturation curve is refused (a
+            :class:`~communications.saturation_curve.SaturationCurveError`:
+            another schema, altered, incomplete, or computed for other inputs),
+            or it cannot be run.
     """
     checkout = locate_source_checkout(__file__)
     scenario = Path(scenario_path)
     config = load_comms_config(scenario)
-    trajectory = run_comms_model(config)
+    dials = iridium_dials_of(config)
+    curve = load_saturation_curve(_anchored(checkout, dials.saturation.curve_path))
+    trajectory = run_iridium_model(config, curve)
     stamp = version_stamp if version_stamp is not None else date.today().isoformat()
     artifact = build_iridium_artifact(
         config=config,
@@ -684,9 +721,7 @@ def export_iridium_json(
         source_scenario_path=checkout.repo_relative(scenario),
         version_stamp=stamp,
     )
-    out = Path(output_path)
-    if not out.is_absolute():
-        out = checkout.repo_dir / out
+    out = _anchored(checkout, output_path)
     write_files_with_rollback([artifact_write(out, artifact)])
     logger.info("promoted Iridium model artifact written to %s", out)
     return out
@@ -697,7 +732,8 @@ def _build_parser() -> CliArgumentParser:
     parser = CliArgumentParser(
         prog="python -m communications.json_output",
         description=(
-            "Run the Iridium model (formerly Model B) from a scenario YAML and write "
+            "Run the Iridium model (formerly Model B) from a scenario YAML, on the "
+            "saturation curve its iridium.saturation.curve_path names, and write "
             "the promoted JSON artifact into the repo-root communications/models/ "
             "workstream."
         ),
@@ -730,8 +766,9 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         :data:`~common.cli.EXIT_OK` on success; :data:`~common.cli.EXIT_ERROR`
         (after one ``ERROR:`` log line, no traceback) when the scenario cannot
-        be read, is invalid, does not select the Iridium model, cannot be run,
-        or the artifact cannot be written. Usage errors exit through
+        be read, is invalid, or does not select the Iridium model, its
+        saturation curve cannot be read or was computed for other inputs, the
+        model cannot run, or the artifact cannot be written. Usage errors exit through
         :class:`~common.cli.CliArgumentParser` with
         :data:`~common.cli.EXIT_USAGE`.
     """
