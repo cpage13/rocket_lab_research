@@ -41,7 +41,10 @@ that the curve was computed for the config's own inputs (the identity check,
 Every list of classes runs small terminal, mounted terminal, phone class (the order of
 :class:`~communications.constants.DeviceClass`), never phone-first. No quantity that does not
 exist is published as a number: a margin with no revenue, U at a fleet of 0, a marker not
-reached and an IoT share below the floor are None, and nothing divides by zero.
+reached and an IoT share below the floor are None, and nothing divides by zero. A run whose
+records would hold an infinity or a NaN (a setting past what the model can compute) is
+refused as the entry's last step, naming the first such field and the settings behind it, so
+a run the entry returns holds only finite numbers.
 
 numpy-free, like every communications module but the saturation module (ADR 010).
 """
@@ -51,7 +54,7 @@ from __future__ import annotations
 import logging
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Final, assert_never
@@ -1227,6 +1230,76 @@ def _assumptions(
     return tuple(lines)
 
 
+def _first_non_finite(value: object, path: str) -> tuple[str, float] | None:
+    """Return the first float in a record that is an infinity or a NaN, with its path.
+
+    The walk goes depth first in field order: a dataclass by its fields, a mapping by its
+    keys, a tuple or a list by index; any other value (an int, a string, an enum, None) holds
+    no float. None when every float is finite.
+    """
+    if isinstance(value, float):
+        return None if math.isfinite(value) else (path, value)
+    children: list[tuple[str, object]]
+    if is_dataclass(value) and not isinstance(value, type):
+        children = [(f"{path}.{field.name}", getattr(value, field.name)) for field in fields(value)]
+    elif isinstance(value, Mapping):
+        children = [(f"{path}[{key}]", child) for key, child in value.items()]
+    elif isinstance(value, tuple | list):
+        children = [(f"{path}[{index}]", child) for index, child in enumerate(value)]
+    else:
+        return None
+    for child_path, child in children:
+        found = _first_non_finite(child, child_path)
+        if found is not None:
+            return found
+    return None
+
+
+def _refuse_a_number_that_is_not_finite(
+    run: IridiumRun, config: CommsConfig, dials: IridiumDials
+) -> None:
+    """Refuse a run whose records hold an infinity or a NaN (an invariant, checked last).
+
+    The shared fleet-and-cost record is walked first, then the Iridium record. The fleet
+    record's numbers are its cost lines, which scale with the cost settings alone; the Iridium
+    record's scale with the panel (people, beams, capacity and the IoT check), the prices
+    (revenue) and the cost settings (the margins, the readings' costs and the cost per
+    satellite-year). No bound moves: a setting this far out is one the model cannot compute.
+
+    Raises:
+        ValueError: Naming the first field that is not finite, its value, and the settings its
+            record scales with, each with its value.
+    """
+    cost_settings = (
+        f"satellite.satellite_build_cost_musd ({config.satellite.satellite_build_cost_musd!r})",
+        *(
+            f"launch_cost.{name} ({setting!r})"
+            for name, setting in config.launch_cost.model_dump().items()
+        ),
+    )
+    settings: tuple[str, ...] = cost_settings
+    record = "the fleet-and-cost record"
+    found = _first_non_finite(run.fleet, "fleet")
+    if found is None:
+        found = _first_non_finite(run.iridium, "iridium")
+        if found is None:
+            return
+        record = "the Iridium record"
+        settings = (
+            f"iridium.aperture_m2 ({dials.aperture_m2!r})",
+            *(
+                f"iridium.arpu.{name} ({price!r})"
+                for name, price in dials.arpu.model_dump().items()
+            ),
+            *cost_settings,
+        )
+    path, value = found
+    raise ValueError(
+        f"the run's {path} is {value!r}, not a finite number: {record} scales with "
+        f"{', '.join(settings)}, and one of them is past what the model can compute"
+    )
+
+
 def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun:
     """Run an Iridium config on its saturation curve: the Iridium entry.
 
@@ -1255,9 +1328,16 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
         CurveBeyondLastRowError: If a year's living fleet, or a reported fleet, lies past a
             class's last row (a year's names its fiscal year), naming the fleet, the class and
             the last row.
-        ValueError: If the panel factor is not a positive finite number.
-        OverflowError: If a value the model cannot compute arises (a panel so large that the
-            people at a fleet overflow to infinity and cannot become a count).
+        ValueError: If the panel factor is not a positive finite number (a panel so small its
+            ratio to the reference panel underflows to 0), naming ``iridium.aperture_m2``; or
+            if the run's records would hold an infinity or a NaN (a panel, a price or a cost
+            setting past what the model can compute: a panel of 1e-305 or 2.5e300 m^2, say,
+            or a price of 5e-324 dollars), naming the first such field (the fleet-and-cost
+            record walked first), its value and the settings its record scales with, each
+            with its value (the panel, the five prices and the cost settings; the cost
+            settings alone for the fleet-and-cost record). No run is returned.
+        OverflowError: If the people at a fleet overflow to infinity and cannot become a
+            count (a panel of about 1e308 m^2), before any record is built.
     """
     dials = iridium_dials_of(config)
     check_curve_matches(saturation_inputs_for(dials), curve)
@@ -1346,6 +1426,8 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
         ),
         assumptions=_assumptions(config, dials, curve, panel_factor=panel_factor),
     )
+    run = IridiumRun(fleet=fleet, iridium=record)
+    _refuse_a_number_that_is_not_finite(run, config, dials)
     logger.debug(
         "Iridium run: FY%d living fleet %d at $%.4fM a satellite-year; the floor reached %s",
         final.year,
@@ -1353,7 +1435,7 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
         cost_per_satellite_year_musd,
         record.coverage_floor_reached_year,
     )
-    return IridiumRun(fleet=fleet, iridium=record)
+    return run
 
 
 __all__ = [

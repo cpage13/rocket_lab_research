@@ -12,11 +12,12 @@ against the usage check's targets (``check_usage_10_04_output.txt``, section A: 
 mounted terminals within 5 percent, the phone class within 1 percent; the fleets, costs and books
 exactly); the no-upgrade bracket; revenue rising with the fleet; the floor rule; the books outside
 every margin; a share that never launches; the downlink share; the panel setting; every class in
-one run, in order; a fleet past a class's last row (the engine and the command); the readings and
-the reported fleets; the IoT reading; the marginal intervals (hand-worked, and their verdicts on
-the committed curve); a saturation number beside the cadence, never a cap; the scenario YAML; the
-stated assumptions; the promoted export frozen on ``iridium-v6``; and the drift guard that
-regenerates the committed artifact.
+one run, in order; a fleet past a class's last row (the engine and the command); a run that would
+hold a number that is not finite, refused naming the settings; the readings and the reported
+fleets (the retired cap's reading its own constant); the IoT reading; the marginal intervals
+(hand-worked, and their verdicts on the committed curve); a saturation number beside the cadence,
+never a cap; the scenario YAML; the stated assumptions; the promoted export frozen on
+``iridium-v6``; and the drift guard that regenerates the committed artifact.
 
 The values these tests freeze from the committed curve (people, the markers) move only with a
 re-promotion of the curve, which re-freezes them on purpose (the re-promotion rule). Each class's
@@ -1010,6 +1011,77 @@ def test_a_fleet_past_a_class_last_row_fails_naming_the_year_the_class_and_the_l
     assert len(errors) == 1
     for named in ("FY2035", "small_terminal_class", "3025", "3072"):
         assert named in errors[0]
+
+
+@pytest.mark.parametrize(
+    ("setting", "value", "first_field"),
+    [
+        (
+            ("iridium", "aperture_m2"),
+            1e-305,
+            "iridium.saturation.iot_check.minimal_packet_iot[0].devices_per_useful_beam is inf",
+        ),
+        (("iridium", "aperture_m2"), 2.5e300, "iridium.years[6].classes[0].revenue_musd is inf"),
+        (
+            ("iridium", "arpu", "phone_class_price_usd_month"),
+            5e-324,
+            "iridium.years[5].classes[2].own_margin_pct is -inf",
+        ),
+        (
+            ("satellite", "satellite_build_cost_musd"),
+            1e308,
+            "fleet.years[1].build_cost_this_year_musd is inf",
+        ),
+    ],
+    ids=[
+        "a panel so small the IoT devices per beam overflow",
+        "a panel so large revenue overflows",
+        "a subnormal price",
+        "a build cost that overflows the fleet's costs",
+    ],
+)
+def test_a_run_that_would_hold_a_number_that_is_not_finite_is_refused_naming_the_settings(
+    iridium_yaml: Path,
+    committed_saturation_curve: SaturationCurve,
+    setting: tuple[str, ...],
+    value: float,
+    first_field: str,
+) -> None:
+    """Objective: a run the Iridium entry returns holds only finite numbers (before the fix these
+    settings, each valid at load, returned records holding inf, -inf or NaN, which only the
+    artifact's models refused, naming an artifact field rather than the setting).
+
+    Sample: the shipped scenario with, in turn, a panel of 1e-305 m^2 (its factor is positive, so
+    the entry's panel check passes, but the IoT devices per useful beam overflow), a panel of
+    2.5e300 m^2 (people stay finite; revenue overflows and the margins become NaN), a phone class
+    price of 5e-324 dollars (its margin overflows to -inf) and a satellite build cost of 1e308 $M
+    (the fleet-and-cost record's costs overflow).
+
+    Expected outcome: a ValueError (the type itself) naming the first field that is not finite
+    (the fleet-and-cost record walked first) and its value, then the settings its record scales
+    with, each with its value: for the Iridium record the panel, the five prices and the cost
+    settings; for the fleet-and-cost record the cost settings alone.
+    """
+    data = load_comms_config(iridium_yaml).model_dump()
+    node = data
+    for key in setting[:-1]:
+        node = node[key]
+    node[setting[-1]] = value
+    config = CommsConfig.model_validate(data)
+    with pytest.raises(ValueError, match="not a finite number") as refused:
+        run_iridium_model(config, committed_saturation_curve)
+    assert type(refused.value) is ValueError
+    message = str(refused.value)
+    assert message.startswith(f"the run's {first_field}, not a finite number: ")
+    assert f"{'.'.join(setting)} ({value!r})" in message
+    assert "satellite.satellite_build_cost_musd (" in message
+    assert "launch_cost.high_cadence_cost_musd (" in message
+    if setting[0] == "satellite":
+        assert "iridium." not in message
+    else:
+        assert "iridium.aperture_m2 (" in message
+        for name in IridiumArpuDials.model_fields:
+            assert f"iridium.arpu.{name} (" in message
 
 
 # ---------------------------------------------------------------------------
