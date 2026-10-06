@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -36,6 +37,8 @@ from communications.engine import (
     run_comms_model,
     subscribers_served_at,
 )
+from communications.iridium import run_iridium_model
+from communications.saturation_curve import SaturationCurve
 
 # A representative subscriber target distinct from the dialled default, so a test
 # asserting "result == base" cannot pass by coincidence against the default.
@@ -418,22 +421,26 @@ def test_partial_deployment_reports_proportional_subscribers() -> None:
     )
 
 
-def test_saturated_regime_serves_at_most_the_fleet_capacity() -> None:
+def test_saturated_regime_serves_at_most_the_fleet_capacity(
+    synthetic_saturation_curve: Callable[[IridiumDials], SaturationCurve],
+) -> None:
     """A saturated run serves the capped fleet's people capacity, not the full target.
 
     Objective: the served base never exceeds what the fleet carries. On the Iridium
     phone-class tier at a 10 Mbps active rate the density is 3,120 per satellite, so
-    the 10M target needs 3,206 satellites and the fleet pins at the 2,000 cap.
+    the 10M target needs 3,206 satellites and the fleet pins at the 2,000 cap. The run
+    goes through the Iridium entry on a synthetic curve stamped for its dials.
     Expected: the regime is saturated and the run (all-in share, so the build
     completes) serves 6,240,000 people (2,000 x 3,120), below the 10M target.
     """
+    dials = IridiumDials(active_user_rate_mbps=SATURATING_ACTIVE_RATE_MBPS)
     config = CommsConfig.model_validate(
         {
             "comms_cadence": {"share_of_fleet": 1.0},
-            "iridium": IridiumDials(active_user_rate_mbps=SATURATING_ACTIVE_RATE_MBPS).model_dump(),
+            "iridium": dials.model_dump(),
         }
     )
-    traj = run_comms_model(config)
+    traj = run_iridium_model(config, synthetic_saturation_curve(dials))
     assert traj.subscribers_per_satellite == SATURATED_DENSITY_PER_SATELLITE
     assert traj.fleet_target == MAX_FLEET_SATELLITES_DEFAULT
     assert traj.binding_regime is BindingRegime.SATURATED
