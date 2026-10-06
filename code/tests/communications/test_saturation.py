@@ -1677,6 +1677,43 @@ def test_numpy_stays_inside_the_saturation_module(code_dir: Path) -> None:
     )
 
 
+FAMILY_MODULES = ("communications.iridium", "communications.saturation_curve")
+"""The modules the shared path must not import: the Iridium family and the curve's contract."""
+
+
+def _family_modules_loaded_after_importing(modules: tuple[str, ...], code_dir: Path) -> list[str]:
+    """The family modules a fresh interpreter has loaded after importing the modules."""
+    source = "import sys\n" + "".join(f"import {name}\n" for name in modules)
+    source += f"print(','.join(name for name in {FAMILY_MODULES!r} if name in sys.modules))\n"
+    environment = {**os.environ, "PYTHONPATH": str(code_dir / "src")}
+    result = subprocess.run(  # noqa: S603 (a fixed command: this interpreter and our source)
+        [sys.executable, "-c", source],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=environment,
+    )
+    assert result.returncode == 0, result.stderr
+    return [name for name in result.stdout.strip().split(",") if name]
+
+
+def test_engine_imports_no_family_module(code_dir: Path) -> None:
+    """Objective: the shared path stays family-neutral: ``communications.engine`` imports
+    neither the Iridium family nor the curve's contract, transitive imports included, which a
+    grep would miss.
+
+    Sample: a fresh interpreter importing ``communications.engine`` alone; then one importing
+    ``communications.iridium`` too, the control.
+
+    Expected outcome: neither ``communications.iridium`` nor ``communications.saturation_curve``
+    is in ``sys.modules`` after the first; both are after the control (so the probe sees them).
+    """
+    assert _family_modules_loaded_after_importing(("communications.engine",), code_dir) == []
+    assert _family_modules_loaded_after_importing(
+        ("communications.engine", "communications.iridium"), code_dir
+    ) == list(FAMILY_MODULES)
+
+
 def test_the_command_refuses_a_scenario_without_an_iridium_block(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -2317,6 +2354,30 @@ def test_saturation_inputs_for_reads_only_the_held_spectrum() -> None:
     assert curve_input_hash(wider) != curve_input_hash(default)
     round_trip = SaturationInputs.model_validate_json(default.model_dump_json())
     assert curve_input_hash(round_trip) == curve_input_hash(default)
+
+
+def test_the_device_class_is_not_an_input_of_the_curve(repo_dir: Path) -> None:
+    """Objective: one curve serves every class: the device class a config names is not an input
+    of the curve (it holds every class), so two Iridium dials differing only in it imply the
+    same inputs and read the same promoted curve.
+
+    Sample: the Iridium dials at each class, small terminal, mounted terminal, phone class; the
+    committed curve.
+
+    Expected outcome: ``saturation_inputs_for`` gives equal inputs and one input hash for the
+    three, holding every class in the class key's order; the committed curve passes the
+    identity check for each.
+    """
+    curve = load_saturation_curve(repo_dir / COMMITTED_CURVE)
+    inputs = [
+        saturation_inputs_for(IridiumDials(device_class=device_class))
+        for device_class in DeviceClass
+    ]
+    assert inputs[0] == inputs[1] == inputs[2]
+    assert len({curve_input_hash(each) for each in inputs}) == 1
+    assert [entry.device_class for entry in inputs[0].classes] == list(DeviceClass)
+    for each in inputs:
+        check_curve_matches(each, curve)
 
 
 @pytest.mark.parametrize(

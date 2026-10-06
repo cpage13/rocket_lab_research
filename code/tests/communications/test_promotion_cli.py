@@ -24,16 +24,20 @@ the shared writer (``common.file_io.write_files_with_rollback``). The contract:
 from __future__ import annotations
 
 import errno
+import json
 import logging
 import os
 import stat
+from collections.abc import Callable
 from pathlib import Path
 from typing import NoReturn
 
 import pytest
 
 from common.cli import EXIT_ERROR, EXIT_OK
+from common.file_io import ARTIFACT_FILE_END, render_artifact_json
 from communications import json_output
+from communications.config import IridiumDials
 from communications.json_output import main
 from communications.saturation_curve import SaturationCurve
 
@@ -279,3 +283,34 @@ def test_a_relative_curve_path_is_anchored_to_the_repository_root(
 
     assert out_path.is_file()
     assert loaded == [repo_dir / _COMMITTED_CURVE]
+
+
+def test_a_scenario_runs_on_a_curve_computed_for_its_inputs(
+    tmp_path: Path, synthetic_saturation_curve: Callable[[IridiumDials], SaturationCurve]
+) -> None:
+    """Objective: a held spectrum the committed curve was not computed for promotes once the
+    scenario's curve path names a curve computed for it (an absolute path, used as given).
+
+    Sample: a synthetic curve stamped for the Iridium dials at 10.5 MHz, written as the
+    promotion writes a curve to a temporary folder; a scenario at 10.5 MHz whose
+    ``iridium.saturation.curve_path`` is that file's absolute path.
+
+    Expected outcome: exit 0 and the artifact written, its physics at 10.5 MHz with the frozen
+    coordinated-span density, 40,950 people per satellite (10.5 x 0.65 x 0.15 Gbps over 1.0 x
+    0.025 Mbps).
+    """
+    curve_path = tmp_path / "coordinated_curve.json"
+    curve = synthetic_saturation_curve(IridiumDials(spectrum_mhz=10.5))
+    curve_path.write_text(render_artifact_json(curve) + ARTIFACT_FILE_END, encoding="utf-8")
+    scenario = tmp_path / "coordinated.yaml"
+    scenario.write_text(
+        f"iridium:\n  spectrum_mhz: 10.5\n  saturation:\n    curve_path: {curve_path}\n",
+        encoding="utf-8",
+    )
+    out_path = tmp_path / "coordinated.json"
+
+    assert main([str(scenario), str(out_path), "--version-stamp", "test"]) == EXIT_OK
+
+    physics = json.loads(out_path.read_text(encoding="utf-8"))["iridium_physics"]
+    assert physics["spectrum_mhz"] == 10.5
+    assert physics["subscribers_per_satellite"] == 40_950

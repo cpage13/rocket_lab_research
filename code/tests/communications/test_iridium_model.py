@@ -78,7 +78,7 @@ from communications.engine import (
     resolve_device_spectral_efficiency,
     run_comms_model,
 )
-from communications.iridium import run_iridium_model
+from communications.iridium import NotAnIridiumConfigError, run_iridium_model
 from communications.json_output import (
     MODEL_NAME,
     IridiumModelArtifact,
@@ -86,7 +86,7 @@ from communications.json_output import (
     export_iridium_json,
     main,
 )
-from communications.saturation_curve import SaturationCurve
+from communications.saturation_curve import SaturationCurve, SaturationCurveMismatchError
 
 # ---------------------------------------------------------------------------
 # The frozen Iridium-model phone-class baseline (spectrum 8.0, aperture 25.0,
@@ -450,6 +450,58 @@ def test_the_cellular_entry_refuses_an_iridium_config(iridium_yaml: Path) -> Non
             run_comms_model(config)
         assert "communications.iridium.run_iridium_model(config, curve)" in str(refused.value)
         assert isinstance(refused.value, ValueError)
+
+
+def test_the_iridium_entry_refuses_a_cellular_config_with_the_familys_message(
+    committed_saturation_curve: SaturationCurve,
+) -> None:
+    """Objective: the Iridium entry narrows its config before anything else, so a config of
+    the cellular family is refused with the family's typed error and today's message, before
+    any check of the curve.
+
+    Sample: the default config (no ``iridium:`` block) with the committed curve.
+
+    Expected outcome: NotAnIridiumConfigError (a ValueError) with the message word for word,
+    not a mismatch of the curve.
+    """
+    with pytest.raises(NotAnIridiumConfigError) as refused:
+        run_iridium_model(CommsConfig(), committed_saturation_curve)
+    assert str(refused.value) == (
+        "the scenario does not select the Iridium model: it needs a top-level "
+        "'iridium:' block (see scenarios/iridium.yaml)"
+    )
+    assert isinstance(refused.value, ValueError)
+
+
+def test_the_iridium_entry_runs_only_on_a_curve_computed_for_its_inputs(
+    committed_saturation_curve: SaturationCurve, synthetic_saturation_curve: SyntheticCurve
+) -> None:
+    """Objective: the identity check runs inside the Iridium entry on every run, before the
+    run: a config reads only a curve computed for its own inputs.
+
+    Sample: an Iridium config at 10.5 MHz with the committed curve (computed for the held
+    spectrum the shipped scenario sets), then with a synthetic curve stamped for 10.5 MHz; the
+    default Iridium dials with that 10.5 MHz curve.
+
+    Expected outcome: the 10.5 MHz config with the committed curve raises
+    SaturationCurveMismatchError naming ``spectrum_mhz``, 10.5 for this run and the curve's own
+    value (read from its parameters); with its own curve it runs, at the frozen coordinated-span
+    density of 40,950 people per satellite; the default dials with the 10.5 MHz curve are
+    refused in turn, naming ``spectrum_mhz`` again.
+    """
+    wider = IridiumDials(spectrum_mhz=COORDINATED_SPECTRUM_MHZ)
+    committed_spectrum = committed_saturation_curve.parameters.spectrum_mhz
+    with pytest.raises(SaturationCurveMismatchError) as refused:
+        run_iridium_model(CommsConfig(iridium=wider), committed_saturation_curve)
+    assert (
+        f"spectrum_mhz is {COORDINATED_SPECTRUM_MHZ} for this run but {committed_spectrum} in "
+        "the curve's parameters"
+    ) in str(refused.value)
+    wider_curve = synthetic_saturation_curve(wider)
+    traj = run_iridium_model(CommsConfig(iridium=wider), wider_curve)
+    assert traj.subscribers_per_satellite == EXPECTED_SUBS_PER_SAT_COORDINATED
+    with pytest.raises(SaturationCurveMismatchError, match=r"spectrum_mhz is 8\.0 for this run"):
+        run_iridium_model(CommsConfig(iridium=IridiumDials()), wider_curve)
 
 
 # ---------------------------------------------------------------------------
