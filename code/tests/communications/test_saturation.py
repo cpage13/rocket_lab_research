@@ -4812,3 +4812,94 @@ def test_a_reading_the_curve_cannot_give_is_refused_with_a_typed_error() -> None
         read_fleet(
             power_law_curve(maximum_use=0.0), PHONE, 342, downlink_share=1.0, panel_factor=1.0
         )
+
+
+def test_the_synthetic_curve_fixture_matches_its_dials_and_loads_as_promoted(
+    synthetic_saturation_curve: Callable[[IridiumDials], SaturationCurve], tmp_path: Path
+) -> None:
+    """Objective: the synthetic-curve fixture stamps matching parameters for any Iridium dials
+    and builds a curve the loader accepts as promoted, its rows spanning the real grid, every
+    row hand-workable and its markers the module's own for its rows.
+
+    Sample: the default Iridium dials, the same at 10.5 MHz, and at a 15.4 m^2 panel.
+
+    Expected outcome: each curve's parameters are ``saturation_inputs_for`` of its dials with a
+    valid input hash, so the identity check passes for its dials (and the 10.5 MHz curve is
+    refused for the default dials, naming ``spectrum_mhz``); it passes the completeness check
+    and, written as the promotion writes it, loads equal; every class's rows run from 342 to
+    40,000 satellites (to 64,009 for the mounted terminal); at every row L = N x 150 (U = 1) and
+    capacity is L x the spectrum x the class's central SE / 1,000; every class's and band
+    point's markers are the module's ``_markers`` of its own rows.
+    """
+    default_dials = IridiumDials()
+    for dials in (default_dials, IridiumDials(spectrum_mhz=10.5), IridiumDials(aperture_m2=15.4)):
+        curve = synthetic_saturation_curve(dials)
+        assert curve.parameters == saturation_inputs_for(dials)
+        assert curve.input_hash == curve_input_hash(curve.parameters)
+        check_curve_matches(saturation_inputs_for(dials), curve)
+        check_curve_complete(curve)
+        path = tmp_path / "synthetic_curve.json"
+        path.write_text(render_artifact_json(curve) + ARTIFACT_FILE_END, encoding="utf-8")
+        assert load_saturation_curve(path) == curve
+        central_se = {
+            entry.device_class: entry.spectral_efficiency_bps_per_hz
+            for entry in curve.parameters.classes
+        }
+        for entry in curve.classes:
+            last = 64_009 if entry.device_class is DeviceClass.MOUNTED_TERMINAL_CLASS else 40_000
+            assert (entry.rows[0].fleet, entry.rows[-1].fleet) == (342, last)
+            for row in entry.rows:
+                assert row.useful_beams == pytest.approx(row.fleet * 150.0, rel=1e-12)
+                assert row.ocean_factor == 1.0
+                assert row.capacity_gbps == pytest.approx(
+                    row.useful_beams * dials.spectrum_mhz * central_se[entry.device_class] / 1e3,
+                    rel=1e-12,
+                )
+            assert entry.markers == sat._markers(
+                entry.device_class, entry.rows, entry.markers.maximum_use_beams
+            )
+        for band in curve.bands:
+            assert band.markers == sat._markers(
+                band.point.name, band.rows, band.markers.maximum_use_beams
+            )
+    wider = synthetic_saturation_curve(IridiumDials(spectrum_mhz=10.5))
+    with pytest.raises(SaturationCurveMismatchError, match="spectrum_mhz is 8.0 for this run"):
+        check_curve_matches(saturation_inputs_for(default_dials), wider)
+
+
+def test_the_short_curve_fixture_ends_at_its_row_and_refuses_a_reading_past_it(
+    short_saturation_curve: Callable[[IridiumDials, int], SaturationCurve],
+) -> None:
+    """Objective: the short-curve variant ends every curve at a given row and keeps the dials'
+    parameters, so the identity check passes and a reading past its last row is refused.
+
+    Sample: the default dials cut at 3,025 satellites (the realized fleet of the 3,000
+    request); a fleet past it, 3,072; a cut at 3,000, which is no row.
+
+    Expected outcome: every class's and band point's rows end at 3,025, each not reached by
+    3,025; the identity check passes; the completeness check refuses the short rows; a reading
+    at 3,025 is given (L = 3,025 x 150), and one at 3,072 is a CurveBeyondLastRowError naming
+    the class, 3,025 and 3,072; the cut at 3,000 is a ValueError.
+    """
+    dials = IridiumDials()
+    curve = short_saturation_curve(dials, 3_025)
+    curves = [(entry.rows, entry.markers) for entry in curve.classes]
+    curves += [(band.rows, band.markers) for band in curve.bands]
+    for rows, markers in curves:
+        assert rows[-1].fleet == 3_025
+        assert markers.saturation_not_reached_by == 3_025
+    check_curve_matches(saturation_inputs_for(dials), curve)
+    with pytest.raises(SaturationCurveError, match="rows stand at the requested fleets"):
+        check_curve_complete(curve)
+    for device_class in DeviceClass:
+        assert useful_beams_at(curve, device_class, 3_025) == pytest.approx(3_025 * 150.0)
+        with pytest.raises(
+            CurveBeyondLastRowError,
+            match=(
+                f"the {device_class.value} curve's last row is at 3025 satellites, and a "
+                "reading at 3072 satellites lies past it"
+            ),
+        ):
+            useful_beams_at(curve, device_class, 3_072)
+    with pytest.raises(ValueError, match="3000 is not a row of every curve"):
+        short_saturation_curve(dials, 3_000)

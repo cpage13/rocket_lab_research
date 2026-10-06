@@ -14,26 +14,49 @@ It also provides the saturation module's synthetic worlds: a builder of syntheti
 population grids and a builder of the curve's inputs for them
 (``synthetic_population_grid``, ``synthetic_saturation_inputs``), session-scoped so a
 test module can compute a world's curve once and share it.
+
+And the curves the engine's tests read, session-scoped: the committed curve, loaded with the
+loader (``committed_saturation_curve``); a builder of a synthetic curve for any Iridium dials,
+its parameters the inputs those dials imply, so the identity check passes, and its rows
+spanning the real grid, so every fleet a test reads sits inside it
+(``synthetic_saturation_curve``); and a builder of the same curve cut short at a given row,
+for a reading past a class's last row (``short_saturation_curve``).
 """
 
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable
+import math
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Protocol
 
 import numpy as np
 import pytest
 
-from communications.config import CommsConfig
-from communications.constants import GBPS_TO_MBPS
+from communications import saturation as sat
+from communications.config import CommsConfig, IridiumDials
+from communications.constants import GBPS_TO_MBPS, SATURATION_CURVE_PATH_DEFAULT, DeviceClass
 from communications.saturation import PopulationGrid
 from communications.saturation_curve import (
+    SATURATION_CURVE_SCHEMA_VERSION,
+    BandCurve,
+    ClassCurve,
+    ClassMarkers,
+    CurveProvenance,
+    CurveRow,
     DemandInputs,
+    DirectionalDiagnostics,
+    RunMeasurement,
+    SaturationCurve,
     SaturationInputs,
     ShellInputs,
     SweepInputs,
+    TrimAtFloor,
+    curve_input_hash,
+    load_saturation_curve,
+    saturation_inputs_for,
+    walker_shape,
 )
 
 SYNTHETIC_NORTH_EDGE_DEG = 90.0
@@ -55,6 +78,215 @@ cells may hold far fewer people per km^2 than the central threshold of 1."""
 PeopleAt = Callable[[np.ndarray, np.ndarray], np.ndarray]
 """People per cell from the cell centres' latitudes and longitudes, degrees: two arrays of
 the grid's shape in, one array of that shape out."""
+
+SYNTHETIC_OCEAN_FACTOR = 1.0
+"""The synthetic curve's ocean factor at every row: every beam over people, so L = N x B, the
+no-ocean bound, and every reading is hand-workable (L, capacity and people linear in N)."""
+
+SYNTHETIC_MAXIMUM_USE_OVER_LAST_ROW = 2.0
+"""The synthetic curve's maximum use over its last row's useful beams. With L linear in N the
+elasticity is 1 at every midpoint, so no crossing under 0.10 or 0.25 is reached, and L stays
+under 90 percent of maximum use: no marker is placed, each curve not reached by its last row,
+as the module's own marker rules read such rows."""
+
+SYNTHETIC_TRIM = 0.0
+"""The synthetic phone class's interference trim at every floor: none."""
+
+SYNTHETIC_STAMP = "synthetic"
+"""The synthetic curve's version stamp."""
+
+NO_STACKED_BEAMS = DirectionalDiagnostics(
+    kept_stacked_share=0.0, median_separation_deg=None, mean_full_sum_interference_db=None
+)
+"""A directional row's diagnostics when it keeps no stacked beam (the synthetic curve's)."""
+
+
+class SyntheticCurveBuilder(Protocol):
+    """The builder ``synthetic_saturation_curve`` returns: Iridium dials in, a curve out."""
+
+    def __call__(self, dials: IridiumDials) -> SaturationCurve:
+        """Return the synthetic curve whose parameters the dials imply."""
+        ...
+
+
+class ShortCurveBuilder(Protocol):
+    """The builder ``short_saturation_curve`` returns: Iridium dials and a last row's fleet
+    in, a curve out."""
+
+    def __call__(self, dials: IridiumDials, last_fleet: int) -> SaturationCurve:
+        """Return the synthetic curve for the dials, every curve ending at the given row."""
+        ...
+
+
+def _synthetic_rows(
+    requested: Sequence[int],
+    beams_per_satellite: float,
+    gbps_per_beam: float,
+    *,
+    sectored: bool,
+    trim_floors_dbi: tuple[float, ...] | None,
+) -> tuple[CurveRow, ...]:
+    """One synthetic curve's rows at the requested fleets: L = N x B at U = 1, its ceiling and
+    supply equal to L, capacity L x the beam's rate; diagnostics with nothing stacked where the
+    class has sky sectors, and a trim of 0 at each floor where one is asked."""
+    rows = []
+    for requested_fleet in requested:
+        fleet = math.prod(walker_shape(requested_fleet))
+        beams = SYNTHETIC_OCEAN_FACTOR * fleet * beams_per_satellite
+        rows.append(
+            CurveRow(
+                fleet=fleet,
+                requested_fleet=requested_fleet,
+                useful_beams=beams,
+                useful_beams_spread=0.0,
+                capacity_gbps=beams * gbps_per_beam,
+                ocean_factor=SYNTHETIC_OCEAN_FACTOR,
+                ceiling_beams=beams,
+                supply_beams=beams,
+                directional=NO_STACKED_BEAMS if sectored else None,
+                trim=(
+                    None
+                    if trim_floors_dbi is None
+                    else tuple(
+                        TrimAtFloor(floor_dbi=floor, trim=SYNTHETIC_TRIM)
+                        for floor in trim_floors_dbi
+                    )
+                ),
+            )
+        )
+    return tuple(rows)
+
+
+def _synthetic_markers(rows: Sequence[CurveRow], maximum_use: float) -> ClassMarkers:
+    """The markers of linear rows: no crossing, not reached by the last row, no 90 percent fleet."""
+    return ClassMarkers(
+        maximum_use_beams=maximum_use,
+        saturation_number=None,
+        saturation_not_reached_by=rows[-1].fleet,
+        elasticity_under_0p25_fleet=None,
+        fleet_at_90pct_of_maximum_use=None,
+    )
+
+
+def build_synthetic_curve(dials: IridiumDials) -> SaturationCurve:
+    """Return a synthetic curve whose parameters are ``saturation_inputs_for(dials)``.
+
+    Every class and band point at the parameters' requested fleets (the real grid, 342 to
+    40,000 realized; the mounted terminal with its extension, to 64,009), each row L = N x B
+    at U = 1 with capacity L x the spectrum x the class's central SE (the phone class's for a
+    band point, B a band point's own when it sets one), so the identity check passes for the
+    dials and the curve passes the completeness check the loader runs.
+    """
+    parameters = saturation_inputs_for(dials)
+    sweep = parameters.sweep
+    central_beams = sat._beams_per_satellite(parameters.shell)
+    sectored = {
+        entry.device_class: bool(entry.sector_wedges_per_ring) for entry in parameters.classes
+    }
+    gbps_per_beam = {
+        entry.device_class: parameters.spectrum_mhz
+        * entry.spectral_efficiency_bps_per_hz
+        / GBPS_TO_MBPS
+        for entry in parameters.classes
+    }
+    classes = []
+    for device_class in DeviceClass:
+        requested = (
+            sweep.fleets + sweep.mounted_terminal_extension
+            if device_class is DeviceClass.MOUNTED_TERMINAL_CLASS
+            else sweep.fleets
+        )
+        rows = _synthetic_rows(
+            requested,
+            central_beams,
+            gbps_per_beam[device_class],
+            sectored=sectored[device_class],
+            trim_floors_dbi=(
+                parameters.trim.floors_dbi if device_class is DeviceClass.PHONE_CLASS else None
+            ),
+        )
+        maximum_use = SYNTHETIC_MAXIMUM_USE_OVER_LAST_ROW * rows[-1].useful_beams
+        classes.append(
+            ClassCurve(
+                device_class=device_class,
+                rows=rows,
+                markers=_synthetic_markers(rows, maximum_use),
+            )
+        )
+    bands = []
+    for point in parameters.bands:
+        rows = _synthetic_rows(
+            sweep.fleets,
+            central_beams if point.beams_per_satellite is None else point.beams_per_satellite,
+            gbps_per_beam[DeviceClass.PHONE_CLASS],
+            sectored=sectored[DeviceClass.PHONE_CLASS],
+            trim_floors_dbi=None,
+        )
+        maximum_use = SYNTHETIC_MAXIMUM_USE_OVER_LAST_ROW * rows[-1].useful_beams
+        bands.append(
+            BandCurve(point=point, rows=rows, markers=_synthetic_markers(rows, maximum_use))
+        )
+    return SaturationCurve(
+        schema_version=SATURATION_CURVE_SCHEMA_VERSION,
+        version_stamp=SYNTHETIC_STAMP,
+        parameters=parameters,
+        input_hash=curve_input_hash(parameters),
+        provenance=CurveProvenance(
+            grid_file_name=Path(parameters.demand.grid_path).name,
+            grid_sha256=parameters.demand.grid_sha256,
+            citations=(),
+            licence="none (synthetic)",
+            method=(
+                "synthetic, built by the test suite, never computed: L = N x B at every row "
+                "(U = 1), capacity L x the spectrum x the class's central SE"
+            ),
+            checks_passed=(
+                "L at most min(ceiling, supply) and the ceiling at most maximum use at every "
+                "row, by construction",
+            ),
+            run_measurement=RunMeasurement(wall_time_s=0.0, peak_memory_mb=0.0),
+        ),
+        classes=tuple(classes),
+        bands=tuple(bands),
+        limits=(
+            "A synthetic test curve: every beam over people (U = 1), so L, capacity and people "
+            "are linear in N and no marker is placed.",
+        ),
+    )
+
+
+def cut_curve_short(curve: SaturationCurve, last_fleet: int) -> SaturationCurve:
+    """Return a curve with every class's and band point's rows cut after the row at
+    ``last_fleet``, each curve's markers not reached by that row, its parameters unchanged (so
+    the identity check still passes, while the completeness check refuses its short rows).
+
+    Raises:
+        ValueError: If ``last_fleet`` is not the fleet of a row every curve holds.
+    """
+    holding = [entry.rows for entry in curve.classes] + [band.rows for band in curve.bands]
+    if any(last_fleet not in [row.fleet for row in rows] for rows in holding):
+        raise ValueError(
+            f"{last_fleet} is not a row of every curve; the phone class's rows are "
+            f"{[row.fleet for row in curve.classes[-1].rows]}"
+        )
+
+    def short(rows: tuple[CurveRow, ...], markers: ClassMarkers) -> dict[str, object]:
+        kept = tuple(row for row in rows if row.fleet <= last_fleet)
+        return {
+            "rows": kept,
+            "markers": markers.model_copy(update={"saturation_not_reached_by": kept[-1].fleet}),
+        }
+
+    return curve.model_copy(
+        update={
+            "classes": tuple(
+                entry.model_copy(update=short(entry.rows, entry.markers)) for entry in curve.classes
+            ),
+            "bands": tuple(
+                band.model_copy(update=short(band.rows, band.markers)) for band in curve.bands
+            ),
+        }
+    )
 
 
 class SaturationInputsBuilder(Protocol):
@@ -161,5 +393,42 @@ def synthetic_saturation_inputs() -> SaturationInputsBuilder:
             ),
             sweep=SweepInputs(fleets=fleets, snapshots_phone_central=snapshots),
         )
+
+    return build
+
+
+@pytest.fixture(scope="session")
+def committed_saturation_curve(repo_dir: Path) -> SaturationCurve:
+    """The committed promoted curve, ``communications/models/iridium/saturation_curve.json``,
+    loaded with ``load_saturation_curve`` (its schema, input hash and completeness checked).
+
+    Its numbers are the promotion's: a test reads what it needs from the curve and freezes
+    none of them, so a re-promotion needs no test edit.
+    """
+    return load_saturation_curve(repo_dir / SATURATION_CURVE_PATH_DEFAULT)
+
+
+@pytest.fixture(scope="session")
+def synthetic_saturation_curve() -> SyntheticCurveBuilder:
+    """Return a builder of a synthetic curve for any Iridium dials (``build_synthetic_curve``).
+
+    Its parameters are ``saturation_inputs_for(dials)`` with a valid input hash, so the
+    identity check passes for those dials; its rows span the real grid (342 to 40,000, and
+    64,009 for the mounted terminal), so every fleet a test reads (2,000 and every scenario's
+    steady state among them) sits inside it; it passes the completeness check the loader runs,
+    so it can be written to a file a scenario's ``iridium.saturation.curve_path`` names.
+    """
+    return build_synthetic_curve
+
+
+@pytest.fixture(scope="session")
+def short_saturation_curve() -> ShortCurveBuilder:
+    """Return a builder of the synthetic curve for any Iridium dials cut short at a given row
+    (``cut_curve_short``), for a reading past a class's last row: its parameters are still the
+    dials' (the identity check passes), while the completeness check refuses its rows, so it is
+    read in Python, never loaded from a file."""
+
+    def build(dials: IridiumDials, last_fleet: int) -> SaturationCurve:
+        return cut_curve_short(build_synthetic_curve(dials), last_fleet)
 
     return build
