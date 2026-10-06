@@ -8,9 +8,8 @@ classes' own defaults and bounds are tested once, in
 ground blocks, the field bounds, the cross-field validators (the coverage floor at or
 below the fleet cap; on an Iridium config every cellular sizing and revenue dial at its
 default and no ground block), a retired Iridium setting refused at load, every float dial of
-an Iridium config finite, the YAML loader pair, and the Iridium saturation block (its
-defaults, the shipped scenario's block, its bounds).
-Mirrors the data-center
+an Iridium config finite and never a boolean, the YAML loader pair, and the Iridium saturation
+block (its defaults, the shipped scenario's block, its bounds). Mirrors the data-center
 ``test_config.py`` assertion style without importing ``data_center`` (forbidden).
 """
 
@@ -32,6 +31,7 @@ from communications.config import (
     CommsMetadataDials,
     CoverageDials,
     GroundInterfaceDials,
+    IridiumArpuDials,
     IridiumDials,
     RevenueDials,
     SatelliteDials,
@@ -540,6 +540,47 @@ def test_the_iridium_dials_refuse_a_number_that_is_not_finite_naming_the_field(
                 load_comms_config(scenario)
             located = [".".join(map(str, error["loc"])) for error in refused.value.errors()]
             assert located == [".".join(("iridium", *path))], (path, value)
+
+
+def test_the_iridium_dials_refuse_a_boolean_naming_the_field(tmp_path: Path) -> None:
+    """Objective: a YAML boolean never loads as a number in the Iridium dials (before the fix
+    pydantic's lax mode read ``true`` as 1.0: a price of $1, a 1 m^2 panel, d = 1, a 1 MHz
+    spectrum), while an integer still loads as its float. The shared satellite and comms-share
+    blocks are not in this test: making them strict changes how cellular configs load.
+
+    Sample: every float field of the Iridium dials and of the blocks nested in them (the
+    spectrum, the panel, the downlink share and the five prices), walked from the model's own
+    fields, each written in a scenario YAML as ``true``; the panel written as ``yes`` and as
+    ``on`` (YAML 1.1 reads both as true) and as the quoted ``"15"``; the panel as the integer
+    ``15``.
+
+    Expected outcome: the walk finds those eight fields; each boolean and the quoted number
+    fail at load with one ValidationError, located at that field (``iridium.aperture_m2``,
+    say); the integer panel loads as 15.0, a float.
+    """
+    paths = _float_dial_paths(IridiumDials)
+    assert {("spectrum_mhz",), ("aperture_m2",), ("saturation", "downlink_share")} | {
+        ("arpu", name) for name in IridiumArpuDials.model_fields
+    } == set(paths)
+    scenario = tmp_path / "boolean.yaml"
+    for path in paths:
+        dials: object = True
+        for key in reversed(path):
+            dials = {key: dials}
+        scenario.write_text(yaml.safe_dump({"iridium": dials}), encoding="utf-8")
+        with pytest.raises(ValidationError) as refused:
+            load_comms_config(scenario)
+        located = [".".join(map(str, error["loc"])) for error in refused.value.errors()]
+        assert located == [".".join(("iridium", *path))], path
+    for written in ("yes", "on", '"15"'):
+        scenario.write_text(f"iridium:\n  aperture_m2: {written}\n", encoding="utf-8")
+        with pytest.raises(ValidationError, match=r"iridium\.aperture_m2"):
+            load_comms_config(scenario)
+    scenario.write_text("iridium:\n  aperture_m2: 15\n", encoding="utf-8")
+    loaded = load_comms_config(scenario).iridium
+    assert loaded is not None
+    assert isinstance(loaded.aperture_m2, float)
+    assert loaded.aperture_m2 == 15.0
 
 
 COMMON_CADENCE_BLOCKS = ("cadence", "launch_cost")

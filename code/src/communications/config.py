@@ -12,7 +12,10 @@ no-argument construct is fully valid, plus the ``comms_config_from_dict`` /
 ``load_comms_config`` YAML loader pair. Every block this module defines refuses a
 number that is not finite (``allow_inf_nan=False``), and so do the cadence and launch-cost
 blocks, ``common.cadence``'s, shared with the data-center model (the launch cost's by the
-same setting, the cadence's dials being whole numbers), each at load, naming the field.
+same setting, the cadence's dials being whole numbers), each at load, naming the field. The
+Iridium blocks' numeric fields (the held spectrum, the panel, the downlink share and the five
+prices) are also strict: a boolean (a YAML ``true``, ``yes`` or ``on``) is refused at load,
+naming the field, never read as 1, and so is a quoted number; an integer loads as its float.
 Nothing here computes a cost, a coverage
 fraction, a subscriber count, or a comparison; it is the contract the engine
 (``communications.engine``), the Iridium family (``communications.iridium``), the
@@ -481,7 +484,9 @@ class IridiumArpuDials(BaseModel):
     :data:`~communications.constants.MINIMAL_PACKET_IOT_DEVICES` and
     :data:`~communications.constants.DATA_IOT_DEVICES`, ADR 007, not settings). The classes
     run small terminal, mounted terminal, phone class, never phone-first. Every price is
-    above 0 and at most :data:`~communications.constants.ARPU_PRICE_CEILING_USD_MONTH`.
+    above 0 and at most :data:`~communications.constants.ARPU_PRICE_CEILING_USD_MONTH`, and
+    a number, never a boolean (each field is strict: a YAML ``true`` is refused, not read as
+    a price of 1).
     Government is left out of revenue (2026-10-04): there is no government price. A lower
     price or a smaller market is a division in the conclusions, never a setting here.
 
@@ -495,6 +500,7 @@ class IridiumArpuDials(BaseModel):
         default=SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT,
         gt=0,
         le=ARPU_PRICE_CEILING_USD_MONTH,
+        strict=True,
         description=(
             "The small terminal's monthly price, dollars, held flat. INVESTOR_SET to "
             f"{SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-03), the midpoint of "
@@ -505,6 +511,7 @@ class IridiumArpuDials(BaseModel):
         default=MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT,
         gt=0,
         le=ARPU_PRICE_CEILING_USD_MONTH,
+        strict=True,
         description=(
             "The mounted terminal's monthly price, dollars, held flat. INVESTOR_SET to "
             f"{MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-03), between "
@@ -515,6 +522,7 @@ class IridiumArpuDials(BaseModel):
         default=PHONE_CLASS_PRICE_USD_MONTH_DEFAULT,
         gt=0,
         le=ARPU_PRICE_CEILING_USD_MONTH,
+        strict=True,
         description=(
             "The phone class's monthly price, dollars, held flat. INVESTOR_SET to "
             f"{PHONE_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-03), its floor: no price "
@@ -525,6 +533,7 @@ class IridiumArpuDials(BaseModel):
         default=MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT,
         gt=0,
         le=ARPU_PRICE_CEILING_USD_MONTH,
+        strict=True,
         description=(
             "Minimal-packet IoT's monthly price per device, dollars. INVESTOR_SET to "
             f"{MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT:g} (the investor's trial price, "
@@ -535,6 +544,7 @@ class IridiumArpuDials(BaseModel):
         default=DATA_IOT_PRICE_USD_MONTH_DEFAULT,
         gt=0,
         le=ARPU_PRICE_CEILING_USD_MONTH,
+        strict=True,
         description=(
             "Data IoT's monthly price per device, dollars. INVESTOR_SET to "
             f"{DATA_IOT_PRICE_USD_MONTH_DEFAULT:g} (the investor's trial price, 2026-10-04; "
@@ -560,6 +570,7 @@ class SaturationDials(BaseModel):
         default=DOWNLINK_SHARE_DEFAULT,
         gt=0,
         le=1.0,
+        strict=True,
         description=(
             "The downlink time share d of Iridium's time-division duplex band, a fraction "
             "above 0 and at most 1 (ADR 008). Default 0.67, Certus 700's 2 : 1 down-to-up rate "
@@ -598,7 +609,10 @@ class IridiumDials(BaseModel):
     Every number here is finite: a NaN or an infinity is refused at load, naming the field
     (``allow_inf_nan=False``, as the saturation curve's contract models refuse them), so no
     run starts from one. The nested ``saturation`` and ``arpu`` blocks refuse them the same
-    way.
+    way. No number here or in those blocks is a boolean: each numeric field is strict, so a
+    YAML ``true`` (or ``yes``, ``on``) is refused at load, naming the field, rather than read
+    as 1 (a 1 m^2 panel, d = 1, a price of 1), and so is a quoted number; an integer still
+    loads as its float.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
@@ -606,6 +620,7 @@ class IridiumDials(BaseModel):
     spectrum_mhz: float = Field(
         default=SPECTRUM_MHZ_DEFAULT,
         gt=0,
+        strict=True,
         description=(
             "The L-band WIDTH held in MHz (a width, NOT a frequency; the frequency is "
             "the ~1.6 GHz dial position). INVESTOR_SET to 8.0, the Iridium exclusive "
@@ -617,6 +632,7 @@ class IridiumDials(BaseModel):
     aperture_m2: float = Field(
         default=APERTURE_M2_DEFAULT,
         gt=0,
+        strict=True,
         description=(
             f"The satellite's flat panel area in m^2. Default {APERTURE_M2_DEFAULT:g}, the "
             "validated Flatellite body (COMM-711, the investor's approved default of "
