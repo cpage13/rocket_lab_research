@@ -2290,20 +2290,28 @@ COMPLETE_FLEETS = (342, 992)
 """The complete bare curve's requested fleets: each realizes as itself (18 x 19, 31 x 32)."""
 
 
+NO_STACK = DirectionalDiagnostics(
+    kept_stacked_share=0.0, median_separation_deg=None, mean_full_sum_interference_db=None
+)
+"""A directional row's diagnostics when it keeps no stacked beam."""
+
+
 def complete_bare_curve() -> SaturationCurve:
     """A complete curve on hand-built rows: the default inputs but for the sweep (fleets 342
     and 992, no mounted extension), every class and every band point on the two bare rows, the
-    phone class's rows with a trim at the default floors."""
+    phone class's rows with a trim at the default floors, the directional classes' rows with
+    their diagnostics, one stated limit and one check passed."""
     inputs = SaturationInputs(
         sweep=SweepInputs(fleets=COMPLETE_FLEETS, mounted_terminal_extension=())
     )
     trim = tuple(TrimAtFloor(floor_dbi=floor, trim=0.01) for floor in inputs.trim.floors_dbi)
     phone_rows = tuple(row.model_copy(update={"trim": trim}) for row in BARE_ROWS)
-    return bare_curve(
+    directional_rows = tuple(row.model_copy(update={"directional": NO_STACK}) for row in BARE_ROWS)
+    curve = bare_curve(
         tuple(
             ClassCurve(
                 device_class=device_class,
-                rows=phone_rows if device_class is PHONE else BARE_ROWS,
+                rows=phone_rows if device_class is PHONE else directional_rows,
                 markers=bare_markers(),
             )
             for device_class in DeviceClass
@@ -2311,7 +2319,15 @@ def complete_bare_curve() -> SaturationCurve:
         tuple(
             BandCurve(point=point, rows=BARE_ROWS, markers=bare_markers()) for point in inputs.bands
         ),
-    ).model_copy(update={"parameters": inputs, "input_hash": curve_input_hash(inputs)})
+    )
+    return curve.model_copy(
+        update={
+            "parameters": inputs,
+            "input_hash": curve_input_hash(inputs),
+            "provenance": curve.provenance.model_copy(update={"checks_passed": ("a check",)}),
+            "limits": ("a stated limit",),
+        }
+    )
 
 
 def write_curve_json(path: Path, data: object) -> Path:
@@ -2373,6 +2389,70 @@ def _phone_trim_json() -> list[dict[str, float]]:
             lambda d: d.update(classes=[d["classes"][1], d["classes"][0], d["classes"][2]]),
             "not a saturation curve",
         ),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(requested_fleet="342"),
+            "requested_fleet: Input should be a valid integer",
+        ),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(fleet=342.0),
+            "fleet: Input should be a valid integer",
+        ),
+        (
+            lambda d: (
+                d["parameters"]["bands"][0].update(grid_aggregation=True),
+                d["bands"][0]["point"].update(grid_aggregation=True),
+            ),
+            "grid_aggregation: Input should be a valid integer",
+        ),
+        (
+            lambda d: d["parameters"].update(spectrum_mhz="8.0"),
+            "spectrum_mhz: Input should be a valid number",
+        ),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(useful_beams=float("nan")),
+            "finite number",
+        ),
+        (lambda d: d["parameters"].update(sidelobe_floor_db=float("-inf")), "finite number"),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(requested_fleet=10**309),
+            "a number out of range",
+        ),
+        (
+            lambda d: d["classes"][0]["rows"][0].update(directional=None),
+            "small_terminal_class row at 342 satellites lacks its stacking diagnostics",
+        ),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(directional=NO_STACK.model_dump()),
+            "phone_class row at 342 satellites carries stacking diagnostics",
+        ),
+        (
+            lambda d: d["bands"][0]["rows"][1].update(directional=NO_STACK.model_dump()),
+            "band point taper row at 992 satellites carries stacking diagnostics",
+        ),
+        (lambda d: d.update(limits=[]), "the curve states no limits"),
+        (lambda d: d["provenance"].update(checks_passed=[]), "names no checks passed"),
+        (
+            lambda d: d["provenance"].update(grid_file_name="other.npz"),
+            "the provenance's grid file 'other.npz' is not the parameters'",
+        ),
+        (
+            lambda d: d["provenance"].update(grid_sha256="0" * 64),
+            "the provenance's grid digest 0000",
+        ),
+        (
+            lambda d: d["bands"][5]["markers"].update(saturation_not_reached_by=500),
+            "band point beams_48 saturation_not_reached_by is 500, not its last row's fleet 992",
+        ),
+        (
+            lambda d: d["classes"][0]["markers"].update(
+                saturation_number=5_000, saturation_not_reached_by=None
+            ),
+            "saturation_number 5000 lies outside its rows' span, 342 to 992",
+        ),
+        (
+            lambda d: d["classes"][2]["markers"].update(maximum_use_beams=15.0),
+            "phone_class row at 992 satellites has a ceiling of 20.0 beams, above its maximum use",
+        ),
     ],
     ids=[
         "an altered input hash",
@@ -2387,14 +2467,34 @@ def _phone_trim_json() -> list[dict[str, float]]:
         "a band point not its parameters'",
         "rows missing",
         "a curve the contract refuses",
+        "a fleet written as a string",
+        "a fleet written as a float",
+        "a count written as true",
+        "a number written as a string",
+        "NaN in a row",
+        "minus infinity in a parameter",
+        "a requested fleet out of range",
+        "a directional row without its diagnostics",
+        "a phone row with diagnostics",
+        "a band row with diagnostics",
+        "no stated limits",
+        "no checks passed",
+        "a grid file not the parameters'",
+        "a grid digest not the parameters'",
+        "not reached by a fleet that is not the last row",
+        "a saturation number outside the rows",
+        "maximum use under a row's ceiling",
     ],
 )
 def test_the_loader_refuses_a_curve_the_engine_must_not_read(
     tmp_path: Path, alter: Callable[[dict[str, object]], object], message: str
 ) -> None:
     """Objective: ``load_saturation_curve`` refuses a promoted curve whose parameters or hash
-    were altered, one of another schema, one the contract refuses and an incomplete one, each
-    with a SaturationCurveError (a ValueError, so both commands catch it) naming the file.
+    were altered, one of another schema, one the contract refuses (a value of another JSON type
+    than the contract writes, a NaN or an infinity, a number out of range), an incomplete one
+    (diagnostics or a trim misplaced, no limits or checks, a grid not the parameters') and one
+    whose markers its rows cannot give, each with a SaturationCurveError (a ValueError, so both
+    commands catch it) naming the file.
 
     Sample: the complete bare curve's JSON with one change each.
 
@@ -2407,6 +2507,40 @@ def test_the_loader_refuses_a_curve_the_engine_must_not_read(
         load_saturation_curve(path)
     assert str(path) in str(refused.value)
     assert isinstance(refused.value, ValueError)
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "message"),
+    [
+        (
+            '"schema_version": "saturation-v1",',
+            '"schema_version": "saturation-v2",\n  "schema_version": "saturation-v1",',
+            "the key 'schema_version' appears twice in one JSON object",
+        ),
+        ('"capacity_gbps": 1.0,', '"capacity_gbps": 1e999,', "finite number"),
+    ],
+    ids=["a key written twice", "a number too large for a float"],
+)
+def test_the_loader_refuses_json_text_the_promotion_never_writes(
+    tmp_path: Path, old: str, new: str, message: str
+) -> None:
+    """Objective: the loader refuses JSON text that parses, but not as the promotion writes it:
+    a key written twice in one object (Python's parser keeps the last, another reader may keep
+    the first) and a number beyond a float (Python's parser reads it as infinity).
+
+    Sample: the complete bare curve as the promotion renders it, with ``schema_version``
+    written twice (another schema first), or its first capacity written ``1e999``.
+
+    Expected outcome: SaturationCurveError naming the file and the repeated key, or the value
+    not a finite number.
+    """
+    text = render_artifact_json(complete_bare_curve()) + "\n"
+    assert old in text
+    path = tmp_path / "altered.json"
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+    with pytest.raises(SaturationCurveError, match=message) as refused:
+        load_saturation_curve(path)
+    assert str(path) in str(refused.value)
 
 
 @pytest.mark.parametrize(
