@@ -10,7 +10,12 @@ documented variants (the rich tier, the coordinated spectrum, the device ladder)
 the edge cases the artifact must publish honestly (a build completing in the final
 year, a satellite life longer than the horizon, a near-zero share, an incomplete
 build, a degenerate density), the saturation companion end to end, and the drift
-guard that regenerates the committed promoted artifact.
+guard that regenerates the committed promoted artifact. Every Iridium run goes
+through the Iridium entry, ``run_iridium_model(config, curve)``: on the committed
+saturation curve, or, for dials it was not computed for and for the equality
+tripwire, on a synthetic curve stamped for the dials (``conftest.py``). The entry's
+identity check is the only thing the curve does here: today's density path still
+sizes the fleet, so every frozen value is unchanged.
 
 Two structural facts anchor the suite. First, the High-Bandwidth Cellular Pure Play
 model (formerly Model A) is untouched: the default config (no ``iridium`` block)
@@ -35,6 +40,8 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -62,6 +69,7 @@ from communications.constants import (
 from communications.engine import (
     MUSD_TO_USD,
     CommsTrajectory,
+    NotACellularConfigError,
     derive_arpu_buckets,
     derive_iridium_per_user_rates,
     derive_iridium_satellites_per_launch,
@@ -71,6 +79,7 @@ from communications.engine import (
     resolve_device_spectral_efficiency,
     run_comms_model,
 )
+from communications.iridium import NotAnIridiumConfigError, run_iridium_model
 from communications.json_output import (
     MODEL_NAME,
     IridiumModelArtifact,
@@ -78,6 +87,7 @@ from communications.json_output import (
     export_iridium_json,
     main,
 )
+from communications.saturation_curve import SaturationCurve, SaturationCurveMismatchError
 
 # ---------------------------------------------------------------------------
 # The frozen Iridium-model phone-class baseline (spectrum 8.0, aperture 25.0,
@@ -255,9 +265,12 @@ SATURATION_POOL = 367_058_824  # 62,400,000 / 0.17, rounded half up.
 SATURATION_REVENUE_TOTAL_MUSD = 48_534.132_504
 SATURATION_MARGIN_PCT = 98.279_561_296_513_99
 
-# The scenario YAMLs and the committed promoted artifact come from the
-# repository-anchored fixtures in conftest.py (iridium_yaml,
-# iridium_saturation_yaml, promoted_iridium_artifact).
+# The scenario YAMLs, the committed promoted artifact and the saturation curves come
+# from the repository-anchored fixtures in conftest.py (iridium_yaml,
+# iridium_saturation_yaml, promoted_iridium_artifact, committed_saturation_curve,
+# synthetic_saturation_curve).
+SyntheticCurve = Callable[[IridiumDials], SaturationCurve]
+"""The ``synthetic_saturation_curve`` fixture: Iridium dials in, a curve stamped for them out."""
 
 
 def _iridium_scenario_with(scenario: Path, block: str, **fields: object) -> CommsConfig:
@@ -277,18 +290,20 @@ def _iridium_scenario_with(scenario: Path, block: str, **fields: object) -> Comm
     return CommsConfig.model_validate(data)
 
 
-def _artifact_for(config: CommsConfig) -> IridiumModelArtifact:
-    """Run a config and assemble its promoted artifact (no file IO).
+def _artifact_for(config: CommsConfig, curve: SaturationCurve) -> IridiumModelArtifact:
+    """Run a config through the Iridium entry on a curve and assemble its promoted artifact
+    (no file IO).
 
     Args:
         config: An Iridium-selecting config.
+        curve: The saturation curve computed for its inputs.
 
     Returns:
         The assembled artifact.
     """
     return build_iridium_artifact(
         config=config,
-        trajectory=run_comms_model(config),
+        trajectory=run_iridium_model(config, curve),
         source_scenario_path="test",
         version_stamp="test",
     )
@@ -421,14 +436,83 @@ def test_hb_cellular_default_has_no_iridium_block() -> None:
     assert traj.iridium is None
 
 
+def test_the_cellular_entry_refuses_an_iridium_config(iridium_yaml: Path) -> None:
+    """Objective: each family has its own entry: the cellular entry refuses a config of the
+    Iridium family with a typed error naming the Iridium entry, so no Iridium config runs
+    without its saturation curve.
+
+    Sample: the default Iridium dials; the shipped Iridium scenario.
+
+    Expected outcome: each raises NotACellularConfigError (a ValueError) whose message names
+    ``communications.iridium.run_iridium_model(config, curve)``.
+    """
+    for config in (CommsConfig(iridium=IridiumDials()), load_comms_config(iridium_yaml)):
+        with pytest.raises(NotACellularConfigError) as refused:
+            run_comms_model(config)
+        assert "communications.iridium.run_iridium_model(config, curve)" in str(refused.value)
+        assert isinstance(refused.value, ValueError)
+
+
+def test_the_iridium_entry_refuses_a_cellular_config_with_the_familys_message(
+    committed_saturation_curve: SaturationCurve,
+) -> None:
+    """Objective: the Iridium entry narrows its config before anything else, so a config of
+    the cellular family is refused with the family's typed error and today's message, before
+    any check of the curve.
+
+    Sample: the default config (no ``iridium:`` block) with the committed curve.
+
+    Expected outcome: NotAnIridiumConfigError (a ValueError) with the message word for word,
+    not a mismatch of the curve.
+    """
+    with pytest.raises(NotAnIridiumConfigError) as refused:
+        run_iridium_model(CommsConfig(), committed_saturation_curve)
+    assert str(refused.value) == (
+        "the scenario does not select the Iridium model: it needs a top-level "
+        "'iridium:' block (see scenarios/iridium.yaml)"
+    )
+    assert isinstance(refused.value, ValueError)
+
+
+def test_the_iridium_entry_runs_only_on_a_curve_computed_for_its_inputs(
+    committed_saturation_curve: SaturationCurve, synthetic_saturation_curve: SyntheticCurve
+) -> None:
+    """Objective: the identity check runs inside the Iridium entry on every run, before the
+    run: a config reads only a curve computed for its own inputs.
+
+    Sample: an Iridium config at 10.5 MHz with the committed curve (computed for the held
+    spectrum the shipped scenario sets), then with a synthetic curve stamped for 10.5 MHz; the
+    default Iridium dials with that 10.5 MHz curve.
+
+    Expected outcome: the 10.5 MHz config with the committed curve raises
+    SaturationCurveMismatchError naming ``spectrum_mhz``, 10.5 for this run and the curve's own
+    value (read from its parameters); with its own curve it runs, at the frozen coordinated-span
+    density of 40,950 people per satellite; the default dials with the 10.5 MHz curve are
+    refused in turn, naming ``spectrum_mhz`` again.
+    """
+    wider = IridiumDials(spectrum_mhz=COORDINATED_SPECTRUM_MHZ)
+    committed_spectrum = committed_saturation_curve.parameters.spectrum_mhz
+    with pytest.raises(SaturationCurveMismatchError) as refused:
+        run_iridium_model(CommsConfig(iridium=wider), committed_saturation_curve)
+    assert (
+        f"spectrum_mhz is {COORDINATED_SPECTRUM_MHZ} for this run but {committed_spectrum} in "
+        "the curve's parameters"
+    ) in str(refused.value)
+    wider_curve = synthetic_saturation_curve(wider)
+    traj = run_iridium_model(CommsConfig(iridium=wider), wider_curve)
+    assert traj.subscribers_per_satellite == EXPECTED_SUBS_PER_SAT_COORDINATED
+    with pytest.raises(SaturationCurveMismatchError, match=r"spectrum_mhz is 8\.0 for this run"):
+        run_iridium_model(CommsConfig(iridium=IridiumDials()), wider_curve)
+
+
 # ---------------------------------------------------------------------------
 # The Iridium model end-to-end (behind the config.iridium branch).
 # ---------------------------------------------------------------------------
 
 
-def test_iridium_baseline_physics_frozen() -> None:
+def test_iridium_baseline_physics_frozen(committed_saturation_curve: SaturationCurve) -> None:
     """The phone-class baseline freezes every derived physics number (aperture invariant)."""
-    traj = run_comms_model(CommsConfig(iridium=IridiumDials()))
+    traj = run_iridium_model(CommsConfig(iridium=IridiumDials()), committed_saturation_curve)
     assert traj.iridium is not None
     iridium = traj.iridium
     # The derived density and the fleet it sizes.
@@ -450,13 +534,17 @@ def test_iridium_baseline_physics_frozen() -> None:
     assert iridium.operations_cost_musd == pytest.approx(EXPECTED_OPERATIONS_COST_MUSD)
 
 
-def test_iridium_baseline_shares_hb_cellular_trajectory() -> None:
+def test_iridium_baseline_shares_hb_cellular_trajectory(
+    synthetic_saturation_curve: SyntheticCurve,
+) -> None:
     """THE EQUALITY TRIPWIRE: the Iridium baseline equals the cellular default, field by field.
 
     Objective: prove the shared machinery. On config defaults both families bind at
     the 340 coverage floor with the 12-per-launch identity at 25.0 m^2, so a shared
     engine drift moves both together while anything that moves one family alone
-    breaks here. Expected: every per-year rollup is equal (the whole ``years``
+    breaks here. The cellular default runs through the cellular entry, the Iridium
+    baseline through the Iridium entry on a synthetic curve stamped for its dials.
+    Expected: every per-year rollup is equal (the whole ``years``
     tuple, cohort lines included), every other trajectory field is exactly equal
     except the two intended differences (the per-satellite density, and the Iridium
     physics block present on one side only), and the final-year cash cost per
@@ -464,7 +552,10 @@ def test_iridium_baseline_shares_hb_cellular_trajectory() -> None:
     dataclass, so a new trajectory field joins the comparison automatically.
     """
     hb_cellular = run_comms_model(CommsConfig())
-    iridium_run = run_comms_model(CommsConfig(iridium=IridiumDials()))
+    iridium_dials = IridiumDials()
+    iridium_run = run_iridium_model(
+        CommsConfig(iridium=iridium_dials), synthetic_saturation_curve(iridium_dials)
+    )
     assert iridium_run.years == hb_cellular.years
     intended_differences = {"subscribers_per_satellite", "iridium"}
     compared = [
@@ -484,10 +575,11 @@ def test_iridium_baseline_shares_hb_cellular_trajectory() -> None:
     assert hb_cellular.iridium is None
 
 
-def test_iridium_rich_tier_flips_to_capacity() -> None:
+def test_iridium_rich_tier_flips_to_capacity(committed_saturation_curve: SaturationCurve) -> None:
     """The rich 2.5 Mbps tier shrinks the density and flips to the capacity regime."""
-    traj = run_comms_model(
-        CommsConfig(iridium=IridiumDials(active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS))
+    traj = run_iridium_model(
+        CommsConfig(iridium=IridiumDials(active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS)),
+        committed_saturation_curve,
     )
     assert traj.subscribers_per_satellite == EXPECTED_SUBS_PER_SAT_RICH
     assert traj.fleet_target == EXPECTED_FLEET_TARGET_RICH
@@ -495,7 +587,7 @@ def test_iridium_rich_tier_flips_to_capacity() -> None:
 
 
 def test_rich_tier_reports_below_target_truthfully_then_completes_all_in(
-    iridium_yaml: Path,
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
     """The rich tier's 802-satellite fleet: 576 by FY2036 at 0.18, complete in 2033 all-in.
 
@@ -505,8 +597,9 @@ def test_rich_tier_reports_below_target_truthfully_then_completes_all_in(
     artifact publishes build_completes_in_horizon false); on the promoted scenario's
     all-in share it completes in 2033 with 804 satellites (67 whole launches).
     """
-    default_share = run_comms_model(
-        CommsConfig(iridium=IridiumDials(active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS))
+    default_share = run_iridium_model(
+        CommsConfig(iridium=IridiumDials(active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS)),
+        committed_saturation_curve,
     )
     assert default_share.fleet_target == EXPECTED_FLEET_TARGET_RICH
     assert default_share.full_coverage_reached_year is None
@@ -514,13 +607,14 @@ def test_rich_tier_reports_below_target_truthfully_then_completes_all_in(
     all_in_config = _iridium_scenario_with(
         iridium_yaml, "iridium", active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS
     )
-    all_in = run_comms_model(all_in_config)
+    all_in = run_iridium_model(all_in_config, committed_saturation_curve)
     assert all_in.full_coverage_reached_year == RICH_TIER_COMPLETION_YEAR_ALL_IN
     assert all_in.years[-1].living_fleet == RICH_TIER_BUILT_FLEET
     incomplete = _iridium_scenario_with(
         iridium_yaml, "iridium", active_user_rate_mbps=RICH_ACTIVE_RATE_MBPS
     ).model_copy(update={"comms_cadence": CommsConfig().comms_cadence})
-    assert _artifact_for(incomplete).trajectory_summary.build_completes_in_horizon is False
+    summary = _artifact_for(incomplete, committed_saturation_curve).trajectory_summary
+    assert summary.build_completes_in_horizon is False
 
 
 @pytest.mark.parametrize(
@@ -538,34 +632,45 @@ def test_rich_tier_reports_below_target_truthfully_then_completes_all_in(
     ],
     ids=["coordinated_10_5_mhz", "small_terminal", "terminal"],
 )
-def test_documented_density_variants(dials: IridiumDials, expected_density: int) -> None:
+def test_documented_density_variants(
+    dials: IridiumDials, expected_density: int, synthetic_saturation_curve: SyntheticCurve
+) -> None:
     """The documented variants' densities: 40,950 (10.5 MHz), 96,000 and 120,000 (ladder).
 
-    Objective: freeze the variant densities the conclusion quotes. Expected: each
+    Objective: freeze the variant densities the conclusion quotes. Each runs through the
+    Iridium entry on a synthetic curve stamped for its dials (the committed curve was
+    computed for the held 8 MHz). Expected: each
     variant derives its density exactly and, at the 10M target, still binds at the
     340 coverage floor (more capacity per satellite buys nothing at this base).
     """
-    traj = run_comms_model(CommsConfig(iridium=dials))
+    traj = run_iridium_model(CommsConfig(iridium=dials), synthetic_saturation_curve(dials))
     assert traj.subscribers_per_satellite == expected_density
     assert traj.fleet_target == EXPECTED_FLEET_TARGET_BASELINE
     assert traj.binding_regime is BindingRegime.COVERAGE
 
 
-def test_degenerate_density_fails_with_a_clear_error(tmp_path: Path) -> None:
+def test_degenerate_density_fails_with_a_clear_error(
+    tmp_path: Path, committed_saturation_curve: SaturationCurve, caplog: pytest.LogCaptureFixture
+) -> None:
     """Dials that derive less than one subscriber per satellite fail clearly, not by division.
 
     Objective: the derived density must be at least one person. A 0.01 m^2 aperture
     at full peak concurrency derives 0.312 Mbps of capacity over a 1.0 Mbps load,
     which rounds to zero and used to crash the fleet sizing with ZeroDivisionError.
-    Expected: the engine raises a ValueError naming the problem, and the promotion
-    command exits with the error code without writing an artifact (no traceback).
+    Neither the aperture nor the concurrency is an input of the saturation curve, so
+    the Iridium entry's identity check passes on the committed curve and the density
+    path's error is the one raised.
+    Expected: the Iridium entry raises a ValueError naming the problem, and the promotion
+    command exits with the error code without writing an artifact (no traceback), its one
+    ERROR record naming the density error (not one of the command's earlier refusals, which
+    end the same way).
     """
     dials = IridiumDials(
         aperture_m2=DEGENERATE_APERTURE_M2,
         concurrency_peak=FULL_PEAK_CONCURRENCY,
     )
     with pytest.raises(ValueError, match="fewer than one subscriber per satellite"):
-        run_comms_model(CommsConfig(iridium=dials))
+        run_iridium_model(CommsConfig(iridium=dials), committed_saturation_curve)
     scenario = tmp_path / "degenerate.yaml"
     scenario.write_text(
         f"iridium:\n  aperture_m2: {DEGENERATE_APERTURE_M2}\n"
@@ -575,12 +680,16 @@ def test_degenerate_density_fails_with_a_clear_error(tmp_path: Path) -> None:
     out_path = tmp_path / "degenerate.json"
     assert main([str(scenario), str(out_path)]) == EXIT_ERROR
     assert not out_path.exists()
+    errors = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert "fewer than one subscriber per satellite" in errors[0]
 
 
-def test_iridium_terminal_class_capacity() -> None:
+def test_iridium_terminal_class_capacity(committed_saturation_curve: SaturationCurve) -> None:
     """The large-terminal class resolves SE 2.5 and reproduces the 3.0 Gbps per-satellite anchor."""
-    traj = run_comms_model(
-        CommsConfig(iridium=IridiumDials(device_class=DeviceClass.MOUNTED_TERMINAL_CLASS))
+    traj = run_iridium_model(
+        CommsConfig(iridium=IridiumDials(device_class=DeviceClass.MOUNTED_TERMINAL_CLASS)),
+        committed_saturation_curve,
     )
     assert traj.iridium is not None
     assert traj.iridium.spectral_efficiency_bps_per_hz == pytest.approx(EXPECTED_SE_TERMINAL)
@@ -589,9 +698,12 @@ def test_iridium_terminal_class_capacity() -> None:
     )
 
 
-def test_iridium_aperture_60_what_if() -> None:
+def test_iridium_aperture_60_what_if(committed_saturation_curve: SaturationCurve) -> None:
     """The 60 m^2 what-if freezes the fewer-bigger physics and carries the fold caveat."""
-    traj = run_comms_model(CommsConfig(iridium=IridiumDials(aperture_m2=WHAT_IF_APERTURE_M2)))
+    traj = run_iridium_model(
+        CommsConfig(iridium=IridiumDials(aperture_m2=WHAT_IF_APERTURE_M2)),
+        committed_saturation_curve,
+    )
     assert traj.iridium is not None
     iridium = traj.iridium
     assert iridium.per_satellite_capacity_gbps == pytest.approx(EXPECTED_PER_SAT_CAPACITY_60M2_GBPS)
@@ -616,7 +728,9 @@ def test_iridium_aperture_60_what_if() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_iridium_yaml_scenario_loads_and_runs(iridium_yaml: Path) -> None:
+def test_iridium_yaml_scenario_loads_and_runs(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
     """The Iridium scenario YAML loads (iridium, factory metadata) and runs the baseline."""
     config = load_comms_config(iridium_yaml)
     assert config.iridium is not None
@@ -624,7 +738,7 @@ def test_iridium_yaml_scenario_loads_and_runs(iridium_yaml: Path) -> None:
     # No metadata block in the file: the default factory supplies base year 2026, horizon 10.
     assert config.metadata.base_year == BASE_YEAR_DEFAULT
     assert config.metadata.horizon_years == HORIZON_YEARS_DEFAULT
-    traj = run_comms_model(config)
+    traj = run_iridium_model(config, committed_saturation_curve)
     assert traj.iridium is not None
     assert traj.subscribers_per_satellite == EXPECTED_SUBS_PER_SAT_PHONE_BASELINE
     assert traj.fleet_target == EXPECTED_FLEET_TARGET_BASELINE
@@ -880,7 +994,9 @@ def test_arpu_validator_rejects_bad_sheet() -> None:
         )
 
 
-def test_arpu_none_path_omits_block_and_keeps_iot_passthrough() -> None:
+def test_arpu_none_path_omits_block_and_keeps_iot_passthrough(
+    committed_saturation_curve: SaturationCurve,
+) -> None:
     """No arpu block: the result and artifact omit the case, the IoT passthrough stands.
 
     Objective: the None path is inert. Success: IridiumResult.arpu is None, the
@@ -888,7 +1004,7 @@ def test_arpu_none_path_omits_block_and_keeps_iot_passthrough() -> None:
     iridium_physics.iot_devices reports the fixed 10M passthrough, not a bucket count.
     """
     config = CommsConfig(iridium=IridiumDials())
-    trajectory = run_comms_model(config)
+    trajectory = run_iridium_model(config, committed_saturation_curve)
     assert trajectory.iridium is not None
     assert trajectory.iridium.arpu is None
     artifact = build_iridium_artifact(
@@ -903,7 +1019,7 @@ def test_arpu_none_path_omits_block_and_keeps_iot_passthrough() -> None:
     assert payload.get("revenue_arpu_buckets") is None
 
 
-def test_arpu_supersession_one_iot_truth() -> None:
+def test_arpu_supersession_one_iot_truth(committed_saturation_curve: SaturationCurve) -> None:
     """With the ARPU case on, the artifact carries exactly one IoT count (the bucket).
 
     Objective: the IoT supersession at the output layer. Success: the artifact's
@@ -911,7 +1027,7 @@ def test_arpu_supersession_one_iot_truth() -> None:
     51,670,320), so no artifact ever carries two IoT counts.
     """
     config = CommsConfig(iridium=IridiumDials(arpu=IridiumArpuDials()))
-    trajectory = run_comms_model(config)
+    trajectory = run_iridium_model(config, committed_saturation_curve)
     artifact = build_iridium_artifact(
         config=config,
         trajectory=trajectory,
@@ -929,7 +1045,9 @@ def test_arpu_supersession_one_iot_truth() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_completion_year_is_a_build_year_on_the_promoted_scenario(iridium_yaml: Path) -> None:
+def test_completion_year_is_a_build_year_on_the_promoted_scenario(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
     """The 2031 completion tranche is build, never replacement; HOLD years replace cohorts.
 
     Objective: the replacement rule on the promoted scenario. FY2031 deploys the final
@@ -938,7 +1056,7 @@ def test_completion_year_is_a_build_year_on_the_promoted_scenario(iridium_yaml: 
     HOLD years FY2032..FY2036 replace the cohorts launched five years earlier, with
     replacement lines 50, 75, 125, 225, and 250 M, each equal to the year's cash.
     """
-    traj = run_comms_model(load_comms_config(iridium_yaml))
+    traj = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
     by_year = {year.year: year for year in traj.years}
     completion = by_year[FULL_COVERAGE_YEAR_ALL_IN]
     assert completion.is_hold_phase is False
@@ -957,7 +1075,9 @@ def test_completion_year_is_a_build_year_on_the_promoted_scenario(iridium_yaml: 
         assert year.replacement_cost_this_year_musd == year.total_cost_this_year_musd
 
 
-def test_horizon_ending_on_completion_publishes_no_cash_replacement(iridium_yaml: Path) -> None:
+def test_horizon_ending_on_completion_publishes_no_cash_replacement(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
     """A horizon that ends on the completion year publishes no final-year cash replacement.
 
     Objective: the final-year cash pair never carries a build tranche. Before the
@@ -969,7 +1089,7 @@ def test_horizon_ending_on_completion_publishes_no_cash_replacement(iridium_yaml
     config = _iridium_scenario_with(
         iridium_yaml, "metadata", base_year=BASE_YEAR_DEFAULT, horizon_years=COMPLETION_YEAR_HORIZON
     )
-    summary = _artifact_for(config).trajectory_summary
+    summary = _artifact_for(config, committed_saturation_curve).trajectory_summary
     assert summary.full_coverage_reached_year == FULL_COVERAGE_YEAR_ALL_IN
     assert summary.final_year_replacement_cost_musd is None
     assert summary.final_year_cash_cost_per_subscriber_usd is None
@@ -981,7 +1101,9 @@ def test_horizon_ending_on_completion_publishes_no_cash_replacement(iridium_yaml
     )
 
 
-def test_long_satellite_life_publishes_no_cash_replacement(iridium_yaml: Path) -> None:
+def test_long_satellite_life_publishes_no_cash_replacement(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
     """A satellite life longer than the horizon publishes no 0.0 cash cost as a real figure.
 
     Objective: with a 10-year life no cohort retires by FY2036, so the final year
@@ -992,14 +1114,14 @@ def test_long_satellite_life_publishes_no_cash_replacement(iridium_yaml: Path) -
     config = _iridium_scenario_with(
         iridium_yaml, "satellite", satellite_lifetime_years=LONG_LIFE_YEARS
     )
-    summary = _artifact_for(config).trajectory_summary
+    summary = _artifact_for(config, committed_saturation_curve).trajectory_summary
     assert summary.final_year_replacement_cost_musd is None
     assert summary.final_year_cash_cost_per_subscriber_usd is None
     assert summary.steady_state_annual_cost_musd == pytest.approx(LONG_LIFE_ANNUAL_COST_MUSD)
 
 
 def test_near_zero_share_does_not_publish_a_full_margin_on_an_empty_fleet(
-    iridium_yaml: Path,
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
     """A share that never launches publishes the built fleet's margin, flagged incomplete.
 
@@ -1013,7 +1135,7 @@ def test_near_zero_share_does_not_publish_a_full_margin_on_an_empty_fleet(
     figures are None (nobody served, nothing replaced).
     """
     config = _iridium_scenario_with(iridium_yaml, "comms_cadence", share_of_fleet=NEAR_ZERO_SHARE)
-    artifact = _artifact_for(config)
+    artifact = _artifact_for(config, committed_saturation_curve)
     summary = artifact.trajectory_summary
     assert summary.build_completes_in_horizon is False
     assert summary.living_fleet_final_year == 0
@@ -1029,7 +1151,9 @@ def test_near_zero_share_does_not_publish_a_full_margin_on_an_empty_fleet(
     )
 
 
-def test_incomplete_build_margin_equals_the_completed_build_margin(iridium_yaml: Path) -> None:
+def test_incomplete_build_margin_equals_the_completed_build_margin(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
     """The margin describes the built fleet whether or not the horizon reaches it.
 
     Objective: consistency of the built-fleet convention. The rich tier on the flat
@@ -1045,8 +1169,8 @@ def test_incomplete_build_margin_equals_the_completed_build_margin(iridium_yaml:
     incomplete_config = complete_config.model_copy(
         update={"comms_cadence": CommsConfig().comms_cadence}
     )
-    complete = _artifact_for(complete_config)
-    incomplete = _artifact_for(incomplete_config)
+    complete = _artifact_for(complete_config, committed_saturation_curve)
+    incomplete = _artifact_for(incomplete_config, committed_saturation_curve)
     assert complete.trajectory_summary.build_completes_in_horizon is True
     assert incomplete.trajectory_summary.build_completes_in_horizon is False
     assert incomplete.trajectory_summary.living_fleet_final_year == (

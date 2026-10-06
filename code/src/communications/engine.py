@@ -1,10 +1,21 @@
 """The communications cost engine: the per-year cohort treadmill both families share.
 
-``run_comms_model(config)`` drives the slim cost-to-serve model across the
+``run_comms_trajectory(config)`` drives the slim cost-to-serve model across the
 horizon and returns a :class:`CommsTrajectory` of plain-numeric per-year rollups.
 The same treadmill serves both model families: the High-Bandwidth Cellular Pure
 Play model (a fixed subscriber-density dial) and the Iridium model (the density
-derived from L-band physics when ``config.iridium`` is set).
+derived from L-band physics when ``config.iridium`` is set). Each family has its own
+entry, and both call this one path (the interim shared path, until the shared
+fleet-and-cost loop lands): the cellular entry is ``run_comms_model(config)`` here,
+which refuses a config with an ``iridium`` block (:class:`NotACellularConfigError`);
+the Iridium entry is ``communications.iridium.run_iridium_model(config, curve)``,
+which checks its saturation curve against the config before the run. The interim
+path itself is not an entry (it is not in ``__all__``): it checks neither the family
+nor a curve, so what the entries guarantee holds through the entries. This module
+imports neither the Iridium family module nor the curve's contract, while the interim
+path still holds the Iridium model's branches (its density derivation and physics
+block, read from the ``iridium`` block) until the shared fleet-and-cost loop, which
+holds no family branch, replaces it.
 It mirrors the data-center model's fleet engine (the per-year loop in
 ``data_center/engine.py`` plus the living-cohort rollup in ``data_center/fleet.py``)
 with three deliberate differences, all driven by the comms design:
@@ -332,7 +343,7 @@ def compute_fleet_target(
 # subscribers_per_satellite dial of the High-Bandwidth Cellular Pure Play model
 # (formerly Model A), then feeds the SAME compute_fleet_target above. These are
 # pure derivations (primitives or the dials in, primitives out, no side effects);
-# run_comms_model wires them in behind the config.iridium branch. THE THREE LANES
+# run_comms_trajectory wires them in behind the config.iridium branch. THE THREE LANES
 # stay separate: the Iridium model is the MSS lane (purpose-built or in-chipset
 # devices on owned L-band), NOT cellular direct-to-cell to an unmodified phone
 # (the High-Bandwidth Cellular Pure Play model) and NOT broadband.
@@ -1180,7 +1191,7 @@ def build_iridium_result(
     aggregate as ``per_satellite_capacity_gbps x fleet_target`` (0.7 step 6), and
     echoes the derived density and the aperture-coupled effective
     satellites-per-launch (both passed in, already computed once in
-    :func:`run_comms_model`, so the density that sized the fleet and the density
+    :func:`run_comms_trajectory`, so the density that sized the fleet and the density
     reported here cannot drift). The operations cost and the ecosystem assumption are
     the stated Iridium-model constants (:data:`IRIDIUM_OPERATIONS_COST_MUSD`,
     :data:`ECOSYSTEM_ASSUMPTION_NOTE`). When the dials carry an ``arpu`` block, the
@@ -1766,14 +1777,31 @@ def _built_fleet_annual_cost_musd(
 
 
 # ---------------------------------------------------------------------------
-# The engine entry point.
+# The shared path and the cellular entry.
 # ---------------------------------------------------------------------------
 
+_NOT_A_CELLULAR_CONFIG: Final[str] = (
+    "the config selects the Iridium model (it has an 'iridium:' block), which the cellular "
+    "entry does not run: run it through the Iridium entry, "
+    "communications.iridium.run_iridium_model(config, curve), on its saturation curve"
+)
+"""The cellular entry's refusal of an Iridium config, naming the Iridium entry."""
 
-def run_comms_model(config: CommsConfig) -> CommsTrajectory:
+
+class NotACellularConfigError(ValueError):
+    """A config of the Iridium family (one with an ``iridium:`` block) handed to the cellular
+    entry, :func:`run_comms_model`."""
+
+
+def run_comms_trajectory(config: CommsConfig) -> CommsTrajectory:
     """Run the build-and-hold cost trajectory for one communications scenario.
 
-    Serves both families: the High-Bandwidth Cellular Pure Play model (no ``iridium``
+    The interim shared path both entries call (the cellular entry :func:`run_comms_model`
+    and the Iridium entry ``communications.iridium.run_iridium_model``), so no year loop is
+    copied into the Iridium family, until the shared fleet-and-cost loop replaces it. It is
+    not an entry and not in ``__all__``: it checks neither the family nor a saturation
+    curve and runs whatever config it is given, so a run goes through an entry. Serves
+    both families: the High-Bandwidth Cellular Pure Play model (no ``iridium``
     block) and the Iridium model (the density derived from the ``iridium`` block).
     Iterates the model years 0..``horizon_years`` inclusive (FY2026..FY2036 at
     the defaults), deploying satellites toward the CAPACITY-sized FLEET TARGET
@@ -1970,6 +1998,31 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
     )
 
 
+def run_comms_model(config: CommsConfig) -> CommsTrajectory:
+    """The cellular entry: run a High-Bandwidth Cellular Pure Play config.
+
+    A config with an ``iridium:`` block belongs to the Iridium family, whose entry is
+    ``communications.iridium.run_iridium_model(config, curve)`` (it checks its saturation
+    curve against the config before it runs the same path); this entry refuses it, so
+    through the two entries no Iridium config runs without its curve. Any other config runs
+    the interim shared path, :func:`run_comms_trajectory`.
+
+    Args:
+        config: The comms config (the frozen Pydantic tree). The all-defaults config
+            reproduces the High-Bandwidth Cellular Pure Play central case.
+
+    Returns:
+        The :class:`CommsTrajectory` of :func:`run_comms_trajectory`.
+
+    Raises:
+        NotACellularConfigError: If the config has an ``iridium:`` block, naming the Iridium
+            entry.
+    """
+    if config.iridium is not None:
+        raise NotACellularConfigError(_NOT_A_CELLULAR_CONFIG)
+    return run_comms_trajectory(config)
+
+
 __all__ = [
     "CommsCohortYear",
     "CommsTrajectory",
@@ -1977,6 +2030,7 @@ __all__ = [
     "IridiumArpuBucket",
     "IridiumArpuResult",
     "IridiumResult",
+    "NotACellularConfigError",
     "arpu_stated_assumptions",
     "build_iridium_result",
     "compute_fleet_target",

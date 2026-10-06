@@ -30,7 +30,12 @@ specification, each naming what it exercises and what counts as success:
   re-derived exactly; the coarse promotion, byte-identical but for its measurement; the curve
   loader's refusals and the saturation command's;
 * numpy confinement (a subprocess), the people-per-beam arithmetic, the class constants,
-  the checks' refusals, the grid loader's refusals and the contract's validators.
+  the checks' refusals, the grid loader's refusals and the contract's validators;
+* the engine's side of the curve: the identity check, which names the first field of a run's
+  inputs that differs from the curve's parameters, and the readings' edge rules (a row's own
+  values at a row, log-log between rows, linear through the origin below the first row, no
+  beams and no ocean factor at a fleet of 0, refused past a class's last row), on the
+  committed curve and on hand-built ones.
 
 Every synthetic world also passes the module's own checks (the bounds at every snapshot,
 capacity per satellite never rising), so each is shaped for it: its capacity per satellite
@@ -58,6 +63,7 @@ import tracemalloc
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures.process import BrokenProcessPool
 from enum import StrEnum
+from functools import partial
 from itertools import combinations, pairwise
 from pathlib import Path
 from typing import Protocol, assert_never
@@ -82,8 +88,11 @@ from communications.config import CommsConfig, IridiumDials, load_comms_config
 from communications.constants import (
     CLASS_SE_CENTRAL,
     CLASS_USAGE,
+    DOWNLINK_SHARE_DEFAULT,
+    GBPS_TO_MBPS,
     POPULATION_GRID_PATH,
     POPULATION_GRID_SHA256,
+    SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
     DeviceClass,
 )
 from communications.iridium import NotAnIridiumConfigError, iridium_dials_of
@@ -102,21 +111,29 @@ from communications.saturation_curve import (
     ClassCurve,
     ClassInputs,
     ClassMarkers,
+    CurveBeyondLastRowError,
     CurveProvenance,
     CurveRow,
     DirectionalDiagnostics,
+    FleetReading,
     RunMeasurement,
     SaturationCurve,
     SaturationCurveError,
+    SaturationCurveMismatchError,
     SaturationInputs,
     ShellInputs,
     SweepInputs,
     TrimAtFloor,
     TrimInputs,
+    capacity_gbps_at,
     check_curve_complete,
+    check_curve_matches,
     curve_input_hash,
     load_saturation_curve,
+    people_at,
+    read_fleet,
     saturation_inputs_for,
+    useful_beams_at,
     walker_shape,
 )
 
@@ -1629,10 +1646,17 @@ NUMPY_FREE_MODULES = (
 """The communications modules that must load without numpy (ADR 010)."""
 
 
-def _numpy_loaded_after_importing(modules: tuple[str, ...], code_dir: Path) -> bool:
-    """Whether a fresh interpreter has numpy loaded after importing the modules."""
-    source = "import sys\n" + "".join(f"import {name}\n" for name in modules)
-    source += "sys.exit(0 if 'numpy' in sys.modules else 3)\n"
+def _loaded_after_each_import(
+    steps: Sequence[tuple[str, ...]], probed: tuple[str, ...], code_dir: Path
+) -> list[list[str]]:
+    """Import each step's modules in turn in one fresh interpreter and return, after each step,
+    which of the probed modules are in its ``sys.modules`` (in the probed order): transitive
+    imports included, which a grep would miss."""
+    source = "import json\nimport sys\nloaded = []\n"
+    for step in steps:
+        source += "".join(f"import {name}\n" for name in step)
+        source += f"loaded.append([name for name in {probed!r} if name in sys.modules])\n"
+    source += "print(json.dumps(loaded))\n"
     environment = {**os.environ, "PYTHONPATH": str(code_dir / "src")}
     result = subprocess.run(  # noqa: S603 (a fixed command: this interpreter and our source)
         [sys.executable, "-c", source],
@@ -1641,25 +1665,48 @@ def _numpy_loaded_after_importing(modules: tuple[str, ...], code_dir: Path) -> b
         check=False,
         env=environment,
     )
-    assert result.returncode in (0, 3), result.stderr
-    return result.returncode == 0
+    assert result.returncode == 0, result.stderr
+    loaded: list[list[str]] = json.loads(result.stdout)
+    return loaded
 
 
 def test_numpy_stays_inside_the_saturation_module(code_dir: Path) -> None:
     """Objective: numpy stays inside ``communications.saturation`` (ADR 010), transitive
     imports included, which a grep would miss.
 
-    Sample: a fresh interpreter importing ``communications.config``, ``.engine``,
-    ``.iridium``, ``.json_output`` and ``.saturation_curve``; then one importing
+    Sample: one fresh interpreter importing ``communications.config``, ``.engine``,
+    ``.iridium``, ``.json_output`` and ``.saturation_curve``; then, in the same interpreter,
     ``communications.saturation`` too, the control.
 
-    Expected outcome: numpy is not in ``sys.modules`` after the first, and is after the
+    Expected outcome: numpy is not in ``sys.modules`` after the first step, and is after the
     control (so the probe can see it).
     """
-    assert not _numpy_loaded_after_importing(NUMPY_FREE_MODULES, code_dir)
-    assert _numpy_loaded_after_importing(
-        (*NUMPY_FREE_MODULES, "communications.saturation"), code_dir
-    )
+    assert _loaded_after_each_import(
+        (NUMPY_FREE_MODULES, ("communications.saturation",)), ("numpy",), code_dir
+    ) == [[], ["numpy"]]
+
+
+FAMILY_MODULES = ("communications.iridium", "communications.saturation_curve")
+"""The modules ``communications.engine`` must not import: the Iridium family and the curve's
+contract."""
+
+
+def test_engine_imports_no_family_module(code_dir: Path) -> None:
+    """Objective: ``communications.engine`` imports neither the Iridium family nor the curve's
+    contract, transitive imports included, which a grep would miss: the import half of keeping
+    the shared path family-neutral (the interim path's Iridium branches go when the shared
+    fleet-and-cost loop replaces it).
+
+    Sample: one fresh interpreter importing ``communications.engine`` alone; then, in the same
+    interpreter, ``communications.iridium`` too, the control.
+
+    Expected outcome: neither ``communications.iridium`` nor ``communications.saturation_curve``
+    is in ``sys.modules`` after the first step; both are after the control (so the probe sees
+    them).
+    """
+    assert _loaded_after_each_import(
+        (("communications.engine",), ("communications.iridium",)), FAMILY_MODULES, code_dir
+    ) == [[], list(FAMILY_MODULES)]
 
 
 def test_the_command_refuses_a_scenario_without_an_iridium_block(
@@ -2302,6 +2349,32 @@ def test_saturation_inputs_for_reads_only_the_held_spectrum() -> None:
     assert curve_input_hash(wider) != curve_input_hash(default)
     round_trip = SaturationInputs.model_validate_json(default.model_dump_json())
     assert curve_input_hash(round_trip) == curve_input_hash(default)
+
+
+def test_the_device_class_is_not_an_input_of_the_curve(
+    committed_saturation_curve: SaturationCurve,
+) -> None:
+    """Objective: one curve serves every class: the device class a config names is not an input
+    of the curve (it holds every class), so two Iridium dials differing only in it imply the
+    same inputs and read the same promoted curve.
+
+    Sample: the Iridium dials at each class, small terminal, mounted terminal, phone class; the
+    committed curve.
+
+    Expected outcome: ``saturation_inputs_for`` gives equal inputs and one input hash for the
+    three, holding every class in the class key's order; the committed curve passes the
+    identity check for each.
+    """
+    curve = committed_saturation_curve
+    inputs = [
+        saturation_inputs_for(IridiumDials(device_class=device_class))
+        for device_class in DeviceClass
+    ]
+    assert inputs[0] == inputs[1] == inputs[2]
+    assert len({curve_input_hash(each) for each in inputs}) == 1
+    assert [entry.device_class for entry in inputs[0].classes] == list(DeviceClass)
+    for each in inputs:
+        check_curve_matches(each, curve)
 
 
 @pytest.mark.parametrize(
@@ -2977,6 +3050,76 @@ def test_one_bounds_tolerance_serves_the_computation_and_the_completeness_check(
         check_curve_complete(
             with_phone_markers(curve, maximum_use_beams=ceiling * (1 - 2 * tolerance))
         )
+
+
+@pytest.mark.parametrize(
+    ("alter", "message"),
+    [
+        (
+            lambda d: d["classes"][0]["rows"][0].update(
+                useful_beams=0.0, capacity_gbps=0.0, ocean_factor=0.0
+            ),
+            "the small_terminal_class row at 342 satellites has its useful beams at 0.0, not "
+            "above 0",
+        ),
+        (
+            lambda d: d["classes"][1]["rows"][1].update(capacity_gbps=0.0),
+            "the mounted_terminal_class row at 992 satellites has its capacity at 0.0, not above 0",
+        ),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(ocean_factor=0.0),
+            "the phone_class row at 342 satellites has its ocean factor at 0.0, not above 0",
+        ),
+        (
+            lambda d: d["bands"][5]["rows"][1].update(useful_beams=0.0),
+            "the band point beams_48 row at 992 satellites has its useful beams at 0.0, not "
+            "above 0",
+        ),
+        (
+            lambda d: d["classes"][0]["markers"].update(maximum_use_beams=0.0),
+            "the small_terminal_class maximum use is 0.0 beams, not above 0",
+        ),
+        (
+            lambda d: d["bands"][0]["markers"].update(maximum_use_beams=0.0),
+            "the band point taper maximum use is 0.0 beams, not above 0",
+        ),
+    ],
+    ids=[
+        "a class's first row zeroed",
+        "a class row's capacity at 0",
+        "a class row's ocean factor at 0",
+        "a band point row's useful beams at 0",
+        "a class's maximum use at 0",
+        "a band point's maximum use at 0",
+    ],
+)
+def test_the_completeness_check_refuses_a_row_or_a_maximum_use_not_above_zero(
+    tmp_path: Path, alter: Callable[[dict[str, object]], object], message: str
+) -> None:
+    """Objective: a curve the engine reads holds no zero where the computation never writes one
+    (amendment A9): every row's useful beams, capacity and ocean factor and every maximum use are
+    above 0, for every class and band point, so a curve file with a zeroed row no longer loads
+    and reads zeros silently at and below that row (the readings take logarithms between rows
+    and divide by maximum use).
+
+    Sample: the complete bare curve's JSON with one quantity set to 0 in turn: the small
+    terminal's first row zeroed whole (L, capacity and U, the review's case), a mounted terminal
+    row's capacity, a phone row's ocean factor, a band point row's useful beams, a class's and a
+    band point's maximum use; each checked as a curve and loaded from a file.
+
+    Expected outcome: ``check_curve_complete`` refuses each with a SaturationCurveError naming
+    the curve, the row (or its maximum use), the quantity and its value; the loader refuses the
+    file with the same words after the file's path.
+    """
+    data = json.loads(render_artifact_json(complete_bare_curve()))
+    alter(data)
+    with pytest.raises(SaturationCurveError) as refused:
+        check_curve_complete(SaturationCurve.model_validate(data))
+    assert str(refused.value) == message
+    path = write_curve_json(tmp_path / "zeroed.json", data)
+    with pytest.raises(SaturationCurveError) as refused_at_load:
+        load_saturation_curve(path)
+    assert str(refused_at_load.value) == f"{path}: {message}"
 
 
 def _phone_trim_json() -> list[dict[str, float]]:
@@ -4426,3 +4569,565 @@ def test_the_memory_tiers_change_no_number(
         }
     )
     assert measured_as_free == free
+
+
+# ---------------------------------------------------------------------------
+# The identity check and the readings (the engine's side of the curve)
+# ---------------------------------------------------------------------------
+
+READING_PANEL_FACTOR = 0.616
+"""The panel factor the readings below are taken at where the panel is not the point (d is then
+the default, ``DOWNLINK_SHARE_DEFAULT``): 15.4 m^2, the investor's approved panel (the Iridium
+dials' default once the approved defaults are built; today's built default is the 25 m^2
+reference), over the curve's 25 m^2 reference panel."""
+
+POWER_LAW_FLEETS = (342, 992)
+"""The fleets of the hand-built reading curve's two rows (each realizes as itself)."""
+
+POWER_LAW_FIRST_BEAMS = 1_000.0
+"""Its useful beams at its first row, 342 satellites."""
+
+POWER_LAW_EXPONENT = 0.5
+"""The power of N its useful beams follow, L = 1,000 x (N / 342)^0.5: log-log reads it exactly,
+a chord in N would not."""
+
+POWER_LAW_MAXIMUM_USE = 4_000.0
+"""Its maximum use, above both rows' ceilings."""
+
+PHONE_GBPS_PER_BEAM = 8.0 * 0.65 / 1_000.0
+"""A phone-class beam's capacity at the default inputs: 8 MHz x 0.65 bps/Hz = 5.2 Mbps."""
+
+DEFAULT_BEAMS_PER_SATELLITE = 150.0
+"""B at the default inputs: 1,000 x the 0.15 calibration at the reference panel."""
+
+
+def power_law_rows() -> tuple[CurveRow, ...]:
+    """Two phone-class rows at 342 and 992 satellites whose useful beams follow
+    L = 1,000 x (N / 342)^0.5, with the phone class's capacity per beam and U = L / (N x B), as
+    the module writes U; ceiling and supply equal L."""
+    rows = []
+    for fleet in POWER_LAW_FLEETS:
+        beams = POWER_LAW_FIRST_BEAMS * (fleet / POWER_LAW_FLEETS[0]) ** POWER_LAW_EXPONENT
+        rows.append(
+            _row(fleet, beams, beams * PHONE_GBPS_PER_BEAM).model_copy(
+                update={"ocean_factor": beams / (fleet * DEFAULT_BEAMS_PER_SATELLITE)}
+            )
+        )
+    return tuple(rows)
+
+
+def power_law_curve(
+    rows: tuple[CurveRow, ...] | None = None, maximum_use: float = POWER_LAW_MAXIMUM_USE
+) -> SaturationCurve:
+    """A curve of the default inputs holding one phone-class curve on the given rows (the
+    power-law rows by default) and maximum use."""
+    return bare_curve(
+        (
+            ClassCurve(
+                device_class=PHONE,
+                rows=power_law_rows() if rows is None else rows,
+                markers=bare_markers(maximum_use_beams=maximum_use),
+            ),
+        ),
+        (),
+    )
+
+
+def test_the_identity_check_names_the_first_field_that_differs(
+    committed_saturation_curve: SaturationCurve,
+) -> None:
+    """Objective: a curve is read only with the inputs it was computed for; the identity check
+    names the first field, in the inputs' field order, whose value differs, as a dotted path,
+    with the run's value and the curve's.
+
+    Sample: the committed curve and its own parameters; the same at 10.5 MHz; with the phone
+    class's busy-hour share doubled; with the sweep's first fleet moved, then with one fleet
+    dropped; with both the spectrum and the first fleet changed.
+
+    Expected outcome: the curve's own parameters pass. Each other case refuses with a
+    SaturationCurveMismatchError (a SaturationCurveError and a ValueError) naming, in turn,
+    ``spectrum_mhz``, ``classes.2.concurrency_peak`` (the phone class is the third class),
+    ``sweep.fleets.0`` and ``sweep.fleets`` (a list whose length differs is itself the
+    difference), with both values; the two changes name ``spectrum_mhz``, the earlier field.
+    """
+    curve = committed_saturation_curve
+    inputs = curve.parameters
+    check_curve_matches(inputs, curve)
+    phone_index = list(DeviceClass).index(PHONE)
+    phone = inputs.classes[phone_index]
+    busier_phone = phone.model_copy(update={"concurrency_peak": 2 * phone.concurrency_peak})
+    busier = tuple(busier_phone if entry is phone else entry for entry in inputs.classes)
+    fleets = inputs.sweep.fleets
+    moved = inputs.sweep.model_copy(update={"fleets": (fleets[0] + 1, *fleets[1:])})
+    dropped = inputs.sweep.model_copy(update={"fleets": fleets[1:]})
+    cases = [
+        (
+            inputs.model_copy(update={"spectrum_mhz": 10.5}),
+            "spectrum_mhz",
+            10.5,
+            inputs.spectrum_mhz,
+        ),
+        (
+            inputs.model_copy(update={"classes": busier}),
+            f"classes.{phone_index}.concurrency_peak",
+            busier_phone.concurrency_peak,
+            phone.concurrency_peak,
+        ),
+        (inputs.model_copy(update={"sweep": moved}), "sweep.fleets.0", fleets[0] + 1, fleets[0]),
+        (inputs.model_copy(update={"sweep": dropped}), "sweep.fleets", fleets[1:], fleets),
+        (
+            inputs.model_copy(update={"spectrum_mhz": 10.5, "sweep": moved}),
+            "spectrum_mhz",
+            10.5,
+            inputs.spectrum_mhz,
+        ),
+    ]
+    for changed, path, run_value, curve_value in cases:
+        with pytest.raises(SaturationCurveMismatchError) as refused:
+            check_curve_matches(changed, curve)
+        assert (
+            f"{path} is {json.dumps(run_value)} for this run but {json.dumps(curve_value)} in "
+            "the curve's parameters"
+        ) in str(refused.value), path
+        assert isinstance(refused.value, SaturationCurveError)
+        assert isinstance(refused.value, ValueError)
+
+
+def test_a_reading_below_the_first_row_is_linear_through_the_origin(
+    committed_saturation_curve: SaturationCurve,
+) -> None:
+    """Objective: below a class's first row a reading is linear through the origin, so the
+    ocean factor U is flat there; the coverage floor (340) reads there, under the first row.
+
+    Sample: the committed curve, every class, at 1 satellite, at half its first row's fleet and
+    at the coverage floor.
+
+    Expected outcome: useful beams and capacity are the fleet over the first row's fleet times
+    the first row's values (to 1e-12 relative); U is the first row's exactly; the fleet's
+    readings scale useful beams by the panel factor and capacity by d and the panel factor;
+    people follow capacity (the scaled capacity over the class's busy-hour load from the curve's
+    parameters, and ``people_at`` gives the same); the share of maximum use follows L.
+    """
+    curve = committed_saturation_curve
+    load_mbps = {
+        entry.device_class: entry.active_rate_mbps * entry.concurrency_peak
+        for entry in curve.parameters.classes
+    }
+    for entry in curve.classes:
+        first = entry.rows[0]
+        assert first.fleet > SATELLITES_FOR_FULL_COVERAGE_DEFAULT
+        for fleet in (1, first.fleet // 2, SATELLITES_FOR_FULL_COVERAGE_DEFAULT):
+            share = fleet / first.fleet
+            beams = useful_beams_at(curve, entry.device_class, fleet)
+            assert beams == pytest.approx(share * first.useful_beams, rel=1e-12)
+            capacity = capacity_gbps_at(curve, entry.device_class, fleet)
+            assert capacity == pytest.approx(share * first.capacity_gbps, rel=1e-12)
+            reading = read_fleet(
+                curve,
+                entry.device_class,
+                fleet,
+                downlink_share=DOWNLINK_SHARE_DEFAULT,
+                panel_factor=READING_PANEL_FACTOR,
+            )
+            assert reading.ocean_factor == first.ocean_factor
+            assert reading.useful_beams == pytest.approx(beams * READING_PANEL_FACTOR, rel=1e-12)
+            assert reading.capacity_gbps == pytest.approx(
+                capacity * DOWNLINK_SHARE_DEFAULT * READING_PANEL_FACTOR, rel=1e-12
+            )
+            assert reading.people == pytest.approx(
+                reading.capacity_gbps * GBPS_TO_MBPS / load_mbps[entry.device_class], rel=1e-12
+            )
+            assert reading.people == people_at(
+                curve,
+                entry.device_class,
+                fleet,
+                downlink_share=DOWNLINK_SHARE_DEFAULT,
+                panel_factor=READING_PANEL_FACTOR,
+            )
+            assert reading.share_of_maximum_use == pytest.approx(
+                beams / entry.markers.maximum_use_beams, rel=1e-12
+            )
+
+
+def test_a_reading_at_a_fleet_of_zero_has_no_beams_and_no_ocean_factor(
+    committed_saturation_curve: SaturationCurve,
+) -> None:
+    """Objective: an empty fleet places no beam: L, capacity, people and the share of maximum
+    use are 0, and the ocean factor, beams over people per beam offered, does not exist.
+
+    Sample: the committed curve, every class, at a fleet of 0.
+
+    Expected outcome: each reading 0.0, and the fleet's readings with U None.
+    """
+    curve = committed_saturation_curve
+    for device_class in DeviceClass:
+        assert useful_beams_at(curve, device_class, 0) == 0.0
+        assert capacity_gbps_at(curve, device_class, 0) == 0.0
+        assert (
+            people_at(
+                curve,
+                device_class,
+                0,
+                downlink_share=DOWNLINK_SHARE_DEFAULT,
+                panel_factor=READING_PANEL_FACTOR,
+            )
+            == 0.0
+        )
+        assert read_fleet(
+            curve,
+            device_class,
+            0,
+            downlink_share=DOWNLINK_SHARE_DEFAULT,
+            panel_factor=READING_PANEL_FACTOR,
+        ) == FleetReading(
+            fleet=0,
+            useful_beams=0.0,
+            capacity_gbps=0.0,
+            share_of_maximum_use=0.0,
+            ocean_factor=None,
+            people=0.0,
+        )
+
+
+@pytest.mark.parametrize(
+    "read",
+    [
+        useful_beams_at,
+        capacity_gbps_at,
+        partial(
+            people_at, downlink_share=DOWNLINK_SHARE_DEFAULT, panel_factor=READING_PANEL_FACTOR
+        ),
+        partial(
+            read_fleet, downlink_share=DOWNLINK_SHARE_DEFAULT, panel_factor=READING_PANEL_FACTOR
+        ),
+    ],
+    ids=["useful beams", "capacity", "people", "the fleet's readings"],
+)
+def test_a_reading_past_a_classs_last_row_is_refused_naming_the_fleet_the_class_and_the_row(
+    committed_saturation_curve: SaturationCurve,
+    read: Callable[[SaturationCurve, DeviceClass, int], object],
+) -> None:
+    """Objective: a curve is never extrapolated or clamped: a reading past a class's last row
+    is refused with a typed error naming the fleet, the class and the last row's fleet.
+
+    Sample: the committed curve, every class, at its last row's fleet (read from the curve) and
+    one satellite past it.
+
+    Expected outcome: at the last row the reading is given; one satellite past it, a
+    CurveBeyondLastRowError (a SaturationCurveError and a ValueError) naming the class, the
+    last row's fleet and the fleet read.
+    """
+    curve = committed_saturation_curve
+    for entry in curve.classes:
+        last = entry.rows[-1]
+        read(curve, entry.device_class, last.fleet)
+        past = last.fleet + 1
+        with pytest.raises(CurveBeyondLastRowError) as refused:
+            read(curve, entry.device_class, past)
+        assert (
+            f"the {entry.device_class.value} curve's last row is at {last.fleet} satellites, and "
+            f"a reading at {past} satellites lies past it"
+        ) in str(refused.value)
+        assert isinstance(refused.value, SaturationCurveError)
+        assert isinstance(refused.value, ValueError)
+
+
+def test_between_rows_a_reading_is_log_log() -> None:
+    """Objective: between two rows a reading is log-log (ln L linear in ln N, and the same for
+    capacity and U), never a chord in N; at a row it is the row's own value.
+
+    Sample: a phone-class curve of two rows, 342 and 992 satellites, whose useful beams follow
+    L = 1,000 x (N / 342)^0.5, its capacity 5.2 Mbps a beam and U = L / (N x 150); read at 582
+    (the rows' geometric midpoint, rounded) and at 700.
+
+    Expected outcome: L, capacity and U equal the power law at both fleets (to 1e-12), each at
+    least 1 percent off the chord in N; at each row, the row's own values exactly.
+    """
+    curve = power_law_curve()
+    low, high = power_law_rows()
+
+    def chord(value_of: Callable[[CurveRow], float], fleet: int) -> float:
+        """The value at the fleet on the straight line in N through the two rows' values."""
+        share = (fleet - low.fleet) / (high.fleet - low.fleet)
+        return value_of(low) + share * (value_of(high) - value_of(low))
+
+    for fleet in (582, 700):
+        beams = POWER_LAW_FIRST_BEAMS * (fleet / low.fleet) ** POWER_LAW_EXPONENT
+        read = useful_beams_at(curve, PHONE, fleet)
+        assert read == pytest.approx(beams, rel=1e-12)
+        assert abs(read - chord(lambda row: row.useful_beams, fleet)) > 0.01 * read
+        capacity = capacity_gbps_at(curve, PHONE, fleet)
+        assert capacity == pytest.approx(beams * PHONE_GBPS_PER_BEAM, rel=1e-12)
+        assert abs(capacity - chord(lambda row: row.capacity_gbps, fleet)) > 0.01 * capacity
+        ocean_factor = read_fleet(
+            curve, PHONE, fleet, downlink_share=1.0, panel_factor=1.0
+        ).ocean_factor
+        assert ocean_factor is not None
+        assert ocean_factor == pytest.approx(
+            beams / (fleet * DEFAULT_BEAMS_PER_SATELLITE), rel=1e-12
+        )
+        assert abs(ocean_factor - chord(lambda row: row.ocean_factor, fleet)) > 0.01 * ocean_factor
+    for row in (low, high):
+        assert useful_beams_at(curve, PHONE, row.fleet) == row.useful_beams
+        assert capacity_gbps_at(curve, PHONE, row.fleet) == row.capacity_gbps
+        at_row = read_fleet(curve, PHONE, row.fleet, downlink_share=1.0, panel_factor=1.0)
+        assert at_row.ocean_factor == row.ocean_factor
+
+
+def test_the_phone_class_reads_ninety_percent_of_maximum_use_at_its_ninety_percent_marker(
+    committed_saturation_curve: SaturationCurve,
+) -> None:
+    """Objective: the log-log rule's two copies agree: the saturation module places the 90
+    percent marker by it (``_fleet_reaching``, the fleet where L reaches 90 percent of maximum
+    use, rounded half up) and the readings read L by it, so a reading at the marker gives 0.90
+    of maximum use within the marker's rounding to a whole fleet.
+
+    Sample: the committed curve's phone class at its 90 percent marker (read from the curve,
+    never frozen) and one satellite either side, at d = 1 and the reference panel.
+
+    Expected outcome: the marker is placed; the share of maximum use is under 0.90 one satellite
+    below the marker and over it one satellite above (the crossing lies within half a satellite
+    of the marker); at the marker it is 0.90 within half a satellite's change of the share (the
+    larger of the two one-satellite steps, halved).
+    """
+    curve = committed_saturation_curve
+    (phone,) = [entry for entry in curve.classes if entry.device_class is PHONE]
+    marker = phone.markers.fleet_at_90pct_of_maximum_use
+    assert marker is not None
+    below, at, above = (
+        read_fleet(curve, PHONE, fleet, downlink_share=1.0, panel_factor=1.0).share_of_maximum_use
+        for fleet in (marker - 1, marker, marker + 1)
+    )
+    assert below < 0.9 < above
+    assert at == pytest.approx(0.9, abs=max(at - below, above - at) / 2)
+
+
+def test_people_are_the_capacity_over_the_busy_hour_load_times_d_and_the_panel() -> None:
+    """Objective: people at a fleet are the capacity over the class's busy-hour load per person
+    (its rate while active times its busy-hour share, from the curve's parameters), times the
+    downlink share d and the panel factor, unrounded; a fleet's readings scale useful beams with
+    the panel and capacity with d and the panel, and leave the share of maximum use and U on
+    the curve's own basis.
+
+    Sample: the power-law phone curve at its first row (342 satellites: 1,000 beams, 5.2 Gbps),
+    d = 0.5 and the panel factor 0.616 (15.4 m^2 over 25).
+
+    Expected outcome, worked by hand: people 1,000 beams x 277.333 people a beam (8 x 0.65 /
+    (0.75 x 0.025)) x 0.5 x 0.616 = 85,418.67, unrounded; useful beams 616.0; capacity 5.2 x
+    0.5 x 0.616 = 1.6016 Gbps; the share of maximum use 1,000 / 4,000 = 0.25; U the row's own.
+    """
+    curve = power_law_curve()
+    first = power_law_rows()[0]
+    people = people_at(curve, PHONE, first.fleet, downlink_share=0.5, panel_factor=0.616)
+    assert people == pytest.approx(1_000.0 * (832.0 / 3.0) * 0.5 * 0.616, rel=1e-12)
+    reading = read_fleet(curve, PHONE, first.fleet, downlink_share=0.5, panel_factor=0.616)
+    assert reading == FleetReading(
+        fleet=first.fleet,
+        useful_beams=pytest.approx(616.0, rel=1e-12),
+        capacity_gbps=pytest.approx(1.6016, rel=1e-12),
+        share_of_maximum_use=pytest.approx(0.25, rel=1e-12),
+        ocean_factor=first.ocean_factor,
+        people=people,
+    )
+
+
+@pytest.mark.parametrize(
+    ("downlink_share", "panel_factor", "named"),
+    [
+        (0.0, 1.0, "the downlink share d"),
+        (1.5, 1.0, "the downlink share d"),
+        (math.nan, 1.0, "the downlink share d"),
+        (DOWNLINK_SHARE_DEFAULT, 0.0, "the panel factor"),
+        (DOWNLINK_SHARE_DEFAULT, -1.0, "the panel factor"),
+        (DOWNLINK_SHARE_DEFAULT, math.inf, "the panel factor"),
+    ],
+    ids=["d of 0", "d above 1", "d not a number", "a panel of 0", "a negative panel", "no panel"],
+)
+def test_the_readings_refuse_a_factor_out_of_its_range(
+    downlink_share: float, panel_factor: float, named: str
+) -> None:
+    """Objective: d is a fraction above 0 and at most 1, the panel factor a positive number;
+    the readings refuse anything else rather than publish people from it.
+
+    Sample: the power-law curve at its first row, with each factor out of its range in turn.
+
+    Expected outcome: ``people_at`` and ``read_fleet`` each raise ValueError naming the factor.
+    """
+    curve = power_law_curve()
+    for read in (people_at, read_fleet):
+        with pytest.raises(ValueError, match=named):
+            read(curve, PHONE, 342, downlink_share=downlink_share, panel_factor=panel_factor)
+
+
+def test_a_reading_the_curve_cannot_give_is_refused_with_a_typed_error() -> None:
+    """Objective: a reading the curve cannot give is a typed error naming why, never a bare
+    arithmetic failure.
+
+    Sample: the power-law curve (the phone class only) read for the small terminal; at a fleet
+    of -1; with its first row's L, capacity and U at 0, read between the rows; with a maximum
+    use of 0, read at a row.
+
+    Expected outcome: the curve holds no small terminal curve (a SaturationCurveError naming
+    the class); a negative fleet is a ValueError; reading log-log through a row at 0 is a
+    SaturationCurveError naming the quantity and both rows (a logarithm of 0 does not exist),
+    while the row at 0 itself still reads; a share of a maximum use of 0 is a
+    SaturationCurveError.
+    """
+    curve = power_law_curve()
+    with pytest.raises(SaturationCurveError, match="holds no small_terminal_class curve"):
+        useful_beams_at(curve, DeviceClass.SMALL_TERMINAL_CLASS, 342)
+    with pytest.raises(ValueError, match="at least 0; got -1"):
+        useful_beams_at(curve, PHONE, -1)
+    low, high = power_law_rows()
+    empty_low = low.model_copy(
+        update={
+            "useful_beams": 0.0,
+            "capacity_gbps": 0.0,
+            "ocean_factor": 0.0,
+            "ceiling_beams": 0.0,
+            "supply_beams": 0.0,
+        }
+    )
+    through_zero = power_law_curve((empty_low, high))
+    assert useful_beams_at(through_zero, PHONE, low.fleet) == 0.0
+    with pytest.raises(SaturationCurveError, match="useful beams must be positive at both rows"):
+        useful_beams_at(through_zero, PHONE, 582)
+    with pytest.raises(SaturationCurveError, match="capacity must be positive at both rows"):
+        capacity_gbps_at(through_zero, PHONE, 582)
+    with pytest.raises(SaturationCurveError, match="maximum use is 0.0 beams"):
+        read_fleet(
+            power_law_curve(maximum_use=0.0), PHONE, 342, downlink_share=1.0, panel_factor=1.0
+        )
+
+
+def test_the_synthetic_curve_fixture_matches_its_dials_and_loads_as_promoted(
+    synthetic_saturation_curve: Callable[[IridiumDials], SaturationCurve], tmp_path: Path
+) -> None:
+    """Objective: the synthetic-curve fixture stamps matching parameters for any Iridium dials
+    and builds a curve the loader accepts as promoted, its rows spanning the real grid and every
+    row hand-workable (its markers are the module's own, ``_markers``, by construction: the
+    fixture is a valid curve for the engine's tests, not an oracle of the marker rules).
+
+    Sample: the default Iridium dials, the same at 10.5 MHz, and at a 15.4 m^2 panel.
+
+    Expected outcome: each curve's parameters are ``saturation_inputs_for`` of its dials with a
+    valid input hash, so the identity check passes for its dials (and the 10.5 MHz curve is
+    refused for the default dials, naming ``spectrum_mhz``); it passes the completeness check
+    and, written as the promotion writes it, loads equal; every class's rows run from 342 to
+    40,000 satellites (to 64,009 for the mounted terminal); at every row L = N x 150 (U = 1) and
+    capacity is L x the spectrum x the class's central SE / 1,000.
+    """
+    default_dials = IridiumDials()
+    for dials in (default_dials, IridiumDials(spectrum_mhz=10.5), IridiumDials(aperture_m2=15.4)):
+        curve = synthetic_saturation_curve(dials)
+        assert curve.parameters == saturation_inputs_for(dials)
+        assert curve.input_hash == curve_input_hash(curve.parameters)
+        check_curve_matches(saturation_inputs_for(dials), curve)
+        check_curve_complete(curve)
+        path = tmp_path / "synthetic_curve.json"
+        path.write_text(render_artifact_json(curve) + ARTIFACT_FILE_END, encoding="utf-8")
+        assert load_saturation_curve(path) == curve
+        central_se = {
+            entry.device_class: entry.spectral_efficiency_bps_per_hz
+            for entry in curve.parameters.classes
+        }
+        for entry in curve.classes:
+            last = 64_009 if entry.device_class is DeviceClass.MOUNTED_TERMINAL_CLASS else 40_000
+            assert (entry.rows[0].fleet, entry.rows[-1].fleet) == (342, last)
+            for row in entry.rows:
+                assert row.useful_beams == pytest.approx(row.fleet * 150.0, rel=1e-12)
+                assert row.ocean_factor == 1.0
+                assert row.capacity_gbps == pytest.approx(
+                    row.useful_beams * dials.spectrum_mhz * central_se[entry.device_class] / 1e3,
+                    rel=1e-12,
+                )
+    wider = synthetic_saturation_curve(IridiumDials(spectrum_mhz=10.5))
+    with pytest.raises(SaturationCurveMismatchError, match="spectrum_mhz is 8.0 for this run"):
+        check_curve_matches(saturation_inputs_for(default_dials), wider)
+
+
+def test_the_short_curve_fixture_ends_at_its_row_and_refuses_a_reading_past_it(
+    short_saturation_curve: Callable[[IridiumDials, int], SaturationCurve],
+) -> None:
+    """Objective: the short-curve variant ends every curve at a given row and keeps the dials'
+    parameters, so the identity check passes and a reading past its last row is refused.
+
+    Sample: the default dials cut at 3,025 satellites (the realized fleet of the 3,000
+    request); a fleet past it, 3,072; a cut at 3,000, which is no row; a cut at 342, the first
+    row, which keeps one row.
+
+    Expected outcome: every class's and band point's rows end at 3,025, each not reached by
+    3,025; the identity check passes; the completeness check refuses the short rows; a reading
+    at 3,025 is given (L = 3,025 x 150), and one at 3,072 is a CurveBeyondLastRowError naming
+    the class, 3,025 and 3,072; the cut at 3,000 is a ValueError, and so is the cut at 342 (a
+    curve's markers read the elasticity between two rows).
+    """
+    dials = IridiumDials()
+    curve = short_saturation_curve(dials, 3_025)
+    curves = [(entry.rows, entry.markers) for entry in curve.classes]
+    curves += [(band.rows, band.markers) for band in curve.bands]
+    for rows, markers in curves:
+        assert rows[-1].fleet == 3_025
+        assert markers.saturation_not_reached_by == 3_025
+    check_curve_matches(saturation_inputs_for(dials), curve)
+    with pytest.raises(SaturationCurveError, match="rows stand at the requested fleets"):
+        check_curve_complete(curve)
+    for device_class in DeviceClass:
+        assert useful_beams_at(curve, device_class, 3_025) == pytest.approx(3_025 * 150.0)
+        with pytest.raises(
+            CurveBeyondLastRowError,
+            match=(
+                f"the {device_class.value} curve's last row is at 3025 satellites, and a "
+                "reading at 3072 satellites lies past it"
+            ),
+        ):
+            useful_beams_at(curve, device_class, 3_072)
+    with pytest.raises(ValueError, match="3000 is not a row of every curve"):
+        short_saturation_curve(dials, 3_000)
+    with pytest.raises(ValueError, match="a cut at 342 keeps 1 row"):
+        short_saturation_curve(dials, 342)
+
+
+def test_a_curve_cut_short_carries_the_markers_its_kept_rows_give(
+    committed_saturation_curve: SaturationCurve,
+    cut_saturation_curve: Callable[[SaturationCurve, int], SaturationCurve],
+) -> None:
+    """Objective: the short-curve builder recomputes each curve's markers from its kept rows
+    and its own maximum use (the module's ``_markers``), so a cut is a valid curve whatever
+    markers the full curve placed: a saturation number past the cut becomes not reached by it
+    (setting only ``saturation_not_reached_by``, as the builder once did, would leave a curve
+    with both, which the contract refuses).
+
+    Sample: the committed curve, whose markers reach saturation (read from it, never frozen),
+    cut at 3,025 satellites (the 3,000 request, before every saturation number it places) and
+    at the sweep's last fleet (the mounted terminal's extension cut away).
+
+    Expected outcome: at each cut, every class's and band point's rows are its rows up to the
+    cut, its markers ``_markers`` of those rows at its maximum use, valid as the contract's; a
+    curve whose rows are all kept keeps the committed markers; a saturation number the full
+    curve places past the cut is not reached, by the cut's fleet.
+    """
+    curve = committed_saturation_curve
+    full = [(entry.device_class, entry.rows, entry.markers) for entry in curve.classes]
+    full += [(band.point.name, band.rows, band.markers) for band in curve.bands]
+    early_cut = 3_025
+    assert any(
+        markers.saturation_number is not None and markers.saturation_number > early_cut
+        for _, _, markers in full
+    )
+    sweep_last = math.prod(walker_shape(curve.parameters.sweep.fleets[-1]))
+    for last_fleet in (early_cut, sweep_last):
+        cut = cut_saturation_curve(curve, last_fleet)
+        kept = [(entry.rows, entry.markers) for entry in cut.classes]
+        kept += [(band.rows, band.markers) for band in cut.bands]
+        for (key, full_rows, full_markers), (rows, markers) in zip(full, kept, strict=True):
+            assert rows == tuple(row for row in full_rows if row.fleet <= last_fleet)
+            assert markers == sat._markers(key, rows, full_markers.maximum_use_beams)
+            assert ClassMarkers.model_validate(markers.model_dump()) == markers
+            if rows == full_rows:
+                assert markers == full_markers
+            if full_markers.saturation_number is not None and (
+                full_markers.saturation_number > last_fleet
+            ):
+                assert markers.saturation_number is None
+                assert markers.saturation_not_reached_by == last_fleet

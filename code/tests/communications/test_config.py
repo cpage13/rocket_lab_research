@@ -6,18 +6,22 @@ Covers the slim ``CommsConfig`` dial tree: all-defaults construction, the frozen
 classes' own defaults and bounds are tested once, in
 ``tests/common/test_cadence_move.py``), the satellite / coverage / comms-share /
 ground blocks, the field bounds, the cross-field validators (coverage floor at or
-below the cap, off-peak concurrency at or below the peak), the YAML loader pair, and the
-Iridium saturation block (its defaults, the shipped scenario's block, its bounds).
+below the cap, the fleet cap at its default on an Iridium config, off-peak concurrency at
+or below the peak), every float dial of an Iridium config finite, the YAML loader pair,
+and the Iridium saturation block (its defaults, the shipped scenario's block, its bounds).
 Mirrors the data-center
 ``test_config.py`` assertion style without importing ``data_center`` (forbidden).
 """
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
+from typing import get_args
 
 import pytest
-from pydantic import ValidationError
+import yaml
+from pydantic import BaseModel, ValidationError
 
 from common.cadence import CadenceDials, LaunchCostDials
 from common.file_io import ModelFileError
@@ -373,6 +377,138 @@ def test_offpeak_concurrency_above_peak_fails_at_load(tmp_path: Path) -> None:
         IridiumDials(concurrency_peak=0.01, concurrency_offpeak=0.02)
     equal = IridiumDials(concurrency_peak=0.01, concurrency_offpeak=0.01)
     assert equal.concurrency_offpeak == equal.concurrency_peak
+
+
+@pytest.mark.parametrize("cap", [MAX_FLEET_SATELLITES_DEFAULT - 1, 3_000])
+def test_an_iridium_config_refuses_a_fleet_cap_other_than_its_default(
+    tmp_path: Path, cap: int
+) -> None:
+    """Objective: the fleet cap is a setting of the cellular family only; an Iridium config keeps
+    it at its default (2,000), which still caps the Iridium model's fleet until that model sizes
+    its own, and is refused at load otherwise, naming the field. The test is on the value, so a
+    config written out whole (every field set) still loads.
+
+    Sample: a scenario with an ``iridium:`` block and ``coverage.max_fleet_satellites`` at
+    1,999, then 3,000; the same scenario without the ``iridium:`` block; an Iridium scenario
+    writing the cap at its default; the default Iridium config round-tripped through
+    ``model_dump`` and ``model_validate``.
+
+    Expected outcome: the Iridium scenario fails at load (a ValidationError, a ValueError)
+    naming ``coverage.max_fleet_satellites``, its default and the value; the cellular one loads
+    with the value; the cap written at its default and the round trip both load.
+    """
+    scenario = tmp_path / "capped.yaml"
+    scenario.write_text(
+        f"coverage:\n  max_fleet_satellites: {cap}\niridium:\n  spectrum_mhz: 8.0\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError) as refused:
+        load_comms_config(scenario)
+    assert (
+        "coverage.max_fleet_satellites is not a setting on an Iridium config (one with an "
+        f"'iridium:' block): it keeps its default, {MAX_FLEET_SATELLITES_DEFAULT}, the "
+        "cellular family's fleet cap, which also caps the Iridium model's fleet until that "
+        f"model sizes its own; got {cap}"
+    ) in str(refused.value)
+    scenario.write_text(f"coverage:\n  max_fleet_satellites: {cap}\n", encoding="utf-8")
+    assert load_comms_config(scenario).coverage.max_fleet_satellites == cap
+    scenario.write_text(
+        f"coverage:\n  max_fleet_satellites: {MAX_FLEET_SATELLITES_DEFAULT}\n"
+        "iridium:\n  spectrum_mhz: 8.0\n",
+        encoding="utf-8",
+    )
+    assert load_comms_config(scenario).coverage.max_fleet_satellites == (
+        MAX_FLEET_SATELLITES_DEFAULT
+    )
+    whole = CommsConfig(iridium=IridiumDials()).model_dump()
+    assert CommsConfig.model_validate(whole).iridium == IridiumDials()
+
+
+def _float_dial_paths(block: type[BaseModel]) -> list[tuple[str, ...]]:
+    """Every float field's path in a dial block and in the blocks nested in it, walked from the
+    block's own fields (so a field added later is walked too)."""
+    paths: list[tuple[str, ...]] = []
+    for name, field in block.model_fields.items():
+        members = get_args(field.annotation) or (field.annotation,)
+        nested = [
+            member
+            for member in members
+            if isinstance(member, type) and issubclass(member, BaseModel)
+        ]
+        if nested:
+            paths += [(name, *path) for path in _float_dial_paths(nested[0])]
+        elif float in members:
+            paths.append((name,))
+    return paths
+
+
+def test_the_iridium_dials_refuse_a_number_that_is_not_finite_naming_the_field(
+    tmp_path: Path,
+) -> None:
+    """Objective: no run starts from a NaN or an infinity: every float dial of an Iridium config
+    is refused at load when it is not finite, naming the field (before the fix an infinite
+    aperture or spectral efficiency loaded and ended the promotion command in a traceback, and
+    an infinite spectrum was refused naming an internal model, not the field).
+
+    Sample: every float field of the Iridium dials and of the blocks nested in them (the
+    saturation and ARPU blocks), walked from the model's own fields, each written in a scenario
+    YAML as ``.inf``, ``-.inf`` and ``.nan`` in turn.
+
+    Expected outcome: the walk finds the spectrum and the aperture among others; each scenario
+    fails at load with one ValidationError, located at that field (``iridium.aperture_m2``,
+    say).
+    """
+    paths = _float_dial_paths(IridiumDials)
+    assert {("spectrum_mhz",), ("aperture_m2",), ("saturation", "downlink_share")} <= set(paths)
+    scenario = tmp_path / "not_finite.yaml"
+    for path in paths:
+        for value in (math.inf, -math.inf, math.nan):
+            dials: object = value
+            for key in reversed(path):
+                dials = {key: dials}
+            scenario.write_text(yaml.safe_dump({"iridium": dials}), encoding="utf-8")
+            with pytest.raises(ValidationError) as refused:
+                load_comms_config(scenario)
+            located = [".".join(map(str, error["loc"])) for error in refused.value.errors()]
+            assert located == [".".join(("iridium", *path))], (path, value)
+
+
+COMMON_CADENCE_BLOCKS = ("cadence", "launch_cost")
+"""The config's two blocks that ``common.cadence`` defines and the data-center model shares,
+outside this module (the Iridium block has its own test above)."""
+
+
+def test_every_block_this_module_defines_refuses_a_number_that_is_not_finite(
+    tmp_path: Path,
+) -> None:
+    """Objective: no run starts from a NaN or an infinity in any block ``communications.config``
+    defines (before the fix an infinite satellite build cost loaded, and the Iridium promotion
+    wrote an artifact whose cost fields were null).
+
+    Sample: every float field of the config's blocks, walked from the model's own fields, but the
+    Iridium block (tested above) and the two blocks ``common.cadence`` defines; each written in a
+    scenario YAML as ``.inf``, ``-.inf`` and ``.nan`` in turn.
+
+    Expected outcome: the walk finds the satellite build cost among others; each scenario fails at
+    load with one ValidationError, located at that field.
+    """
+    paths = [
+        path
+        for path in _float_dial_paths(CommsConfig)
+        if path[0] not in (*COMMON_CADENCE_BLOCKS, "iridium")
+    ]
+    assert ("satellite", "satellite_build_cost_musd") in paths
+    scenario = tmp_path / "not_finite.yaml"
+    for path in paths:
+        for value in (math.inf, -math.inf, math.nan):
+            dials: object = value
+            for key in reversed(path):
+                dials = {key: dials}
+            scenario.write_text(yaml.safe_dump(dials), encoding="utf-8")
+            with pytest.raises(ValidationError) as refused:
+                load_comms_config(scenario)
+            located = [".".join(map(str, error["loc"])) for error in refused.value.errors()]
+            assert located == [".".join(path)], (path, value)
 
 
 # -- the Iridium saturation block (ADRs 005 and 008) ---------------------

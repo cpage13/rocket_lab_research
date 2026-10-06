@@ -9,13 +9,20 @@ the data-center model's config shape: a top-level frozen :class:`CommsConfig`
 (``extra="forbid"``) whose nested blocks are each their own frozen
 ``extra="forbid"`` BaseModel, every field with a named-constant default so a
 no-argument construct is fully valid, plus the ``comms_config_from_dict`` /
-``load_comms_config`` YAML loader pair. Nothing here computes a cost, a coverage
+``load_comms_config`` YAML loader pair. Every block this module defines refuses a
+number that is not finite (``allow_inf_nan=False``); the cadence and launch-cost blocks
+are ``common.cadence``'s, shared with the data-center model, and admit an infinite
+launch cost, which the Iridium artifact then refuses (``communications.json_output``).
+Nothing here computes a cost, a coverage
 fraction, a subscriber count, or a comparison; it is the contract the engine
 (``communications.engine``), the ground comparison (``communications.ground``), and
 the Iridium artifact writer (``communications.json_output``) consume. Cross-field
 rules are model validators: the coverage floor may not exceed the saturation cap,
-the off-peak concurrency may not exceed the peak, the four ARPU mixes must sum to
-100, and (the shared dial blocks' own validators) the cadence anchors must satisfy
+an Iridium config keeps the fleet cap at its default (the cap is a setting of the
+cellular family only; its default still caps the Iridium model's fleet until that
+model sizes its own), the off-peak concurrency may not exceed the peak, the four ARPU
+mixes must sum to 100, and (the shared dial blocks' own validators) the cadence
+anchors must satisfy
 ``0 < launches_at_year_5 < launches_at_year_10 < cadence_ceiling`` and the
 launch-cost anchors ``low_cadence_launches < high_cadence_launches``.
 
@@ -132,7 +139,7 @@ class CommsMetadataDials(BaseModel):
     with no workload/operator/radiator taxonomy.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     base_year: int = Field(
         ge=MIN_FY,
@@ -162,7 +169,7 @@ class CommsCadenceDials(BaseModel):
     the comms slice's own cadence.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     share_of_fleet: float = Field(
         default=COMMS_SHARE_DEFAULT,
@@ -186,7 +193,7 @@ class SatelliteDials(BaseModel):
     build-cost scalar.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     satellites_per_launch: int = Field(
         default=SATELLITES_PER_LAUNCH_DEFAULT,
@@ -241,7 +248,7 @@ class CoverageDials(BaseModel):
     is the 25-degree quality-link, populated-band, 95%-coverage figure).
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     satellites_for_full_coverage: int = Field(
         default=SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
@@ -267,7 +274,8 @@ class CoverageDials(BaseModel):
             "base is exhausted and more satellites stop buying servable subscribers "
             "(a dense cell saturates). INVESTOR_SET to 2,000: the ~100M ambitious "
             "target (1,334 satellites at 75,000/sat) sits just under it. Source "
-            "COMM-535..560. Configurable."
+            "COMM-535..560. Configurable on a cellular config; an Iridium config "
+            "leaves it at this default (another value there is refused at load)."
         ),
     )
 
@@ -308,7 +316,7 @@ class SubscriberDials(BaseModel):
     the field names use a forbidden demand-side token.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     subscribers_at_full_coverage: int = Field(
         default=SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT,
@@ -374,7 +382,7 @@ class RevenueDials(BaseModel):
     token appears on this block).
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     revenue_multiple: float = Field(
         default=REVENUE_MULTIPLE_DEFAULT,
@@ -419,7 +427,7 @@ class GroundInterfaceDials(BaseModel):
     None on :class:`CommsConfig`); Phase 4 consumes it in ``ground.py``.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     dense_ground_cost_per_subscriber_usd: float | None = Field(
         default=None,
@@ -484,7 +492,7 @@ class IridiumArpuDials(BaseModel):
     alternative in ``scenarios/iridium.yaml``.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     standard_mix_pct: float = Field(
         default=ARPU_STANDARD_MIX_PCT_DEFAULT,
@@ -606,7 +614,7 @@ class SaturationDials(BaseModel):
     (:func:`communications.saturation_curve.saturation_inputs_for`).
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     downlink_share: float = Field(
         default=DOWNLINK_SHARE_DEFAULT,
@@ -645,9 +653,14 @@ class IridiumDials(BaseModel):
     ecosystem assumption: this is the MSS lane (purpose-built or in-chipset devices on
     owned L-band), never an unmodified phone (that is the cellular lane, the
     High-Bandwidth Cellular Pure Play model).
+
+    Every number here is finite: a NaN or an infinity is refused at load, naming the field
+    (``allow_inf_nan=False``, as the saturation curve's contract models refuse them), so no
+    run starts from one. The nested ``saturation`` and ``arpu`` blocks refuse them the same
+    way.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     spectrum_mhz: float = Field(
         default=SPECTRUM_MHZ_DEFAULT,
@@ -787,10 +800,13 @@ class CommsConfig(BaseModel):
     """The complete configuration for one communications cost run (either family).
 
     Construct one (the defaults reproduce the High-Bandwidth Cellular Pure Play
-    central case), or load one from YAML with :func:`load_comms_config`. Hand it to
-    ``communications.engine.run_comms_model``; the Iridium artifact writer
+    central case), or load one from YAML with :func:`load_comms_config`. Hand a
+    cellular config to the cellular entry, ``communications.engine.run_comms_model``,
+    and an Iridium config, with its saturation curve, to the Iridium entry,
+    ``communications.iridium.run_iridium_model``; the Iridium artifact writer
     (``communications.json_output``) assembles the promoted JSON from the config and
-    the run.
+    the run. On an Iridium config the fleet cap, ``coverage.max_fleet_satellites``,
+    stays at its default (:meth:`_iridium_keeps_the_default_fleet_cap`).
 
     Every block defaults via ``default_factory`` (or, for ``ground`` and ``iridium``,
     a plain None) so a config constructed with no arguments, or a YAML omitting a
@@ -801,7 +817,9 @@ class CommsConfig(BaseModel):
     derivation).
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True, validate_assignment=True)
+    model_config = ConfigDict(
+        extra="forbid", frozen=True, validate_assignment=True, allow_inf_nan=False
+    )
 
     metadata: CommsMetadataDials = Field(
         default_factory=lambda: _default_comms_metadata(),
@@ -850,6 +868,32 @@ class CommsConfig(BaseModel):
             "direct-to-cell); set it to select the Iridium MSS derivation."
         ),
     )
+
+    @model_validator(mode="after")
+    def _iridium_keeps_the_default_fleet_cap(self) -> CommsConfig:
+        """Refuse a fleet cap other than its default on an Iridium config.
+
+        ``coverage.max_fleet_satellites`` is the cellular family's investor-set cap, not an
+        Iridium setting, so an Iridium config keeps :data:`MAX_FLEET_SATELLITES_DEFAULT`. That
+        default still caps the Iridium model's fleet: the interim shared path both entries call
+        sizes it with the cellular family's fleet target, cap included, until the Iridium model
+        sizes its own fleet.
+
+        The cap is refused when an Iridium config is loaded or validated (a construction or a
+        ``model_validate``). A ``model_copy`` update is not validated, by pydantic's design (it
+        trusts the data it is given), so a value set that way is not refused. The test is on
+        the value, not on whether the field was written: the test helpers round-trip configs
+        through ``model_dump`` and ``model_validate``, which marks every field as set.
+        """
+        cap = self.coverage.max_fleet_satellites
+        if self.iridium is not None and cap != MAX_FLEET_SATELLITES_DEFAULT:
+            raise ValueError(
+                "coverage.max_fleet_satellites is not a setting on an Iridium config (one with "
+                f"an 'iridium:' block): it keeps its default, {MAX_FLEET_SATELLITES_DEFAULT}, the "
+                "cellular family's fleet cap, which also caps the Iridium model's fleet until "
+                f"that model sizes its own; got {cap}"
+            )
+        return self
 
 
 # ===========================================================================

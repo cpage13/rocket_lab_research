@@ -9,9 +9,14 @@
 #
 # or load it programmatically:
 #
+#   from pathlib import Path
 #   from communications.config import load_comms_config
-#   from communications.engine import run_comms_model
-#   trajectory = run_comms_model(load_comms_config("scenarios/iridium.yaml"))
+#   from communications.iridium import run_iridium_model
+#   from communications.saturation_curve import load_saturation_curve
+#   config = load_comms_config("scenarios/iridium.yaml")
+#   # the curve path is repository-relative, and the repository root is .. from code/
+#   curve = load_saturation_curve(Path("..") / config.iridium.saturation.curve_path)
+#   trajectory = run_iridium_model(config, curve)
 #
 # WHAT THIS MODEL IS. The Iridium model is the MSS lane: purpose-built or
 # in-chipset devices on Iridium's OWNED L-band. It is NOT cellular direct-to-cell
