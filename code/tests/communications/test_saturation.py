@@ -2412,3 +2412,49 @@ def test_the_sector_rule_ceiling_bounds_each_directional_row(
             assert (row.directional.median_separation_deg is not None) == stacked
     for row in class_curve(shared_usage_curve, PHONE).rows:
         assert row.directional is None
+
+
+def test_the_memory_tiers_change_no_number(
+    uniform_band: PopulationGrid,
+    synthetic_saturation_inputs: SaturationInputsBuilder,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Objective: the sweep's schedule changes no number: when the memory budget limits the
+    workers, each class runs down its fleets in memory tiers (each tier's largest task alone
+    first, the schedule the real grid's top fleets take), and the curve equals the one run
+    with a worker per CPU.
+
+    Sample: the uniform band (B = 1) at 1,000 and 10,000 requested satellites (realized 992
+    and 10,000), one snapshot; computed once at the default budget and once with the budget
+    lowered to this process's peak plus two task peaks, so the budget binds.
+
+    Expected outcome: at the default budget one process runs the three classes' largest tasks
+    and one pool the rest; with the budget binding, each class's 992 task, a tier of its own
+    (under half of 10,000), runs alone too: four alone runs. The two curves are equal in
+    everything but the run's own measurement.
+    """
+    inputs = small_sweep(
+        synthetic_saturation_inputs(uniform_band, fleets=BAND_FLEETS, beams_per_satellite=ONE_BEAM)
+    )
+    alone_runs: list[int] = []
+    run_alone = sat._run_alone
+
+    def counted_run_alone(*args: object) -> None:
+        alone_runs.append(1)
+        run_alone(*args)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(sat, "_run_alone", counted_run_alone)
+    free = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
+    assert len(alone_runs) == 1
+    task_peak_mb = 400.0
+    monkeypatch.setattr(sat, "_MEMORY_BUDGET_MB", sat._own_peak_mb() + 2 * task_peak_mb)
+    tiered = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
+    assert len(alone_runs) == 1 + 1 + len(DeviceClass)
+    measured_as_free = tiered.model_copy(
+        update={
+            "provenance": tiered.provenance.model_copy(
+                update={"run_measurement": free.provenance.run_measurement}
+            )
+        }
+    )
+    assert measured_as_free == free
