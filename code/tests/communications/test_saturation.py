@@ -651,6 +651,66 @@ def test_one_satellite_adds_at_most_one_layer_to_a_cell(
     assert np.all(layer <= 1 + 1e-9)
 
 
+TRIM_CASE_CENTRES_DEG = ((0.125, 0.125), (0.125, 22.125))
+"""Two 0.25 degree cells on the equator, 22 degrees of longitude apart: each lies beyond the
+other cell's overhead satellite's horizon (a 450 km shell's horizon stands 20.9 degrees away)."""
+
+
+def two_cells_people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+    """People in the two trim-case cells only (far above any people cap)."""
+    inside = np.zeros(lat.shape, dtype=bool)
+    for centre_lat, centre_lon in TRIM_CASE_CENTRES_DEG:
+        inside |= (np.abs(lat - centre_lat) < 0.125) & (np.abs(lon - centre_lon) < 0.125)
+    return np.where(inside, DENSE_PEOPLE_PER_CELL, 0.0)
+
+
+def test_the_trim_is_its_closed_form_and_drops_satellites_below_the_horizon(
+    synthetic_population_grid: GridBuilder,
+) -> None:
+    """Objective: the interference trim (stage 12) prices each victim's aggregate leak by power
+    control and counts only the lit satellites above the victim's horizon.
+
+    Sample: the two trim-case cells, each under a satellite placed exactly over its centre, the
+    phone allocation (each cell's area binds: about 4.5 beams each), the default trim settings
+    (both cells are the victims, since 2 is under 3,000). Each satellite stands below the other
+    cell's horizon yet is scanned under 90 degrees toward it, so it would leak into it but for
+    the horizon rule.
+
+    Expected outcome: a victim's own satellite overhead gives W = b x h^2 and reaches it as W /
+    h^2, so x = gamma / G0 x b exactly, G0 = 4 pi x 25 / (2.998e8 / 1.621e9)^2 (39.6 dBi); the
+    trim at each floor is 1 - log2(1 + 1 / (1 + x)) within 1e-9 relative. The satellite below
+    the horizon would have added over 0.5 percent to x.
+    """
+    grid = synthetic_population_grid(0.25, two_cells_people)
+    cells = sat._demand_cells(grid, 1.0)
+    assert cells.count == 2
+    over = list(zip(np.degrees(cells.lat_rad).tolist(), np.degrees(cells.lon_rad).tolist()))
+    satellites = satellites_at(over)
+    allocation = sat._allocate(satellites, cells, seam_limits(150.0))
+    assert allocation.satellite.tolist() == [0, 1] == allocation.cell.tolist()
+    beams = allocation.beams[0]
+    assert beams == pytest.approx(allocation.beams[1], rel=1e-12)
+    assert 4.0 < beams < 5.0
+    inputs = SaturationInputs()
+    shell = inputs.shell
+    orbit_km = EARTH_RADIUS_KM + shell.altitude_km
+    satellite_km = orbit_km * cells.xyz[1]
+    offset_km = satellite_km - EARTH_RADIUS_KM * cells.xyz[0]
+    distance_km = float(np.linalg.norm(offset_km))
+    assert float(offset_km @ cells.xyz[0]) / distance_km < 0
+    scan_cosine = float(offset_km @ cells.xyz[1]) / distance_km
+    assert scan_cosine > 0
+    leak = beams * shell.altitude_km**2 * scan_cosine**inputs.trim.scan_exponent / distance_km**2
+    assert leak / beams > 0.005
+    trims = sat._interference_trim(satellites, allocation, cells, shell, inputs.trim)
+    wavelength_m = SPEED_OF_LIGHT_M_S / shell.carrier_hz
+    directivity = 4 * math.pi * shell.reference_aperture_m2 / wavelength_m**2
+    assert 10 * math.log10(directivity) == pytest.approx(39.6, abs=0.05)
+    for floor_dbi, trim in zip(inputs.trim.floors_dbi, trims, strict=True):
+        extra = 10 ** (floor_dbi / 10) / directivity * beams
+        assert trim == pytest.approx(1 - math.log2(1 + 1 / (1 + extra)), rel=1e-9)
+
+
 # ---------------------------------------------------------------------------
 # The real grid at a coarse, fast setting
 # ---------------------------------------------------------------------------
@@ -688,6 +748,14 @@ COARSE_REAL_ROWS = (
 ceiling, supply. They agree at float precision with the same snapshot of the saturation
 design's local prototype, which ``research/direct_communication/iridium_saturation_module.md``
 names."""
+
+COARSE_REAL_TRIMS = (
+    (0.017985540528301147, 0.012521514195641736, 0.003179072785696957),
+    (0.03336923218875287, 0.023359409730369873, 0.00598735144565099),
+    (0.056200731314733576, 0.03968137913869685, 0.010327726966442241),
+)
+"""The phone class's coarse interference trims as first computed (2026-10-06), frozen: at each
+row (342, 992 and 1,980), the trim at -0.4, -2 and -8 dBi, a fraction."""
 
 COARSE_REAL_MAXIMUM_USE = 380946.7365253218
 """The phone class's maximum use on the shipped grid at the investor's usage, beams."""
@@ -787,12 +855,13 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
     Sample: the default inputs (the investor's usage) at fleets 340, 1,000 and 2,000 and one
     snapshot.
 
-    Expected outcome: every class's rows (L, capacity, U, the ceiling, the supply, and for the
-    directional classes their stacking diagnostics) and maximum use within 1e-4 relative of
-    the frozen values; no 0.10 crossing by 1,980 and no other marker; the curve's envelope:
-    schema, stamp, the input hash of its parameters, the grid's name, digest, citations and
-    licence, the three checks passed, the run measured, the stated limits, and the three
-    classes (small terminal, mounted terminal, phone class) with no band yet.
+    Expected outcome: every class's rows (L, capacity, U, the ceiling, the supply, for the
+    directional classes their stacking diagnostics, and for the phone class its interference
+    trim at -0.4, -2 and -8 dBi) and maximum use within 1e-4 relative of the frozen values; no
+    0.10 crossing by 1,980 and no other marker; the curve's envelope: schema, stamp, the input
+    hash of its parameters, the grid's name, digest, citations and licence, the three checks
+    passed, the run measured, the stated limits, and the three classes (small terminal,
+    mounted terminal, phone class) with no band yet.
     """
     inputs = SaturationInputs(
         sweep=SweepInputs(
@@ -806,8 +875,8 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
     rows = phone_curve(curve).rows
     assert [row.fleet for row in rows] == [frozen[0] for frozen in COARSE_REAL_ROWS]
     assert [row.requested_fleet for row in rows] == list(COARSE_REAL_FLEETS)
-    for row, (_, useful, capacity, ocean, ceiling, supply) in zip(
-        rows, COARSE_REAL_ROWS, strict=True
+    for row, (_, useful, capacity, ocean, ceiling, supply), trims in zip(
+        rows, COARSE_REAL_ROWS, COARSE_REAL_TRIMS, strict=True
     ):
         assert row.useful_beams == pytest.approx(useful, rel=1e-4)
         assert row.capacity_gbps == pytest.approx(capacity, rel=1e-4)
@@ -816,7 +885,10 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
         assert row.supply_beams == pytest.approx(supply, rel=1e-4)
         assert row.useful_beams_spread == 0.0
         assert row.directional is None
-        assert row.trim is None
+        assert row.trim is not None
+        assert [entry.floor_dbi for entry in row.trim] == [-0.4, -2.0, -8.0]
+        for entry, trim in zip(row.trim, trims, strict=True):
+            assert entry.trim == pytest.approx(trim, rel=1e-4)
     markers = phone_curve(curve).markers
     assert markers.maximum_use_beams == pytest.approx(COARSE_REAL_MAXIMUM_USE, rel=1e-4)
     assert markers.saturation_number is None

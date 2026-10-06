@@ -14,7 +14,7 @@ scenario's panel when it reads the curve.
 
 The stages, numbered as the saturation strategy's locked stage order numbers them (its § 2),
 for one class on one set of inputs; this version runs stages 2 to 11 for every class (stage
-7 for the two directional classes):
+7 for the two directional classes) and stage 12 for the phone class's central curve:
 
 1. **Inputs**, held by the contract: :class:`~communications.saturation_curve.SaturationInputs`.
 2. **Demand cells.** Every cell of the shipped grid (ADR 009) with at least the threshold's
@@ -84,7 +84,17 @@ for one class on one set of inputs; this version runs stages 2 to 11 for every c
     first midpoint (the geometric mean of the first two rows), the 90 percent fleet when the
     first row already reaches it (the curve's limits then say so). The markers read maximum
     use, never a sweep-dependent ceiling.
-12. **The interference trim**: not computed by this version.
+12. **The interference trim** (the phone class's central curve; a reported band the engine's
+    people never read), at every row on the first snapshots of the draw: power control gives
+    every beam equal flux at its target, so its power goes as r^2 / g(eta), g = cos^n of its
+    scan angle; a victim cell's aggregate far-sidelobe interference over its own signal is x
+    = gamma / G0 x the sum, over every lit satellite above its horizon, of the satellite's
+    summed beam powers x g toward the victim / r^2, G0 the panel's broadside directivity;
+    the victims are served cells drawn without replacement in proportion to their beams,
+    from a fresh seeded draw at each row, so a row does not depend on the order of the
+    fleets; the trim is 1 - the victims' mean of log2(1 + 1 / (1 + x)), at each far-sidelobe
+    floor gamma. The directional classes carry none: each terminal's own pattern suppresses
+    the leak (a stated limit).
 
 The checks raise :class:`SaturationInvariantError`: the bounds (L at most min(ceiling,
 supply) and the ceiling at most maximum use, at every snapshot of every class, 1e-9
@@ -146,6 +156,8 @@ from communications.saturation_curve import (
     SaturationCurve,
     SaturationInputs,
     ShellInputs,
+    TrimAtFloor,
+    TrimInputs,
     curve_input_hash,
 )
 from communications.saturation_curve import walker_shape as _walker_shape
@@ -328,6 +340,26 @@ about 0.6 GB; the prices do not depend on it."""
 _NO_NEIGHBOUR_COSINE: Final[float] = -2.0
 """Below any cosine: the nearest-layer cosine of a sub-pair whose cell holds no served
 sub-pair in another sector."""
+
+_OPERATING_SINR: Final[float] = 1.0
+"""SOURCED_ESTIMATE (COMM-429, the anchor's own reading point). The phone class's central SE
+is the anchor read at the measured median SINR of 0 dB, 1 in linear terms; the interference
+trim's extra aggregate x lowers it to 1 / (1 + x)."""
+
+_HORIZON_ELEVATION_SINE: Final[float] = 0.0
+"""A satellite reaches a victim cell in the interference trim when it stands above the cell's
+horizon: the sine of its elevation there is above this."""
+
+_COSINE_UNIT_BOUNDS: Final[tuple[float, float]] = (0.0, 1.0)
+"""The scan cosine toward a satellite above a victim's horizon lies in this range (the scan is
+under 90 degrees); one below the horizon, which the horizon rule drops, can read negative, so
+the cosine is clipped into it before its power is taken."""
+
+_TRIM_CHUNK_ELEMENTS: Final[int] = 6_000_000
+"""The most victim-satellite pairs the interference trim sums at once (victims x satellites),
+which bounds its temporary arrays: about ten arrays of 8 bytes a pair (the offsets' three
+components among them), so about 0.5 GB. At 3,000 victims a chunk holds 2,000 satellites; the
+trim depends on it only through the rounding of its sums."""
 
 # ===========================================================================
 # The checks, the markers and the run's memory budget
@@ -2252,6 +2284,110 @@ def _directional_allocation(
 
 
 # ===========================================================================
+# Stage 12: the interference trim (the phone class's central curve)
+# ===========================================================================
+
+
+def _broadside_directivity(shell: ShellInputs) -> float:
+    """Return G0, the panel's broadside directivity, linear: 4 pi x area / wavelength^2.
+
+    Standard antenna theory for an aperture of that area; 39.6 dBi at the 25 m^2 reference
+    panel and 1.621 GHz.
+    """
+    wavelength_m = _SPEED_OF_LIGHT_M_S / shell.carrier_hz
+    return _SPHERE_SOLID_ANGLE_SR * shell.reference_aperture_m2 / wavelength_m**2
+
+
+def _interference_trim(
+    satellites: _SatellitePositions,
+    allocation: _Allocation,
+    cells: _DemandCells,
+    shell: ShellInputs,
+    trim: TrimInputs,
+) -> tuple[float, ...]:
+    """Return one snapshot's interference trim at each far-sidelobe floor (stage 12).
+
+    The share of capacity the aggregate far-sidelobe leak of the lit beams costs a served
+    cell, on the phone allocation's own lit-beam map. Power control gives every beam equal
+    flux at its target, so a beam's power goes as r^2 / g(eta), r its slant range and g(eta) =
+    cos^n of its scan angle (n the scan exponent); a satellite's power W_s is the sum over its
+    beams. A pair above the mask is scanned less than 90 degrees, so its scan cosine is
+    positive (at least about 0.53 on the central shell). Victims: served cells (more than
+    :data:`_SERVED_BEAMS_FLOOR` beams) drawn without replacement in proportion to their beams,
+    from a fresh ``default_rng(seed)``, so a row does not depend on the order of the fleets. A
+    victim's aggregate over its own signal is x = gamma / G0 x the sum, over every lit
+    satellite above the victim's horizon, of W_s x g(eta toward the victim) / r^2, G0 the
+    panel's broadside directivity and gamma a floor's average far-sidelobe gain. The extra
+    aggregate lowers the operating SINR of 1 to 1 / (1 + x), so a victim keeps log2(1 + 1 /
+    (1 + x)) of its capacity; the trim is one less the victims' mean of that.
+
+    Args:
+        satellites: The snapshot's satellites.
+        allocation: The phone class's allocation of that snapshot (its pairs and beams).
+        cells: The demand cells.
+        shell: The shell and the beam (the orbit, the carrier and the reference panel).
+        trim: The victims, the seed, the floors and the scan exponent.
+
+    Returns:
+        The trim at each of ``trim.floors_dbi``, a fraction, in their order.
+
+    Raises:
+        SaturationInvariantError: If the snapshot serves no cell, so no victim can be drawn.
+    """
+    orbit_radius_km = _EARTH_RADIUS_KM + shell.altitude_km
+    satellite_unit = _unit_vectors(satellites.lat_rad, satellites.lon_rad)
+    satellite_km = orbit_radius_km * satellite_unit
+    to_cell_km = _EARTH_RADIUS_KM * cells.xyz[allocation.cell] - satellite_km[allocation.satellite]
+    slant_km = np.linalg.norm(to_cell_km, axis=1)
+    scan_cosine = (
+        np.einsum("ij,ij->i", -satellite_unit[allocation.satellite], to_cell_km) / slant_km
+    )
+    power = np.bincount(
+        allocation.satellite,
+        weights=allocation.beams * slant_km**2 / scan_cosine**trim.scan_exponent,
+        minlength=satellites.count,
+    )
+    served = np.bincount(allocation.cell, weights=allocation.beams, minlength=cells.count)
+    candidates = np.flatnonzero(served > _SERVED_BEAMS_FLOOR)
+    if candidates.size == 0:
+        raise SaturationInvariantError(
+            f"the interference trim at {satellites.count} satellites: the snapshot serves no "
+            "cell, so no victim can be drawn"
+        )
+    weight = served[candidates]
+    victims = np.random.default_rng(trim.seed).choice(
+        candidates,
+        size=min(trim.victims, candidates.size),
+        replace=False,
+        p=weight / weight.sum(),
+    )
+    victim_unit = cells.xyz[victims]
+    victim_km = _EARTH_RADIUS_KM * victim_unit
+    lit = np.flatnonzero(power > _NONE_LEFT)
+    per_chunk = max(_MIN_CHUNK_SATELLITES, _TRIM_CHUNK_ELEMENTS // victims.size)
+    aggregate = np.zeros(victims.size)
+    for start in range(0, lit.size, per_chunk):
+        chunk = lit[start : start + per_chunk]
+        offset_km = satellite_km[chunk][None, :, :] - victim_km[:, None, :]
+        distance_km = np.linalg.norm(offset_km, axis=2)
+        above = (
+            np.einsum("vsj,vj->vs", offset_km, victim_unit) / distance_km > _HORIZON_ELEVATION_SINE
+        )
+        toward_cosine = np.einsum("vsj,sj->vs", offset_km, satellite_unit[chunk]) / distance_km
+        gain = np.clip(toward_cosine, *_COSINE_UNIT_BOUNDS) ** trim.scan_exponent
+        aggregate += np.sum(above * (power[chunk][None, :] * gain / distance_km**2), axis=1)
+    directivity = _broadside_directivity(shell)
+    trims = []
+    for floor_dbi in trim.floors_dbi:
+        extra = 10 ** (floor_dbi / _DECIBELS_PER_DECADE) / directivity * aggregate
+        kept = np.log2(1 + _OPERATING_SINR / (1 + _OPERATING_SINR * extra)) / math.log2(
+            1 + _OPERATING_SINR
+        )
+        trims.append(float(_FULL_SCALE - np.mean(kept)))
+    return tuple(trims)
+
+
+# ===========================================================================
 # The sweep, in separate processes under the memory budget
 # ===========================================================================
 
@@ -2266,6 +2402,8 @@ class _SnapshotTask:
         requested_fleet: The requested fleet N.
         snapshot_index: The snapshot's position in the draw.
         time_s: The snapshot time, s.
+        prices_trim: Whether the task also prices the interference trim (the phone class's
+            central curve, on the first snapshots of the draw).
     """
 
     device_class: DeviceClass
@@ -2273,15 +2411,18 @@ class _SnapshotTask:
     requested_fleet: int
     snapshot_index: int
     time_s: float
+    prices_trim: bool
 
 
 @dataclass(frozen=True, eq=False)
 class _SweepContext:
-    """What every snapshot task needs: the shell, the demand cells and each class's limits."""
+    """What every snapshot task needs: the shell, the demand cells, each class's limits and the
+    interference trim's settings."""
 
     shell: ShellInputs
     cells: _DemandCells
     limits: Mapping[DeviceClass, _AllocationLimits]
+    trim: TrimInputs
 
 
 @dataclass(frozen=True)
@@ -2296,6 +2437,7 @@ class _SnapshotResult:
         ceiling_beams: The ceiling (the sector-rule ceiling for a directional class).
         supply_beams: The supply.
         statistics: A directional class's kept stacked layers; None for the phone class.
+        trims: The interference trim at each floor, when the task prices it; None otherwise.
         worker_pid: The worker's process id.
         worker_peak_mb: The worker's peak resident memory so far, MB.
     """
@@ -2307,6 +2449,7 @@ class _SnapshotResult:
     ceiling_beams: float
     supply_beams: float
     statistics: _StackStatistics | None
+    trims: tuple[float, ...] | None
     worker_pid: int
     worker_peak_mb: float
 
@@ -2320,9 +2463,15 @@ def _own_peak_mb() -> float:
 
 
 def _run_snapshot(task: _SnapshotTask, context: _SweepContext) -> _SnapshotResult:
-    """Run one class at one fleet at one snapshot time (a worker's task)."""
+    """Run one class at one fleet at one snapshot time (a worker's task), pricing the
+    interference trim on its allocation when the task asks."""
     satellites = _walker_positions(context.shell, task.requested_fleet, task.time_s)
     allocation = _allocate(satellites, context.cells, context.limits[task.device_class])
+    trims = (
+        _interference_trim(satellites, allocation, context.cells, context.shell, context.trim)
+        if task.prices_trim
+        else None
+    )
     return _SnapshotResult(
         task=task,
         realized_fleet=satellites.count,
@@ -2331,6 +2480,7 @@ def _run_snapshot(task: _SnapshotTask, context: _SweepContext) -> _SnapshotResul
         ceiling_beams=allocation.ceiling_beams,
         supply_beams=allocation.supply_beams,
         statistics=None if allocation.directional is None else allocation.directional.statistics,
+        trims=trims,
         worker_pid=os.getpid(),
         worker_peak_mb=_own_peak_mb(),
     )
@@ -2510,6 +2660,8 @@ class _FleetSnapshots:
         capacity_mbps: The capacity at each, d = 1.
         statistics: A directional class's kept stacked layers at each; empty for the phone
             class.
+        trims: The interference trim at each floor, at each snapshot that priced it (the
+            phone class's central curve); empty otherwise.
     """
 
     fleet: int
@@ -2518,6 +2670,7 @@ class _FleetSnapshots:
     supply_beams: tuple[float, ...]
     capacity_mbps: tuple[float, ...]
     statistics: tuple[_StackStatistics, ...]
+    trims: tuple[tuple[float, ...], ...] = ()
 
 
 def _by_fleet(results: Sequence[_SnapshotResult], n_fleets: int) -> tuple[_FleetSnapshots, ...]:
@@ -2538,6 +2691,7 @@ def _by_fleet(results: Sequence[_SnapshotResult], n_fleets: int) -> tuple[_Fleet
                 statistics=tuple(
                     result.statistics for result in snapshots if result.statistics is not None
                 ),
+                trims=tuple(result.trims for result in snapshots if result.trims is not None),
             )
         )
     return tuple(fleets)
@@ -2634,15 +2788,34 @@ def _directional_diagnostics(fleet: _FleetSnapshots) -> DirectionalDiagnostics:
     )
 
 
+def _row_trim(fleet: _FleetSnapshots, floors_dbi: Sequence[float]) -> tuple[TrimAtFloor, ...]:
+    """Return a row's interference trim at each floor: the mean over the snapshots that priced it.
+
+    Raises:
+        SaturationInvariantError: If no snapshot of the row priced the trim.
+    """
+    if not fleet.trims:
+        raise SaturationInvariantError(
+            f"the interference trim at {fleet.fleet} satellites: no snapshot priced it"
+        )
+    means = np.mean(np.array(fleet.trims), axis=0)
+    return tuple(
+        TrimAtFloor(floor_dbi=floor_dbi, trim=float(mean))
+        for floor_dbi, mean in zip(floors_dbi, means, strict=True)
+    )
+
+
 def _class_rows(
     fleets: Sequence[_FleetSnapshots],
     requested_fleets: Sequence[int],
     *,
     beams_per_satellite: float,
     directional: bool,
+    trim_floors_dbi: Sequence[float] | None,
 ) -> tuple[CurveRow, ...]:
     """Return a class's rows: the snapshot means, the spread of L, U, the bounds and, for a
-    directional class, its stacking diagnostics.
+    directional class, its stacking diagnostics; for the phone class's central curve, the
+    interference trim at each floor.
 
     Each row carries the request its shell was built from (the sweep's fleet, in the order
     the tasks were made), so a reader can rebuild it. Each snapshot's capacity is its own (a
@@ -2665,7 +2838,7 @@ def _class_rows(
                 ceiling_beams=float(np.mean(fleet.ceiling_beams)),
                 supply_beams=float(np.mean(fleet.supply_beams)),
                 directional=_directional_diagnostics(fleet) if directional else None,
-                trim=None,
+                trim=None if trim_floors_dbi is None else _row_trim(fleet, trim_floors_dbi),
             )
         )
     return tuple(rows)
@@ -2899,7 +3072,8 @@ def _class_limits(inputs: SaturationInputs, device_class: DeviceClass) -> _Alloc
 
 def _method(inputs: SaturationInputs) -> str:
     """Return the method, stated as the rule, at the inputs' values."""
-    shell, sweep = inputs.shell, inputs.sweep
+    shell, sweep, trim = inputs.shell, inputs.sweep, inputs.trim
+    floors = ", ".join(f"{floor_dbi:g}" for floor_dbi in trim.floors_dbi)
     return (
         "Smallest footprint first, per snapshot: the satellite-cell pairs in view are filled "
         f"in {sweep.footprint_bands} geometric footprint bands from the smallest, "
@@ -2937,7 +3111,18 @@ def _method(inputs: SaturationInputs) -> str:
         "the shell can ever offer it; for a directional class one layer per sky sector, each "
         "at the best its ring allows, whether its azimuth is reachable ignored); the markers "
         "on the elasticity of capacity at the geometric midpoints of the rows, interpolated "
-        "in ln N."
+        "in ln N. The phone class's central rows carry the interference trim, priced on the "
+        f"first {sweep.snapshots_trim} snapshot(s) of each row: power control gives every beam "
+        "equal flux at its target, so a beam's power goes as its slant range squared over g, "
+        f"g = cos^{trim.scan_exponent:g} of its scan angle; a victim cell's aggregate "
+        "far-sidelobe interference over its own signal is x = gamma / G0 x the sum, over "
+        "every lit satellite above the victim's horizon, of the satellite's summed beam "
+        "powers x g toward the victim / the slant range squared, G0 the panel's broadside "
+        "directivity (4 pi x its area / the wavelength squared); "
+        f"{trim.victims:,} served cells are the victims, drawn without replacement in "
+        f"proportion to their beams, a fresh draw from seed {trim.seed} at each row; the trim "
+        "is 1 - the victims' mean of log2(1 + 1 / (1 + x)), at each floor gamma of "
+        f"{floors} dBi."
     )
 
 
@@ -2988,11 +3173,11 @@ def compute_saturation(
 
     Runs stages 2 to 11 of the module docstring for each class, the small terminal and the
     mounted terminal by rules D1 to D6 at the sweep's directional snapshots (the mounted
-    terminal over its extension too) and the phone class at its central snapshots; checks
-    the bounds and capacity per satellite for every class and the stall floor for the phone
-    class; reads each class's markers against its maximum use, states any supporting marker
-    the rows cannot place among the limits, and records the run's wall time and peak-memory
-    bound.
+    terminal over its extension too) and the phone class at its central snapshots, and stage
+    12, the interference trim, on the phone class's central rows; checks the bounds and
+    capacity per satellite for every class and the stall floor for the phone class; reads
+    each class's markers against its maximum use, states any supporting marker the rows
+    cannot place among the limits, and records the run's wall time and peak-memory bound.
 
     Args:
         inputs: The curve's inputs.
@@ -3005,7 +3190,8 @@ def compute_saturation(
     Raises:
         PopulationGridError: If the grid is not the one the inputs name, or not global.
         SaturationInvariantError: If a check fails, a class's realized fleets do not strictly
-            increase, or a saturation number lies before the rows can place it.
+            increase, a saturation number lies before the rows can place it, or the trim asks
+            for more snapshots than the phone class's central curve computes.
     """
     started = time.perf_counter()
     if population.sha256 != inputs.demand.grid_sha256:
@@ -3014,6 +3200,12 @@ def compute_saturation(
             f"but the inputs expect {inputs.demand.grid_sha256}"
         )
     sweep = inputs.sweep
+    if sweep.snapshots_trim > sweep.snapshots_phone_central:
+        raise SaturationInvariantError(
+            f"the interference trim prices the first {sweep.snapshots_trim} snapshots of the "
+            f"phone class's central curve, which computes {sweep.snapshots_phone_central}: "
+            "sweep.snapshots_trim must not exceed sweep.snapshots_phone_central"
+        )
     fleets_of = {
         entry.device_class: (
             sweep.fleets + sweep.mounted_terminal_extension
@@ -3046,6 +3238,8 @@ def compute_saturation(
             requested_fleet=fleet,
             snapshot_index=snapshot_index,
             time_s=float(times[snapshot_index]),
+            prices_trim=device_class is DeviceClass.PHONE_CLASS
+            and snapshot_index < sweep.snapshots_trim,
         )
         for device_class in limits
         for fleet_index, fleet in enumerate(fleets_of[device_class])
@@ -3058,7 +3252,10 @@ def compute_saturation(
         cells.count,
         population.file_name,
     )
-    run = _run_sweep(tasks, _SweepContext(shell=inputs.shell, cells=cells, limits=limits))
+    run = _run_sweep(
+        tasks,
+        _SweepContext(shell=inputs.shell, cells=cells, limits=limits, trim=inputs.trim),
+    )
     curves = []
     marker_limits: list[str] = []
     for device_class, class_limits in limits.items():
@@ -3075,6 +3272,9 @@ def compute_saturation(
             fleets_of[device_class],
             beams_per_satellite=class_limits.beams_per_satellite,
             directional=class_limits.directional is not None,
+            trim_floors_dbi=(
+                inputs.trim.floors_dbi if device_class is DeviceClass.PHONE_CLASS else None
+            ),
         )
         _check_capacity_per_satellite(device_class, rows)
         markers = _markers(device_class, rows, maximum_use)
