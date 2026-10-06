@@ -132,13 +132,14 @@ of 11,945 MB, under the 16 GB budget (``time -l`` reported a largest resident se
 the curve's ``provenance.run_measurement`` carries the same two figures.
 
 It loads the scenario, narrows it to its Iridium dials (a scenario without an ``iridium:``
-block is refused before anything runs), computes the curve those dials imply, logs its
-summary, checks that it is complete and writes it through the shared writer. A relative
-output path anchors to the repository root, a relative scenario path to the working
+block is refused before anything runs), refuses a destination the shared writer would refuse
+(before the computation, so a bad path costs no run), computes the curve those dials imply,
+logs its summary, checks that it is complete and writes it through the shared writer. A
+relative output path anchors to the repository root, a relative scenario path to the working
 directory; the stamp defaults to today's ISO date. It follows the shared command conventions
 (:mod:`common.cli`): status on stderr, an expected failure one ``ERROR:`` line and exit status
-1, a usage error exit status 2. It reads no curve, so a stale or missing curve never blocks
-its own regeneration.
+1 (a saturation worker that dies, most likely out of memory, too), a usage error exit status
+2. It reads no curve, so a stale or missing curve never blocks its own regeneration.
 
 Public: :func:`load_population_grid`, :class:`PopulationGrid`, :func:`compute_saturation`,
 :func:`promote_saturation_curve`, :func:`main`, :class:`PopulationGridError` and
@@ -2677,7 +2678,8 @@ def _run_sweep(
     appear in.
 
     Raises:
-        BrokenProcessPool: If a worker dies (logged with the task count before it rises).
+        BrokenProcessPool: If a worker dies, its message naming the sweep's task count (the
+            command logs it as its one ERROR line).
     """
     results: dict[int, _SnapshotResult] = {}
     by_curve: dict[_CurveKey, list[int]] = {}
@@ -2721,9 +2723,10 @@ def _run_sweep(
                         bound_mb = results[top].worker_peak_mb
                         peak_bound_mb = max(peak_bound_mb, bound_mb)
                         floor_fleet = tasks[top].requested_fleet / _SWEEP_TIER_FLEET_RATIO
-    except BrokenProcessPool:
-        logger.error("a saturation worker died during a sweep of %d snapshot tasks", len(tasks))
-        raise
+    except BrokenProcessPool as exc:
+        raise BrokenProcessPool(
+            f"a saturation worker died during a sweep of {len(tasks):,} snapshot tasks"
+        ) from exc
     return _SweepRun(
         results=tuple(results[i] for i in range(len(tasks))),
         workers=widest,
@@ -3751,6 +3754,42 @@ def _log_summary(curve: SaturationCurve) -> None:
     )
 
 
+def _check_destination(out: Path) -> None:
+    """Refuse, before anything is computed, a destination the shared writer would refuse.
+
+    The writer (:func:`common.file_io.write_files_with_rollback`) refuses a symbolic link and an
+    existing file that is not a regular file, and stages its file beside the destination,
+    creating the missing parent directories; so the destination's nearest existing ancestor must
+    be a directory this process can write into and search. A full promotion computes for about
+    26 minutes before it writes, so this refuses what it can know first; the writer keeps its own
+    checks at the write.
+
+    Args:
+        out: The anchored destination.
+
+    Raises:
+        ModelFileError: Naming the destination, saying nothing was changed or computed.
+    """
+    untouched = "no destination was changed and nothing was computed"
+    if out.is_symlink():
+        raise ModelFileError(
+            out,
+            "is a symbolic link, and an artifact replaces only a regular file (point the output "
+            f"at the link's target); {untouched}",
+        )
+    if out.exists() and not out.is_file():
+        raise ModelFileError(out, f"exists and is not a regular file; {untouched}")
+    ancestor = out.parent
+    while not ancestor.exists(follow_symlinks=False):
+        ancestor = ancestor.parent
+    if not ancestor.is_dir() or not os.access(ancestor, os.W_OK | os.X_OK):
+        raise ModelFileError(
+            out,
+            f"could not write: its nearest existing parent, {ancestor}, is not a directory this "
+            f"process can write into; {untouched}",
+        )
+
+
 def promote_saturation_curve(
     scenario_path: str | Path, output_path: str | Path, version_stamp: str | None = None
 ) -> Path:
@@ -3762,9 +3801,11 @@ def promote_saturation_curve(
     name, anchored at the repository root and checked against its SHA-256, computes the curve,
     logs its summary, checks that it is complete and writes it through
     :func:`common.file_io.write_files_with_rollback`: staged in full beside the destination,
-    then renamed over it, so a failure leaves any existing file as it was (a destination that is
-    a symbolic link or not a regular file is refused at the write). It reads no curve, so a
-    stale or missing curve never blocks its own regeneration.
+    then renamed over it, so a failure leaves any existing file as it was. A destination the
+    writer would refuse (a symbolic link, an existing file that is not a regular file, a nearest
+    existing parent that is not a writable directory) is refused before the computation, and
+    the writer checks again at the write. It reads no curve, so a stale or missing curve never
+    blocks its own regeneration.
 
     Args:
         scenario_path: The scenario YAML (it must select the Iridium model); a relative path
@@ -3777,21 +3818,24 @@ def promote_saturation_curve(
 
     Raises:
         ModelFileError: If the module is not running from a source checkout, the scenario or
-            the grid is missing, unreadable or malformed, or the curve cannot be written.
+            the grid is missing, unreadable or malformed, or the destination is refused or the
+            curve cannot be written.
         ValueError: If the scenario is invalid (a :class:`pydantic.ValidationError`) or does
             not select the Iridium model (:class:`~communications.iridium.NotAnIridiumConfigError`),
             the grid is not the one the inputs name (:class:`PopulationGridError`), a check
             fails (:class:`SaturationInvariantError`), or the curve is incomplete
             (:class:`~communications.saturation_curve.SaturationCurveError`).
+        BrokenProcessPool: If a saturation worker dies (most likely out of memory).
     """
     checkout = locate_source_checkout(__file__)
     config = load_comms_config(Path(scenario_path))
     inputs = saturation_inputs_for(iridium_dials_of(config))
+    out = _anchored(checkout, output_path)
+    _check_destination(out)
     population = load_population_grid(
         _anchored(checkout, inputs.demand.grid_path), inputs.demand.grid_sha256
     )
     stamp = version_stamp if version_stamp is not None else date.today().isoformat()
-    out = _anchored(checkout, output_path)
     logger.info("saturation curve: computing from %s, stamp %s", scenario_path, stamp)
     curve = compute_saturation(inputs, population, version_stamp=stamp)
     _log_summary(curve)
@@ -3839,8 +3883,10 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         :data:`~common.cli.EXIT_OK` on success; :data:`~common.cli.EXIT_ERROR` (after one
         ``ERROR:`` log line, no traceback) when the scenario cannot be read, is invalid or does
-        not select the Iridium model, the grid is not the one expected, a check fails, or the
-        curve cannot be written. Usage errors exit through
+        not select the Iridium model, the destination is one the writer would refuse (found
+        before the computation), the grid is not the one expected, a check fails, a saturation
+        worker dies (most likely out of memory; the line carries the sweep's task count, and
+        nothing is written), or the curve cannot be written. Usage errors exit through
         :class:`~common.cli.CliArgumentParser` with :data:`~common.cli.EXIT_USAGE`.
     """
     configure_cli_logging()
@@ -3853,6 +3899,14 @@ def main(argv: list[str] | None = None) -> int:
             "could not promote the saturation curve from %s: %s",
             scenario,
             describe_failure(exc, scenario),
+        )
+        return EXIT_ERROR
+    except BrokenProcessPool as exc:
+        logger.error(
+            "could not promote the saturation curve from %s: %s, most likely out of memory; "
+            "nothing was written",
+            Path(args.scenario),
+            describe_failure(exc),
         )
         return EXIT_ERROR
     return EXIT_OK

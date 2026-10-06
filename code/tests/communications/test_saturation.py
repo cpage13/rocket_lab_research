@@ -52,6 +52,7 @@ import subprocess
 import sys
 import tracemalloc
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures.process import BrokenProcessPool
 from itertools import combinations, pairwise
 from pathlib import Path
 from typing import Protocol
@@ -1615,6 +1616,125 @@ def test_the_command_refuses_a_scenario_without_an_iridium_block(
     assert f"could not promote the saturation curve from {scenario}" in errors[0]
     assert "the scenario does not select the Iridium model" in errors[0]
     assert sorted(tmp_path.iterdir()) == [scenario]
+
+
+def unusable_destination(tmp_path: Path, case: str) -> Path:
+    """A destination the shared writer would refuse, made in a temporary folder: a directory, a
+    symbolic link to a file, a file in a folder this process cannot write into, or a path under
+    a regular file."""
+    if case == "a directory":
+        destination = tmp_path / "curve.json"
+        destination.mkdir()
+    elif case == "a symbolic link":
+        (tmp_path / "target.json").write_text("ORIGINAL\n", encoding="utf-8")
+        destination = tmp_path / "curve.json"
+        destination.symlink_to(tmp_path / "target.json")
+    elif case == "a read-only folder":
+        folder = tmp_path / "locked"
+        folder.mkdir()
+        destination = folder / "curve.json"
+        destination.write_text("ORIGINAL\n", encoding="utf-8")
+        folder.chmod(0o500)
+    else:
+        (tmp_path / "blocker").write_text("ORIGINAL\n", encoding="utf-8")
+        destination = tmp_path / "blocker" / "curve.json"
+    return destination
+
+
+@pytest.mark.parametrize(
+    ("case", "reason"),
+    [
+        ("a directory", "exists and is not a regular file"),
+        ("a symbolic link", "is a symbolic link"),
+        ("a read-only folder", "is not a directory this process can write into"),
+        ("a path under a file", "is not a directory this process can write into"),
+    ],
+)
+def test_a_destination_the_writer_would_refuse_is_refused_before_the_computation(
+    tmp_path: Path,
+    iridium_yaml: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    case: str,
+    reason: str,
+) -> None:
+    """Objective: the saturation command refuses what the shared writer would refuse before it
+    computes (a full promotion computes for about 26 minutes first), and changes nothing.
+
+    Sample: the shipped scenario with ``compute_saturation`` patched to fail the test if called,
+    and a destination that is a directory, a symbolic link to a file, a file in a folder this
+    process cannot write into, or a path under a regular file.
+
+    Expected outcome: exit status 1; exactly one ERROR record, on one line, naming the scenario,
+    the destination and the reason, and saying nothing was computed; the computation never
+    called; every file and folder as it was.
+    """
+
+    def never(*args: object, **kwargs: object) -> SaturationCurve:
+        pytest.fail("compute_saturation ran before the destination was checked")
+
+    monkeypatch.setattr(sat, "compute_saturation", never)
+    destination = unusable_destination(tmp_path, case)
+    try:
+        status = sat.main([str(iridium_yaml), str(destination)])
+    finally:
+        destination.parent.chmod(0o700)
+    assert status == EXIT_ERROR
+    errors = [record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert "\n" not in errors[0]
+    assert f"could not promote the saturation curve from {iridium_yaml}: {destination}" in errors[0]
+    assert reason in errors[0]
+    assert "no destination was changed and nothing was computed" in errors[0]
+    if case == "a directory":
+        assert destination.is_dir() and not any(destination.iterdir())
+    elif case == "a symbolic link":
+        assert destination.is_symlink() and destination.read_text(encoding="utf-8") == "ORIGINAL\n"
+    else:
+        assert (tmp_path / ("locked" if case == "a read-only folder" else "blocker")).exists()
+        assert sorted(path.name for path in tmp_path.rglob("*")) == sorted(
+            ["locked", "curve.json"] if case == "a read-only folder" else ["blocker"]
+        )
+
+
+def test_a_dead_saturation_worker_is_one_error_line(
+    tmp_path: Path,
+    iridium_yaml: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Objective: a saturation worker that dies (most likely killed out of memory, the heavy
+    run's likeliest environmental failure) ends the command with one ERROR line, never a
+    traceback.
+
+    Sample: the shipped scenario at the coarse setting (nine curves at three fleets and one
+    snapshot: 27 snapshot tasks), with the sweep's first pool patched to raise
+    ``BrokenProcessPool`` as a dead worker's pool does.
+
+    Expected outcome: exit status 1; exactly one ERROR record, on one line, with no exception
+    attached, naming the scenario, the sweep's task count and the likely cause, and saying
+    nothing was written; no file written.
+    """
+
+    def dies(*args: object, **kwargs: object) -> None:
+        raise BrokenProcessPool(
+            "A process in the process pool was terminated abruptly while the future was running "
+            "or pending."
+        )
+
+    monkeypatch.setattr(sat, "saturation_inputs_for", coarse_inputs_for)
+    monkeypatch.setattr(sat, "_run_alone", dies)
+    out_path = tmp_path / "saturation_curve.json"
+    assert sat.main([str(iridium_yaml), str(out_path)]) == EXIT_ERROR
+    errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert errors[0].exc_info is None
+    tasks = (len(DeviceClass) + len(BandName)) * len(COARSE_REAL_FLEETS)
+    assert errors[0].getMessage() == (
+        f"could not promote the saturation curve from {iridium_yaml}: a saturation worker died "
+        f"during a sweep of {tasks} snapshot tasks, most likely out of memory; nothing was written"
+    )
+    assert not out_path.exists()
 
 
 def test_the_command_exits_with_the_usage_status_on_a_usage_error(
