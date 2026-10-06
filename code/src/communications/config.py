@@ -10,9 +10,9 @@ the data-center model's config shape: a top-level frozen :class:`CommsConfig`
 ``extra="forbid"`` BaseModel, every field with a named-constant default so a
 no-argument construct is fully valid, plus the ``comms_config_from_dict`` /
 ``load_comms_config`` YAML loader pair. Every block this module defines refuses a
-number that is not finite (``allow_inf_nan=False``); the cadence and launch-cost blocks
-are ``common.cadence``'s, shared with the data-center model, and admit an infinite
-launch cost, which the Iridium artifact then refuses (``communications.json_output``).
+number that is not finite (``allow_inf_nan=False``), and so do the cadence and launch-cost
+blocks, ``common.cadence``'s, shared with the data-center model (the launch cost's by the
+same setting, the cadence's dials being whole numbers), each at load, naming the field.
 Nothing here computes a cost, a coverage
 fraction, a subscriber count, or a comparison; it is the contract the engine
 (``communications.engine``), the ground comparison (``communications.ground``), and

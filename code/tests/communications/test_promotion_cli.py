@@ -222,9 +222,9 @@ def test_an_artifact_never_holds_a_number_that_is_not_finite(
     models refuse a number that is not finite, whatever route made it.
 
     Sample: an Iridium scenario with a satellite build cost of 1.0e308 $M (finite, so it loads;
-    the run's costs overflow to infinity), and one with an infinite launch cost in the
-    ``launch_cost`` block, which ``common.cadence`` defines and the data-center model shares
-    (it admits an infinity at load).
+    the run's costs overflow to infinity, which the artifact refuses), and one with an infinite
+    launch cost in the ``launch_cost`` block, which ``common.cadence`` defines and the
+    data-center model shares (refused at load, naming the field, before any run).
 
     Expected outcome: exit 1; exactly one ERROR record, on one line, naming the scenario and a
     number that is not finite; no artifact written.
