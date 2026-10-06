@@ -8,11 +8,12 @@ MSS lane on Iridium's owned L-band, selected by the ``iridium`` block). It mirro
 the data-center model's config shape: a top-level frozen :class:`CommsConfig`
 (``extra="forbid"``) whose nested blocks are each their own frozen
 ``extra="forbid"`` BaseModel, every field with a named-constant default so a
-no-argument construct is fully valid (and every block this module defines refuses a
-number that is not finite, ``allow_inf_nan=False``; the cadence and launch-cost blocks
-are ``common.cadence``'s, shared with the data-center model), plus the
-``comms_config_from_dict`` /
-``load_comms_config`` YAML loader pair. Nothing here computes a cost, a coverage
+no-argument construct is fully valid, plus the ``comms_config_from_dict`` /
+``load_comms_config`` YAML loader pair. Every block this module defines refuses a
+number that is not finite (``allow_inf_nan=False``); the cadence and launch-cost blocks
+are ``common.cadence``'s, shared with the data-center model, and admit an infinite
+launch cost, which the Iridium artifact then refuses (``communications.json_output``).
+Nothing here computes a cost, a coverage
 fraction, a subscriber count, or a comparison; it is the contract the engine
 (``communications.engine``), the ground comparison (``communications.ground``), and
 the Iridium artifact writer (``communications.json_output``) consume. Cross-field
@@ -655,8 +656,8 @@ class IridiumDials(BaseModel):
 
     Every number here is finite: a NaN or an infinity is refused at load, naming the field
     (``allow_inf_nan=False``, as the saturation curve's contract models refuse them), so no
-    run starts from one. The nested ``saturation`` and ``arpu`` blocks refuse them through
-    their own bounds.
+    run starts from one. The nested ``saturation`` and ``arpu`` blocks refuse them the same
+    way.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)

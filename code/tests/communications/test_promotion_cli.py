@@ -4,8 +4,10 @@
 command-line conventions (``common.cli``) and writes its one artifact through
 the shared writer (``common.file_io.write_files_with_rollback``). The contract:
 
-1. a malformed scenario, an unwritable destination or a value too large for the
-   model to compute is one error record and exit status 1, never a traceback;
+1. a malformed scenario, an unwritable destination, a value the model cannot
+   compute or an artifact that would hold a number that is not finite is one
+   error record and exit status 1, never a traceback (and never a promoted
+   artifact with a null cost);
 2. a failed write (a read-only directory, a failed rename) leaves the existing
    artifact exactly as it was, with no staged or backup file left behind, and
    the error says no destination was changed;
@@ -168,22 +170,29 @@ def test_a_successful_promotion_logs_its_status_and_prints_nothing(
     assert status == [f"promoted Iridium model artifact written to {out_path}"]
 
 
-def test_a_value_too_large_for_the_model_is_one_error_line(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+@pytest.mark.parametrize(
+    "iridium_dials",
+    ["aperture_m2: 1.0e+308", "active_user_rate_mbps: 5.0e-324"],
+    ids=["a panel too large", "a rate that underflows to zero"],
+)
+def test_a_value_the_model_cannot_compute_is_one_error_line(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, iridium_dials: str
 ) -> None:
-    """Objective: a finite dial too large for the model to compute ends the command in one
-    error record, never a traceback (before the fix the run's ``OverflowError`` escaped as one).
+    """Objective: a finite dial the model cannot compute with ends the command in one error
+    record, never a traceback (before the fix the run's ``OverflowError``, and a
+    ``ZeroDivisionError``, escaped as one).
 
-    Sample: a scenario selecting the Iridium model with a panel of 1.0e308 m^2 (finite, so it
-    loads; neither the panel nor anything it scales is an input of the curve, so the identity
-    check passes and the run itself overflows).
+    Sample: a scenario selecting the Iridium model with a panel of 1.0e308 m^2 (the run
+    overflows), and one with an active rate of 5.0e-324 Mbps (the rate times the concurrency
+    underflows to zero, and the run divides by it); both finite, so both load, and neither is an
+    input of the curve, so the identity check passes.
 
     Expected outcome: exit 1; exactly one ERROR record, on one line and with no exception
-    attached, naming the scenario and saying a value is too large for the model to compute; no
+    attached, naming the scenario and saying a value is one the model cannot compute; no
     artifact written.
     """
-    scenario = tmp_path / "huge_panel.yaml"
-    scenario.write_text("iridium:\n  aperture_m2: 1.0e+308\n", encoding="utf-8")
+    scenario = tmp_path / "cannot_compute.yaml"
+    scenario.write_text(f"iridium:\n  {iridium_dials}\n", encoding="utf-8")
     out_path = tmp_path / "out.json"
 
     assert main([str(scenario), str(out_path)]) == EXIT_ERROR
@@ -192,10 +201,46 @@ def test_a_value_too_large_for_the_model_is_one_error_line(
     assert len(records) == 1
     message = records[0].getMessage()
     assert "\n" not in message
-    assert message.startswith(
-        f"could not promote {scenario}: a value is too large for the model to compute ("
-    )
+    assert message.startswith(f"could not promote {scenario}: a value the model cannot compute (")
     assert records[0].exc_info is None
+    assert not out_path.exists()
+
+
+@pytest.mark.parametrize(
+    "shared_block",
+    [
+        "satellite:\n  satellite_build_cost_musd: 1.0e+308",
+        "launch_cost:\n  high_cadence_cost_musd: .inf",
+    ],
+    ids=["a build cost that overflows", "an infinite launch cost in the common block"],
+)
+def test_an_artifact_never_holds_a_number_that_is_not_finite(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, shared_block: str
+) -> None:
+    """Objective: the command never writes an artifact whose numbers are not finite (before the
+    fix such a run promoted, exit 0, with its cost fields written as null): the artifact's
+    models refuse a number that is not finite, whatever route made it.
+
+    Sample: an Iridium scenario with a satellite build cost of 1.0e308 $M (finite, so it loads;
+    the run's costs overflow to infinity), and one with an infinite launch cost in the
+    ``launch_cost`` block, which ``common.cadence`` defines and the data-center model shares
+    (it admits an infinity at load).
+
+    Expected outcome: exit 1; exactly one ERROR record, on one line, naming the scenario and a
+    number that is not finite; no artifact written.
+    """
+    scenario = tmp_path / "not_finite_artifact.yaml"
+    scenario.write_text(f"{shared_block}\niridium: {{}}\n", encoding="utf-8")
+    out_path = tmp_path / "out.json"
+
+    assert main([str(scenario), str(out_path)]) == EXIT_ERROR
+
+    records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(records) == 1
+    message = records[0].getMessage()
+    assert "\n" not in message
+    assert message.startswith(f"could not promote {scenario}: ")
+    assert "finite number" in message
     assert not out_path.exists()
 
 

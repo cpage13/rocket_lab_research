@@ -41,9 +41,10 @@ The command follows the shared CLI conventions (:mod:`common.cli`): the status
 line and any error are log records on stderr; an unreadable or invalid
 scenario, a scenario of the cellular family, a saturation curve that cannot be
 read or was computed for other inputs, a scenario the model cannot run (a
-value too large for the model to compute among them), or a failed write is one
-``ERROR:`` line and exit status 1, never a traceback; a usage error exits with
-status 2.
+value the model cannot compute among them), an artifact that would hold a number
+that is not finite (the artifact's models refuse one, so no cost is ever written
+as null), or a failed write is one ``ERROR:`` line and exit status 1, never a
+traceback; a usage error exits with status 2.
 The one artifact is written through
 :func:`common.file_io.write_files_with_rollback`: staged in full beside its
 destination, then renamed over it in one atomic rename, so a failure leaves
@@ -143,7 +144,7 @@ class IridiumProvenance(BaseModel):
     git-describe string or a date).
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
 
     model_name: str = Field(description="The model this artifact belongs to: 'iridium'.")
     schema_version: str = Field(description="The promoted Iridium artifact schema version.")
@@ -167,7 +168,7 @@ class IridiumPhysicsBlock(BaseModel):
     truth per artifact), otherwise the fixed passthrough dial.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
 
     spectrum_mhz: float = Field(description="The held L-band width used, MHz (a width).")
     aperture_m2: float = Field(description="The satellite flat-array area used, m^2.")
@@ -237,7 +238,7 @@ class TrajectorySummaryBlock(BaseModel):
     ``revenue_arpu_buckets`` block on the artifact.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
 
     total_build_and_hold_cost_musd: float = Field(
         description="Cumulative build-and-hold cost over the trajectory, $M."
@@ -360,7 +361,7 @@ class OrbitScenarioBlock(BaseModel):
     text come from the named constants in :mod:`communications.constants`.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
 
     altitude_km: float = Field(
         description="The published fleet altitude, km (a stated scenario, not derived)."
@@ -386,7 +387,7 @@ class ArpuBucketBlock(BaseModel):
     government: never summed as one population (the pool is an accounting frame).
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
 
     mix_pct: float = Field(
         description="The bucket's share of the billable-connection pool, percent."
@@ -411,7 +412,7 @@ class RevenueArpuBucketsBlock(BaseModel):
     accounting total, NOT one summed people population.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
 
     standard: ArpuBucketBlock = Field(
         description="The standard personal (phone-class) people bucket."
@@ -449,7 +450,7 @@ class RevenueArpuBucketsBlock(BaseModel):
 class IridiumModelArtifact(BaseModel):
     """The complete promoted Iridium JSON artifact (the file's top level)."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
 
     provenance: IridiumProvenance = Field(description="The small provenance header.")
     trajectory_summary: TrajectorySummaryBlock = Field(
@@ -775,10 +776,11 @@ def main(argv: list[str] | None = None) -> int:
         (after one ``ERROR:`` log line, no traceback) when the scenario cannot
         be read, is invalid, or does not select the Iridium model, its
         saturation curve cannot be read or was computed for other inputs, the
-        model cannot run (a value too large for it to compute, an
-        ``OverflowError``, among them), or the artifact cannot be written. Usage errors exit through
-        :class:`~common.cli.CliArgumentParser` with
-        :data:`~common.cli.EXIT_USAGE`.
+        model cannot run (a value it cannot compute among them: an ``ArithmeticError``,
+        such as an overflow or a division by a value that underflowed to zero), the
+        artifact would hold a number that is not finite (its models refuse one), or the
+        artifact cannot be written. Usage errors exit through
+        :class:`~common.cli.CliArgumentParser` with :data:`~common.cli.EXIT_USAGE`.
     """
     configure_cli_logging()
     args = _build_parser().parse_args(argv)
@@ -788,9 +790,9 @@ def main(argv: list[str] | None = None) -> int:
     except (ModelFileError, ValueError) as exc:
         logger.error("could not promote %s: %s", scenario, describe_failure(exc, scenario))
         return EXIT_ERROR
-    except OverflowError as exc:
+    except ArithmeticError as exc:
         logger.error(
-            "could not promote %s: a value is too large for the model to compute (%s)",
+            "could not promote %s: a value the model cannot compute (%s)",
             scenario,
             describe_failure(exc, scenario),
         )
