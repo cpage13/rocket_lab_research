@@ -127,11 +127,12 @@ summed peaks of the largest set of workers alive at once).
         communications/models/iridium/saturation_curve.json --version-stamp <stamp>
 
 The full promotion of 2026-10-06 (the shipped scenario, 160 footprint bands, a shared machine
-of 16 CPUs and 32 GB, loaded by other work throughout: a one-minute load average of 6.8 at its
-start and 21.2 at its end, which its wall time reflects) measured 2,792.5 s of wall time, about
-47 minutes, and a peak-memory bound of 12,108 MB, under the 16 GB budget (``time -l`` reported a
-largest resident set of 3.24 GB); the curve's ``provenance.run_measurement`` carries the same two
-figures.
+of 16 CPUs and 32 GB, contended by other work throughout: ``time -l`` counted 74.4 million
+involuntary context switches, against 4.5 million in the 40-band run, which its wall time
+reflects) measured 2,792.5 s of wall time, about 47 minutes, and a peak-memory bound of
+12,108 MB, under the 16 GB budget (the bound is the budget's figure; ``time -l`` reported a
+largest resident set of 3.24 GB); the curve's ``provenance.run_measurement`` carries the same
+two figures.
 
 It loads the scenario, narrows it to its Iridium dials (a scenario without an ``iridium:``
 block is refused before anything runs), refuses a destination the shared writer would refuse
