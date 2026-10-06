@@ -6,7 +6,8 @@ Covers the slim ``CommsConfig`` dial tree: all-defaults construction, the frozen
 classes' own defaults and bounds are tested once, in
 ``tests/common/test_cadence_move.py``), the satellite / coverage / comms-share /
 ground blocks, the field bounds, the cross-field validators (coverage floor at or
-below the cap, off-peak concurrency at or below the peak), the YAML loader pair, and the
+below the cap, the fleet cap at its default on an Iridium config, off-peak concurrency at
+or below the peak), the YAML loader pair, and the
 Iridium saturation block (its defaults, the shipped scenario's block, its bounds).
 Mirrors the data-center
 ``test_config.py`` assertion style without importing ``data_center`` (forbidden).
@@ -373,6 +374,49 @@ def test_offpeak_concurrency_above_peak_fails_at_load(tmp_path: Path) -> None:
         IridiumDials(concurrency_peak=0.01, concurrency_offpeak=0.02)
     equal = IridiumDials(concurrency_peak=0.01, concurrency_offpeak=0.01)
     assert equal.concurrency_offpeak == equal.concurrency_peak
+
+
+@pytest.mark.parametrize("cap", [MAX_FLEET_SATELLITES_DEFAULT - 1, 3_000])
+def test_an_iridium_config_refuses_a_fleet_cap_other_than_its_default(
+    tmp_path: Path, cap: int
+) -> None:
+    """Objective: the fleet cap is the cellular family's setting; an Iridium config leaves it at
+    its default (2,000) and is refused at load otherwise, naming the field. The test is on the
+    value, so a config written out whole (every field set) still loads.
+
+    Sample: a scenario with an ``iridium:`` block and ``coverage.max_fleet_satellites`` at
+    1,999, then 3,000; the same scenario without the ``iridium:`` block; an Iridium scenario
+    writing the cap at its default; the default Iridium config round-tripped through
+    ``model_dump`` and ``model_validate``.
+
+    Expected outcome: the Iridium scenario fails at load (a ValidationError, a ValueError)
+    naming ``coverage.max_fleet_satellites`` and its default; the cellular one loads with the
+    value; the cap written at its default and the round trip both load.
+    """
+    scenario = tmp_path / "capped.yaml"
+    scenario.write_text(
+        f"coverage:\n  max_fleet_satellites: {cap}\niridium:\n  spectrum_mhz: 8.0\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError) as refused:
+        load_comms_config(scenario)
+    assert (
+        "coverage.max_fleet_satellites is not a setting on an Iridium config (one with an "
+        f"'iridium:' block): it stays at its default, {MAX_FLEET_SATELLITES_DEFAULT}, the "
+        f"cellular family's fleet cap; got {cap}"
+    ) in str(refused.value)
+    scenario.write_text(f"coverage:\n  max_fleet_satellites: {cap}\n", encoding="utf-8")
+    assert load_comms_config(scenario).coverage.max_fleet_satellites == cap
+    scenario.write_text(
+        f"coverage:\n  max_fleet_satellites: {MAX_FLEET_SATELLITES_DEFAULT}\n"
+        "iridium:\n  spectrum_mhz: 8.0\n",
+        encoding="utf-8",
+    )
+    assert load_comms_config(scenario).coverage.max_fleet_satellites == (
+        MAX_FLEET_SATELLITES_DEFAULT
+    )
+    whole = CommsConfig(iridium=IridiumDials()).model_dump()
+    assert CommsConfig.model_validate(whole).iridium == IridiumDials()
 
 
 # -- the Iridium saturation block (ADRs 005 and 008) ---------------------

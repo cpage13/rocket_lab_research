@@ -14,8 +14,10 @@ fraction, a subscriber count, or a comparison; it is the contract the engine
 (``communications.engine``), the ground comparison (``communications.ground``), and
 the Iridium artifact writer (``communications.json_output``) consume. Cross-field
 rules are model validators: the coverage floor may not exceed the saturation cap,
-the off-peak concurrency may not exceed the peak, the four ARPU mixes must sum to
-100, and (the shared dial blocks' own validators) the cadence anchors must satisfy
+an Iridium config leaves the fleet cap at its default (the cap is the cellular
+family's setting), the off-peak concurrency may not exceed the peak, the four ARPU
+mixes must sum to 100, and (the shared dial blocks' own validators) the cadence
+anchors must satisfy
 ``0 < launches_at_year_5 < launches_at_year_10 < cadence_ceiling`` and the
 launch-cost anchors ``low_cadence_launches < high_cadence_launches``.
 
@@ -267,7 +269,8 @@ class CoverageDials(BaseModel):
             "base is exhausted and more satellites stop buying servable subscribers "
             "(a dense cell saturates). INVESTOR_SET to 2,000: the ~100M ambitious "
             "target (1,334 satellites at 75,000/sat) sits just under it. Source "
-            "COMM-535..560. Configurable."
+            "COMM-535..560. Configurable on a cellular config; an Iridium config "
+            "leaves it at this default (another value there is refused at load)."
         ),
     )
 
@@ -787,10 +790,13 @@ class CommsConfig(BaseModel):
     """The complete configuration for one communications cost run (either family).
 
     Construct one (the defaults reproduce the High-Bandwidth Cellular Pure Play
-    central case), or load one from YAML with :func:`load_comms_config`. Hand it to
-    ``communications.engine.run_comms_model``; the Iridium artifact writer
+    central case), or load one from YAML with :func:`load_comms_config`. Hand a
+    cellular config to the cellular entry, ``communications.engine.run_comms_model``,
+    and an Iridium config, with its saturation curve, to the Iridium entry,
+    ``communications.iridium.run_iridium_model``; the Iridium artifact writer
     (``communications.json_output``) assembles the promoted JSON from the config and
-    the run.
+    the run. On an Iridium config the fleet cap, ``coverage.max_fleet_satellites``,
+    stays at its default (:meth:`_iridium_keeps_the_default_fleet_cap`).
 
     Every block defaults via ``default_factory`` (or, for ``ground`` and ``iridium``,
     a plain None) so a config constructed with no arguments, or a YAML omitting a
@@ -850,6 +856,25 @@ class CommsConfig(BaseModel):
             "direct-to-cell); set it to select the Iridium MSS derivation."
         ),
     )
+
+    @model_validator(mode="after")
+    def _iridium_keeps_the_default_fleet_cap(self) -> CommsConfig:
+        """Refuse a fleet cap other than its default on an Iridium config.
+
+        ``coverage.max_fleet_satellites`` is the cellular family's investor-set cap. The
+        Iridium model's spectrum bound is its saturation curve's, which no setting replaces,
+        so an Iridium config leaves the cap at :data:`MAX_FLEET_SATELLITES_DEFAULT`. The test
+        is on the value, not on whether the field was written: the test helpers round-trip
+        configs through ``model_dump`` and ``model_validate``, which marks every field as set.
+        """
+        cap = self.coverage.max_fleet_satellites
+        if self.iridium is not None and cap != MAX_FLEET_SATELLITES_DEFAULT:
+            raise ValueError(
+                "coverage.max_fleet_satellites is not a setting on an Iridium config (one with "
+                f"an 'iridium:' block): it stays at its default, {MAX_FLEET_SATELLITES_DEFAULT}, "
+                f"the cellular family's fleet cap; got {cap}"
+            )
+        return self
 
 
 # ===========================================================================
