@@ -20,7 +20,10 @@ specification, each naming what it exercises and what counts as success:
   sector-rule ceiling and the first layer at each class's own people cap;
 * the sky sectors (rule D1), the pairs' sky geometry, the pair search's chunk budget, and the
   vectorized admission against the rule taken candidate by candidate;
-* the real grid at a coarse, fast setting, every class frozen at 1e-4 relative;
+* the interference trim against its closed form (the horizon rule included), and each band
+  point's one changed input (the beam, B, the demand threshold, the 2 x 2 grid);
+* the real grid at a coarse, fast setting, every class and band point frozen at 1e-4
+  relative, the phone class's trim with them;
 * numpy confinement (a subprocess), the people-per-beam arithmetic, the class constants,
   the checks' refusals, the grid loader's refusals and the contract's validators.
 
@@ -29,7 +32,8 @@ capacity per satellite never rising), so each is shaped for it: its capacity per
 falls between its rows for a physical reason (a people cap or the tiling binding), never by
 the noise of one snapshot. The worlds' grids come from ``synthetic_population_grid`` and
 their inputs from ``synthetic_saturation_inputs`` (``conftest.py``), without the mounted
-terminal's extension (``small_sweep``).
+terminal's extension and with the band points at the central values (``small_sweep``,
+``central_bands``), so each band point's curve repeats the central one there.
 """
 
 from __future__ import annotations
@@ -41,7 +45,7 @@ import os
 import subprocess
 import sys
 import tracemalloc
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from itertools import combinations, pairwise
 from pathlib import Path
 from typing import Protocol
@@ -71,6 +75,7 @@ from communications.saturation_curve import (
     SATURATION_CURVE_SCHEMA_VERSION,
     BandCurve,
     BandName,
+    BandPoint,
     ClassCurve,
     ClassInputs,
     ClassMarkers,
@@ -182,9 +187,35 @@ def log_log_fleet(rows: tuple[CurveRow, ...], target: float) -> float | None:
     return None
 
 
+def central_bands(inputs: SaturationInputs) -> SaturationInputs:
+    """The inputs with every band point at the central values (each keeps its name) and the
+    bands at the phone class's central snapshots, so on a synthetic world each band point's
+    curve repeats the central one.
+
+    The synthetic worlds are shaped for the central curve's checks; the band points' own
+    inputs (a 10 or 100 per km^2 threshold, 48 beams) would empty a synthetic world's demand
+    or flatten its curve before the markers can place a crossing. The band points' changed
+    inputs are tested at the seam and on the real grid.
+    """
+    points = [
+        BandPoint(
+            name=point.name,
+            beamwidth_factor=inputs.shell.beamwidth_factor,
+            spacing_area_factor=1.0,
+            density_threshold_per_km2=inputs.demand.density_threshold_per_km2,
+            grid_aggregation=1,
+            beams_per_satellite=None,
+        ).model_dump()
+        for point in inputs.bands
+    ]
+    sweep = {**inputs.sweep.model_dump(), "snapshots_bands": inputs.sweep.snapshots_phone_central}
+    return SaturationInputs.model_validate({**inputs.model_dump(), "bands": points, "sweep": sweep})
+
+
 def small_sweep(inputs: SaturationInputs, snapshots_directional: int = 1) -> SaturationInputs:
-    """The inputs with no mounted-terminal extension and the directional classes at the given
-    snapshots, so a synthetic world's curve stays small and fast."""
+    """The inputs with no mounted-terminal extension, the directional classes at the given
+    snapshots and the band points at the central values (:func:`central_bands`), so a
+    synthetic world's curve stays small and fast."""
     sweep = SweepInputs.model_validate(
         {
             **inputs.sweep.model_dump(),
@@ -192,7 +223,7 @@ def small_sweep(inputs: SaturationInputs, snapshots_directional: int = 1) -> Sat
             "snapshots_directional": snapshots_directional,
         }
     )
-    return inputs.model_copy(update={"sweep": sweep})
+    return central_bands(inputs.model_copy(update={"sweep": sweep}))
 
 
 def phone_curve(curve: SaturationCurve) -> ClassCurve:
@@ -711,6 +742,86 @@ def test_the_trim_is_its_closed_form_and_drops_satellites_below_the_horizon(
         assert trim == pytest.approx(1 - math.log2(1 + 1 / (1 + extra)), rel=1e-9)
 
 
+BAND_CASE_PEOPLE = {
+    (0.375, 0.125): 3_000.0,
+    (0.375, 0.375): 30_000.0,
+    (0.125, 0.125): 100_000.0,
+    (0.125, 0.375): 300_000.0,
+    (0.125, 0.625): 15_000.0,
+}
+"""People in five 0.25 degree cells of about 773 km^2 each, by centre (latitude, longitude):
+the first four one 2 x 2 block of the 0.5 degree grid (densities about 3.9, 39, 129 and 388 per
+km^2), the fifth in the next 0.5 degree cell east (about 19 per km^2)."""
+
+
+def band_case_people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+    """People in the band case's five cells only."""
+    people = np.zeros(lat.shape)
+    for (centre_lat, centre_lon), count in BAND_CASE_PEOPLE.items():
+        people = np.where(
+            (np.abs(lat - centre_lat) < 0.125) & (np.abs(lon - centre_lon) < 0.125), count, people
+        )
+    return people
+
+
+def test_each_band_point_changes_its_one_input(synthetic_population_grid: GridBuilder) -> None:
+    """Objective: a band point's curve is the phone class's central curve but for its one
+    changed input, and the spaced point's area factor reaches the fill and maximum use alike
+    (both read the beam's footprint table).
+
+    Sample: the default inputs' six band points against the phone class's own limits; the band
+    case's five cells on a synthetic 0.25 degree grid, at the central threshold of 1 per km^2.
+
+    Expected outcome: the taper's footprint table is the central one times (1.0934 / 0.886)^2
+    (a footprint goes as the beamwidth squared) and the spaced point's the taper's times 1.5;
+    every other point keeps the central table; B is 48 for the 48-beam point and the central
+    150 for every other; every point keeps the phone class's people per beam and one layer (no
+    sky sectors). The points that keep the central threshold and grid reuse the central cells;
+    the 10 per km^2 point keeps the four cells at or above it and the 100 per km^2 point two;
+    the 0.5 degree grid sums the block into one cell of 433,000 people beside the 15,000 cell,
+    each with the 0.5 degree zone's area, half the rows and columns.
+    """
+    inputs = SaturationInputs()
+    phone = sat._class_limits(inputs, PHONE)
+    points = {point.name: point for point in inputs.bands}
+    taper_area = (1.0934 / 0.886) ** 2
+    scale = {
+        BandName.TAPER: taper_area,
+        BandName.TAPER_AND_SPACING: taper_area * 1.5,
+    }
+    for name, point in points.items():
+        band_limits = sat._band_limits(inputs, point)
+        np.testing.assert_allclose(
+            band_limits.beam.footprint_km2,
+            phone.beam.footprint_km2 * scale.get(name, 1.0),
+            rtol=1e-12,
+        )
+        assert band_limits.beams_per_satellite == (48.0 if name is BandName.BEAMS_48 else 150.0)
+        assert band_limits.people_per_beam == phone.people_per_beam
+        assert band_limits.directional is None
+    grid = synthetic_population_grid(0.25, band_case_people)
+    central = sat._demand_cells(grid, 1.0)
+    assert central.count == len(BAND_CASE_PEOPLE)
+    cells = {name: sat._band_cells(grid, point, central, 1.0) for name, point in points.items()}
+    for name in (BandName.TAPER, BandName.TAPER_AND_SPACING, BandName.BEAMS_48):
+        assert cells[name] is central
+    assert sorted(cells[BandName.DENSITY_10_PER_KM2].people.tolist()) == [
+        15_000.0,
+        30_000.0,
+        100_000.0,
+        300_000.0,
+    ]
+    assert sorted(cells[BandName.DENSITY_100_PER_KM2].people.tolist()) == [100_000.0, 300_000.0]
+    coarse = cells[BandName.GRID_0P5_DEG]
+    assert coarse.cell_deg == 0.5
+    assert coarse.index.shape == (360, 720)
+    assert coarse.people.tolist() == [433_000.0, 15_000.0]
+    zone = cell_area_km2(0.5, 0.5, 720)
+    assert coarse.area_km2 == pytest.approx([zone, zone], rel=1e-12)
+    assert np.degrees(coarse.lat_rad) == pytest.approx([0.25, 0.25])
+    assert np.degrees(coarse.lon_rad) == pytest.approx([0.25, 0.75])
+
+
 # ---------------------------------------------------------------------------
 # The real grid at a coarse, fast setting
 # ---------------------------------------------------------------------------
@@ -842,6 +953,187 @@ COARSE_DIRECTIONAL = {
 class's maximum use: fleet, L, capacity Gbps, U, the sector-rule ceiling, supply, the kept
 stacked share, the median separation (degrees) and the mean full-sum interference (dB)."""
 
+COARSE_BANDS = {
+    BandName.TAPER: (
+        253261.3007391356,
+        (
+            (
+                342,
+                19268.861303115795,
+                100.19807877620214,
+                0.37561133144475234,
+                67204.6866775107,
+                20183.576871614907,
+            ),
+            (
+                992,
+                51982.26061129278,
+                270.3077551787225,
+                0.34934314926944077,
+                129498.5403789101,
+                58497.21294412446,
+            ),
+            (
+                1980,
+                90385.6844979183,
+                470.0055593891752,
+                0.3043289040333949,
+                168586.02171164897,
+                117183.53473941982,
+            ),
+        ),
+    ),
+    BandName.TAPER_AND_SPACING: (
+        168882.15956754866,
+        (
+            (
+                342,
+                17883.794359746207,
+                92.99573067068027,
+                0.34861197582351283,
+                44803.29111163624,
+                18869.48870100613,
+            ),
+            (
+                992,
+                46285.68656170406,
+                240.68557012086112,
+                0.31105972151682837,
+                86332.9002698339,
+                54822.43062219184,
+            ),
+            (
+                1980,
+                78195.628411344,
+                406.61726773898886,
+                0.2632849441459394,
+                112391.94523636127,
+                109737.6448195993,
+            ),
+        ),
+    ),
+    BandName.DENSITY_10_PER_KM2: (
+        252829.7231940112,
+        (
+            (
+                342,
+                17233.082918813285,
+                89.61203117782908,
+                0.33592754227706206,
+                66755.526511821,
+                18421.37507649095,
+            ),
+            (
+                992,
+                45599.27469399411,
+                237.1162284087694,
+                0.30644673853490667,
+                127802.00237942414,
+                53892.43809956228,
+            ),
+            (
+                1980,
+                78913.01953168925,
+                410.34770156478413,
+                0.26570040246360016,
+                167231.5596078611,
+                107888.44036897024,
+            ),
+        ),
+    ),
+    BandName.DENSITY_100_PER_KM2: (
+        92020.43406589914,
+        (
+            (
+                342,
+                10235.839027540751,
+                53.2263629432119,
+                0.19952902587798735,
+                23577.929688830915,
+                11298.508971539646,
+            ),
+            (
+                992,
+                25876.40733770832,
+                134.55731815608326,
+                0.1739005869469645,
+                45897.65888676973,
+                34617.11517424151,
+            ),
+            (
+                1980,
+                40620.356108506894,
+                211.22585176423584,
+                0.1367688757862185,
+                60444.2866770497,
+                69302.28966736834,
+            ),
+        ),
+    ),
+    BandName.GRID_0P5_DEG: (
+        446507.1621288899,
+        (
+            (
+                342,
+                21601.799366765023,
+                112.32935670717812,
+                0.4210877069544839,
+                119629.71416586779,
+                22380.923093227226,
+            ),
+            (
+                992,
+                58807.60914697346,
+                305.799567564262,
+                0.3952124270629937,
+                230525.36179907064,
+                64696.68530694656,
+            ),
+            (
+                1980,
+                109231.32168481972,
+                568.0028727610626,
+                0.3677822278950159,
+                299752.75177026563,
+                129548.80947020264,
+            ),
+        ),
+    ),
+    BandName.BEAMS_48: (
+        380946.7365253218,
+        (
+            (
+                342,
+                7476.358546524962,
+                38.877064441929804,
+                0.4554311980095615,
+                102190.2125947176,
+                7624.037949061897,
+            ),
+            (
+                992,
+                20908.703028287917,
+                108.72525574709717,
+                0.4391108666895144,
+                196678.16776641438,
+                22576.75501265761,
+            ),
+            (
+                1980,
+                39445.19868116313,
+                205.11503314204828,
+                0.4150378649112282,
+                255760.63823593326,
+                44990.23618199112,
+            ),
+        ),
+    ),
+}
+"""The phone class's band points' coarse rows as first computed (2026-10-06), frozen, with each
+point's maximum use: fleet, L, capacity Gbps, U, ceiling, supply. The 48-beam point keeps the
+central maximum use and ceiling (neither depends on B); the two density points and the 0.5
+degree grid change the demand, the taper and the spacing the area per beam."""
+
 
 @pytest.fixture(scope="module")
 def real_grid(repo_dir: Path) -> PopulationGrid:
@@ -853,15 +1145,17 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
     """Objective: the module's numbers on the shipped grid do not drift.
 
     Sample: the default inputs (the investor's usage) at fleets 340, 1,000 and 2,000 and one
-    snapshot.
+    snapshot for every class and band point.
 
     Expected outcome: every class's rows (L, capacity, U, the ceiling, the supply, for the
     directional classes their stacking diagnostics, and for the phone class its interference
-    trim at -0.4, -2 and -8 dBi) and maximum use within 1e-4 relative of the frozen values; no
-    0.10 crossing by 1,980 and no other marker; the curve's envelope: schema, stamp, the input
-    hash of its parameters, the grid's name, digest, citations and licence, the three checks
-    passed, the run measured, the stated limits, and the three classes (small terminal,
-    mounted terminal, phone class) with no band yet.
+    trim at -0.4, -2 and -8 dBi) and maximum use within 1e-4 relative of the frozen values;
+    the six band points in their order, each the inputs' point, its rows (no trim, no
+    diagnostics) and maximum use within 1e-4 relative; no 0.10 crossing by 1,980 and no other
+    marker on any curve; the curve's envelope: schema, stamp, the input hash of its
+    parameters, the grid's name, digest, citations and licence, the three checks passed, the
+    run measured, the stated limits, and the three classes (small terminal, mounted terminal,
+    phone class).
     """
     inputs = SaturationInputs(
         sweep=SweepInputs(
@@ -869,6 +1163,7 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
             mounted_terminal_extension=(),
             snapshots_phone_central=1,
             snapshots_directional=1,
+            snapshots_bands=1,
         )
     )
     curve = compute_saturation(inputs, real_grid, version_stamp=STAMP)
@@ -911,7 +1206,25 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
     assert provenance.run_measurement.peak_memory_mb > 0
     assert len(curve.limits) == 8
     assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
-    assert curve.bands == ()
+    assert [band.point for band in curve.bands] == list(inputs.bands)
+    assert [band.point.name for band in curve.bands] == list(BandName)
+    for band in curve.bands:
+        maximum_use, frozen_rows = COARSE_BANDS[band.point.name]
+        assert band.markers.maximum_use_beams == pytest.approx(maximum_use, rel=1e-4)
+        assert band.markers.saturation_not_reached_by == 1_980
+        assert band.markers.elasticity_under_0p25_fleet is None
+        assert band.markers.fleet_at_90pct_of_maximum_use is None
+        for row, (fleet, useful, capacity, ocean, ceiling, supply) in zip(
+            band.rows, frozen_rows, strict=True
+        ):
+            assert (row.fleet, row.requested_fleet) == (fleet, walker_request_of(fleet))
+            assert row.useful_beams == pytest.approx(useful, rel=1e-4)
+            assert row.capacity_gbps == pytest.approx(capacity, rel=1e-4)
+            assert row.ocean_factor == pytest.approx(ocean, rel=1e-4)
+            assert row.ceiling_beams == pytest.approx(ceiling, rel=1e-4)
+            assert row.supply_beams == pytest.approx(supply, rel=1e-4)
+            assert row.directional is None
+            assert row.trim is None
     for device_class, (maximum_use, frozen_rows) in COARSE_DIRECTIONAL.items():
         directional = class_curve(curve, device_class)
         assert directional.markers.maximum_use_beams == pytest.approx(maximum_use, rel=1e-4)
@@ -2603,7 +2916,7 @@ def test_the_mounted_terminal_runs_over_its_extension_through_compute_saturation
     Sample: the shared-usage world (every class at 1 Mbps x 2.5 percent) at fleets 500 and
     1,000 (realized 506 and 992) with the mounted terminal's extension 4,000 (realized 3,969),
     one snapshot, with a second fleet under 1,000, since the contract
-    takes two fleets at least.
+    takes two fleets at least; the band points at the central values (:func:`central_bands`).
 
     Expected outcome: the classes in the class key's order; the mounted terminal's rows 506,
     992 and 3,969, requested 500, 1,000 and 4,000, its 3,969 row a directional row with its
@@ -2621,7 +2934,7 @@ def test_the_mounted_terminal_runs_over_its_extension_through_compute_saturation
         }
     )
     curve = compute_saturation(
-        inputs.model_copy(update={"sweep": sweep}), grid, version_stamp=STAMP
+        central_bands(inputs.model_copy(update={"sweep": sweep})), grid, version_stamp=STAMP
     )
     assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
     fleets_rows = [(506, 500), (992, 1_000)]
@@ -2656,10 +2969,10 @@ def test_the_memory_tiers_change_no_number(
     a worker's own peak.
 
     Expected outcome: at the default budget (room for at least eight task peaks) one process
-    runs the three classes' largest tasks and one pool the rest; with the budget binding (room
-    for about two), each class's 992 task, a tier of its own (under half of 10,000), runs alone
-    too: four alone runs. The two curves are equal in everything but the run's own
-    measurement.
+    runs the nine curves' largest tasks (three classes, six band points) and one pool the
+    rest; with the budget binding (room for about two), each curve's 992 task, a tier of its
+    own (under half of 10,000), runs alone too: ten alone runs. The two curves are equal in
+    everything but the run's own measurement.
     """
     monkeypatch.setattr(sat.os, "process_cpu_count", lambda: TIER_TEST_CPUS)
     inputs = small_sweep(
@@ -2671,10 +2984,10 @@ def test_the_memory_tiers_change_no_number(
     def counted_run_alone(
         indices: Sequence[int],
         tasks: Sequence[sat._SnapshotTask],
-        context: sat._SweepContext,
+        contexts: Mapping[sat._CurveKey, sat._SweepContext],
         results: dict[int, sat._SnapshotResult],
     ) -> None:
-        run_alone(indices, tasks, context, results)
+        run_alone(indices, tasks, contexts, results)
         alone_runs.append([results[index].worker_peak_mb for index in indices])
 
     monkeypatch.setattr(sat, "_run_alone", counted_run_alone)
@@ -2685,7 +2998,7 @@ def test_the_memory_tiers_change_no_number(
     assert room >= TIER_TEST_CPUS
     monkeypatch.setattr(sat, "_MEMORY_BUDGET_MB", sat._own_peak_mb() + 2 * task_peak_mb)
     tiered = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
-    assert len(alone_runs) == 1 + 1 + len(DeviceClass)
+    assert len(alone_runs) == 1 + 1 + len(DeviceClass) + len(BandName)
     measured_as_free = tiered.model_copy(
         update={
             "provenance": tiered.provenance.model_copy(

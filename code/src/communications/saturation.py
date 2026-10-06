@@ -96,21 +96,29 @@ for one class on one set of inputs; this version runs stages 2 to 11 for every c
     floor gamma. The directional classes carry none: each terminal's own pattern suppresses
     the leak (a stated limit).
 
-The checks raise :class:`SaturationInvariantError`: the bounds (L at most min(ceiling,
-supply) and the ceiling at most maximum use, at every snapshot of every class, 1e-9
-relative); the stall floor (the phone class's L at least the sweep's floor x min(ceiling,
-supply) from 20,000 satellites up, at every snapshot and in the means); capacity per
-satellite never rising between consecutive rows of any class by more than 2 percent of the
-earlier row (the snapshots' noise).
+**The band points.** Beside the phone class's central curve, one curve per band point, each
+the central curve but for one changed input, at the bands' snapshots over the same fleets,
+with its own rows, maximum use and markers: the taper (the beam's half-power width); the
+taper with wider co-channel spacing (the ground a co-channel beam occupies over its 3 dB
+footprint, scaling the area per beam in the fill, the two bounds and maximum use alike); 10
+and 100 people per km^2 (the demand threshold); the 0.5 degree grid (the shipped cells summed
+2 x 2); and 48 beams per satellite. They carry no trim.
 
-The classes' snapshots run in separate processes. Each class's largest task runs first and
-measures a worker's peak memory; then as many workers run at once as keep the parent's peak
-plus their summed peaks under the 16 GB budget, at most one per CPU: every other task in one
-pool when the budget allows a worker per CPU, otherwise each class in memory tiers down its
-fleets, each tier sized by its own largest task (one process at a time only at the top of the
-grid). The curve records the wall time and that bound (each worker reports its own peak; the
-bound is the parent's peak plus the summed peaks of the largest set of workers alive at
-once).
+The checks raise :class:`SaturationInvariantError`: the bounds (L at most min(ceiling,
+supply) and the ceiling at most maximum use, at every snapshot of every class and band
+point, 1e-9 relative); the stall floor (the phone class's central L at least the sweep's
+floor x min(ceiling, supply) from 20,000 satellites up, at every snapshot and in the means;
+not the band points); capacity per satellite never rising between consecutive rows of any
+class or band point by more than 2 percent of the earlier row (the snapshots' noise).
+
+The curves' snapshots run in separate processes, each task sent its own curve's demand cells
+and limits. Each curve's largest task runs first and measures a worker's peak memory; then
+as many workers run at once as keep the parent's peak plus their summed peaks under the 16 GB
+budget, at most one per CPU: every other task in one pool when the budget allows a worker per
+CPU, otherwise each curve in memory tiers down its fleets, each tier sized by its own largest
+task (one process at a time only at the top of the grid). The curve records the wall time
+and that bound (each worker reports its own peak; the bound is the parent's peak plus the
+summed peaks of the largest set of workers alive at once).
 
 Public: :func:`load_population_grid`, :class:`PopulationGrid`, :func:`compute_saturation`,
 :class:`PopulationGridError` and :class:`SaturationInvariantError`. Everything else is
@@ -131,9 +139,9 @@ import zipfile
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
-from itertools import pairwise, repeat
+from itertools import pairwise
 from multiprocessing import get_context
 from pathlib import Path
 from typing import Final
@@ -143,9 +151,17 @@ import numpy.typing as npt
 
 from common.cadence import round_half_up
 from common.file_io import ModelFileError
-from communications.constants import APERTURE_REFERENCE_M2, GBPS_TO_MBPS, DeviceClass
+from communications.constants import (
+    APERTURE_REFERENCE_M2,
+    GBPS_TO_MBPS,
+    GRID_AGGREGATION_SHIPPED,
+    DeviceClass,
+)
 from communications.saturation_curve import (
     SATURATION_CURVE_SCHEMA_VERSION,
+    BandCurve,
+    BandName,
+    BandPoint,
     ClassCurve,
     ClassInputs,
     ClassMarkers,
@@ -163,6 +179,10 @@ from communications.saturation_curve import (
 from communications.saturation_curve import walker_shape as _walker_shape
 
 logger = logging.getLogger(__name__)
+
+type _CurveKey = DeviceClass | BandName
+"""What one curve of the sweep is for: a class (its central curve) or one of the phone class's
+band points. The two enums' values never coincide, so a key names one curve."""
 
 # ===========================================================================
 # Physical constants and the curve's pinned conventions
@@ -634,23 +654,41 @@ def _check_global(population: PopulationGrid) -> None:
         )
 
 
-def _demand_cells(population: PopulationGrid, density_threshold_per_km2: float) -> _DemandCells:
+def _demand_cells(
+    population: PopulationGrid,
+    density_threshold_per_km2: float,
+    grid_aggregation: int = GRID_AGGREGATION_SHIPPED,
+) -> _DemandCells:
     """Return the grid's demand cells: every cell with at least the threshold's density.
 
     Args:
         population: A global population grid.
         density_threshold_per_km2: A cell is demand at this many people per km^2 or more.
+        grid_aggregation: The grid's cells summed per side first (the shipped grid as it is
+            at :data:`~communications.constants.GRID_AGGREGATION_SHIPPED`; 2 sums each 2 x 2
+            block of cells into one cell twice as wide, the 0.5 degree band point's grid).
 
     Returns:
-        The demand cells, in row-major order of the grid.
+        The demand cells, in row-major order of the (summed) grid.
 
     Raises:
-        PopulationGridError: If the grid is not global.
+        PopulationGridError: If the grid is not global, or its rows or columns do not divide
+            by the aggregation.
     """
     _check_global(population)
     people_grid = population.population.astype(np.float64)
     n_lat, n_lon = people_grid.shape
-    cell_deg = population.cell_deg
+    if n_lat % grid_aggregation or n_lon % grid_aggregation:
+        raise PopulationGridError(
+            f"{population.file_name}: {n_lat} x {n_lon} cells do not sum {grid_aggregation} x "
+            f"{grid_aggregation}"
+        )
+    if grid_aggregation != GRID_AGGREGATION_SHIPPED:
+        n_lat, n_lon = n_lat // grid_aggregation, n_lon // grid_aggregation
+        people_grid = people_grid.reshape(n_lat, grid_aggregation, n_lon, grid_aggregation).sum(
+            axis=(1, 3)
+        )
+    cell_deg = population.cell_deg * grid_aggregation
     lat_edges = np.radians(population.lat_top_deg - np.arange(n_lat + 1) * cell_deg)
     row_area = _ZONE_AREA_PER_SINE_KM2 * np.abs(np.diff(np.sin(lat_edges))) / n_lon
     density = people_grid / row_area[:, None]
@@ -2394,11 +2432,11 @@ def _interference_trim(
 
 @dataclass(frozen=True)
 class _SnapshotTask:
-    """One class at one fleet at one snapshot time.
+    """One curve (a class's, or a band point's) at one fleet at one snapshot time.
 
     Attributes:
-        device_class: The class.
-        fleet_index: The fleet's position in the class's sweep.
+        curve: The class or the band point.
+        fleet_index: The fleet's position in the curve's sweep.
         requested_fleet: The requested fleet N.
         snapshot_index: The snapshot's position in the draw.
         time_s: The snapshot time, s.
@@ -2406,7 +2444,7 @@ class _SnapshotTask:
             central curve, on the first snapshots of the draw).
     """
 
-    device_class: DeviceClass
+    curve: _CurveKey
     fleet_index: int
     requested_fleet: int
     snapshot_index: int
@@ -2416,12 +2454,16 @@ class _SnapshotTask:
 
 @dataclass(frozen=True, eq=False)
 class _SweepContext:
-    """What every snapshot task needs: the shell, the demand cells, each class's limits and the
-    interference trim's settings."""
+    """What one curve's snapshot tasks need: the shell, the curve's demand cells and limits, and
+    the interference trim's settings.
+
+    Each task is sent its own curve's context only, so a band point with its own demand cells
+    adds nothing to the other curves' tasks.
+    """
 
     shell: ShellInputs
     cells: _DemandCells
-    limits: Mapping[DeviceClass, _AllocationLimits]
+    limits: _AllocationLimits
     trim: TrimInputs
 
 
@@ -2463,10 +2505,10 @@ def _own_peak_mb() -> float:
 
 
 def _run_snapshot(task: _SnapshotTask, context: _SweepContext) -> _SnapshotResult:
-    """Run one class at one fleet at one snapshot time (a worker's task), pricing the
+    """Run one curve at one fleet at one snapshot time (a worker's task), pricing the
     interference trim on its allocation when the task asks."""
     satellites = _walker_positions(context.shell, task.requested_fleet, task.time_s)
-    allocation = _allocate(satellites, context.cells, context.limits[task.device_class])
+    allocation = _allocate(satellites, context.cells, context.limits)
     trims = (
         _interference_trim(satellites, allocation, context.cells, context.shell, context.trim)
         if task.prices_trim
@@ -2519,19 +2561,21 @@ def _memory_binds(task_peak_mb: float) -> bool:
 
 
 def _sector_count(limits: _AllocationLimits) -> int:
-    """Return a class's sky sectors (none for the phone class): the sweep measures the classes
-    in this order, the lightest first, since stage 2's keys grow with it."""
+    """Return a curve's sky sectors (none for the phone class and its band points): the sweep
+    measures the curves in this order, the lightest first, since stage 2's keys grow with it."""
     return 0 if limits.directional is None else limits.directional.layout.count
 
 
 def _run_pool(
     indices: Sequence[int],
     tasks: Sequence[_SnapshotTask],
-    context: _SweepContext,
+    contexts: Mapping[_CurveKey, _SweepContext],
     task_peak_mb: float,
     results: dict[int, _SnapshotResult],
 ) -> tuple[int, float]:
     """Run the tasks at ``indices`` in a fresh pool sized to ``task_peak_mb``; store their results.
+
+    Each task is sent with its own curve's context.
 
     Returns:
         The pool's worker count and the summed peaks of its workers, MB (they are alive at
@@ -2542,7 +2586,11 @@ def _run_pool(
     with ProcessPoolExecutor(max_workers=workers, mp_context=get_context("spawn")) as pool:
         for index, result in zip(
             indices,
-            pool.map(_run_snapshot, [tasks[i] for i in indices], repeat(context)),
+            pool.map(
+                _run_snapshot,
+                [tasks[i] for i in indices],
+                [contexts[tasks[i].curve] for i in indices],
+            ),
             strict=True,
         ):
             results[index] = result
@@ -2556,7 +2604,7 @@ def _run_pool(
 def _run_alone(
     indices: Sequence[int],
     tasks: Sequence[_SnapshotTask],
-    context: _SweepContext,
+    contexts: Mapping[_CurveKey, _SweepContext],
     results: dict[int, _SnapshotResult],
 ) -> None:
     """Run the tasks at ``indices`` one after another in one fresh process; store their results.
@@ -2565,56 +2613,54 @@ def _run_alone(
     """
     with ProcessPoolExecutor(max_workers=_MIN_WORKERS, mp_context=get_context("spawn")) as alone:
         for index in indices:
-            results[index] = alone.submit(_run_snapshot, tasks[index], context).result()
+            task = tasks[index]
+            results[index] = alone.submit(_run_snapshot, task, contexts[task.curve]).result()
 
 
-def _run_sweep(tasks: Sequence[_SnapshotTask], context: _SweepContext) -> _SweepRun:
+def _run_sweep(
+    tasks: Sequence[_SnapshotTask], contexts: Mapping[_CurveKey, _SweepContext]
+) -> _SweepRun:
     """Run every task in separate processes, the largest tasks first and measured.
 
-    A worker's peak grows about linearly with the fleet and differs by class. Each class's
-    largest task runs first, the lightest class's first, one after another in one fresh
-    process, so each one's reading bounds every other task of its class. When the budget does
+    A worker's peak grows about linearly with the fleet and differs by curve. Each curve's
+    largest task runs first, the lightest curve's first, one after another in one fresh
+    process, so each one's reading bounds every other task of its curve. When the budget does
     not limit the workers at the largest reading, every other task then runs in one pool
-    under it. Otherwise each class runs from its largest fleet down in tiers: a tier holds the
+    under it. Otherwise each curve runs from its largest fleet down in tiers: a tier holds the
     tasks whose requested fleet exceeds its largest over :data:`_SWEEP_TIER_FLEET_RATIO` and
     runs under its largest's reading, each lower tier's largest task running alone first in a
-    fresh process, until the budget no longer limits the workers and the rest of the class
+    fresh process, until the budget no longer limits the workers and the rest of the curve
     runs in one pool. Every pool is fresh, a pool's workers are alive at once so their peaks
-    sum, and the pools run one after another.
+    sum, and the pools run one after another. The curves keep the order their tasks first
+    appear in.
 
     Raises:
         BrokenProcessPool: If a worker dies (logged with the task count before it rises).
     """
     results: dict[int, _SnapshotResult] = {}
-    by_class = {
-        device_class: sorted(
-            (i for i, task in enumerate(tasks) if task.device_class is device_class),
-            key=lambda i: (-tasks[i].requested_fleet, i),
-        )
-        for device_class in DeviceClass
-    }
-    by_class = {device_class: order for device_class, order in by_class.items() if order}
+    by_curve: dict[_CurveKey, list[int]] = {}
+    for index, task in enumerate(tasks):
+        by_curve.setdefault(task.curve, []).append(index)
+    for order in by_curve.values():
+        order.sort(key=lambda i: (-tasks[i].requested_fleet, i))
     tops = [
         order[0]
         for _, order in sorted(
-            by_class.items(), key=lambda item: _sector_count(context.limits[item[0]])
+            by_curve.items(), key=lambda item: _sector_count(contexts[item[0]].limits)
         )
     ]
     widest = _MIN_WORKERS
     try:
-        _run_alone(tops, tasks, context, results)
-        bounds = {
-            device_class: results[order[0]].worker_peak_mb
-            for device_class, order in by_class.items()
-        }
+        _run_alone(tops, tasks, contexts, results)
+        bounds = {curve: results[order[0]].worker_peak_mb for curve, order in by_curve.items()}
         peak_bound_mb = max(bounds.values(), default=0.0)
-        rest = [i for order in by_class.values() for i in order[1:]]
+        rest = [i for order in by_curve.values() for i in order[1:]]
         if rest and not _memory_binds(peak_bound_mb):
-            widest, pool_peak_mb = _run_pool(rest, tasks, context, peak_bound_mb, results)
+            widest, pool_peak_mb = _run_pool(rest, tasks, contexts, peak_bound_mb, results)
             peak_bound_mb = max(peak_bound_mb, pool_peak_mb)
         elif rest:
-            for device_class, order in by_class.items():
-                bound_mb = bounds[device_class]
+            for curve, order in by_curve.items():
+                bound_mb = bounds[curve]
                 floor_fleet = tasks[order[0]].requested_fleet / _SWEEP_TIER_FLEET_RATIO
                 pending = order[1:]
                 while pending:
@@ -2624,12 +2670,12 @@ def _run_sweep(tasks: Sequence[_SnapshotTask], context: _SweepContext) -> _Sweep
                     else:
                         tier, pending = pending, []
                     if tier:
-                        workers, pool_peak_mb = _run_pool(tier, tasks, context, bound_mb, results)
+                        workers, pool_peak_mb = _run_pool(tier, tasks, contexts, bound_mb, results)
                         widest = max(widest, workers)
                         peak_bound_mb = max(peak_bound_mb, pool_peak_mb)
                     if pending:
                         top, pending = pending[0], pending[1:]
-                        _run_alone([top], tasks, context, results)
+                        _run_alone([top], tasks, contexts, results)
                         bound_mb = results[top].worker_peak_mb
                         peak_bound_mb = max(peak_bound_mb, bound_mb)
                         floor_fleet = tasks[top].requested_fleet / _SWEEP_TIER_FLEET_RATIO
@@ -2702,26 +2748,33 @@ def _exceeds(value: float, bound: float, relative_tolerance: float) -> bool:
     return value > bound and not math.isclose(value, bound, rel_tol=relative_tolerance)
 
 
-def _check_bounds(
-    device_class: DeviceClass, fleets: Sequence[_FleetSnapshots], maximum_use: float
-) -> None:
+def _curve_label(curve: _CurveKey) -> str:
+    """Return a curve's name in messages and limits: its class's key, or for a band point the
+    phone class's key and the point's name."""
+    if isinstance(curve, BandName):
+        return f"{DeviceClass.PHONE_CLASS.value} band point {curve.value}"
+    return curve.value
+
+
+def _check_bounds(curve: _CurveKey, fleets: Sequence[_FleetSnapshots], maximum_use: float) -> None:
     """Refuse a snapshot whose L exceeds min(ceiling, supply) or whose ceiling exceeds maximum use.
 
     Raises:
-        SaturationInvariantError: Naming the class, the fleet, the snapshot and the values.
+        SaturationInvariantError: Naming the curve, the fleet, the snapshot and the values.
     """
+    name = _curve_label(curve)
     for fleet in fleets:
         for snapshot, (useful, ceiling, supply) in enumerate(
             zip(fleet.useful_beams, fleet.ceiling_beams, fleet.supply_beams, strict=True)
         ):
             if _exceeds(useful, min(ceiling, supply), _BOUNDS_RELATIVE_TOLERANCE):
                 raise SaturationInvariantError(
-                    f"{device_class.value} at {fleet.fleet} satellites, snapshot {snapshot}: "
+                    f"{name} at {fleet.fleet} satellites, snapshot {snapshot}: "
                     f"useful beams {useful} exceed min(ceiling {ceiling}, supply {supply})"
                 )
             if _exceeds(ceiling, maximum_use, _BOUNDS_RELATIVE_TOLERANCE):
                 raise SaturationInvariantError(
-                    f"{device_class.value} at {fleet.fleet} satellites, snapshot {snapshot}: "
+                    f"{name} at {fleet.fleet} satellites, snapshot {snapshot}: "
                     f"the ceiling {ceiling} exceeds maximum use {maximum_use}"
                 )
 
@@ -2844,7 +2897,7 @@ def _class_rows(
     return tuple(rows)
 
 
-def _check_capacity_per_satellite(device_class: DeviceClass, rows: Sequence[CurveRow]) -> None:
+def _check_capacity_per_satellite(curve: _CurveKey, rows: Sequence[CurveRow]) -> None:
     """Refuse a curve whose capacity per satellite rises between consecutive rows.
 
     A rise of up to :data:`_CAPACITY_PER_SATELLITE_RISE_TOLERANCE` of the earlier row's value
@@ -2852,14 +2905,14 @@ def _check_capacity_per_satellite(device_class: DeviceClass, rows: Sequence[Curv
     row (which the stall floor, from 20,000 satellites up, cannot see).
 
     Raises:
-        SaturationInvariantError: Naming the class, the two fleets and the two values.
+        SaturationInvariantError: Naming the curve, the two fleets and the two values.
     """
     for earlier, later in pairwise(rows):
         before = earlier.capacity_gbps / earlier.fleet
         after = later.capacity_gbps / later.fleet
         if after - before > _CAPACITY_PER_SATELLITE_RISE_TOLERANCE * before:
             raise SaturationInvariantError(
-                f"{device_class.value}: capacity per satellite rises from {before} Gbps at "
+                f"{_curve_label(curve)}: capacity per satellite rises from {before} Gbps at "
                 f"{earlier.fleet} satellites to {after} Gbps at {later.fleet}, more than "
                 f"{_CAPACITY_PER_SATELLITE_RISE_TOLERANCE:g} relative"
             )
@@ -2906,9 +2959,7 @@ def _fleet_reaching(
     return None
 
 
-def _elasticity(
-    device_class: DeviceClass, rows: Sequence[CurveRow]
-) -> tuple[list[float], list[float]]:
+def _elasticity(curve: _CurveKey, rows: Sequence[CurveRow]) -> tuple[list[float], list[float]]:
     """Return the rows' interval midpoints and the elasticity of capacity at each.
 
     The elasticity ln(C_i+1 / C_i) / ln(N_i+1 / N_i) sits at the interval's geometric
@@ -2922,7 +2973,7 @@ def _elasticity(
     capacity = [row.capacity_gbps for row in rows]
     if min(capacity) <= 0:
         raise SaturationInvariantError(
-            f"{device_class.value}: capacity must be positive at every row to read the "
+            f"{_curve_label(curve)}: capacity must be positive at every row to read the "
             f"elasticity; got {capacity}"
         )
     midpoints = [math.sqrt(low * high) for low, high in pairwise(fleets)]
@@ -2945,9 +2996,7 @@ def _reached_at_first_row(useful_beams: Sequence[float], target: float) -> bool:
     return useful_beams[0] >= target
 
 
-def _markers(
-    device_class: DeviceClass, rows: Sequence[CurveRow], maximum_use: float
-) -> ClassMarkers:
+def _markers(curve: _CurveKey, rows: Sequence[CurveRow], maximum_use: float) -> ClassMarkers:
     """Return a curve's markers, read on its rows against maximum use.
 
     The saturation number, placed first, is the first crossing of the elasticity under 0.10,
@@ -2964,8 +3013,8 @@ def _markers(
             midpoint.
     """
     fleets = [row.fleet for row in rows]
-    midpoints, elasticity = _elasticity(device_class, rows)
-    name = device_class.value
+    midpoints, elasticity = _elasticity(curve, rows)
+    name = _curve_label(curve)
     saturation = _first_crossing_under(
         midpoints, elasticity, _SATURATION_ELASTICITY, f"{name}, the saturation number"
     )
@@ -2993,19 +3042,20 @@ def _markers(
 
 
 def _unplaced_marker_limits(
-    device_class: DeviceClass, rows: Sequence[CurveRow], maximum_use: float
+    curve: _CurveKey, rows: Sequence[CurveRow], maximum_use: float
 ) -> tuple[str, ...]:
     """Return the limits a curve states for its supporting markers that its rows cannot place.
 
-    Such a marker is None in the markers, like one not reached; this says which it is.
+    Such a marker is None in the markers, like one not reached; this says which it is, naming
+    the class or the band point.
     """
-    _, elasticity = _elasticity(device_class, rows)
-    name = device_class.value
+    _, elasticity = _elasticity(curve, rows)
+    name = _curve_label(curve)
     limits = []
     if _crosses_before_first_midpoint(elasticity, _SUPPORTING_ELASTICITY):
-        class_in_prose = device_class.value.replace("_", " ")
+        curve_in_prose = name.replace("_", " ")
         limits.append(
-            f"The {class_in_prose}'s crossing under {_SUPPORTING_ELASTICITY:g} lies before the "
+            f"The {curve_in_prose}'s crossing under {_SUPPORTING_ELASTICITY:g} lies before the "
             "first midpoint (the geometric mean of the first two rows), where the rows cannot "
             "place it, so it is not reported; a sweep starting lower would place it."
         )
@@ -3070,6 +3120,141 @@ def _class_limits(inputs: SaturationInputs, device_class: DeviceClass) -> _Alloc
     )
 
 
+def _band_limits(inputs: SaturationInputs, point: BandPoint) -> _AllocationLimits:
+    """Return a band point's allocation limits: the phone class's, but for the point's beam.
+
+    The beam's half-power width is the point's, and its footprint is scaled by the point's
+    spacing area factor (the ground a co-channel beam occupies over its 3 dB footprint), so
+    the fill, the two bounds and maximum use read the same effective area per beam. B is the
+    point's own count, or the calibration's at the reference panel when it sets none. The
+    point's demand threshold and grid set its demand cells (:func:`_band_cells`).
+
+    Args:
+        inputs: The curve's inputs.
+        point: The band point.
+
+    Returns:
+        The point's limits.
+    """
+    phone = _class_limits(inputs, DeviceClass.PHONE_CLASS)
+    beam = _beam_model(inputs.shell.model_copy(update={"beamwidth_factor": point.beamwidth_factor}))
+    return replace(
+        phone,
+        beams_per_satellite=(
+            _beams_per_satellite(inputs.shell)
+            if point.beams_per_satellite is None
+            else float(point.beams_per_satellite)
+        ),
+        beam=replace(beam, footprint_km2=beam.footprint_km2 * point.spacing_area_factor),
+    )
+
+
+def _band_cells(
+    population: PopulationGrid,
+    point: BandPoint,
+    central: _DemandCells,
+    central_threshold_per_km2: float,
+) -> _DemandCells:
+    """Return a band point's demand cells: the central ones when the point keeps the central
+    threshold and the shipped grid, else the grid (summed as the point says) at its threshold.
+
+    Args:
+        population: The population grid.
+        point: The band point.
+        central: The central curve's demand cells.
+        central_threshold_per_km2: The central curve's demand threshold.
+
+    Returns:
+        The point's demand cells.
+    """
+    if (
+        point.density_threshold_per_km2 == central_threshold_per_km2
+        and point.grid_aggregation == GRID_AGGREGATION_SHIPPED
+    ):
+        return central
+    return _demand_cells(population, point.density_threshold_per_km2, point.grid_aggregation)
+
+
+@dataclass(frozen=True, eq=False)
+class _CurvePlan:
+    """One curve the sweep computes: a class's central curve or a band point's.
+
+    Attributes:
+        key: The class or the band point.
+        fleets: Its requested fleets, in order.
+        snapshots: Its snapshots at each fleet.
+        context: What its snapshot tasks need: the shell, its demand cells and limits, the
+            trim's settings.
+        point: The band point, for a band point's curve; None for a class's.
+    """
+
+    key: _CurveKey
+    fleets: tuple[int, ...]
+    snapshots: int
+    context: _SweepContext
+    point: BandPoint | None
+
+
+def _curve_plans(
+    inputs: SaturationInputs, population: PopulationGrid, cells: _DemandCells
+) -> tuple[_CurvePlan, ...]:
+    """Return the curves a run computes: every class in its key's order, then every band point.
+
+    The mounted terminal runs over the sweep's fleets and its extension, every other class and
+    every band point over the fleets; the directional classes at the directional snapshots, the
+    phone class at its central snapshots, the band points at the bands' snapshots.
+
+    Args:
+        inputs: The curve's inputs.
+        population: The population grid (a band point may sum it or set its own threshold).
+        cells: The central demand cells.
+
+    Returns:
+        The plans, classes first.
+    """
+    sweep = inputs.sweep
+    plans = []
+    for entry in inputs.classes:
+        limits = _class_limits(inputs, entry.device_class)
+        plans.append(
+            _CurvePlan(
+                key=entry.device_class,
+                fleets=(
+                    sweep.fleets + sweep.mounted_terminal_extension
+                    if entry.device_class is DeviceClass.MOUNTED_TERMINAL_CLASS
+                    else sweep.fleets
+                ),
+                snapshots=(
+                    sweep.snapshots_phone_central
+                    if limits.directional is None
+                    else sweep.snapshots_directional
+                ),
+                context=_SweepContext(
+                    shell=inputs.shell, cells=cells, limits=limits, trim=inputs.trim
+                ),
+                point=None,
+            )
+        )
+    for point in inputs.bands:
+        plans.append(
+            _CurvePlan(
+                key=point.name,
+                fleets=sweep.fleets,
+                snapshots=sweep.snapshots_bands,
+                context=_SweepContext(
+                    shell=inputs.shell,
+                    cells=_band_cells(
+                        population, point, cells, inputs.demand.density_threshold_per_km2
+                    ),
+                    limits=_band_limits(inputs, point),
+                    trim=inputs.trim,
+                ),
+                point=point,
+            )
+        )
+    return tuple(plans)
+
+
 def _method(inputs: SaturationInputs) -> str:
     """Return the method, stated as the rule, at the inputs' values."""
     shell, sweep, trim = inputs.shell, inputs.sweep, inputs.trim
@@ -3122,22 +3307,28 @@ def _method(inputs: SaturationInputs) -> str:
         f"{trim.victims:,} served cells are the victims, drawn without replacement in "
         f"proportion to their beams, a fresh draw from seed {trim.seed} at each row; the trim "
         "is 1 - the victims' mean of log2(1 + 1 / (1 + x)), at each floor gamma of "
-        f"{floors} dBi."
+        f"{floors} dBi. Each band point of the phone class is its central curve but for one "
+        f"changed input, at {sweep.snapshots_bands} snapshot(s) a row over the same fleets, "
+        "with its own rows and markers: the beam's half-power width (the taper), the ground a "
+        "co-channel beam occupies over its 3 dB footprint (wider co-channel spacing, scaling "
+        "the area per beam in the fill, the bounds and maximum use alike), the demand "
+        "threshold, the grid (the shipped cells summed k x k), or the beams per satellite."
     )
 
 
 def _checks_passed(inputs: SaturationInputs) -> tuple[str, ...]:
     """Return the checks a computed curve passed, each stated as its rule."""
     return (
-        "bounds: at every snapshot of every class, useful beams at most min(ceiling, supply) "
-        "and the ceiling at most maximum use (for a directional class, the sector-rule "
-        f"ceiling and its maximum use), within {_BOUNDS_RELATIVE_TOLERANCE:g} relative",
-        f"stall floor: from {_STALL_FLOOR_FROM_FLEET:,} satellites up, the phone class's useful "
-        f"beams at least {inputs.sweep.stall_floor:g} x min(ceiling, supply), at every "
-        "snapshot and in the snapshot means",
-        "capacity per satellite never rises between consecutive rows of any class by more "
-        f"than {_CAPACITY_PER_SATELLITE_RISE_TOLERANCE:g} relative to the earlier row (the "
-        "snapshots' noise)",
+        "bounds: at every snapshot of every class and band point, useful beams at most "
+        "min(ceiling, supply) and the ceiling at most maximum use (for a directional class, "
+        "the sector-rule ceiling and its maximum use), within "
+        f"{_BOUNDS_RELATIVE_TOLERANCE:g} relative",
+        f"stall floor: from {_STALL_FLOOR_FROM_FLEET:,} satellites up, the phone class's "
+        f"central useful beams at least {inputs.sweep.stall_floor:g} x min(ceiling, supply), "
+        "at every snapshot and in the snapshot means",
+        "capacity per satellite never rises between consecutive rows of any class or band "
+        f"point by more than {_CAPACITY_PER_SATELLITE_RISE_TOLERANCE:g} relative to the "
+        "earlier row (the snapshots' noise)",
     )
 
 
@@ -3169,15 +3360,18 @@ def _curve_limits(inputs: SaturationInputs) -> tuple[str, ...]:
 def compute_saturation(
     inputs: SaturationInputs, population: PopulationGrid, *, version_stamp: str
 ) -> SaturationCurve:
-    """Compute the saturation curve on a population grid: every class, in the class key's order.
+    """Compute the saturation curve on a population grid: every class, then every band point.
 
     Runs stages 2 to 11 of the module docstring for each class, the small terminal and the
     mounted terminal by rules D1 to D6 at the sweep's directional snapshots (the mounted
     terminal over its extension too) and the phone class at its central snapshots, and stage
-    12, the interference trim, on the phone class's central rows; checks the bounds and
-    capacity per satellite for every class and the stall floor for the phone class; reads
-    each class's markers against its maximum use, states any supporting marker the rows
-    cannot place among the limits, and records the run's wall time and peak-memory bound.
+    12, the interference trim, on the phone class's central rows; then each band point of
+    the phone class, the central curve but for its one changed input, at the bands'
+    snapshots. Every curve's tasks share one sweep. Checks the bounds and capacity per
+    satellite for every class and band point and the stall floor for the phone class's
+    central curve; reads each curve's markers against its own maximum use, states any
+    supporting marker the rows cannot place among the limits, and records the run's wall
+    time and peak-memory bound.
 
     Args:
         inputs: The curve's inputs.
@@ -3185,11 +3379,12 @@ def compute_saturation(
         version_stamp: The stamp the curve carries.
 
     Returns:
-        The curve, with every class's rows and markers.
+        The curve, with every class's rows and markers and every band point's.
 
     Raises:
-        PopulationGridError: If the grid is not the one the inputs name, or not global.
-        SaturationInvariantError: If a check fails, a class's realized fleets do not strictly
+        PopulationGridError: If the grid is not the one the inputs name, not global, or not
+            divisible by a band point's aggregation.
+        SaturationInvariantError: If a check fails, the realized fleets do not strictly
             increase, a saturation number lies before the rows can place it, or the trim asks
             for more snapshots than the phone class's central curve computes.
     """
@@ -3206,83 +3401,67 @@ def compute_saturation(
             f"phone class's central curve, which computes {sweep.snapshots_phone_central}: "
             "sweep.snapshots_trim must not exceed sweep.snapshots_phone_central"
         )
-    fleets_of = {
-        entry.device_class: (
-            sweep.fleets + sweep.mounted_terminal_extension
-            if entry.device_class is DeviceClass.MOUNTED_TERMINAL_CLASS
-            else sweep.fleets
-        )
-        for entry in inputs.classes
-    }
-    for requested in fleets_of.values():
-        _check_realized_fleets(requested)
+    _check_realized_fleets(sweep.fleets)
+    _check_realized_fleets(sweep.fleets + sweep.mounted_terminal_extension)
     cells = _demand_cells(population, inputs.demand.density_threshold_per_km2)
-    limits = {
-        entry.device_class: _class_limits(inputs, entry.device_class) for entry in inputs.classes
-    }
-    snapshots_of = {
-        device_class: (
-            sweep.snapshots_phone_central
-            if class_limits.directional is None
-            else sweep.snapshots_directional
-        )
-        for device_class, class_limits in limits.items()
-    }
+    plans = _curve_plans(inputs, population, cells)
     times = np.random.default_rng(sweep.seed).uniform(
-        _DAY_START_S, _SIDEREAL_DAY_S, max(snapshots_of.values())
+        _DAY_START_S, _SIDEREAL_DAY_S, max(plan.snapshots for plan in plans)
     )
     tasks = [
         _SnapshotTask(
-            device_class=device_class,
+            curve=plan.key,
             fleet_index=fleet_index,
             requested_fleet=fleet,
             snapshot_index=snapshot_index,
             time_s=float(times[snapshot_index]),
-            prices_trim=device_class is DeviceClass.PHONE_CLASS
+            prices_trim=plan.key is DeviceClass.PHONE_CLASS
             and snapshot_index < sweep.snapshots_trim,
         )
-        for device_class in limits
-        for fleet_index, fleet in enumerate(fleets_of[device_class])
-        for snapshot_index in range(snapshots_of[device_class])
+        for plan in plans
+        for fleet_index, fleet in enumerate(plan.fleets)
+        for snapshot_index in range(plan.snapshots)
     ]
     logger.info(
-        "saturation: %d classes, %d snapshot tasks on %d demand cells of %s",
-        len(limits),
+        "saturation: %d classes and %d band points, %d snapshot tasks on %d demand cells of %s",
+        len(inputs.classes),
+        len(inputs.bands),
         len(tasks),
         cells.count,
         population.file_name,
     )
-    run = _run_sweep(
-        tasks,
-        _SweepContext(shell=inputs.shell, cells=cells, limits=limits, trim=inputs.trim),
-    )
-    curves = []
+    run = _run_sweep(tasks, {plan.key: plan.context for plan in plans})
+    curves: list[ClassCurve] = []
+    bands: list[BandCurve] = []
     marker_limits: list[str] = []
-    for device_class, class_limits in limits.items():
+    for plan in plans:
         fleets = _by_fleet(
-            [result for result in run.results if result.task.device_class is device_class],
-            len(fleets_of[device_class]),
+            [result for result in run.results if result.task.curve is plan.key], len(plan.fleets)
         )
-        maximum_use = _maximum_use(cells, class_limits, inputs.shell.inclination_deg)
-        _check_bounds(device_class, fleets, maximum_use)
-        if device_class is DeviceClass.PHONE_CLASS:
+        limits = plan.context.limits
+        maximum_use = _maximum_use(plan.context.cells, limits, inputs.shell.inclination_deg)
+        _check_bounds(plan.key, fleets, maximum_use)
+        if plan.key is DeviceClass.PHONE_CLASS:
             _check_stall_floor(fleets, sweep.stall_floor)
         rows = _class_rows(
             fleets,
-            fleets_of[device_class],
-            beams_per_satellite=class_limits.beams_per_satellite,
-            directional=class_limits.directional is not None,
+            plan.fleets,
+            beams_per_satellite=limits.beams_per_satellite,
+            directional=limits.directional is not None,
             trim_floors_dbi=(
-                inputs.trim.floors_dbi if device_class is DeviceClass.PHONE_CLASS else None
+                inputs.trim.floors_dbi if plan.key is DeviceClass.PHONE_CLASS else None
             ),
         )
-        _check_capacity_per_satellite(device_class, rows)
-        markers = _markers(device_class, rows, maximum_use)
-        curves.append(ClassCurve(device_class=device_class, rows=rows, markers=markers))
-        marker_limits.extend(_unplaced_marker_limits(device_class, rows, maximum_use))
+        _check_capacity_per_satellite(plan.key, rows)
+        markers = _markers(plan.key, rows, maximum_use)
+        marker_limits.extend(_unplaced_marker_limits(plan.key, rows, maximum_use))
+        if plan.point is not None:
+            bands.append(BandCurve(point=plan.point, rows=rows, markers=markers))
+        elif isinstance(plan.key, DeviceClass):
+            curves.append(ClassCurve(device_class=plan.key, rows=rows, markers=markers))
         logger.info(
             "saturation: %s, maximum use %.0f beams, saturation number %s",
-            device_class.value,
+            _curve_label(plan.key),
             maximum_use,
             markers.saturation_number
             if markers.saturation_number is not None
@@ -3319,7 +3498,7 @@ def compute_saturation(
             run_measurement=RunMeasurement(wall_time_s=wall_time_s, peak_memory_mb=peak_memory_mb),
         ),
         classes=tuple(curves),
-        bands=(),
+        bands=tuple(bands),
         limits=(*_curve_limits(inputs), *marker_limits),
     )
 
