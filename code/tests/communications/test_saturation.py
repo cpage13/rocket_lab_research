@@ -41,6 +41,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import logging
 import math
 import os
 import subprocess
@@ -55,6 +56,7 @@ import numpy as np
 import pytest
 
 from common.cadence import round_half_up
+from common.cli import EXIT_ERROR, EXIT_USAGE
 from common.file_io import ModelFileError, render_artifact_json
 from communications import saturation as sat
 from communications.config import CommsConfig, IridiumDials, load_comms_config
@@ -1304,6 +1306,45 @@ def test_numpy_stays_inside_the_saturation_module(code_dir: Path) -> None:
     assert _numpy_loaded_after_importing(
         (*NUMPY_FREE_MODULES, "communications.saturation"), code_dir
     )
+
+
+def test_the_command_refuses_a_scenario_without_an_iridium_block(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Objective: the saturation command narrows its scenario first, so a scenario of the
+    cellular family fails with the family's message before anything runs.
+
+    Sample: a scenario setting only the cellular satellite block; an output path in a temporary
+    folder.
+
+    Expected outcome: exit status 1; exactly one ERROR record, on one line, naming the scenario
+    and the narrowing function's message; no file written.
+    """
+    scenario = tmp_path / "cellular.yaml"
+    scenario.write_text("satellite:\n  satellites_per_launch: 12\n", encoding="utf-8")
+    out_path = tmp_path / "saturation_curve.json"
+    assert sat.main([str(scenario), str(out_path)]) == EXIT_ERROR
+    errors = [record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert "\n" not in errors[0]
+    assert f"could not promote the saturation curve from {scenario}" in errors[0]
+    assert "the scenario does not select the Iridium model" in errors[0]
+    assert sorted(tmp_path.iterdir()) == [scenario]
+
+
+def test_the_command_exits_with_the_usage_status_on_a_usage_error(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Objective: a usage error follows the shared convention.
+
+    Sample: the command with no arguments.
+
+    Expected outcome: exit status 2 with the usage line on stderr.
+    """
+    with pytest.raises(SystemExit) as stopped:
+        sat.main([])
+    assert stopped.value.code == EXIT_USAGE
+    assert "usage: python -m communications.saturation" in capsys.readouterr().err
 
 
 def test_the_narrowing_function_returns_the_iridium_dials_or_refuses_a_cellular_config(

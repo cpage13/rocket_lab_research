@@ -120,9 +120,24 @@ task (one process at a time only at the top of the grid). The curve records the 
 and that bound (each worker reports its own peak; the bound is the parent's peak plus the
 summed peaks of the largest set of workers alive at once).
 
+**The command** promotes the curve, from ``code/``::
+
+    uv run python -m communications.saturation scenarios/iridium.yaml \\
+        communications/models/iridium/saturation_curve.json --version-stamp <stamp>
+
+It loads the scenario, narrows it to its Iridium dials (a scenario without an ``iridium:``
+block is refused before anything runs), computes the curve those dials imply, logs its
+summary, checks that it is complete and writes it through the shared writer. A relative
+output path anchors to the repository root, a relative scenario path to the working
+directory; the stamp defaults to today's ISO date. It follows the shared command conventions
+(:mod:`common.cli`): status on stderr, an expected failure one ``ERROR:`` line and exit status
+1, a usage error exit status 2. It reads no curve, so a stale or missing curve never blocks
+its own regeneration.
+
 Public: :func:`load_population_grid`, :class:`PopulationGrid`, :func:`compute_saturation`,
-:class:`PopulationGridError` and :class:`SaturationInvariantError`. Everything else is
-private; ``_allocate`` is the seam the tests drive with explicit satellite positions.
+:func:`promote_saturation_curve`, :func:`main`, :class:`PopulationGridError` and
+:class:`SaturationInvariantError`. Everything else is private; ``_allocate`` is the seam the
+tests drive with explicit satellite positions.
 """
 
 from __future__ import annotations
@@ -140,6 +155,7 @@ from collections.abc import Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, replace
+from datetime import date
 from enum import StrEnum
 from itertools import pairwise
 from multiprocessing import get_context
@@ -150,13 +166,28 @@ import numpy as np
 import numpy.typing as npt
 
 from common.cadence import round_half_up
-from common.file_io import ModelFileError
+from common.cli import (
+    EXIT_ERROR,
+    EXIT_OK,
+    CliArgumentParser,
+    configure_cli_logging,
+    describe_failure,
+)
+from common.file_io import (
+    ModelFileError,
+    SourceCheckout,
+    artifact_write,
+    locate_source_checkout,
+    write_files_with_rollback,
+)
+from communications.config import load_comms_config
 from communications.constants import (
     APERTURE_REFERENCE_M2,
     GBPS_TO_MBPS,
     GRID_AGGREGATION_SHIPPED,
     DeviceClass,
 )
+from communications.iridium import iridium_dials_of
 from communications.saturation_curve import (
     SATURATION_CURVE_SCHEMA_VERSION,
     BandCurve,
@@ -174,7 +205,9 @@ from communications.saturation_curve import (
     ShellInputs,
     TrimAtFloor,
     TrimInputs,
+    check_curve_complete,
     curve_input_hash,
+    saturation_inputs_for,
 )
 from communications.saturation_curve import walker_shape as _walker_shape
 
@@ -3503,10 +3536,160 @@ def compute_saturation(
     )
 
 
+# ===========================================================================
+# The command: compute the curve a scenario implies and promote it
+# ===========================================================================
+
+
+def _anchored(checkout: SourceCheckout, path: str | Path) -> Path:
+    """Return a path anchored at the repository root when it is relative, else as given."""
+    candidate = Path(path)
+    return candidate if candidate.is_absolute() else checkout.repo_dir / candidate
+
+
+def _log_summary(curve: SaturationCurve) -> None:
+    """Log the curve's summary: each class's saturation number, or the last row it is not
+    reached by, and its maximum use, in the class key's order; then the run's wall time and
+    peak-memory bound."""
+    for entry in curve.classes:
+        markers = entry.markers
+        reading = (
+            f"saturation number {markers.saturation_number:,}"
+            if markers.saturation_number is not None
+            else f"not reached by {markers.saturation_not_reached_by:,}"
+        )
+        logger.info(
+            "saturation curve: %s, %s, maximum use %.0f beams",
+            entry.device_class.value,
+            reading,
+            markers.maximum_use_beams,
+        )
+    measured = curve.provenance.run_measurement
+    logger.info(
+        "saturation curve: computed in %.1f s, peak memory bound %.0f MB (budget %.0f MB)",
+        measured.wall_time_s,
+        measured.peak_memory_mb,
+        _MEMORY_BUDGET_MB,
+    )
+
+
+def promote_saturation_curve(
+    scenario_path: str | Path, output_path: str | Path, version_stamp: str | None = None
+) -> Path:
+    """Compute the saturation curve a scenario implies and write it, promoted.
+
+    Loads the scenario, narrows it to its Iridium dials (a scenario without an ``iridium:``
+    block is refused before anything runs), builds the curve's inputs from those dials (the
+    held spectrum; every other input its named constant), loads the population grid the inputs
+    name, anchored at the repository root and checked against its SHA-256, computes the curve,
+    logs its summary, checks that it is complete and writes it through
+    :func:`common.file_io.write_files_with_rollback`: staged in full beside the destination,
+    then renamed over it, so a failure leaves any existing file as it was (a destination that is
+    a symbolic link or not a regular file is refused at the write). It reads no curve, so a
+    stale or missing curve never blocks its own regeneration.
+
+    Args:
+        scenario_path: The scenario YAML (it must select the Iridium model); a relative path
+            resolves against the working directory.
+        output_path: Where to write the curve; a relative path anchors to the repository root.
+        version_stamp: The curve's stamp; today's ISO date when None.
+
+    Returns:
+        The path written.
+
+    Raises:
+        ModelFileError: If the module is not running from a source checkout, the scenario or
+            the grid is missing, unreadable or malformed, or the curve cannot be written.
+        ValueError: If the scenario is invalid (a :class:`pydantic.ValidationError`) or does
+            not select the Iridium model (:class:`~communications.iridium.NotAnIridiumConfigError`),
+            the grid is not the one the inputs name (:class:`PopulationGridError`), a check
+            fails (:class:`SaturationInvariantError`), or the curve is incomplete
+            (:class:`~communications.saturation_curve.SaturationCurveError`).
+    """
+    checkout = locate_source_checkout(__file__)
+    config = load_comms_config(Path(scenario_path))
+    inputs = saturation_inputs_for(iridium_dials_of(config))
+    population = load_population_grid(
+        _anchored(checkout, inputs.demand.grid_path), inputs.demand.grid_sha256
+    )
+    stamp = version_stamp if version_stamp is not None else date.today().isoformat()
+    out = _anchored(checkout, output_path)
+    logger.info("saturation curve: computing from %s, stamp %s", scenario_path, stamp)
+    curve = compute_saturation(inputs, population, version_stamp=stamp)
+    _log_summary(curve)
+    check_curve_complete(curve)
+    write_files_with_rollback([artifact_write(out, curve)])
+    logger.info("promoted saturation curve written to %s", out)
+    return out
+
+
+def _build_parser() -> CliArgumentParser:
+    """Build the command's parser (usage errors exit with EXIT_USAGE)."""
+    parser = CliArgumentParser(
+        prog="python -m communications.saturation",
+        description=(
+            "Compute the saturation curve a scenario's Iridium dials imply (every class and "
+            "band point) and write it, promoted, into the repo-root communications/models/ "
+            "workstream."
+        ),
+    )
+    parser.add_argument(
+        "scenario",
+        help="Scenario YAML (must select the Iridium model), e.g. scenarios/iridium.yaml.",
+    )
+    parser.add_argument(
+        "output",
+        help=(
+            "Curve JSON path, e.g. communications/models/iridium/saturation_curve.json "
+            "(relative paths anchor to the repo root)."
+        ),
+    )
+    parser.add_argument(
+        "--version-stamp",
+        default=None,
+        help="The curve's stamp (any string). Defaults to today's ISO date.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Command-line entry point. Returns a process exit code.
+
+    Args:
+        argv: Argument list (defaults to ``sys.argv[1:]``).
+
+    Returns:
+        :data:`~common.cli.EXIT_OK` on success; :data:`~common.cli.EXIT_ERROR` (after one
+        ``ERROR:`` log line, no traceback) when the scenario cannot be read, is invalid or does
+        not select the Iridium model, the grid is not the one expected, a check fails, or the
+        curve cannot be written. Usage errors exit through
+        :class:`~common.cli.CliArgumentParser` with :data:`~common.cli.EXIT_USAGE`.
+    """
+    configure_cli_logging()
+    args = _build_parser().parse_args(argv)
+    try:
+        promote_saturation_curve(args.scenario, args.output, args.version_stamp)
+    except (ModelFileError, ValueError) as exc:
+        scenario = Path(args.scenario)
+        logger.error(
+            "could not promote the saturation curve from %s: %s",
+            scenario,
+            describe_failure(exc, scenario),
+        )
+        return EXIT_ERROR
+    return EXIT_OK
+
+
 __all__ = [
     "PopulationGrid",
     "PopulationGridError",
     "SaturationInvariantError",
     "compute_saturation",
     "load_population_grid",
+    "main",
+    "promote_saturation_curve",
 ]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
