@@ -43,12 +43,14 @@ terminal's extension and with the band points at the central values (``small_swe
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import hashlib
 import json
 import logging
 import math
 import os
+import pickle
 import stat
 import subprocess
 import sys
@@ -62,9 +64,10 @@ from typing import Protocol, assert_never
 
 import numpy as np
 import pytest
+from pydantic import ValidationError
 
 from common.cadence import round_half_up
-from common.cli import EXIT_ERROR, EXIT_USAGE
+from common.cli import EXIT_ERROR, EXIT_USAGE, describe_failure
 from common.file_io import (
     ARTIFACT_FILE_END,
     ModelFileError,
@@ -1387,9 +1390,11 @@ def drift_grid_and_cells(
     parameters: SaturationInputs, repo_dir: Path
 ) -> tuple[PopulationGrid, sat._DemandCells]:
     """A curve's grid, loaded once through the command's own grid load (``_inputs_grid``), and
-    its central demand cells, which the curve's plans are built on."""
-    population = sat._inputs_grid(SourceCheckout(repo_dir), parameters)
-    return population, sat._demand_cells(population, parameters.demand.density_threshold_per_km2)
+    its central demand cells, which the curve's plans are built on, both as the drift seams take
+    them (``_seam_grid_and_cells``)."""
+    return sat._seam_grid_and_cells(
+        parameters, sat._inputs_grid(SourceCheckout(repo_dir), parameters)
+    )
 
 
 def assert_check_rows_match(curve: SaturationCurve, repo_dir: Path, rel: float) -> None:
@@ -1440,14 +1445,22 @@ def test_the_drift_seams_and_plans_rebuild_the_coarse_curve_exactly(
 
     Sample: the coarse real-grid curve (one snapshot): every class's 342 row, the mounted
     terminal's 1,980 row (requested 2,000), every band point's 342 row, and every class's and
-    band point's maximum use.
+    band point's maximum use, from one grid load; and the small terminal's 342 row once more
+    through the seam's own grid load (no grid passed), the path a reviewer's script takes.
 
     Expected outcome: every value of each row, the phone class's trim included, and every
     maximum use equal to the curve's exactly (the same code on the same draw, in another
-    process).
+    process), by either grid load.
     """
     assert_check_rows_match(coarse_real_curve, repo_dir, rel=0.0)
     assert_band_rows_match(coarse_real_curve, repo_dir, rel=0.0)
+    committed = class_curve(coarse_real_curve, DeviceClass.SMALL_TERMINAL_CLASS).rows[0]
+    recomputed = sat._class_row(
+        DeviceClass.SMALL_TERMINAL_CLASS, committed.requested_fleet, coarse_real_curve.parameters
+    )
+    assert_rows_match(
+        "small_terminal_class row by the seam's own grid load", committed, recomputed, 0.0
+    )
 
 
 def test_committed_curve_has_not_drifted(repo_dir: Path) -> None:
@@ -1927,7 +1940,8 @@ def test_a_memory_error_of_the_command_itself_is_not_blamed_on_a_worker(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Objective: the sweep's error names a worker only for a worker's own failure: a
-    MemoryError of the command's own process is left as it is.
+    MemoryError the command's own process raises outside the pool's manager thread is left as
+    it is (one there breaks the pool and is named as its cause).
 
     Sample: the shipped scenario at the coarse setting, with the sweep's first pool patched to
     raise a bare MemoryError, as this process's own allocation would (a worker's arrives marked).
@@ -1946,6 +1960,28 @@ def test_a_memory_error_of_the_command_itself_is_not_blamed_on_a_worker(
         sat.main([str(iridium_yaml), str(out_path)])
     assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
     assert not out_path.exists()
+
+
+def test_the_sweeps_error_survives_a_pickle_round_trip_and_a_copy() -> None:
+    """Objective: the sweep's public error can cross a process boundary and be copied, so a
+    caller running the computation in a pool of its own sees the sweep's message, never a
+    TypeError rebuilding it.
+
+    Sample: ``SaturationSweepError`` with a one-line message and a task count of 27.
+
+    Expected outcome: a pickle round trip and ``copy.copy`` each give the same type, message and
+    task count.
+    """
+    error = sat.SaturationSweepError(
+        "a saturation worker died during a sweep of 27 snapshot tasks, most likely out of memory",
+        27,
+    )
+    pickled = pickle.dumps(error)
+    unpickled = pickle.loads(pickled)  # noqa: S301 (the bytes this test itself pickled)
+    for rebuilt in (unpickled, copy.copy(error)):
+        assert type(rebuilt) is sat.SaturationSweepError
+        assert str(rebuilt) == str(error)
+        assert rebuilt.task_count == error.task_count
 
 
 UNBUILDABLE_FLEET = 10**15
@@ -3195,19 +3231,71 @@ def test_a_number_out_of_range_is_the_curves_error_whatever_pythons_digit_limit(
     assert str(path) in str(refused.value)
 
 
-def test_a_json_root_that_is_not_an_object_is_not_a_saturation_curve(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("text", "kind"),
+    [
+        ("[1, 2]", "an array"),
+        ("null", "null"),
+        ("true", "true"),
+        ("false", "false"),
+        ("3", "a number"),
+        ("2.5", "a number"),
+        ('"a curve"', "a string"),
+    ],
+    ids=["an array", "null", "true", "false", "an integer", "a decimal", "a string"],
+)
+def test_a_json_root_that_is_not_an_object_is_not_a_saturation_curve(
+    tmp_path: Path, text: str, kind: str
+) -> None:
     """Objective: text Python's parser reads is the curve's to refuse, so a JSON root that is not
-    an object is the curve's error, not the file boundary's.
+    an object is the curve's error, not the file boundary's, and the refusal names the root in
+    JSON's own words.
 
-    Sample: a file holding the JSON list ``[1, 2]``.
+    Sample: a file holding each kind of JSON value that is not an object.
 
-    Expected outcome: SaturationCurveError naming the file and the root's type.
+    Expected outcome: SaturationCurveError naming the file and the root's kind (null, true,
+    false, a number, a string, an array), never a Python type's name.
     """
     path = tmp_path / "saturation_curve.json"
-    path.write_text("[1, 2]", encoding="utf-8")
-    with pytest.raises(SaturationCurveError, match="its JSON root is list, not an") as refused:
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(
+        SaturationCurveError, match=f"its JSON root is {kind}, not an object"
+    ) as refused:
         load_saturation_curve(path)
     assert str(path) in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ('"requested_fleet": 342,', '"requested_fleet": "342",'),
+        ('"device_class": "small_terminal_class"', '"device_class": "mounted_terminal_class"'),
+        ('"a stated limit"', '"\\ud800a stated limit"'),
+    ],
+    ids=["a located error", "a refusal of the whole curve", "text pydantic's parser refuses"],
+)
+def test_the_loaders_one_line_reading_of_a_validation_error_is_the_shared_commands(
+    old: str, new: str
+) -> None:
+    """Objective: the loader's one-line reading of a pydantic error (``_validation_summary``, a
+    copy the rule keeping ``common/`` unchanged forces) stays the one the shared commands print
+    (``common.cli.describe_failure``), so the two cannot drift apart unseen.
+
+    Sample: the complete bare curve as the promotion renders it, with a requested fleet written
+    as text (a located error), a class written twice (the curve's own validator refusing the
+    whole curve, no location), or its stated limit led by a lone surrogate escape (pydantic's
+    parser refusing the text, no location), each validated as the loader validates.
+
+    Expected outcome: ``describe_failure`` of the error is ``invalid <title>:`` followed by the
+    loader's reading, whitespace collapsed as ``describe_failure`` collapses it.
+    """
+    text = render_artifact_json(complete_bare_curve()) + ARTIFACT_FILE_END
+    assert old in text
+    with pytest.raises(ValidationError) as refused:
+        SaturationCurve.model_validate_json(text.replace(old, new, 1), strict=True)
+    error = refused.value
+    summary = saturation_curve._validation_summary(error)
+    assert describe_failure(error) == " ".join(f"invalid {error.title}: {summary}".split())
 
 
 def test_a_code_defect_in_validation_is_never_reported_as_a_data_problem(

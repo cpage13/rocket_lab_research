@@ -139,7 +139,8 @@ relative output path anchors to the repository root, a relative scenario path to
 directory; the stamp defaults to today's ISO date. It follows the shared command conventions
 (:mod:`common.cli`): status on stderr, an expected failure one ``ERROR:`` line and exit status
 1 (a sweep that fails too: a saturation worker that dies, most likely out of memory, or runs
-out of memory), a usage error exit status 2. It reads no curve, so a stale or missing curve
+out of memory, or the sweep's process pool breaks with a stated cause), a usage error exit
+status 2. It reads no curve, so a stale or missing curve
 never blocks its own regeneration.
 
 Public: :func:`load_population_grid`, :class:`PopulationGrid`, :func:`compute_saturation`,
@@ -557,6 +558,11 @@ class SaturationSweepError(ValueError):
         """Build the error from its one-line message and the sweep's task count."""
         super().__init__(message)
         self.task_count = task_count
+
+    def __reduce__(self) -> tuple[type[SaturationSweepError], tuple[str, int]]:
+        """Rebuild the error from its message and task count, so it survives a pickle round trip
+        or a copy (an exception pickles only its ``args``, which hold the message alone)."""
+        return (type(self), (str(self), self.task_count))
 
 
 @dataclass(frozen=True, eq=False)
@@ -2742,9 +2748,10 @@ def _run_sweep(
     The sweep's failures are its own error, each naming the sweep's task count: a worker that
     dies (the pool breaks with no cause; most likely the system killed it out of memory), a
     worker that runs out of memory (its MemoryError, which the worker marks as its own), and a
-    pool that breaks with a stated cause (sending a task or receiving a result failed in this
-    process), whose cause the message names without blaming a worker. A MemoryError of this
-    process is not a worker's and is left as it is.
+    pool that breaks with a stated cause (the pool's manager thread failed to queue a task or to
+    receive a result in this process, a MemoryError there included), whose cause the message
+    names without blaming a worker. A MemoryError this process raises anywhere else (building,
+    submitting or pickling the tasks) is not a worker's and is left as it is.
 
     Raises:
         SaturationSweepError: If a worker dies or runs out of memory, or the pool breaks with a
@@ -3900,7 +3907,8 @@ def _check_destination(out: Path) -> None:
     existing file that is not a regular file, and stages its file beside the destination,
     creating the missing parent directories; so the destination's nearest existing ancestor must
     be a directory this process can write into and search. Each path is examined by ``lstat``
-    with no error hidden: a missing component climbs to the parent, and any other error the
+    with no error hidden: a missing component, or one under a component that is not a
+    directory, climbs to the parent, and any other error the
     system reports (a name past the file system's limit, a loop of symbolic links, a folder that
     cannot be searched) refuses the destination with its reason. A full promotion computes for
     about 26 minutes before it writes, so this refuses what it can know first.
@@ -3909,7 +3917,7 @@ def _check_destination(out: Path) -> None:
     existing file it cannot replace (a locked or append-only file, another user's file in a
     folder with the sticky bit), a folder whose access control list grants or denies otherwise
     than its mode bits (``os.access`` reads the mode bits), and a staged name past the file
-    system's limit (the writer's hidden sibling is 38 bytes longer than the destination's name;
+    system's limit (the writer's hidden sibling's name is longer than the destination's, and
     checking it would copy the writer's private naming).
 
     Args:

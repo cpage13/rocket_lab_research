@@ -25,8 +25,8 @@ family can read a curve without importing numpy:
   pydantic's strict mode refuses (an integer field given a string, a float or a boolean; a
   float field given a string or a boolean, while a JSON integer there reads as the same
   float), altered parameters or input hash, or one that fails its completeness check, each
-  with a :class:`SaturationCurveError` naming the file (a file it cannot read, or that
-  Python's JSON parser refuses, is the file boundary's ``ModelFileError``).
+  with a :class:`SaturationCurveError` naming the file (a file it cannot read, or whose text
+  Python's JSON parser cannot read as JSON, is the file boundary's ``ModelFileError``).
 
 Every model is a frozen pydantic model with ``extra="forbid"`` that refuses a NaN or an
 infinity, so a curve's JSON is standard JSON. The validators that belong to the contract:
@@ -894,7 +894,9 @@ def _check_markers_on_rows(name: str, rows: Sequence[CurveRow], markers: ClassMa
     maximum use, the most the shell could ever use, is at least every row's ceiling (by
     :func:`exceeds_bound`). A marker that meets them all may still not be the one its rows give
     (a saturation number moved within its span, say): the exact re-derivation is ``_markers``
-    itself, which the drift tests run on the committed curve.
+    itself, which the drift tests run on the committed curve. The rows hold two or more fleets
+    (the completeness check refuses rows off the sweep's requested fleets first, and a sweep
+    requests two or more), so every span holds at least one midpoint.
 
     Raises:
         SaturationCurveError: Naming the curve, the marker or row, and the values.
@@ -925,10 +927,6 @@ def _check_markers_on_rows(name: str, rows: Sequence[CurveRow], markers: ClassMa
     ):
         if fleet is None:
             continue
-        if not span:
-            raise SaturationCurveError(
-                f"the {name} {field} is {fleet}, but its one row has no interval to place it on"
-            )
         if not span[0] <= fleet <= span[-1]:
             raise SaturationCurveError(
                 f"the {name} {field} {fleet} lies outside {where}, {span[0]} to {span[-1]}"
@@ -1081,6 +1079,20 @@ def _validation_summary(exc: ValidationError) -> str:
     return "; ".join(parts)
 
 
+def _json_root_kind(value: object) -> str:
+    """Name a value Python's JSON parser produced in JSON's own words (null, true, false, a
+    number, a string, an array), for a refusal of a root that is not an object."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int | float):
+        return "a number"
+    if isinstance(value, str):
+        return "a string"
+    return "an array"
+
+
 def load_saturation_curve(path: Path) -> SaturationCurve:
     """Load a promoted saturation curve, refusing one the engine must not read.
 
@@ -1094,12 +1106,13 @@ def load_saturation_curve(path: Path) -> SaturationCurve:
     parameters, so an altered parameter or hash fails; and it must pass
     :func:`check_curve_complete`.
 
-    One rule sorts the refusals: a file that cannot be read, or that Python's JSON parser refuses
-    as JSON, is the file boundary's :class:`~common.file_io.ModelFileError`; everything found
-    after that parse succeeds is a :class:`SaturationCurveError`, a number out of range included
-    (an integer past Python's limit on digits, a requested fleet too large to build its shell
-    from, a float past a float's range, or text pydantic's parser refuses where Python's
-    accepted it, such as a lone surrogate or nesting past pydantic's depth).
+    One rule sorts the refusals: a file that cannot be read, or whose text Python's JSON parser
+    cannot read as JSON (malformed, or nested past its stack), is the file boundary's
+    :class:`~common.file_io.ModelFileError`; every other refusal is a
+    :class:`SaturationCurveError`, Python's parser's own for a repeated key or an integer past
+    its limit on digits included, and so is any other number out of range (a requested fleet
+    too large to build its shell from, a float past a float's range) and text pydantic's
+    parser refuses where Python's read it (a lone surrogate, nesting past pydantic's depth).
 
     Args:
         path: The curve's JSON file.
@@ -1143,7 +1156,7 @@ def load_saturation_curve(path: Path) -> SaturationCurve:
         ) from exc
     if not isinstance(data, dict):
         raise SaturationCurveError(
-            f"{path}: not a saturation curve (its JSON root is {type(data).__name__}, not an "
+            f"{path}: not a saturation curve (its JSON root is {_json_root_kind(data)}, not an "
             "object)"
         )
     schema = data.get("schema_version")
