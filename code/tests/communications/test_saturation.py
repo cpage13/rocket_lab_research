@@ -57,7 +57,7 @@ import pytest
 from common.cadence import round_half_up
 from common.file_io import ModelFileError, render_artifact_json
 from communications import saturation as sat
-from communications.config import IridiumDials
+from communications.config import CommsConfig, IridiumDials, load_comms_config
 from communications.constants import (
     CLASS_SE_CENTRAL,
     CLASS_USAGE,
@@ -65,6 +65,7 @@ from communications.constants import (
     POPULATION_GRID_SHA256,
     DeviceClass,
 )
+from communications.iridium import NotAnIridiumConfigError, iridium_dials_of
 from communications.saturation import (
     PopulationGrid,
     PopulationGridError,
@@ -1265,6 +1266,7 @@ def walker_request_of(fleet: int) -> int:
 NUMPY_FREE_MODULES = (
     "communications.config",
     "communications.engine",
+    "communications.iridium",
     "communications.json_output",
     "communications.saturation_curve",
 )
@@ -1292,7 +1294,7 @@ def test_numpy_stays_inside_the_saturation_module(code_dir: Path) -> None:
     imports included, which a grep would miss.
 
     Sample: a fresh interpreter importing ``communications.config``, ``.engine``,
-    ``.json_output`` and ``.saturation_curve``; then one importing
+    ``.iridium``, ``.json_output`` and ``.saturation_curve``; then one importing
     ``communications.saturation`` too, the control.
 
     Expected outcome: numpy is not in ``sys.modules`` after the first, and is after the
@@ -1302,6 +1304,28 @@ def test_numpy_stays_inside_the_saturation_module(code_dir: Path) -> None:
     assert _numpy_loaded_after_importing(
         (*NUMPY_FREE_MODULES, "communications.saturation"), code_dir
     )
+
+
+def test_the_narrowing_function_returns_the_iridium_dials_or_refuses_a_cellular_config(
+    iridium_yaml: Path,
+) -> None:
+    """Objective: one function narrows a config to its Iridium dials, and refuses a config of
+    the cellular family with the Iridium promotion command's own message, as a ValueError.
+
+    Sample: the shipped Iridium scenario; the default config (no ``iridium:`` block).
+
+    Expected outcome: the scenario's own ``iridium`` block back; for the default config,
+    NotAnIridiumConfigError with today's message, word for word.
+    """
+    config = load_comms_config(iridium_yaml)
+    assert iridium_dials_of(config) is config.iridium
+    with pytest.raises(NotAnIridiumConfigError) as refused:
+        iridium_dials_of(CommsConfig())
+    assert str(refused.value) == (
+        "the scenario does not select the Iridium model: it needs a top-level "
+        "'iridium:' block (see scenarios/iridium.yaml)"
+    )
+    assert isinstance(refused.value, ValueError)
 
 
 @pytest.mark.parametrize(
