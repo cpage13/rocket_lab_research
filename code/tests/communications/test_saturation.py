@@ -2239,7 +2239,7 @@ def test_the_statistics_count_stacks_only_in_cells_their_first_layer_covers(
     cell its first layer covers. In a covered cell every stage-2 beam overlaps another sector's
     first layer; in a cell its first layer leaves short, stage 2 may complete that first layer
     instead, which the fluid allocation cannot tell from stacking, so those beams count in L,
-    never as stacked layers (the numerics review's satellite-limited case, round 1).
+    never as stacked layers.
 
     Sample: 0.5 degree cells between 20 and 40 degrees north, 30 people each, so the mounted
     terminal's people caps (0.75 beams) outrun 306 satellites (requested 300) at the snapshot
@@ -2415,7 +2415,7 @@ def test_the_vectorized_admission_equals_the_rule_taken_candidate_by_candidate(
 
 
 def shared_usage(inputs: SaturationInputs) -> SaturationInputs:
-    """The inputs with every class at the prototypes' one usage, 1 Mbps x 2.5 percent, so the
+    """The inputs with every class at one shared usage, 1 Mbps x 2.5 percent, so the
     classes' people per beam differ only by their central SE (640, 800 and 208)."""
     classes = [
         {**entry.model_dump(), "active_rate_mbps": 1.0, "concurrency_peak": 0.025}
@@ -2530,7 +2530,7 @@ def test_the_mounted_terminal_runs_over_its_extension_through_compute_saturation
 
     Sample: the shared-usage world (every class at 1 Mbps x 2.5 percent) at fleets 500 and
     1,000 (realized 506 and 992) with the mounted terminal's extension 4,000 (realized 3,969),
-    one snapshot: the spec review's sample, with a second fleet under 1,000, since the contract
+    one snapshot, with a second fleet under 1,000, since the contract
     takes two fleets at least.
 
     Expected outcome: the classes in the class key's order; the mounted terminal's rows 506,

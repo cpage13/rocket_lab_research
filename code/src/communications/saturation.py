@@ -1239,7 +1239,7 @@ def _fill_band(
     the band by every satellite's beams left, then by the tighter of every key's area left and
     every cell's people cap left (each scale at most 1); then the band is committed, so the
     next band sees only what remains. With a cell as its own key this is the phone
-    allocation's band (p1's arithmetic, step for step).
+    allocation's band (the phone class's arithmetic, step for step).
 
     Args:
         asked_cap: Each pair's cap, beams.
