@@ -57,7 +57,7 @@ import pytest
 
 from common.cadence import round_half_up
 from common.cli import EXIT_ERROR, EXIT_USAGE
-from common.file_io import ModelFileError, render_artifact_json
+from common.file_io import ARTIFACT_FILE_END, ModelFileError, render_artifact_json
 from communications import saturation as sat
 from communications.config import CommsConfig, IridiumDials, load_comms_config
 from communications.constants import (
@@ -1160,18 +1160,62 @@ def real_grid(repo_dir: Path) -> PopulationGrid:
     return load_population_grid(repo_dir / POPULATION_GRID_PATH, POPULATION_GRID_SHA256)
 
 
+def coarse_inputs_for(iridium: IridiumDials) -> SaturationInputs:
+    """The coarse setting's inputs for a config's Iridium dials: what the saturation command
+    builds (the dials' spectrum, every other input its named constant) but for the sweep."""
+    return SaturationInputs(spectrum_mhz=iridium.spectrum_mhz, sweep=COARSE_SWEEP)
+
+
+def promote_coarse(scenario: Path, output: Path) -> Path:
+    """Promote the curve at the coarse setting through the saturation command's own function
+    (its inputs builder patched to the coarse sweep), with the pinned stamp: computed and written
+    through ``write_files_with_rollback``, as the full promotion is."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(sat, "saturation_inputs_for", coarse_inputs_for)
+        return sat.promote_saturation_curve(scenario, output, version_stamp=STAMP)
+
+
+def curves_equal_but_measurement(first: Path, second: Path) -> bool:
+    """Whether two promoted curves are byte-identical once the second's run measurement is the
+    first's (the plan's finding F2: a run's measured wall time and peak memory differ run to run).
+
+    Both files are parsed as :class:`SaturationCurve`; the first's ``run_measurement`` is copied
+    into the second (``model_copy``), the second is re-rendered as the promotion renders a curve
+    (``render_artifact_json`` and the file's one closing newline), and its bytes are compared with
+    the first file's. Acceptance runs this same helper as a script.
+    """
+    one = SaturationCurve.model_validate_json(first.read_text(encoding="utf-8"))
+    two = SaturationCurve.model_validate_json(second.read_text(encoding="utf-8"))
+    measured_as_one = two.model_copy(
+        update={
+            "provenance": two.provenance.model_copy(
+                update={"run_measurement": one.provenance.run_measurement}
+            )
+        }
+    )
+    rendered = (render_artifact_json(measured_as_one) + ARTIFACT_FILE_END).encode("utf-8")
+    return rendered == first.read_bytes()
+
+
 @pytest.fixture(scope="module")
-def coarse_real_curve(real_grid: PopulationGrid) -> SaturationCurve:
-    """The shipped grid's curve at the coarse setting (the default inputs but the sweep),
-    computed once for the tests that read it."""
-    return compute_saturation(SaturationInputs(sweep=COARSE_SWEEP), real_grid, version_stamp=STAMP)
+def coarse_curve_file(tmp_path_factory: pytest.TempPathFactory, iridium_yaml: Path) -> Path:
+    """The shipped scenario's curve at the coarse setting, promoted once into a temporary
+    folder for the tests that read it."""
+    return promote_coarse(iridium_yaml, tmp_path_factory.mktemp("coarse") / "saturation_curve.json")
+
+
+@pytest.fixture(scope="module")
+def coarse_real_curve(coarse_curve_file: Path) -> SaturationCurve:
+    """The coarse promoted curve, read back through ``load_saturation_curve``."""
+    return load_saturation_curve(coarse_curve_file)
 
 
 def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: SaturationCurve) -> None:
     """Objective: the module's numbers on the shipped grid do not drift.
 
-    Sample: the default inputs (the investor's usage) at fleets 340, 1,000 and 2,000 and one
-    snapshot for every class and band point.
+    Sample: the shipped scenario's curve (the investor's usage) at fleets 340, 1,000 and 2,000
+    and one snapshot for every class and band point, promoted through the saturation command's
+    own function and read back with ``load_saturation_curve``.
 
     Expected outcome: every class's rows (L, capacity, U, the ceiling, the supply, for the
     directional classes their stacking diagnostics, and for the phone class its interference
@@ -1371,6 +1415,48 @@ def test_committed_curve_has_not_drifted(repo_dir: Path) -> None:
     """
     curve = load_saturation_curve(repo_dir / COMMITTED_CURVE)
     assert_check_rows_match(curve, repo_dir, rel=1e-4)
+
+
+def test_the_committed_curve_loads_whole_from_the_shipped_scenario(
+    repo_dir: Path, iridium_yaml: Path
+) -> None:
+    """Objective: the committed curve is the one the shipped scenario implies, whole and
+    unaltered, so the engine can read it.
+
+    Sample: ``communications/models/iridium/saturation_curve.json`` and
+    ``scenarios/iridium.yaml``.
+
+    Expected outcome: the curve loads (schema, input hash, completeness), its parameters are
+    exactly ``saturation_inputs_for`` of the scenario's Iridium dials, and it lists the three
+    classes (small terminal first) and the six band points.
+    """
+    curve = load_saturation_curve(repo_dir / COMMITTED_CURVE)
+    dials = load_comms_config(iridium_yaml).iridium
+    assert dials is not None
+    assert curve.parameters == saturation_inputs_for(dials)
+    assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
+    assert [band.point.name for band in curve.bands] == list(BandName)
+
+
+def test_a_second_promotion_at_the_coarse_setting_is_byte_identical(
+    coarse_curve_file: Path, tmp_path: Path, iridium_yaml: Path
+) -> None:
+    """Objective: a promotion is deterministic: a second run of the saturation command's own
+    function at the coarse setting, with the pinned stamp, writes the same bytes but for the run's
+    own measurement (the plan's finding F2).
+
+    Sample: the coarse promoted curve and a second promotion of the shipped scenario at the same
+    setting, each computed and written through ``write_files_with_rollback``.
+
+    Expected outcome: ``curves_equal_but_measurement`` holds; the two measurements are each a
+    real measurement (a positive wall time and peak-memory bound).
+    """
+    second = promote_coarse(iridium_yaml, tmp_path / "saturation_curve.json")
+    assert curves_equal_but_measurement(coarse_curve_file, second)
+    for path in (coarse_curve_file, second):
+        measured = load_saturation_curve(path).provenance.run_measurement
+        assert measured.wall_time_s > 0
+        assert measured.peak_memory_mb > 0
 
 
 # ---------------------------------------------------------------------------
