@@ -104,6 +104,7 @@ from communications.saturation_curve import (
     ShellInputs,
     SweepInputs,
     TrimAtFloor,
+    TrimInputs,
     check_curve_complete,
     curve_input_hash,
     load_saturation_curve,
@@ -1754,44 +1755,199 @@ def test_a_destination_the_writer_would_refuse_is_refused_before_the_computation
         )
 
 
-def test_a_dead_saturation_worker_is_one_error_line(
+POOL_TERMINATED = (
+    "A process in the process pool was terminated abruptly while the future was running or pending."
+)
+"""The message a process pool breaks with when one of its workers dies."""
+
+WORKER_OUT_OF_MEMORY = (
+    "Unable to allocate 7.11 PiB for an array with shape (999999993568952,) and data type int64"
+)
+"""numpy's message for an allocation no machine can make (the cross-process test's real one)."""
+
+UNPICKLING_CAUSE = (
+    "\n'''\nTraceback (most recent call last):\n  File \"connection.py\", line 1, in recv\n"
+    "_pickle.UnpicklingError: pickle data was truncated\n'''"
+)
+"""A process pool's cause as it fences it: the formatted traceback of a failure in this
+process (here, receiving a result), between triple quotes."""
+
+
+def broken_pool_with_a_cause() -> BrokenProcessPool:
+    """A process pool broken by a failure in this process, with its fenced cause attached."""
+    broken = BrokenProcessPool(POOL_TERMINATED)
+    broken.__cause__ = Exception(UNPICKLING_CAUSE)
+    return broken
+
+
+@pytest.mark.parametrize(
+    ("failure", "reason"),
+    [
+        (
+            lambda: BrokenProcessPool(POOL_TERMINATED),
+            "a saturation worker died during a sweep of 27 snapshot tasks, most likely out of "
+            "memory",
+        ),
+        (
+            lambda: sat._WorkerMemoryError(WORKER_OUT_OF_MEMORY),
+            "a saturation worker ran out of memory during a sweep of 27 snapshot tasks "
+            f"({WORKER_OUT_OF_MEMORY})",
+        ),
+        (
+            broken_pool_with_a_cause,
+            "the saturation sweep's process pool broke during a sweep of 27 snapshot tasks "
+            "(_pickle.UnpicklingError: pickle data was truncated)",
+        ),
+    ],
+    ids=["a dead worker", "a worker out of memory", "a pool broken with a cause"],
+)
+def test_a_failed_sweep_is_one_error_line(
     tmp_path: Path,
     iridium_yaml: Path,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
+    failure: Callable[[], Exception],
+    reason: str,
 ) -> None:
-    """Objective: a saturation worker that dies (most likely killed out of memory, the heavy
-    run's likeliest environmental failure) ends the command with one ERROR line, never a
-    traceback.
+    """Objective: a sweep that fails (a saturation worker that dies, most likely killed out of
+    memory; one that runs out of memory itself; or the process pool broken by a stated cause in
+    this process) ends the command with one ERROR line, never a traceback, and only a worker's
+    own failure is blamed on a worker.
 
     Sample: the shipped scenario at the coarse setting (nine curves at three fleets and one
-    snapshot: 27 snapshot tasks), with the sweep's first pool patched to raise
-    ``BrokenProcessPool`` as a dead worker's pool does.
+    snapshot: 27 snapshot tasks), with the sweep's first pool patched to raise what the process
+    pool raises in each case: ``BrokenProcessPool`` with no cause, the worker's marked
+    MemoryError, ``BrokenProcessPool`` with a fenced cause (an unpickling error).
 
     Expected outcome: exit status 1; exactly one ERROR record, on one line, with no exception
-    attached, naming the scenario, the sweep's task count and the likely cause, and saying
-    nothing was written; no file written.
+    attached, naming the scenario, the sweep's task count and what failed (the cause's own line
+    for a broken pool, with no worker named), and saying nothing was written; no file written.
     """
 
-    def dies(*args: object, **kwargs: object) -> None:
-        raise BrokenProcessPool(
-            "A process in the process pool was terminated abruptly while the future was running "
-            "or pending."
-        )
+    def fails(*args: object, **kwargs: object) -> None:
+        raise failure()
 
     monkeypatch.setattr(sat, "saturation_inputs_for", coarse_inputs_for)
-    monkeypatch.setattr(sat, "_run_alone", dies)
+    monkeypatch.setattr(sat, "_run_alone", fails)
     out_path = tmp_path / "saturation_curve.json"
     assert sat.main([str(iridium_yaml), str(out_path)]) == EXIT_ERROR
     errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
     assert len(errors) == 1
     assert errors[0].exc_info is None
-    tasks = (len(DeviceClass) + len(BandName)) * len(COARSE_REAL_FLEETS)
+    assert (len(DeviceClass) + len(BandName)) * len(COARSE_REAL_FLEETS) == 27
     assert errors[0].getMessage() == (
-        f"could not promote the saturation curve from {iridium_yaml}: a saturation worker died "
-        f"during a sweep of {tasks} snapshot tasks, most likely out of memory; nothing was written"
+        f"could not promote the saturation curve from {iridium_yaml}: {reason}; nothing was written"
     )
     assert not out_path.exists()
+
+
+def test_a_memory_error_of_the_command_itself_is_not_blamed_on_a_worker(
+    tmp_path: Path,
+    iridium_yaml: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Objective: the sweep's error names a worker only for a worker's own failure: a
+    MemoryError of the command's own process is left as it is.
+
+    Sample: the shipped scenario at the coarse setting, with the sweep's first pool patched to
+    raise a bare MemoryError, as this process's own allocation would (a worker's arrives marked).
+
+    Expected outcome: the MemoryError itself leaves the command; no ERROR record, so no line
+    blames a worker; no file written.
+    """
+
+    def runs_out(*args: object, **kwargs: object) -> None:
+        raise MemoryError
+
+    monkeypatch.setattr(sat, "saturation_inputs_for", coarse_inputs_for)
+    monkeypatch.setattr(sat, "_run_alone", runs_out)
+    out_path = tmp_path / "saturation_curve.json"
+    with pytest.raises(MemoryError):
+        sat.main([str(iridium_yaml), str(out_path)])
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
+    assert not out_path.exists()
+
+
+UNBUILDABLE_FLEET = 10**15
+"""A requested fleet no machine can hold: its shell's first array of that size (8 PB) is refused
+at once, after a 0.25 GB array of its planes."""
+
+
+def phone_snapshot_task(fleet_index: int, requested_fleet: int) -> sat._SnapshotTask:
+    """One phone-class snapshot task at the draw's first snapshot, pricing no trim."""
+    return sat._SnapshotTask(
+        curve=PHONE,
+        fleet_index=fleet_index,
+        requested_fleet=requested_fleet,
+        snapshot_index=0,
+        time_s=0.0,
+        prices_trim=False,
+    )
+
+
+def one_patch_context(synthetic_population_grid: GridBuilder) -> sat._SweepContext:
+    """A phone-class snapshot context on one populated 2 degree cell (the default shell, B = 1)."""
+    cells = sat._demand_cells(synthetic_population_grid(2.0, patch_people(2.0, 0)), 1.0)
+    return sat._SweepContext(
+        shell=ShellInputs(), cells=cells, limits=seam_limits(1.0), trim=TrimInputs()
+    )
+
+
+def test_a_workers_memory_error_is_marked_as_the_workers(
+    monkeypatch: pytest.MonkeyPatch, synthetic_population_grid: GridBuilder
+) -> None:
+    """Objective: a pool's worker marks its own MemoryError, so the parent can tell it from one
+    of its own, and passes every result through unchanged.
+
+    Sample: the worker's entry, ``_run_snapshot_in_worker``, called in this process on one
+    phone-class task, with ``_run_snapshot`` patched to raise numpy's out-of-memory message, then
+    unpatched.
+
+    Expected outcome: ``_WorkerMemoryError`` carrying numpy's message, the MemoryError as its
+    cause; unpatched, the snapshot's own result (equal to ``_run_snapshot``'s).
+    """
+    task = phone_snapshot_task(0, 342)
+    context = one_patch_context(synthetic_population_grid)
+    unmarked = sat._run_snapshot(task, context)
+    with monkeypatch.context() as patch:
+
+        def raises(*args: object) -> sat._SnapshotResult:
+            raise MemoryError(WORKER_OUT_OF_MEMORY)
+
+        patch.setattr(sat, "_run_snapshot", raises)
+        with pytest.raises(sat._WorkerMemoryError, match=r"Unable to allocate 7\.11 PiB") as marked:
+            sat._run_snapshot_in_worker(task, context)
+    assert isinstance(marked.value.__cause__, MemoryError)
+    passed = sat._run_snapshot_in_worker(task, context)
+    assert dataclasses.replace(passed, worker_peak_mb=unmarked.worker_peak_mb) == unmarked
+
+
+def test_a_workers_memory_error_crosses_the_process_boundary_as_the_sweeps_error(
+    synthetic_population_grid: GridBuilder,
+) -> None:
+    """Objective: a real worker's MemoryError reaches the parent as the sweep's own error, its
+    message and the task count with it (the pool pickles the worker's exception and raises it
+    again here).
+
+    Sample: two phone-class snapshot tasks of 10^15 satellites run by ``_run_sweep`` in a spawned
+    worker: the shell's first array of that size (8 PB) is refused at once, after a 0.25 GB array
+    of its planes, so the worker raises numpy's real MemoryError.
+
+    Expected outcome: ``SaturationSweepError`` (a ValueError) carrying the task count 2 and
+    saying a saturation worker ran out of memory, with numpy's message.
+    """
+    tasks = [phone_snapshot_task(index, UNBUILDABLE_FLEET + index) for index in range(2)]
+    context = one_patch_context(synthetic_population_grid)
+    with pytest.raises(sat.SaturationSweepError) as failed:
+        sat._run_sweep(tasks, {PHONE: context})
+    assert isinstance(failed.value, ValueError)
+    assert failed.value.task_count == 2
+    assert str(failed.value).startswith(
+        "a saturation worker ran out of memory during a sweep of 2 snapshot tasks (Unable to "
+        "allocate"
+    )
+    assert str(failed.value).endswith("); nothing was written")
 
 
 def test_the_command_exits_with_the_usage_status_on_a_usage_error(

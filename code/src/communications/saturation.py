@@ -138,16 +138,18 @@ logs its summary, checks that it is complete and writes it through the shared wr
 relative output path anchors to the repository root, a relative scenario path to the working
 directory; the stamp defaults to today's ISO date. It follows the shared command conventions
 (:mod:`common.cli`): status on stderr, an expected failure one ``ERROR:`` line and exit status
-1 (a saturation worker that dies, most likely out of memory, too), a usage error exit status
-2. It reads no curve, so a stale or missing curve never blocks its own regeneration.
+1 (a sweep that fails too: a saturation worker that dies, most likely out of memory, or runs
+out of memory), a usage error exit status 2. It reads no curve, so a stale or missing curve
+never blocks its own regeneration.
 
 Public: :func:`load_population_grid`, :class:`PopulationGrid`, :func:`compute_saturation`,
-:func:`promote_saturation_curve`, :func:`main`, :class:`PopulationGridError` and
-:class:`SaturationInvariantError`. Everything else is private; ``_allocate`` is the seam the
-tests drive with explicit satellite positions; ``_class_row`` and ``_band_row`` (one class's or
-one band point's row at one requested fleet) are the seams the drift tests recompute a committed
-curve's rows through, and ``_plan_maximum_use`` on the curve's own plans (``_class_plan``,
-``_band_plan``) what they rebuild every class's and band point's maximum use through.
+:func:`promote_saturation_curve`, :func:`main`, :class:`PopulationGridError`,
+:class:`SaturationInvariantError` and :class:`SaturationSweepError`. Everything else is
+private; ``_allocate`` is the seam the tests drive with explicit satellite positions;
+``_class_row`` and ``_band_row`` (one class's or one band point's row at one requested fleet)
+are the seams the drift tests recompute a committed curve's rows through, and
+``_plan_maximum_use`` on the curve's own plans (``_class_plan``, ``_band_plan``) what they
+rebuild every class's and band point's maximum use through.
 """
 
 from __future__ import annotations
@@ -483,6 +485,10 @@ budget, SR-21), so a tier's measured largest task bounds the rest of it, and eac
 measures again and runs more workers at once (one process at a time only at the top of the
 grid, where one worker's peak nears the budget)."""
 
+_TRACEBACK_QUOTES: Final[str] = "'\""
+"""The quote marks a process pool fences a cause's formatted traceback with (``'''`` or three
+double quotes), which a sweep's error leaves out when it names the cause."""
+
 # ===========================================================================
 # The grid's provenance and the curve's stated limits
 # ===========================================================================
@@ -527,6 +533,21 @@ class PopulationGridError(ValueError):
 
 class SaturationInvariantError(ValueError):
     """A curve breaks one of its invariants or its markers cannot be placed on its rows."""
+
+
+class SaturationSweepError(ValueError):
+    """A sweep that could not finish: a saturation worker died or ran out of memory, or the
+    sweep's process pool broke with a stated cause. Nothing was computed past it, so nothing was
+    written.
+
+    Attributes:
+        task_count: The sweep's snapshot tasks.
+    """
+
+    def __init__(self, message: str, task_count: int) -> None:
+        """Build the error from its one-line message and the sweep's task count."""
+        super().__init__(message)
+        self.task_count = task_count
 
 
 @dataclass(frozen=True, eq=False)
@@ -2572,6 +2593,35 @@ def _run_snapshot(task: _SnapshotTask, context: _SweepContext) -> _SnapshotResul
     )
 
 
+class _WorkerMemoryError(Exception):
+    """A saturation worker's own MemoryError, raised again in the worker under this type: the
+    process pool re-raises a worker's exception in the parent, where a bare MemoryError could be
+    the parent's own."""
+
+
+def _run_snapshot_in_worker(task: _SnapshotTask, context: _SweepContext) -> _SnapshotResult:
+    """Run one snapshot task in a pool's worker: :func:`_run_snapshot`, with a MemoryError marked
+    as the worker's own.
+
+    Raises:
+        _WorkerMemoryError: If the worker runs out of memory (its message kept).
+    """
+    try:
+        return _run_snapshot(task, context)
+    except MemoryError as exc:
+        raise _WorkerMemoryError(str(exc) or type(exc).__name__) from exc
+
+
+def _cause_summary(exc: BaseException) -> str | None:
+    """Return the last line of an exception's cause (the error itself: a process pool's cause is a
+    formatted traceback fenced in quote marks), or None when it has no cause."""
+    if exc.__cause__ is None:
+        return None
+    lines = [line.strip() for line in str(exc.__cause__).splitlines()]
+    stated = [line for line in lines if line.strip(_TRACEBACK_QUOTES)]
+    return stated[-1] if stated else type(exc.__cause__).__name__
+
+
 @dataclass(frozen=True)
 class _SweepRun:
     """A sweep's results with what its workers measured.
@@ -2631,7 +2681,7 @@ def _run_pool(
         for index, result in zip(
             indices,
             pool.map(
-                _run_snapshot,
+                _run_snapshot_in_worker,
                 [tasks[i] for i in indices],
                 [contexts[tasks[i].curve] for i in indices],
             ),
@@ -2658,7 +2708,9 @@ def _run_alone(
     with ProcessPoolExecutor(max_workers=_MIN_WORKERS, mp_context=get_context("spawn")) as alone:
         for index in indices:
             task = tasks[index]
-            results[index] = alone.submit(_run_snapshot, task, contexts[task.curve]).result()
+            results[index] = alone.submit(
+                _run_snapshot_in_worker, task, contexts[task.curve]
+            ).result()
 
 
 def _run_sweep(
@@ -2678,9 +2730,16 @@ def _run_sweep(
     sum, and the pools run one after another. The curves keep the order their tasks first
     appear in.
 
+    The sweep's failures are its own error, each naming the sweep's task count: a worker that
+    dies (the pool breaks with no cause; most likely the system killed it out of memory), a
+    worker that runs out of memory (its MemoryError, which the worker marks as its own), and a
+    pool that breaks with a stated cause (sending a task or receiving a result failed in this
+    process), whose cause the message names without blaming a worker. A MemoryError of this
+    process is not a worker's and is left as it is.
+
     Raises:
-        BrokenProcessPool: If a worker dies, its message naming the sweep's task count (the
-            command logs it as its one ERROR line).
+        SaturationSweepError: If a worker dies or runs out of memory, or the pool breaks with a
+            cause (the command logs it as its one ERROR line).
     """
     results: dict[int, _SnapshotResult] = {}
     by_curve: dict[_CurveKey, list[int]] = {}
@@ -2725,8 +2784,20 @@ def _run_sweep(
                         peak_bound_mb = max(peak_bound_mb, bound_mb)
                         floor_fleet = tasks[top].requested_fleet / _SWEEP_TIER_FLEET_RATIO
     except BrokenProcessPool as exc:
-        raise BrokenProcessPool(
-            f"a saturation worker died during a sweep of {len(tasks):,} snapshot tasks"
+        cause = _cause_summary(exc)
+        failure = (
+            f"a saturation worker died during a sweep of {len(tasks):,} snapshot tasks, most "
+            "likely out of memory"
+            if cause is None
+            else f"the saturation sweep's process pool broke during a sweep of {len(tasks):,} "
+            f"snapshot tasks ({cause})"
+        )
+        raise SaturationSweepError(f"{failure}; nothing was written", len(tasks)) from exc
+    except _WorkerMemoryError as exc:
+        raise SaturationSweepError(
+            f"a saturation worker ran out of memory during a sweep of {len(tasks):,} snapshot "
+            f"tasks ({exc}); nothing was written",
+            len(tasks),
         ) from exc
     return _SweepRun(
         results=tuple(results[i] for i in range(len(tasks))),
@@ -3564,6 +3635,8 @@ def compute_saturation(
         SaturationInvariantError: If a check fails, the realized fleets do not strictly
             increase, a saturation number lies before the rows can place it, or the trim asks
             for more snapshots than the phone class's central curve computes.
+        SaturationSweepError: If a saturation worker dies or runs out of memory, or the sweep's
+            process pool breaks with a stated cause.
     """
     started = time.perf_counter()
     _check_grid(population, inputs)
@@ -3879,9 +3952,10 @@ def promote_saturation_curve(
         ValueError: If the scenario is invalid (a :class:`pydantic.ValidationError`) or does
             not select the Iridium model (:class:`~communications.iridium.NotAnIridiumConfigError`),
             the grid is not the one the inputs name (:class:`PopulationGridError`), a check
-            fails (:class:`SaturationInvariantError`), or the curve is incomplete
+            fails (:class:`SaturationInvariantError`), the sweep fails (a saturation worker
+            dies or runs out of memory, or its process pool breaks with a stated cause:
+            :class:`SaturationSweepError`), or the curve fails its completeness check
             (:class:`~communications.saturation_curve.SaturationCurveError`).
-        BrokenProcessPool: If a saturation worker dies (most likely out of memory).
     """
     checkout = locate_source_checkout(__file__)
     config = load_comms_config(Path(scenario_path))
@@ -3938,9 +4012,12 @@ def main(argv: list[str] | None = None) -> int:
         :data:`~common.cli.EXIT_OK` on success; :data:`~common.cli.EXIT_ERROR` (after one
         ``ERROR:`` log line, no traceback) when the scenario cannot be read, is invalid or does
         not select the Iridium model, the destination is one the writer would refuse (found
-        before the computation), the grid is not the one expected, a check fails, a saturation
-        worker dies (most likely out of memory; the line carries the sweep's task count, and
-        nothing is written), or the curve cannot be written. Usage errors exit through
+        before the computation), the grid is not the one expected, a check fails, the sweep
+        fails (a saturation worker dies, most likely out of memory, or runs out of memory, or
+        the sweep's process pool breaks with a stated cause; the line carries the sweep's task
+        count, and nothing is written), the curve is incomplete, or the curve cannot be written.
+        Every one is a :class:`~common.file_io.ModelFileError` or a ``ValueError``, so one
+        handler logs them all. Usage errors exit through
         :class:`~common.cli.CliArgumentParser` with :data:`~common.cli.EXIT_USAGE`.
     """
     configure_cli_logging()
@@ -3955,14 +4032,6 @@ def main(argv: list[str] | None = None) -> int:
             describe_failure(exc, scenario),
         )
         return EXIT_ERROR
-    except BrokenProcessPool as exc:
-        logger.error(
-            "could not promote the saturation curve from %s: %s, most likely out of memory; "
-            "nothing was written",
-            Path(args.scenario),
-            describe_failure(exc),
-        )
-        return EXIT_ERROR
     return EXIT_OK
 
 
@@ -3970,6 +4039,7 @@ __all__ = [
     "PopulationGrid",
     "PopulationGridError",
     "SaturationInvariantError",
+    "SaturationSweepError",
     "compute_saturation",
     "load_population_grid",
     "main",
