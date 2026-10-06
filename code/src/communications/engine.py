@@ -1,23 +1,38 @@
-"""The communications cost engine: the per-year cohort treadmill both families share.
+"""The communications engine: the shared fleet-and-cost loop, and the cellular family.
 
-``run_comms_trajectory(config)`` drives the slim cost-to-serve model across the
-horizon and returns a :class:`CommsTrajectory` of plain-numeric per-year rollups.
-The same treadmill serves both model families: the High-Bandwidth Cellular Pure
-Play model (a fixed subscriber-density dial) and the Iridium model (the density
-derived from L-band physics when ``config.iridium`` is set). Each family has its own
-entry, and both call this one path (the interim shared path, until the entries move
-onto the shared fleet-and-cost loop, :func:`run_fleet_loop`, which runs a fleet under a
+THE SHARED LOOP. :func:`run_fleet_loop` runs a fleet over the horizon under a
 family's deployment rule and returns the shared fleet-and-cost record,
-:class:`FleetTrajectory`): the cellular entry is ``run_comms_model(config)`` here,
-which refuses a config with an ``iridium`` block (:class:`NotACellularConfigError`);
-the Iridium entry is ``communications.iridium.run_iridium_model(config, curve)``,
-which checks its saturation curve against the config before the run. The interim
-path itself is not an entry (it is not in ``__all__``): it checks neither the family
-nor a curve, so what the entries guarantee holds through the entries. This module
-imports neither the Iridium family module nor the curve's contract, while the interim
-path still holds the Iridium model's branches (its density derivation and physics
-block, read from the ``iridium`` block) until the shared fleet-and-cost loop, which
-holds no family branch, replaces it.
+:class:`FleetTrajectory`: per model year (:class:`FleetYear`) the cadence, the
+satellites deployed, the living fleet under the cohort cliff, the coverage fraction,
+the build, launch, total and replacement cost lines, and the annualized cost with one
+line per living cohort (:class:`FleetCohortCost`, its per-satellite cost locked at its
+launch year's price); then the trajectory's cost totals. The loop holds no family
+branch: a :class:`DeploymentRule` decides how many satellites a year adds and how many
+of them replace retired ones, reading only its :class:`DeploymentStep` and keeping no
+state, and the loop refuses an impossible answer (:class:`DeploymentRuleError`). Every
+family's fleet runs on it; each family's own lines live in its own record beside the
+shared one. The shared cost functions live here too: the per-satellite annualization
+(:func:`per_satellite_annual_cost_musd`) and the one margin formula
+(:func:`margin_pct`, None where revenue is not positive).
+
+THE CELLULAR FAMILY (the High-Bandwidth Cellular Pure Play model, a fixed
+subscriber-density dial). Its entry, :func:`run_comms_model`, refuses a config with an
+``iridium`` block (:class:`NotACellularConfigError`); otherwise it sizes the fleet
+target from the dials (:func:`compute_fleet_target`), runs the loop under
+:func:`cellular_rule` (build to the target, then hold it) and builds its record
+(:func:`build_cellular_record`, a :class:`CellularTrajectory`), returning the two
+records as a :class:`CellularRun`.
+
+THE IRIDIUM FAMILY. Its entry is ``communications.iridium.run_iridium_model(config,
+curve)``, which checks its saturation curve against the config before it runs. Until
+the Iridium family is built there, that entry sizes the fleet by the density path in
+this module (the L-band derivations below: the spectral efficiency, the per-satellite
+capacity, the derived density, the aperture-coupled satellites per launch, and the v5
+physics block, :func:`build_iridium_result`) and runs it through the cellular rule and
+record, so its run is a :class:`CellularRun` whose record carries the v5 block. This
+module imports neither the Iridium family module nor the curve's contract: a family
+hands the loop its rule.
+
 It mirrors the data-center model's fleet engine (the per-year loop in
 ``data_center/engine.py`` plus the living-cohort rollup in ``data_center/fleet.py``)
 with three deliberate differences, all driven by the comms design:
@@ -25,13 +40,14 @@ with three deliberate differences, all driven by the comms design:
 1. Satellites per launch. The DC deploys one node per launch; comms deploys
    ``satellites_per_launch`` satellites per launch, so
    ``satellites_deployed_this_year = comms_launches_flown_this_year * satellites_per_launch``.
-2. The build-and-hold cap (the treadmill). The DC fleet grows with cadence
-   without bound. Comms builds toward the FLEET TARGET (the CAPACITY-sized fleet,
-   :func:`compute_fleet_target`: the subscriber target divided by the per-satellite
-   density, floored by the coverage floor and capped by the saturation cap) and
-   then HOLDS: once the target is reached it deploys only enough whole launches to
-   replace the cohorts ageing off the service-life cliff, so the living count stays at (or
-   as close as launch granularity allows to) the fleet target.
+2. The deployment rule. The DC fleet grows with cadence without bound. A comms fleet
+   deploys what its family's rule decides. The cellular rule (the treadmill) builds
+   toward the FLEET TARGET (the CAPACITY-sized fleet, :func:`compute_fleet_target`:
+   the subscriber target divided by the per-satellite density, floored by the
+   coverage floor and capped by the saturation cap) and then HOLDS: once the target
+   is reached it deploys only enough whole launches to replace the cohorts ageing off
+   the service-life cliff, so the living count stays at (or as close as launch
+   granularity allows to) the fleet target.
 3. Two cadence roles. The shared whole-fleet logistic ramp
    (``common.cadence.compute_launches_per_year``, the 90/year FY2036 ramp) sets
    the WHOLE-fleet launch count. The comms slice flies a SHARE of it
@@ -48,8 +64,9 @@ The cohort cliff is the shared ``common.cohort.LivedCohort`` /
 ``living_cohorts`` machinery, reused unchanged: a cohort is alive in the
 half-open interval ``[launch_year, launch_year + satellite_lifetime_years)``.
 The shared ``LivedCohort`` carries only ``launch_year`` + ``units_deployed``,
-which is exactly what comms needs (no per-satellite economics ride on the
-cohort, unlike the DC ``Cohort``), so comms uses it directly with no subclass.
+which is exactly what the cliff needs (no per-satellite economics ride on the
+cohort, unlike the DC ``Cohort``), so comms uses it directly with no subclass; the
+loop keeps each cohort's locked cost beside it.
 
 The two shared ``common.cadence`` functions return a ``ProvenanceCell``; this
 engine unwraps each ``.value`` to a plain ``float``/``int`` ONCE (via the shared
@@ -60,7 +77,7 @@ provenance envelope).
 
 This module imports only from ``common.*`` and ``communications.*`` (never
 ``data_center``, per the cross-import guard) and uses none of the forbidden
-demand-side tokens. It also carries the subscriber mapping
+demand-side tokens. It also carries the cellular family's subscriber mapping
 (:func:`subscribers_served_at`): subscribers are PEOPLE, NOT households, and never
 IoT devices. The fleet is CAPACITY-SIZED to serve the subscriber TARGET (the input
 base), and the served count RAMPS with the buildout
@@ -70,56 +87,58 @@ base is the target or the served override and ``people_capacity`` is
 the fleet can carry: it reaches the target at full deployment unless the saturation
 cap binds (or an override asks for more than the fleet carries), in which case it
 reaches the fleet's people capacity. This is a sized-base mapping, NOT the old
-spectrum -> capacity -> demand chain (cut). The engine reports the served-people
-count at the FINAL year's buildout (``CommsTrajectory.subscribers_served``), the
-final-year cash cost per served person
-(``final_year_cash_cost_per_subscriber_usd``), and the built fleet's annualized cost
-(``built_fleet_annual_cost_musd``, the published ARPU margin's cost basis).
+spectrum -> capacity -> demand chain (cut). The cellular record reports the
+served-people count at the FINAL year's buildout
+(``CellularTrajectory.subscribers_served``), the final-year cash cost per served
+person (``final_year_cash_cost_per_subscriber_usd``), and, interim for the Iridium v5
+artifact, the built fleet's annualized cost (``built_fleet_annual_cost_musd``, its
+published ARPU margin's cost basis).
 
-THE REPLACEMENT LINE. Only the replacement of retiring cohorts counts as
-replacement, never a build tranche. Before and in the year the fleet target is first
-reached, a year's replacement is the part of its deployment that replaces the
-cohorts retiring that year (``min(satellites_added, satellites_retired)``, both whole
-launches); the rest is build. After that year (the HOLD phase) every deployment
-restores retired satellites, so the whole year's cost is replacement. The trajectory
-headline ``final_year_replacement_cost_musd`` is the final model year's replacement
-line, or ``None`` when the final year replaced no retiring cohort (no cash
-replacement basis exists that year, so none is published as if it were one).
+THE REPLACEMENT LINE. The loop costs as replacement what the rule counts: the
+replaced satellites' build cost plus their whole launches at the year's price. Only
+the replacement of retiring cohorts counts as replacement, never a build tranche. The
+cellular rule counts, before and in the year the fleet target is first reached, the
+part of a year's deployment that replaces the cohorts retiring that year
+(``min(satellites_added, retiring)``, both whole launches; the rest is build), and
+after that year (the HOLD phase) the whole deployment, which restores retired
+satellites. The shared record's headline ``final_year_replacement_cost_musd`` is the
+final model year's replacement line, or ``None`` when the final year replaced no
+retiring cohort (no cash replacement basis exists that year, so none is published as
+if it were one).
 
-THE OVERSHOOT RULE (frozen here and in the engine tests). Launches are granular
-(a whole launch deploys ``satellites_per_launch`` satellites at once), so the
-last build-out launch may push the living count slightly OVER the target. The
-rule, applied uniformly in BOTH the build-out and HOLD phases: the satellites to
-add this year are the deficit to the target (``target - living_before``) rounded
-UP to a whole number of launches (``_ceil_to_launch``), capped by the comms
-cadence share for the year (``would_be_deployed``). This lets the final build
-cohort overshoot the target by strictly less than one launch's worth and never
-deploys beyond what is needed to hold. During HOLD the deficit equals that
-year's cliff losses less any overshoot carried from the final build cohort, so
-the same formula replaces only the ageing cohorts.
+THE OVERSHOOT RULE (the cellular rule's; frozen here and in the engine tests).
+Launches are granular (a whole launch deploys ``satellites_per_launch`` satellites at
+once), so the last build-out launch may push the living count slightly OVER the
+target. The rule, applied uniformly in BOTH the build-out and HOLD phases: the
+satellites to add this year are the deficit to the target (``target -
+living_before``) rounded UP to a whole number of launches (``_ceil_to_launch``),
+capped by the comms cadence share for the year. This lets the final build cohort
+overshoot the target by strictly less than one launch's worth and never deploys
+beyond what is needed to hold. During HOLD the deficit equals that year's cliff
+losses less any overshoot carried from the final build cohort, so the same formula
+replaces only the ageing cohorts.
 
-THE REVENUE + GROSS-MARGIN OVERLAY (mirrors the data-center revenue/margin pattern,
-adapted to the comms model's lighter single-value style; no R-band, no provenance
-envelope). On top of the cost treadmill the engine layers, per cohort and per year,
-TWO REVENUE CASES against one ANNUALIZED cost basis. The cost basis is the
-per-satellite LIFETIME cost (the flat build cost plus the satellite's share of its
-deployment-year launch cost) spread over the satellite life, summed over the living
-cohorts (matching the DC ``cost_annual = node_total / service_life`` convention). It
-is a different convention from the cash replacement line (which the final-year cash
-per-subscriber figure reads); the two converge only in clean rotational steady
-state, and in any single year either can be the larger (the cash line is
-cohort-timed: the promoted Iridium scenario's FY2036 cash replacement is 250.0 $M
-against a 145.0 $M annualized cost, while a year that replaces no cohort carries no
-cash replacement at all). Case 1 (COST-PLUS): revenue = annual cost x
-``revenue_multiple`` (cost-coupled, the DC central R = 1.5 mirror). Case 2
-(PRICES-TODAY / ARPU): revenue = served subscribers x ``arpu_usd_per_month`` x 12.
-Gross margin in both is ``(revenue - cost) / revenue``, a percent. The overlay
-rides a parallel ``_CohortBuild`` list (the per-satellite annual cost the bare
-``LivedCohort`` does not carry), reusing the shared cohort cliff; each living
-cohort's per-year line is a :class:`CommsCohortYear`, and the fleet roll-up plus the
-steady-state (final-year) headlines sit on :class:`CommsYear` /
-:class:`CommsTrajectory`. The revenue is a cost-coupled multiple
-or a price-times-served-base figure, NEVER a demand or market-size estimate.
+THE REVENUE AND MARGIN OVERLAY (the cellular record's; mirrors the data-center
+revenue and margin pattern, adapted to the comms model's lighter single-value style;
+no R-band, no provenance envelope). On the shared record's annualized cost the
+cellular record layers, per cohort and per year, TWO REVENUE CASES. The cost basis is
+each living cohort's line: its satellites at the per-satellite LIFETIME cost (the flat
+build cost plus the satellite's share of its deployment-year launch cost) spread over
+the satellite life, locked at launch, summed over the living cohorts (matching the DC
+``cost_annual = node_total / service_life`` convention). It is a different convention
+from the cash replacement line (which the final-year cash per-subscriber figure
+reads); the two converge only in clean rotational steady state, and in any single
+year either can be the larger (the cash line is cohort-timed: the promoted Iridium
+scenario's FY2036 cash replacement is 250.0 $M against a 145.0 $M annualized cost,
+while a year that replaces no cohort carries no cash replacement at all). Case 1
+(COST-PLUS): revenue = annual cost x ``revenue_multiple`` (cost-coupled, the DC
+central R = 1.5 mirror). Case 2 (PRICES-TODAY / ARPU): revenue = served subscribers x
+``arpu_usd_per_month`` x 12. The margin in both is ``(revenue - cost) / revenue``, a
+percent (0.0 where there is no revenue, the cellular record's published convention).
+Each living cohort's revenue line is a :class:`CellularCohortRevenue` beside its cost
+line, and the year's lines and the steady-state (final-year) headlines sit on
+:class:`CellularYear` / :class:`CellularTrajectory`. The revenue is a cost-coupled
+multiple or a price-times-served-base figure, NEVER a demand or market-size estimate.
 
 Units: money in $M; counts are integers; margins in percent; time in fiscal years
 (FY2026..FY2036, year 0 = ``base_year``).
@@ -354,7 +373,8 @@ def compute_fleet_target(
 # subscribers_per_satellite dial of the High-Bandwidth Cellular Pure Play model
 # (formerly Model A), then feeds the SAME compute_fleet_target above. These are
 # pure derivations (primitives or the dials in, primitives out, no side effects);
-# run_comms_trajectory wires them in behind the config.iridium branch. THE THREE LANES
+# the Iridium entry (communications.iridium.run_iridium_model) wires them in before
+# it runs the shared loop under the cellular rule. THE THREE LANES
 # stay separate: the Iridium model is the MSS lane (purpose-built or in-chipset
 # devices on owned L-band), NOT cellular direct-to-cell to an unmodified phone
 # (the High-Bandwidth Cellular Pure Play model) and NOT broadband.
@@ -595,8 +615,8 @@ def subscribers_served_at(
 
     Args:
         buildout_fraction: The fraction of the capacity-sized fleet target currently
-            on orbit (``living_fleet / fleet_target``, the engine's per-year
-            ``CommsYear.buildout_fraction``). Clamped to ``[0.0, 1.0]`` before
+            on orbit (``living_fleet / fleet_target``, the cellular record's per-year
+            ``CellularYear.buildout_fraction``). Clamped to ``[0.0, 1.0]`` before
             scaling, so an out-of-range value (the engine never produces one) cannot
             push the served count below zero or above the capped base.
         subscriber_target: The served-PERSON count at full deployment (the configured
@@ -644,8 +664,7 @@ def usd_per_person(cost_musd: float | None, people_served: int) -> float | None:
 
 
 # ---------------------------------------------------------------------------
-# The revenue + gross-margin overlay (the two revenue cases; mirrors the DC
-# revenue/margin pattern, adapted to the comms model's lighter single-value style).
+# The shared cost functions: the per-satellite annualization and the one margin.
 #
 # The COST BASIS for margin is the ANNUALIZED per-satellite cost (the satellite's
 # lifetime cost: its flat build cost plus its share of its deployment-year launch
@@ -659,13 +678,13 @@ def usd_per_person(cost_musd: float | None, people_served: int) -> float | None:
 # fleet per year costs ~lifetime_cost/life per satellite. Off that steady state they
 # differ in either direction (a ramped build leaves unequal cohorts, so one year's
 # cliff replacement is not 1/life of the fleet: it can be a large cohort or none). The
-# annualized basis is the stable economic cost the margins read. Two revenue cases
-# ride this basis:
+# annualized basis is the stable economic cost the margins read. The cellular
+# record's two revenue cases ride this basis:
 #
 #   COST-PLUS: revenue = annual cost x revenue_multiple (cost-coupled).
 #   ARPU:      revenue = served subscribers x monthly ARPU x 12 (price x served base).
 #
-# Gross margin in BOTH cases is (revenue - cost) / revenue, reported as a percent.
+# The margin in BOTH cases is (revenue - cost) / revenue, reported as a percent.
 # ---------------------------------------------------------------------------
 
 
@@ -740,7 +759,7 @@ def _cellular_margin_pct(revenue_musd: float, cost_musd: float) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Per-year and whole-trajectory data structures (frozen, plain numerics).
+# The shared fleet-and-cost record (frozen, plain numerics) and the deployment rule.
 # ---------------------------------------------------------------------------
 
 
@@ -1120,233 +1139,6 @@ class CellularRun:
 
 
 @dataclass(frozen=True)
-class CommsCohortYear:
-    """One living cohort's per-year economics line (both revenue cases).
-
-    The cohort-level mirror of the DC per-cohort economics: each living cohort, in
-    each year of its life, carries its annualized cost, its two-case revenue, and its
-    two-case gross margin. The cost-plus case is cost-coupled (revenue = cohort annual
-    cost x the multiple), so the cost-plus margin is the same flat figure for every
-    cohort. The ARPU case allocates the year's served subscribers to the cohort by its
-    share of the living fleet (a cohort with more living satellites serves
-    proportionally more of the base), so the ARPU revenue and margin vary with the
-    cohort's living-satellite share and the year's served base.
-
-    Attributes:
-        launch_year: The cohort's deployment year (its identity across the years).
-        living_satellites: This cohort's satellites alive this year (under the cliff).
-        annual_cost_musd: This cohort's annualized cost this year
-            (``living_satellites x per_satellite_annual_cost_musd``), $M/yr.
-        cost_plus_revenue_musd: The cost-plus revenue (``annual_cost x multiple``),
-            $M/yr.
-        cost_plus_gross_margin_pct: The cost-plus gross margin, percent (flat across
-            cohorts: ``(multiple - 1) / multiple x 100``).
-        arpu_subscribers_served: The served subscribers allocated to this cohort this
-            year (the year's served base x this cohort's share of the living fleet).
-        arpu_revenue_musd: The ARPU revenue (``arpu_subscribers_served x monthly ARPU
-            x 12``), $M/yr.
-        arpu_gross_margin_pct: The ARPU gross margin, percent.
-    """
-
-    launch_year: int
-    living_satellites: int
-    annual_cost_musd: float
-    cost_plus_revenue_musd: float
-    cost_plus_gross_margin_pct: float
-    arpu_subscribers_served: int
-    arpu_revenue_musd: float
-    arpu_gross_margin_pct: float
-
-
-@dataclass(frozen=True)
-class CommsYear:
-    """One fiscal year's cost-and-counts rollup (plain numerics, no cells).
-
-    Attributes:
-        year: The fiscal year (e.g. 2036).
-        fleet_launches_this_year: The whole-fleet integer cadence this year (the
-            shared logistic ramp output). The launch cost is priced at this.
-        comms_launches_flown_this_year: The comms launches actually flown this
-            year, after the cadence share and the build-and-hold cap.
-        satellites_deployed_this_year: Satellites added this year
-            (= ``comms_launches_flown_this_year * satellites_per_launch``).
-        living_fleet: Living satellites at this year under the service-life cliff,
-            counted AFTER this year's cohort is added.
-        coverage_fraction: ``living_fleet / coverage_floor``, clamped to 1.0. The
-            coverage metric (can everyone see a satellite). With a large subscriber
-            base the fleet target exceeds the coverage floor, so this saturates at
-            1.0 while the build continues toward the capacity-sized fleet target.
-        buildout_fraction: ``living_fleet / fleet_target``, clamped to 1.0. The
-            fraction of the capacity-sized fleet on orbit; it drives the served
-            subscriber count (the subscriber target scaled by this).
-        launch_cost_per_launch_musd: Per-launch cost at the whole-fleet cadence
-            this year, $M.
-        build_cost_this_year_musd: Satellite hardware build cost this year, $M
-            (= ``satellites_deployed_this_year * satellite_build_cost_musd``).
-        launch_cost_this_year_musd: Launch cost this year, $M
-            (= ``comms_launches_flown_this_year * launch_cost_per_launch_musd``).
-        total_cost_this_year_musd: ``build_cost_this_year_musd +
-            launch_cost_this_year_musd``.
-        is_hold_phase: ``True`` in every year AFTER the year the fleet target was
-            first reached (``CommsTrajectory.full_coverage_reached_year``); the
-            completion year itself is the last build-out year (its deployment carries
-            the final build tranche).
-        satellites_replaced_this_year: The satellites this year's deployment adds to
-            replace retired satellites (whole launches). During build-out, including
-            the completion year, the part of the deployment that replaces the cohorts
-            retiring this year (``min(satellites_deployed_this_year,
-            satellites_retired)``); in HOLD, every satellite deployed (the whole
-            deployment restores retired satellites). ``0`` when nothing is replaced.
-        replacement_cost_this_year_musd: The cash cost of replacing retired
-            satellites this year, $M: the replaced satellites' build cost plus their
-            whole launches at this year's per-launch cost. Never includes a build
-            tranche: ``0.0`` in a year that replaces no retiring cohort, the year's
-            total cost in HOLD.
-        subscribers_served_this_year: The served-PERSON count at THIS year's buildout
-            fraction (the subscriber target, or the override, capped at the fleet
-            target's people capacity and scaled by ``buildout_fraction``). Drives the
-            cellular family's per-year ARPU revenue line (the final year's value is
-            the trajectory headline ``subscribers_served``).
-        annual_cost_this_year_musd: The ANNUALIZED fleet cost this year (the margin
-            cost basis), $M/yr: the sum over living cohorts of each cohort's
-            per-satellite annual cost (lifetime cost spread over the life). This is
-            NOT the deployment cash cost (``total_cost_this_year_musd``) and NOT the
-            cash replacement line; it is the steady annual cost each living satellite
-            carries, matching the DC annualized convention. It converges with the
-            replacement line only in clean rotational steady state (equal cohorts, a
-            full lifecycle elapsed); in any other year either can be the larger (the
-            cash line replaces whatever cohort retires that year, which may be a
-            large cohort or none).
-        cost_plus_revenue_this_year_musd: The COST-PLUS revenue this year, $M
-            (``annual_cost_this_year_musd x revenue_multiple``).
-        cost_plus_gross_margin_pct: The COST-PLUS gross margin this year, percent
-            (``(revenue - cost) / revenue x 100``; flat at the multiple's implied
-            margin once any fleet is on orbit).
-        arpu_revenue_this_year_musd: The PRICES-TODAY ARPU revenue this year, $M
-            (``subscribers_served_this_year x arpu_usd_per_month x 12 / 1e6``).
-        arpu_gross_margin_pct: The ARPU gross margin this year, percent
-            (``(revenue - cost) / revenue x 100`` against the annualized cost basis).
-        cohort_lines: The per-living-cohort economics breakdown this year (one
-            :class:`CommsCohortYear` per cohort alive under the cliff), the
-            cohort-level mirror of the DC per-cohort revenue/margin. Empty in a year
-            with no living fleet.
-    """
-
-    year: int
-    fleet_launches_this_year: int
-    comms_launches_flown_this_year: int
-    satellites_deployed_this_year: int
-    living_fleet: int
-    coverage_fraction: float
-    buildout_fraction: float
-    launch_cost_per_launch_musd: float
-    build_cost_this_year_musd: float
-    launch_cost_this_year_musd: float
-    total_cost_this_year_musd: float
-    is_hold_phase: bool
-    satellites_replaced_this_year: int
-    replacement_cost_this_year_musd: float
-    subscribers_served_this_year: int
-    annual_cost_this_year_musd: float
-    cost_plus_revenue_this_year_musd: float
-    cost_plus_gross_margin_pct: float
-    arpu_revenue_this_year_musd: float
-    arpu_gross_margin_pct: float
-    cohort_lines: tuple[CommsCohortYear, ...]
-
-
-@dataclass(frozen=True)
-class CommsTrajectory:
-    """The whole build-and-hold run: the per-year rollups plus the headlines.
-
-    Attributes:
-        years: The per-year rollups, one per model year (FY2026..FY2036).
-        total_build_and_hold_cost_musd: The cumulative cost over the trajectory
-            (the sum of every year's ``total_cost_this_year_musd``), $M.
-        fleet_target: The capacity-sized fleet the build-out fills toward
-            (:func:`compute_fleet_target`: the subscriber target divided by the
-            per-satellite density, floored by the coverage floor, capped by the
-            saturation cap). The treadmill builds and holds to THIS, not the floor.
-        subscribers_per_satellite: The attached-subscribers-per-satellite density
-            used to size the fleet (echoed from the config for transparency).
-        binding_regime: Which constraint set the fleet target (the coverage floor,
-            the capacity need, or the saturation cap), the investor's
-            coverage-vs-capacity answer for this scenario.
-        full_coverage_reached_year: The first fiscal year the living fleet hit the
-            FLEET TARGET (full deployment), or ``None`` if it is never reached within
-            the horizon (a truthful below-target output, not an error).
-        final_year_replacement_cost_musd: The FINAL model year's cash replacement
-            line, $M (``years[-1].replacement_cost_this_year_musd``): cohort-timed and
-            lumpy, the cost of replacing whatever retires that year, never a build
-            tranche and NOT an annualized basis. ``None`` when the final year replaced
-            no retiring cohort (for example a build that completes in the final year
-            with nothing retiring yet, or a satellite life longer than the horizon),
-            so no cash replacement figure is published as if it were a real one.
-        subscribers_served: The served-PERSON count at the FINAL year's buildout
-            fraction, the buildout mapping (:func:`subscribers_served_at`) applied to
-            the subscriber target (or the direct override), capped at the fleet
-            target's people capacity. When the build-out completed, the final
-            buildout fraction is ``1.0`` and this is the capped base; when it did
-            not, it is the proportional partial-deployment count.
-        final_year_cash_cost_per_subscriber_usd: The final-year cash replacement per
-            served person, USD: ``final_year_replacement_cost_musd`` (converted to
-            USD) over ``subscribers_served``. ``None`` when the final-year
-            replacement is ``None`` or nobody is served. A lumpy cash figure, NOT an
-            annualized cost to serve.
-        steady_state_annual_cost_musd: The FINAL model year's ANNUALIZED fleet cost,
-            $M/yr (``years[-1].annual_cost_this_year_musd``): the living fleet's
-            per-satellite lifetime cost spread over the life, whatever the fleet's
-            size that year (``0.0`` with nothing on orbit). This is the annualized
-            basis (the DC convention) behind the two steady-state revenue headlines.
-            It converges with the cash replacement line only in clean rotational
-            steady state; in the final horizon year either can be the larger (the
-            promoted Iridium scenario reads 145.0 annualized against a 250.0 cash
-            replacement).
-        built_fleet_annual_cost_musd: The BUILT fleet's annualized cost, $M/yr: the
-            cost basis consistent with a revenue case computed at the fleet target.
-            When the final-year living fleet is at or above the fleet target (the
-            built fleet is on orbit) it equals ``steady_state_annual_cost_musd``;
-            otherwise it projects the whole-launch built fleet (the fleet target
-            rounded up to whole launches, the fleet the overshoot rule builds) at the
-            final year's per-satellite annual cost (build cost plus the satellite's
-            share of the final year's per-launch cost, spread over the life). It is
-            the published ARPU margin's cost basis.
-        steady_state_revenue_cost_plus_musd: The steady-state COST-PLUS annual
-            revenue, $M/yr (the final year's ``cost_plus_revenue_this_year_musd``).
-        steady_state_gross_margin_cost_plus_pct: The steady-state COST-PLUS gross
-            margin, percent (the multiple's implied flat margin once built out).
-        steady_state_revenue_arpu_musd: The steady-state PRICES-TODAY ARPU annual
-            revenue, $M/yr (the final year's ``arpu_revenue_this_year_musd``).
-        steady_state_gross_margin_arpu_pct: The steady-state ARPU gross margin,
-            percent. Unlike the cost-plus margin, this depends on whether the ARPU
-            revenue clears the annualized cost basis at the served base.
-        iridium: The Iridium model's (L-band max-outcome) physics result block when
-            the Iridium model ran (``config.iridium`` was non-None), else ``None``
-            (the High-Bandwidth Cellular Pure Play path). It carries the derived
-            per-satellite capacity, the fleet aggregate, the per-user peak/off-peak
-            rates, the IoT passthrough, and the stated ecosystem assumption; it never
-            perturbs the shared fields above.
-    """
-
-    years: tuple[CommsYear, ...]
-    total_build_and_hold_cost_musd: float
-    fleet_target: int
-    subscribers_per_satellite: int
-    binding_regime: BindingRegime
-    full_coverage_reached_year: int | None
-    final_year_replacement_cost_musd: float | None
-    subscribers_served: int
-    final_year_cash_cost_per_subscriber_usd: float | None
-    steady_state_annual_cost_musd: float
-    built_fleet_annual_cost_musd: float
-    steady_state_revenue_cost_plus_musd: float
-    steady_state_gross_margin_cost_plus_pct: float
-    steady_state_revenue_arpu_musd: float
-    steady_state_gross_margin_arpu_pct: float
-    iridium: IridiumResult | None = None
-
-
-@dataclass(frozen=True)
 class IridiumArpuBucket:
     """One billable-connection ARPU revenue bucket (a mix slice of the pool).
 
@@ -1406,13 +1198,14 @@ class IridiumArpuResult:
 class IridiumResult:
     """The Iridium model's (L-band max-outcome) physics result block.
 
-    Attached to :attr:`CommsTrajectory.iridium` when the Iridium model ran
-    (``config.iridium`` was non-None); ``None`` on the High-Bandwidth Cellular Pure
-    Play path. All fields are estimate-tier derived quantities. Subscribers are
-    PEOPLE; ``iot_devices`` is a separate DEVICE passthrough, never folded into the
-    people count. This is the MSS lane (owned L-band, purpose-built or in-chipset
-    devices), NEVER the cellular unmodified-phone lane (the High-Bandwidth Cellular
-    Pure Play model). See :attr:`ecosystem_assumption`.
+    Attached to the cellular record's interim :attr:`CellularTrajectory.iridium` by
+    the Iridium entry (``config.iridium`` is non-None); ``None`` on a run of the
+    High-Bandwidth Cellular Pure Play model. All fields are estimate-tier derived
+    quantities. Subscribers are PEOPLE; ``iot_devices`` is a separate DEVICE
+    passthrough, never folded into the people count. This is the MSS lane (owned
+    L-band, purpose-built or in-chipset devices), NEVER the cellular
+    unmodified-phone lane (the High-Bandwidth Cellular Pure Play model). See
+    :attr:`ecosystem_assumption`.
 
     Attributes:
         spectrum_mhz: The held L-band width used, MHz (echo of the dial).
@@ -1561,14 +1354,14 @@ def build_iridium_result(
     per-user rates from the dials (the pure derivations above), computes the fleet
     aggregate as ``per_satellite_capacity_gbps x fleet_target`` (0.7 step 6), and
     echoes the derived density and the aperture-coupled effective
-    satellites-per-launch (both passed in, already computed once in
-    :func:`run_comms_trajectory`, so the density that sized the fleet and the density
-    reported here cannot drift). The operations cost and the ecosystem assumption are
-    the stated Iridium-model constants (:data:`IRIDIUM_OPERATIONS_COST_MUSD`,
-    :data:`ECOSYSTEM_ASSUMPTION_NOTE`). When the dials carry an ``arpu`` block, the
-    four-bucket revenue case is derived here at the built fleet's people capacity
-    (``fleet_target x subscribers_per_satellite``, :func:`derive_arpu_buckets`) and
-    attached; it is ``None`` otherwise.
+    satellites-per-launch (both passed in, already computed once by the Iridium entry,
+    ``communications.iridium.run_iridium_model``, so the density that sized the fleet
+    and the density reported here cannot drift). The operations cost and the
+    ecosystem assumption are the stated Iridium-model constants
+    (:data:`IRIDIUM_OPERATIONS_COST_MUSD`, :data:`ECOSYSTEM_ASSUMPTION_NOTE`). When
+    the dials carry an ``arpu`` block, the four-bucket revenue case is derived here
+    at the built fleet's people capacity (``fleet_target x subscribers_per_satellite``,
+    :func:`derive_arpu_buckets`) and attached; it is ``None`` otherwise.
 
     Args:
         dials: The Iridium-model :class:`~communications.config.IridiumDials` block.
@@ -2185,6 +1978,46 @@ def _cellular_cohort_revenue(
     return tuple(lines)
 
 
+def _built_fleet_annual_cost_musd(
+    config: CommsConfig,
+    *,
+    final_year: FleetYear,
+    fleet_target: int,
+    satellites_per_launch: int,
+) -> float:
+    """The built fleet's annualized cost: the Iridium artifact's ARPU margin's cost basis, $M/yr.
+
+    Interim: the cellular record carries it only for the Iridium v5 artifact. A revenue
+    case computed at the fleet target needs a cost for the same fleet. When the
+    final-year living fleet is at or above the fleet target, the built fleet is on
+    orbit, so this is that year's annualized fleet cost (each cohort at its own
+    locked-in launch price). Otherwise (a build that does not complete inside the
+    horizon, or a hold that fell short) it projects the whole-launch built fleet (the
+    fleet target rounded up to whole launches, exactly the fleet the overshoot rule
+    builds) at the final year's per-satellite annual cost.
+
+    Args:
+        config: The comms config (the build cost and the satellite life).
+        final_year: The final model year's shared record (its living fleet, annualized
+            cost, and per-launch price).
+        fleet_target: The capacity-sized fleet target.
+        satellites_per_launch: The satellites per launch this run deployed with.
+
+    Returns:
+        The built fleet's annualized cost, $M/yr.
+    """
+    if final_year.living_fleet >= fleet_target:
+        return final_year.annual_cost_this_year_musd
+    built_fleet_satellites = _ceil_to_launch(fleet_target, satellites_per_launch)
+    final_year_cost_per_satellite_musd = per_satellite_annual_cost_musd(
+        satellite_build_cost_musd=config.satellite.satellite_build_cost_musd,
+        launch_cost_per_launch_musd=final_year.launch_cost_per_launch_musd,
+        satellites_per_launch=satellites_per_launch,
+        satellite_lifetime_years=config.satellite.satellite_lifetime_years,
+    )
+    return built_fleet_satellites * final_year_cost_per_satellite_musd
+
+
 def build_cellular_record(
     config: CommsConfig,
     fleet: FleetTrajectory,
@@ -2318,327 +2151,7 @@ def build_cellular_record(
 
 
 # ---------------------------------------------------------------------------
-# The build-and-hold treadmill: one model year.
-# ---------------------------------------------------------------------------
-
-
-def _cohort_economics_for_year(
-    *,
-    fy: int,
-    life: int,
-    cohort_builds: list[_CohortBuild],
-    living_fleet: int,
-    subscribers_served_this_year: int,
-    revenue_multiple: float,
-    arpu_usd_per_month: float,
-) -> tuple[CommsCohortYear, ...]:
-    """Build the per-living-cohort economics breakdown for one year (both cases).
-
-    For each cohort alive at ``fy`` under the cliff, computes its annualized cost
-    (its living satellites x its locked-in per-satellite annual cost), its cost-plus
-    revenue + margin, and its ARPU revenue + margin. The year's served subscribers are
-    allocated across cohorts by each cohort's share of the living fleet (a cohort with
-    more living satellites serves proportionally more of the base). The last living
-    cohort absorbs any rounding remainder so the per-cohort served counts sum exactly
-    to the year's served total (no drift versus the fleet-level ARPU figure).
-
-    Args:
-        fy: The fiscal year of this rollup.
-        life: The satellite life (the cohort cliff).
-        cohort_builds: The deployed cohorts so far (the economics overlay).
-        living_fleet: The total living satellites this year (the allocation base).
-        subscribers_served_this_year: The year's served-PERSON count (the ARPU base).
-        revenue_multiple: The cost-plus multiple.
-        arpu_usd_per_month: The monthly ARPU.
-
-    Returns:
-        The per-living-cohort economics lines, oldest cohort first (empty when no
-        cohort is alive).
-    """
-    living_builds = [b for b in cohort_builds if cohort_is_alive_at(b.launch_year, fy, life)]
-    lines: list[CommsCohortYear] = []
-    subscribers_allocated = 0
-    for idx, build in enumerate(living_builds):
-        annual_cost_musd = build.satellites * build.per_satellite_annual_cost_musd
-        cost_plus_revenue_musd = annual_cost_musd * revenue_multiple
-        # Allocate the year's served subscribers by the cohort's living-satellite
-        # share; the last living cohort takes the remainder so the parts sum exactly.
-        if idx == len(living_builds) - 1:
-            cohort_subscribers = subscribers_served_this_year - subscribers_allocated
-        elif living_fleet > 0:
-            cohort_subscribers = round(
-                subscribers_served_this_year * build.satellites / living_fleet
-            )
-        else:
-            cohort_subscribers = 0
-        subscribers_allocated += cohort_subscribers
-        arpu_revenue_musd = cohort_subscribers * arpu_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
-        cost_plus_margin_pct = _cellular_margin_pct(cost_plus_revenue_musd, annual_cost_musd)
-        arpu_margin_pct = _cellular_margin_pct(arpu_revenue_musd, annual_cost_musd)
-        lines.append(
-            CommsCohortYear(
-                launch_year=build.launch_year,
-                living_satellites=build.satellites,
-                annual_cost_musd=annual_cost_musd,
-                cost_plus_revenue_musd=cost_plus_revenue_musd,
-                cost_plus_gross_margin_pct=cost_plus_margin_pct,
-                arpu_subscribers_served=cohort_subscribers,
-                arpu_revenue_musd=arpu_revenue_musd,
-                arpu_gross_margin_pct=arpu_margin_pct,
-            )
-        )
-    return tuple(lines)
-
-
-def _compute_comms_year(
-    year_idx: int,
-    fy: int,
-    config: CommsConfig,
-    cohorts: list[LivedCohort],
-    cohort_builds: list[_CohortBuild],
-    fleet_target: int,
-    satellites_per_launch: int,
-    people_capacity: int,
-    target_already_reached: bool,
-) -> tuple[CommsYear, bool]:
-    """Roll up one model year: deploy toward the fleet target, hold, cost it, and price revenue.
-
-    Applies the build-and-hold cap in launch-year order:
-
-    1. Price the cadence (fleet launches, comms launches, launch cost).
-    2. ``would_be_deployed = comms_launches * satellites_per_launch`` (the
-       cadence-share cap on the build rate this year).
-    3. ``living_before`` = the living fleet from PRIOR cohorts under the cliff at
-       ``fy`` (cohorts that aged off are already excluded); the satellites retired
-       this year are the prior year's living fleet minus ``living_before``.
-    4. ``satellites_added = min(would_be_deployed, ceil_to_launch(max(0,
-       fleet_target - living_before), satellites_per_launch))`` (the overshoot rule:
-       the deficit rounded up to whole launches, capped by the cadence share).
-       During HOLD the deficit equals that year's cliff losses (less any overshoot
-       still on orbit), so this replaces only the ageing cohorts.
-    5. Append ``LivedCohort(fy, satellites_added)`` and re-derive ``living_after``
-       under the cliff (so the living count tracks the cohort window).
-    6. Split the deployment into replacement and build: in HOLD (the target was
-       reached in a PRIOR year) every added satellite is replacement; otherwise only
-       ``min(satellites_added, satellites_retired)`` is (the rest is the build
-       tranche). The replacement line costs the replaced satellites and their whole
-       launches at this year's per-launch cost. Every cohort is a whole number of
-       launches, so the replaced count is too.
-
-    Then it layers the REVENUE + GROSS MARGIN overlay (the two cases). It records this
-    year's cohort on the parallel ``cohort_builds`` list with its locked-in
-    per-satellite annual cost, sums the annualized fleet cost over the living cohorts
-    (the margin cost basis, matching the DC annualized convention), scales the served
-    subscribers to this year's buildout, and computes both the cost-plus revenue
-    (annual cost x the multiple) and the ARPU revenue (served base x monthly ARPU x
-    12), each with its gross margin, plus the per-cohort breakdown.
-
-    The fleet target is the CAPACITY-sized fleet (:func:`compute_fleet_target`); the
-    treadmill builds and holds to it. The coverage metric is reported separately
-    against the coverage floor (it can saturate at 1.0 well before full deployment
-    when the fleet target exceeds the floor).
-
-    Args:
-        year_idx: Zero-based model year index (for the cadence ramp).
-        fy: The fiscal year (``base_year + year_idx``), the cohort launch year.
-        config: The comms config.
-        cohorts: The cohort list so far (this year's cohort is appended in place).
-        cohort_builds: The parallel economics-overlay cohort list (this year's cohort,
-            with its locked-in per-satellite annual cost, is appended in place).
-        fleet_target: The capacity-sized fleet the build-out fills toward.
-        satellites_per_launch: The satellites deployed per launch this run (0.6 seam
-            2). The High-Bandwidth Cellular Pure Play model passes the configured
-            ``satellite.satellites_per_launch`` dial; the Iridium model passes the
-            aperture-coupled EFFECTIVE value (0.7 step 10).
-            Consumed by the would-be-deployed count, the overshoot ceil, the
-            flown-launches re-derivation, and the per-satellite launch-cost
-            annualization.
-        people_capacity: The fleet target's people capacity
-            (``fleet_target x subscribers_per_satellite``), the ceiling on the served
-            base (:func:`subscribers_served_at`).
-        target_already_reached: Whether the fleet target was reached in a PRIOR year
-            (the HOLD-phase flag carried forward across years).
-
-    Returns:
-        A 2-tuple ``(comms_year, target_reached_now_or_before)``: the year's
-        rollup and the updated "target reached" flag to thread to the next year.
-    """
-    life = config.satellite.satellite_lifetime_years
-    coverage_floor = config.coverage.satellites_for_full_coverage
-    build_cost_musd = config.satellite.satellite_build_cost_musd
-
-    fleet_launches, comms_launches, launch_cost_per_launch_musd = _comms_launches_for_year(
-        year_idx, config
-    )
-    would_be_deployed = comms_launches * satellites_per_launch
-
-    # The prior cohorts alive at the end of last year and still alive this year; the
-    # difference is the satellites that aged off the cliff at the start of this year.
-    living_prior_year = sum(c.units_deployed for c in living_cohorts(cohorts, fy - 1, life))
-    living_before = sum(c.units_deployed for c in living_cohorts(cohorts, fy, life))
-    satellites_retired = living_prior_year - living_before
-    deficit = max(0, fleet_target - living_before)
-    satellites_added = min(would_be_deployed, _ceil_to_launch(deficit, satellites_per_launch))
-    # The launches actually flown for cost is the whole-launch count we deployed
-    # (an integer, since satellites_added is a whole-launch multiple). The cadence
-    # share may have allowed more launches than the cap used near the end of the
-    # build-out; only the flown launches are costed.
-    comms_launches_flown = satellites_added // satellites_per_launch
-
-    cohorts.append(LivedCohort(launch_year=fy, units_deployed=satellites_added))
-    living_after = sum(c.units_deployed for c in living_cohorts(cohorts, fy, life))
-
-    coverage_fraction = min(FULL_COVERAGE_FRACTION, living_after / coverage_floor)
-    buildout_fraction = min(FULL_BUILDOUT_FRACTION, living_after / fleet_target)
-    target_reached_now = target_already_reached or living_after >= fleet_target
-
-    build_cost_this_year_musd = satellites_added * build_cost_musd
-    launch_cost_this_year_musd = comms_launches_flown * launch_cost_per_launch_musd
-    total_cost_this_year_musd = build_cost_this_year_musd + launch_cost_this_year_musd
-    # The replacement line counts only the replacement of retired satellites, never a
-    # build tranche. In HOLD (target reached in a prior year) every deployment restores
-    # retired satellites; before that (the completion year included) only the part of
-    # the deployment matching this year's retirements is replacement. Both counts are
-    # whole launches, so the replaced launches divide exactly.
-    satellites_replaced = (
-        satellites_added if target_already_reached else min(satellites_added, satellites_retired)
-    )
-    replacement_launches = satellites_replaced // satellites_per_launch
-    replacement_cost_this_year_musd = (
-        satellites_replaced * build_cost_musd + replacement_launches * launch_cost_per_launch_musd
-    )
-
-    # --- The revenue + gross-margin overlay (the two cases). ---
-    # Record this year's cohort with its locked-in per-satellite annual cost (built
-    # from this year's launch cost, so the cadence cost-down is fixed for its life).
-    # Only NON-EMPTY cohorts are recorded: a year that deploys zero satellites (e.g.
-    # the early build-out years at a small cadence share) launches no cohort and so
-    # adds no economics line (it would carry zero satellites, zero cost, zero
-    # revenue, an undefined margin); skipping it keeps the cohort lines to the real
-    # living satellites.
-    if satellites_added > 0:
-        locked_cost_per_satellite_musd = per_satellite_annual_cost_musd(
-            satellite_build_cost_musd=build_cost_musd,
-            launch_cost_per_launch_musd=launch_cost_per_launch_musd,
-            satellites_per_launch=satellites_per_launch,
-            satellite_lifetime_years=life,
-        )
-        cohort_builds.append(
-            _CohortBuild(
-                launch_year=fy,
-                satellites=satellites_added,
-                per_satellite_annual_cost_musd=locked_cost_per_satellite_musd,
-            )
-        )
-    # The annualized fleet cost (the margin cost basis): sum over living cohorts of
-    # each cohort's living satellites x its per-satellite annual cost. This is the
-    # steady annual cost each satellite carries, NOT the deployment cash cost; it is
-    # a different convention from the cash replacement line (they converge only in
-    # clean rotational steady state).
-    annual_cost_this_year_musd = sum(
-        b.satellites * b.per_satellite_annual_cost_musd
-        for b in cohort_builds
-        if cohort_is_alive_at(b.launch_year, fy, life)
-    )
-    # The served subscribers at THIS year's buildout (the ARPU base for the year),
-    # capped at the fleet target's people capacity.
-    subscribers_served_this_year = subscribers_served_at(
-        buildout_fraction,
-        subscriber_target=config.subscribers.subscribers_at_full_coverage,
-        override=config.subscribers.subscribers_served_override,
-        people_capacity=people_capacity,
-    )
-    revenue_multiple = config.revenue.revenue_multiple
-    arpu_usd_per_month = config.revenue.arpu_usd_per_month
-    # Case 1, COST-PLUS: revenue = annual cost x the multiple (cost-coupled).
-    cost_plus_revenue_this_year_musd = annual_cost_this_year_musd * revenue_multiple
-    cost_plus_gross_margin_pct = _cellular_margin_pct(
-        cost_plus_revenue_this_year_musd, annual_cost_this_year_musd
-    )
-    # Case 2, ARPU: revenue = served base x monthly ARPU x 12 (price x served base).
-    arpu_revenue_this_year_musd = (
-        subscribers_served_this_year * arpu_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
-    )
-    arpu_gross_margin_pct = _cellular_margin_pct(
-        arpu_revenue_this_year_musd, annual_cost_this_year_musd
-    )
-    cohort_lines = _cohort_economics_for_year(
-        fy=fy,
-        life=life,
-        cohort_builds=cohort_builds,
-        living_fleet=living_after,
-        subscribers_served_this_year=subscribers_served_this_year,
-        revenue_multiple=revenue_multiple,
-        arpu_usd_per_month=arpu_usd_per_month,
-    )
-
-    comms_year = CommsYear(
-        year=fy,
-        fleet_launches_this_year=fleet_launches,
-        comms_launches_flown_this_year=comms_launches_flown,
-        satellites_deployed_this_year=satellites_added,
-        living_fleet=living_after,
-        coverage_fraction=coverage_fraction,
-        buildout_fraction=buildout_fraction,
-        launch_cost_per_launch_musd=launch_cost_per_launch_musd,
-        build_cost_this_year_musd=build_cost_this_year_musd,
-        launch_cost_this_year_musd=launch_cost_this_year_musd,
-        total_cost_this_year_musd=total_cost_this_year_musd,
-        is_hold_phase=target_already_reached,
-        satellites_replaced_this_year=satellites_replaced,
-        replacement_cost_this_year_musd=replacement_cost_this_year_musd,
-        subscribers_served_this_year=subscribers_served_this_year,
-        annual_cost_this_year_musd=annual_cost_this_year_musd,
-        cost_plus_revenue_this_year_musd=cost_plus_revenue_this_year_musd,
-        cost_plus_gross_margin_pct=cost_plus_gross_margin_pct,
-        arpu_revenue_this_year_musd=arpu_revenue_this_year_musd,
-        arpu_gross_margin_pct=arpu_gross_margin_pct,
-        cohort_lines=cohort_lines,
-    )
-    return comms_year, target_reached_now
-
-
-def _built_fleet_annual_cost_musd(
-    config: CommsConfig,
-    *,
-    final_year: FleetYear | CommsYear,
-    fleet_target: int,
-    satellites_per_launch: int,
-) -> float:
-    """The built fleet's annualized cost: the ARPU margin's cost basis, $M/yr.
-
-    A revenue case computed at the fleet target needs a cost for the same fleet.
-    When the final-year living fleet is at or above the fleet target, the built fleet
-    is on orbit, so this is that year's annualized fleet cost (each cohort at its own
-    locked-in launch price). Otherwise (a build that does not complete inside the
-    horizon, or a hold that fell short) it projects the whole-launch built fleet (the
-    fleet target rounded up to whole launches, exactly the fleet the overshoot rule
-    builds) at the final year's per-satellite annual cost.
-
-    Args:
-        config: The comms config (the build cost and the satellite life).
-        final_year: The final model year's rollup (its living fleet, annualized cost,
-            and per-launch cost).
-        fleet_target: The capacity-sized fleet target.
-        satellites_per_launch: The satellites per launch this run deployed with.
-
-    Returns:
-        The built fleet's annualized cost, $M/yr.
-    """
-    if final_year.living_fleet >= fleet_target:
-        return final_year.annual_cost_this_year_musd
-    built_fleet_satellites = _ceil_to_launch(fleet_target, satellites_per_launch)
-    final_year_cost_per_satellite_musd = per_satellite_annual_cost_musd(
-        satellite_build_cost_musd=config.satellite.satellite_build_cost_musd,
-        launch_cost_per_launch_musd=final_year.launch_cost_per_launch_musd,
-        satellites_per_launch=satellites_per_launch,
-        satellite_lifetime_years=config.satellite.satellite_lifetime_years,
-    )
-    return built_fleet_satellites * final_year_cost_per_satellite_musd
-
-
-# ---------------------------------------------------------------------------
-# The shared path and the cellular entry.
+# The cellular entry.
 # ---------------------------------------------------------------------------
 
 _NOT_A_CELLULAR_CONFIG: Final[str] = (
@@ -2654,226 +2167,29 @@ class NotACellularConfigError(ValueError):
     entry, :func:`run_comms_model`."""
 
 
-def run_comms_trajectory(config: CommsConfig) -> CommsTrajectory:
-    """Run the build-and-hold cost trajectory for one communications scenario.
-
-    The interim shared path both entries call (the cellular entry :func:`run_comms_model`
-    and the Iridium entry ``communications.iridium.run_iridium_model``), so no year loop is
-    copied into the Iridium family, until the shared fleet-and-cost loop replaces it. It is
-    not an entry and not in ``__all__``: it checks neither the family nor a saturation
-    curve and runs whatever config it is given, so a run goes through an entry. Serves
-    both families: the High-Bandwidth Cellular Pure Play model (no ``iridium``
-    block) and the Iridium model (the density derived from the ``iridium`` block).
-    Iterates the model years 0..``horizon_years`` inclusive (FY2026..FY2036 at
-    the defaults), deploying satellites toward the CAPACITY-sized FLEET TARGET
-    (:func:`compute_fleet_target`: the subscriber target divided by the per-satellite
-    density, floored by the coverage floor, capped by the saturation cap), holding
-    the constellation once reached (replacing the cliff losses), and summing the
-    satellite build cost plus the cadence-indexed launch cost over the trajectory.
-
-    The launch cost is priced at the WHOLE-fleet Neutron cadence (the shared
-    90/year FY2036 ramp drives the cost-down); the comms cadence share sets only
-    how many launches comms flies. If the fleet target is too high for the chosen
-    cadence share to reach within the horizon, the model still runs and reports a
-    living fleet below the target at the final year (a truthful output, surfaced via
-    ``full_coverage_reached_year is None`` and a WARNING log), not an error. A served
-    override above the fleet target's people capacity is capped at that capacity
-    and logged as a WARNING (the fleet is sized from the target, not the override).
-
-    Args:
-        config: The comms config (the frozen Pydantic tree). The all-defaults config
-            reproduces the High-Bandwidth Cellular Pure Play central case.
-
-    Returns:
-        A :class:`CommsTrajectory`: the per-year rollups plus the cumulative
-        build-and-hold cost, the fleet target and its binding regime, the first
-        full-deployment year (or ``None``), the final-year cash replacement and its
-        per-person figure (or ``None``), the served-subscriber count, the final-year
-        and built-fleet annualized costs, and the steady-state two-case revenue +
-        gross margin (cost-plus and ARPU).
-
-    Raises:
-        ValueError: If the Iridium dials derive fewer than one subscriber per
-            satellite (:func:`derive_iridium_subscribers_per_satellite`).
-    """
-    base_year = config.metadata.base_year
-    horizon_years = config.metadata.horizon_years
-    subscriber_target = config.subscribers.subscribers_at_full_coverage
-
-    # The per-satellite density and the effective satellites-per-launch: the
-    # High-Bandwidth Cellular Pure Play model reads them from the dials; the Iridium
-    # model (a non-None iridium block) DERIVES the density from L-band physics and
-    # the effective per-launch count from the aperture coupling (0.6 seams 1 and 2;
-    # 0.7 steps 2/3/10). Everything downstream (compute_fleet_target, the year loop)
-    # consumes the two values unchanged, so the High-Bandwidth Cellular Pure Play
-    # path (config.iridium is None) is behavior-identical.
-    if config.iridium is not None:
-        spectral_efficiency = resolve_device_spectral_efficiency(config.iridium)
-        per_sat_capacity_gbps = derive_per_satellite_capacity_gbps(
-            config.iridium.spectrum_mhz, spectral_efficiency, config.iridium.aperture_m2
-        )
-        subscribers_per_satellite = derive_iridium_subscribers_per_satellite(
-            per_satellite_capacity_gbps=per_sat_capacity_gbps,
-            active_user_rate_mbps=config.iridium.active_user_rate_mbps,
-            concurrency_peak=config.iridium.concurrency_peak,
-        )
-        satellites_per_launch_effective = derive_iridium_satellites_per_launch(
-            configured_satellites_per_launch=config.satellite.satellites_per_launch,
-            aperture_m2=config.iridium.aperture_m2,
-        )
-    else:
-        subscribers_per_satellite = config.subscribers.subscribers_per_satellite
-        satellites_per_launch_effective = config.satellite.satellites_per_launch
-
-    # Size the fleet to SERVE the subscriber base (the capacity dimension): the
-    # treadmill below builds and holds to this fleet target, not the coverage floor.
-    fleet_target, binding_regime = compute_fleet_target(
-        subscriber_target=subscriber_target,
-        subscribers_per_satellite=subscribers_per_satellite,
-        coverage_floor=config.coverage.satellites_for_full_coverage,
-        max_fleet_satellites=config.coverage.max_fleet_satellites,
-    )
-    # The most people the fleet target can carry: the ceiling on the served base.
-    people_capacity = fleet_target * subscribers_per_satellite
-    served_override = config.subscribers.subscribers_served_override
-    if served_override is not None and served_override > people_capacity:
-        logger.warning(
-            "subscribers_served_override (%d) exceeds the fleet target's people capacity "
-            "(%d = %d satellites x %d per satellite); the served count is capped at the "
-            "capacity (the fleet is sized from the subscriber target, not the override).",
-            served_override,
-            people_capacity,
-            fleet_target,
-            subscribers_per_satellite,
-        )
-
-    # Build the Iridium-model physics result block once the fleet is sized (None on
-    # the High-Bandwidth Cellular Pure Play path). It re-derives the physics from
-    # the dials and echoes the density
-    # and the effective per-launch count that actually sized and deployed the fleet.
-    iridium_result: IridiumResult | None = None
-    if config.iridium is not None:
-        iridium_result = build_iridium_result(
-            config.iridium,
-            fleet_target=fleet_target,
-            subscribers_per_satellite=subscribers_per_satellite,
-            effective_satellites_per_launch=satellites_per_launch_effective,
-        )
-
-    cohorts: list[LivedCohort] = []
-    # The parallel economics-overlay cohort list (carries the per-satellite annual
-    # cost the build/cost treadmill does not). Threaded alongside ``cohorts``.
-    cohort_builds: list[_CohortBuild] = []
-    years: list[CommsYear] = []
-    target_reached = False
-    full_coverage_reached_year: int | None = None
-
-    for year_idx in range(horizon_years + 1):
-        fy = base_year + year_idx
-        comms_year, target_reached = _compute_comms_year(
-            year_idx,
-            fy,
-            config,
-            cohorts,
-            cohort_builds,
-            fleet_target,
-            satellites_per_launch_effective,
-            people_capacity,
-            target_reached,
-        )
-        years.append(comms_year)
-        if full_coverage_reached_year is None and target_reached:
-            full_coverage_reached_year = fy
-
-    total_build_and_hold_cost_musd = sum(y.total_cost_this_year_musd for y in years)
-    # The horizon is at least MIN_HORIZON_YEARS (a config bound), so the loop above
-    # always yields the base year plus at least one more; the final year exists.
-    final_year = years[-1]
-    # The final-year cash replacement: the final model year's replacement line, or
-    # None when that year replaced no retiring cohort (no cash replacement basis
-    # exists, so no 0.0 is published as if it were one).
-    final_year_replacement_cost_musd = (
-        final_year.replacement_cost_this_year_musd
-        if final_year.satellites_replaced_this_year > 0
-        else None
-    )
-    # The reported subscribers served is the buildout mapping applied to the FINAL
-    # year's buildout fraction. At a completed build-out the final buildout fraction
-    # is 1.0 and this is the base (the target or the override, capped at the fleet
-    # target's people capacity); below full deployment it is the proportional
-    # partial-deployment count.
-    subscribers_served = subscribers_served_at(
-        final_year.buildout_fraction,
-        subscriber_target=subscriber_target,
-        override=config.subscribers.subscribers_served_override,
-        people_capacity=people_capacity,
-    )
-    # The final-year cash cost per served person (a lumpy cash figure over the same
-    # served base the annualized per-person figure uses).
-    final_year_cash_cost_per_subscriber_usd = usd_per_person(
-        final_year_replacement_cost_musd, subscribers_served
-    )
-
-    # The steady-state revenue + gross-margin headlines (both cases) read the FINAL
-    # model year's lines. The margin cost basis is the ANNUALIZED fleet cost
-    # (``annual_cost_this_year_musd``), the DC convention; it converges with the cash
-    # replacement line only in clean rotational steady state.
-    steady_state_annual_cost_musd = final_year.annual_cost_this_year_musd
-    built_fleet_annual_cost_musd = _built_fleet_annual_cost_musd(
-        config,
-        final_year=final_year,
-        fleet_target=fleet_target,
-        satellites_per_launch=satellites_per_launch_effective,
-    )
-
-    if full_coverage_reached_year is None:
-        logger.warning(
-            "Comms build-out did not reach the fleet target (%d satellites, %s regime) within "
-            "the %d-year horizon at share_of_fleet=%.3f; living fleet at FY%d is %d. This is a "
-            "truthful below-target output, not an error.",
-            fleet_target,
-            binding_regime.value,
-            horizon_years,
-            config.comms_cadence.share_of_fleet,
-            final_year.year,
-            final_year.living_fleet,
-        )
-
-    return CommsTrajectory(
-        years=tuple(years),
-        total_build_and_hold_cost_musd=total_build_and_hold_cost_musd,
-        fleet_target=fleet_target,
-        subscribers_per_satellite=subscribers_per_satellite,
-        binding_regime=binding_regime,
-        full_coverage_reached_year=full_coverage_reached_year,
-        final_year_replacement_cost_musd=final_year_replacement_cost_musd,
-        subscribers_served=subscribers_served,
-        final_year_cash_cost_per_subscriber_usd=final_year_cash_cost_per_subscriber_usd,
-        steady_state_annual_cost_musd=steady_state_annual_cost_musd,
-        built_fleet_annual_cost_musd=built_fleet_annual_cost_musd,
-        steady_state_revenue_cost_plus_musd=final_year.cost_plus_revenue_this_year_musd,
-        steady_state_gross_margin_cost_plus_pct=final_year.cost_plus_gross_margin_pct,
-        steady_state_revenue_arpu_musd=final_year.arpu_revenue_this_year_musd,
-        steady_state_gross_margin_arpu_pct=final_year.arpu_gross_margin_pct,
-        iridium=iridium_result,
-    )
-
-
-def run_comms_model(config: CommsConfig) -> CommsTrajectory:
+def run_comms_model(config: CommsConfig) -> CellularRun:
     """The cellular entry: run a High-Bandwidth Cellular Pure Play config.
 
     A config with an ``iridium:`` block belongs to the Iridium family, whose entry is
     ``communications.iridium.run_iridium_model(config, curve)`` (it checks its saturation
-    curve against the config before it runs the same path); this entry refuses it, so
-    through the two entries no Iridium config runs without its curve. Any other config runs
-    the interim shared path, :func:`run_comms_trajectory`.
+    curve against the config before it runs); this entry refuses it, so through the two
+    entries no Iridium config runs without its curve. Any other config is sized from its
+    dials (:func:`compute_fleet_target`: the subscriber target over the fixed per-satellite
+    density, floored by the coverage floor, capped by the saturation cap), deployed on the
+    shared fleet-and-cost loop (:func:`run_fleet_loop`) under the cellular rule
+    (:func:`cellular_rule`: build to the target, then hold it, replacing each retiring
+    cohort), at the configured satellites per launch, and recorded by
+    :func:`build_cellular_record`. The launch cost is priced at the WHOLE-fleet Neutron
+    cadence; the comms share sets only how many launches the fleet flies. A target the
+    cadence share cannot reach within the horizon still runs, reported truthfully (no
+    completion year, a WARNING).
 
     Args:
         config: The comms config (the frozen Pydantic tree). The all-defaults config
             reproduces the High-Bandwidth Cellular Pure Play central case.
 
     Returns:
-        The :class:`CommsTrajectory` of :func:`run_comms_trajectory`.
+        The :class:`CellularRun`: the shared fleet-and-cost record and the cellular record.
 
     Raises:
         NotACellularConfigError: If the config has an ``iridium:`` block, naming the Iridium
@@ -2881,7 +2197,26 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
     """
     if config.iridium is not None:
         raise NotACellularConfigError(_NOT_A_CELLULAR_CONFIG)
-    return run_comms_trajectory(config)
+    subscribers_per_satellite = config.subscribers.subscribers_per_satellite
+    satellites_per_launch = config.satellite.satellites_per_launch
+    fleet_target, binding_regime = compute_fleet_target(
+        subscriber_target=config.subscribers.subscribers_at_full_coverage,
+        subscribers_per_satellite=subscribers_per_satellite,
+        coverage_floor=config.coverage.satellites_for_full_coverage,
+        max_fleet_satellites=config.coverage.max_fleet_satellites,
+    )
+    sizing = CellularSizing(
+        fleet_target=fleet_target,
+        binding_regime=binding_regime,
+        subscribers_per_satellite=subscribers_per_satellite,
+        satellites_per_launch=satellites_per_launch,
+    )
+    fleet = run_fleet_loop(
+        config, cellular_rule(fleet_target), satellites_per_launch=satellites_per_launch
+    )
+    return CellularRun(
+        fleet=fleet, cellular=build_cellular_record(config, fleet, sizing, iridium=None)
+    )
 
 
 __all__ = [
@@ -2890,9 +2225,6 @@ __all__ = [
     "CellularSizing",
     "CellularTrajectory",
     "CellularYear",
-    "CommsCohortYear",
-    "CommsTrajectory",
-    "CommsYear",
     "Deployment",
     "DeploymentRule",
     "DeploymentRuleError",

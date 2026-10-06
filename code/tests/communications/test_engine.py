@@ -41,7 +41,7 @@ from communications.constants import MONTHS_PER_YEAR
 from communications.engine import (
     MARGIN_PERCENT_SCALE,
     MUSD_TO_USD,
-    CommsTrajectory,
+    CellularRun,
     Deployment,
     DeploymentRuleError,
     DeploymentStep,
@@ -73,21 +73,22 @@ _FLOOR_BINDING_SUBSCRIBERS = SubscriberDials(
 
 
 def test_run_returns_trajectory_with_full_horizon() -> None:
-    """The default run returns a CommsTrajectory spanning FY2026..FY2036 (11 years)."""
+    """The default run returns a CellularRun whose two records span FY2026..FY2036 (11 years)."""
     config = CommsConfig()
-    traj = run_comms_model(config)
-    assert isinstance(traj, CommsTrajectory)
-    assert len(traj.years) == EXPECTED_DEFAULT_YEAR_COUNT
-    assert traj.years[0].year == config.metadata.base_year
-    assert traj.years[-1].year == config.metadata.base_year + config.metadata.horizon_years
+    run = run_comms_model(config)
+    assert isinstance(run, CellularRun)
+    for years in (run.fleet.years, run.cellular.years):
+        assert len(years) == EXPECTED_DEFAULT_YEAR_COUNT
+        assert years[0].year == config.metadata.base_year
+        assert years[-1].year == config.metadata.base_year + config.metadata.horizon_years
 
 
 def test_satellites_deployed_equals_launches_times_per_launch() -> None:
     """Every year: satellites_deployed == comms_launches_flown * satellites_per_launch."""
     config = CommsConfig()
     per_launch = config.satellite.satellites_per_launch
-    traj = run_comms_model(config)
-    for year in traj.years:
+    run = run_comms_model(config)
+    for year in run.fleet.years:
         assert year.satellites_deployed_this_year == (
             year.comms_launches_flown_this_year * per_launch
         )
@@ -100,8 +101,12 @@ def test_living_fleet_non_decreasing_during_build_out() -> None:
     default run's additions outpace its retirements, so the living count is
     non-decreasing year over year.
     """
-    traj = run_comms_model(CommsConfig())
-    build_out_years = [y for y in traj.years if not y.is_hold_phase]
+    run = run_comms_model(CommsConfig())
+    build_out_years = [
+        fleet_year
+        for fleet_year, cellular_year in zip(run.fleet.years, run.cellular.years, strict=True)
+        if not cellular_year.is_hold_phase
+    ]
     for earlier, later in zip(build_out_years, build_out_years[1:], strict=False):
         assert later.living_fleet >= earlier.living_fleet
 
@@ -116,9 +121,9 @@ def test_living_fleet_never_exceeds_target_by_more_than_one_launch() -> None:
     """
     config = CommsConfig()
     per_launch = config.satellite.satellites_per_launch
-    traj = run_comms_model(config)
-    for year in traj.years:
-        assert year.living_fleet < traj.fleet_target + per_launch
+    run = run_comms_model(config)
+    for year in run.fleet.years:
+        assert year.living_fleet < run.cellular.fleet_target + per_launch
 
 
 def test_comms_launch_sequence_non_decreasing_before_completion() -> None:
@@ -131,10 +136,10 @@ def test_comms_launch_sequence_non_decreasing_before_completion() -> None:
     smaller), and HOLD years replace only the cliff losses, so neither is included.
     The whole-fleet cadence is checked separately (it is always non-decreasing).
     """
-    traj = run_comms_model(CommsConfig())
-    completion_year = traj.full_coverage_reached_year
+    run = run_comms_model(CommsConfig())
+    completion_year = run.cellular.full_coverage_reached_year
     assert completion_year is not None
-    pre_completion = [y for y in traj.years if y.year < completion_year]
+    pre_completion = [y for y in run.fleet.years if y.year < completion_year]
     for earlier, later in zip(pre_completion, pre_completion[1:], strict=False):
         assert later.comms_launches_flown_this_year >= earlier.comms_launches_flown_this_year
 
@@ -147,29 +152,29 @@ def test_fleet_cadence_non_decreasing_every_year() -> None:
     alike. The launch cost is priced at this series, so its non-increasing cost
     behaviour (the Phase 5 invariant) rests on this monotonicity.
     """
-    traj = run_comms_model(CommsConfig())
-    for earlier, later in zip(traj.years, traj.years[1:], strict=False):
+    run = run_comms_model(CommsConfig())
+    for earlier, later in zip(run.fleet.years, run.fleet.years[1:], strict=False):
         assert later.fleet_launches_this_year >= earlier.fleet_launches_this_year
 
 
 def test_launch_cost_per_launch_non_increasing_with_cadence() -> None:
     """The per-launch cost is non-increasing as the fleet cadence ramps (the cost-down)."""
-    traj = run_comms_model(CommsConfig())
-    for earlier, later in zip(traj.years, traj.years[1:], strict=False):
+    run = run_comms_model(CommsConfig())
+    for earlier, later in zip(run.fleet.years, run.fleet.years[1:], strict=False):
         assert later.launch_cost_per_launch_musd <= earlier.launch_cost_per_launch_musd + 0.0
 
 
 def test_total_cost_is_sum_of_year_costs() -> None:
-    """total_build_and_hold_cost_musd equals the sum of the per-year total costs."""
-    traj = run_comms_model(CommsConfig())
-    expected = sum(y.total_cost_this_year_musd for y in traj.years)
-    assert traj.total_build_and_hold_cost_musd == pytest.approx(expected, rel=COST_SUM_REL_TOL)
+    """total_cost_through_final_year_musd equals the sum of the per-year total costs."""
+    fleet = run_comms_model(CommsConfig()).fleet
+    expected = sum(y.total_cost_this_year_musd for y in fleet.years)
+    assert fleet.total_cost_through_final_year_musd == pytest.approx(expected, rel=COST_SUM_REL_TOL)
 
 
 def test_per_year_total_cost_is_build_plus_launch() -> None:
     """Each year's total cost is exactly its build cost plus its launch cost."""
-    traj = run_comms_model(CommsConfig())
-    for year in traj.years:
+    run = run_comms_model(CommsConfig())
+    for year in run.fleet.years:
         assert year.total_cost_this_year_musd == pytest.approx(
             year.build_cost_this_year_musd + year.launch_cost_this_year_musd,
             rel=COST_SUM_REL_TOL,
@@ -180,8 +185,8 @@ def test_build_cost_uses_the_configured_build_cost_scalar() -> None:
     """Each year's build cost equals satellites_deployed * satellite_build_cost_musd."""
     config = CommsConfig()
     build_cost = config.satellite.satellite_build_cost_musd
-    traj = run_comms_model(config)
-    for year in traj.years:
+    run = run_comms_model(config)
+    for year in run.fleet.years:
         assert year.build_cost_this_year_musd == pytest.approx(
             year.satellites_deployed_this_year * build_cost, rel=COST_SUM_REL_TOL
         )
@@ -202,14 +207,14 @@ def test_replacement_line_never_books_a_build_tranche() -> None:
     config = CommsConfig()
     per_launch = config.satellite.satellites_per_launch
     build_cost = config.satellite.satellite_build_cost_musd
-    traj = run_comms_model(config)
+    run = run_comms_model(config)
     previous_living = 0
     saw_build_year_replacement = False
-    for year in traj.years:
+    for year, cellular_year in zip(run.fleet.years, run.cellular.years, strict=True):
         deployed = year.satellites_deployed_this_year
         retired = previous_living + deployed - year.living_fleet
         replaced = year.satellites_replaced_this_year
-        if year.is_hold_phase:
+        if cellular_year.is_hold_phase:
             assert replaced == deployed
             assert year.replacement_cost_this_year_musd == pytest.approx(
                 year.total_cost_this_year_musd, rel=COST_SUM_REL_TOL
@@ -234,8 +239,8 @@ def test_coverage_fraction_is_living_over_floor_clamped() -> None:
     """coverage_fraction == min(1.0, living_fleet / coverage_floor) every year."""
     config = CommsConfig()
     coverage_floor = config.coverage.satellites_for_full_coverage
-    traj = run_comms_model(config)
-    for year in traj.years:
+    run = run_comms_model(config)
+    for year in run.fleet.years:
         assert year.coverage_fraction == pytest.approx(
             min(1.0, year.living_fleet / coverage_floor), rel=COST_SUM_REL_TOL
         )
@@ -245,10 +250,10 @@ def test_coverage_fraction_is_living_over_floor_clamped() -> None:
 def test_buildout_fraction_is_living_over_fleet_target_clamped() -> None:
     """buildout_fraction == min(1.0, living_fleet / fleet_target) every year."""
     config = CommsConfig()
-    traj = run_comms_model(config)
-    for year in traj.years:
+    run = run_comms_model(config)
+    for fleet_year, year in zip(run.fleet.years, run.cellular.years, strict=True):
         assert year.buildout_fraction == pytest.approx(
-            min(1.0, year.living_fleet / traj.fleet_target), rel=COST_SUM_REL_TOL
+            min(1.0, fleet_year.living_fleet / run.cellular.fleet_target), rel=COST_SUM_REL_TOL
         )
         assert 0.0 <= year.buildout_fraction <= 1.0
 
@@ -261,14 +266,15 @@ def test_hold_phase_starts_the_year_after_full_coverage() -> None:
     ``full_coverage_reached_year + 1``, the completion year is not HOLD, and its
     living fleet has reached the target.
     """
-    traj = run_comms_model(CommsConfig())
-    completion_year = traj.full_coverage_reached_year
+    run = run_comms_model(CommsConfig())
+    completion_year = run.cellular.full_coverage_reached_year
     assert completion_year is not None
-    hold_years = [y.year for y in traj.years if y.is_hold_phase]
+    hold_years = [y.year for y in run.cellular.years if y.is_hold_phase]
     assert hold_years[0] == completion_year + 1
-    completion = next(y for y in traj.years if y.year == completion_year)
+    completion = next(y for y in run.cellular.years if y.year == completion_year)
     assert completion.is_hold_phase is False
-    assert completion.living_fleet >= traj.fleet_target
+    completion_fleet = next(y for y in run.fleet.years if y.year == completion_year)
+    assert completion_fleet.living_fleet >= run.cellular.fleet_target
 
 
 def test_final_year_replacement_is_the_final_year_replacement_line() -> None:
@@ -278,11 +284,11 @@ def test_final_year_replacement_is_the_final_year_replacement_line() -> None:
     default run (HOLD in the final year, a cohort retiring) the headline equals the
     final year's replacement line, which equals that year's total cost.
     """
-    traj = run_comms_model(CommsConfig())
-    final = traj.years[-1]
+    fleet = run_comms_model(CommsConfig()).fleet
+    final = fleet.years[-1]
     assert final.satellites_replaced_this_year > 0
-    assert traj.final_year_replacement_cost_musd == final.replacement_cost_this_year_musd
-    assert traj.final_year_replacement_cost_musd == pytest.approx(
+    assert fleet.final_year_replacement_cost_musd == final.replacement_cost_this_year_musd
+    assert fleet.final_year_replacement_cost_musd == pytest.approx(
         final.total_cost_this_year_musd, rel=COST_SUM_REL_TOL
     )
 
@@ -307,23 +313,24 @@ def test_low_target_reached_at_first_launch_then_holds() -> None:
             "subscribers": _FLOOR_BINDING_SUBSCRIBERS,
         }
     )
-    traj = run_comms_model(low_target_config)
-    assert traj.fleet_target == per_launch
+    run = run_comms_model(low_target_config)
+    assert run.cellular.fleet_target == per_launch
 
-    first_deploy_year = next(y for y in traj.years if y.satellites_deployed_this_year > 0)
+    hold_by_year = {y.year: y.is_hold_phase for y in run.cellular.years}
+    first_deploy_year = next(y for y in run.fleet.years if y.satellites_deployed_this_year > 0)
     # The target is reached the moment the first comms launch flies; that year is the
     # completion year (a build year, no replacement: nothing has retired yet).
-    assert first_deploy_year.is_hold_phase is False
+    assert hold_by_year[first_deploy_year.year] is False
     assert first_deploy_year.satellites_replaced_this_year == 0
     assert first_deploy_year.living_fleet == per_launch
-    assert traj.full_coverage_reached_year == first_deploy_year.year
+    assert run.cellular.full_coverage_reached_year == first_deploy_year.year
     # From the reached year onward the living fleet pins at exactly one launch's
     # worth (the target); every LATER year is HOLD.
-    for year in traj.years:
+    for year in run.fleet.years:
         if year.year >= first_deploy_year.year:
             assert year.living_fleet == per_launch
         if year.year > first_deploy_year.year:
-            assert year.is_hold_phase is True
+            assert hold_by_year[year.year] is True
 
 
 def test_five_year_cliff_retires_an_early_cohort() -> None:
@@ -351,8 +358,8 @@ def test_five_year_cliff_retires_an_early_cohort() -> None:
         ),
         subscribers=_FLOOR_BINDING_SUBSCRIBERS,
     )
-    traj = run_comms_model(config)
-    by_year = {y.year: y for y in traj.years}
+    run = run_comms_model(config)
+    by_year = {y.year: y for y in run.fleet.years}
 
     fy2026 = by_year[2026]
     fy2030 = by_year[2030]
@@ -380,28 +387,28 @@ def test_unreached_target_reports_none_and_runs() -> None:
         ),
         subscribers=_FLOOR_BINDING_SUBSCRIBERS,
     )
-    traj = run_comms_model(config)
-    assert traj.fleet_target == unreachable_target
-    assert traj.full_coverage_reached_year is None
-    assert len(traj.years) == EXPECTED_DEFAULT_YEAR_COUNT
+    run = run_comms_model(config)
+    assert run.cellular.fleet_target == unreachable_target
+    assert run.cellular.full_coverage_reached_year is None
+    assert len(run.fleet.years) == EXPECTED_DEFAULT_YEAR_COUNT
     # No year reaches HOLD. The final year still builds, and it also replaces the
     # cohort retiring that year: the final-year replacement is that cohort's cost
     # alone, strictly below the year's build-plus-replacement cash.
-    assert all(not y.is_hold_phase for y in traj.years)
-    final = traj.years[-1]
+    assert all(not y.is_hold_phase for y in run.cellular.years)
+    final = run.fleet.years[-1]
     assert 0 < final.satellites_replaced_this_year < final.satellites_deployed_this_year
-    assert traj.final_year_replacement_cost_musd == final.replacement_cost_this_year_musd
-    assert traj.final_year_replacement_cost_musd is not None
-    assert traj.final_year_replacement_cost_musd < final.total_cost_this_year_musd
+    assert run.fleet.final_year_replacement_cost_musd == final.replacement_cost_this_year_musd
+    assert run.fleet.final_year_replacement_cost_musd is not None
+    assert run.fleet.final_year_replacement_cost_musd < final.total_cost_this_year_musd
 
 
 def test_trajectory_surfaces_fleet_target_and_regime() -> None:
-    """The trajectory carries the capacity-sized fleet target and its binding regime."""
-    traj = run_comms_model(CommsConfig())
+    """The cellular record carries the capacity-sized fleet target and its binding regime."""
+    cellular = run_comms_model(CommsConfig()).cellular
     # The default 10M base floors the fleet at the coverage floor (340), coverage regime.
-    assert traj.fleet_target == CommsConfig().coverage.satellites_for_full_coverage
-    assert traj.binding_regime.value == "coverage"
-    assert traj.subscribers_per_satellite == CommsConfig().subscribers.subscribers_per_satellite
+    assert cellular.fleet_target == CommsConfig().coverage.satellites_for_full_coverage
+    assert cellular.binding_regime.value == "coverage"
+    assert cellular.subscribers_per_satellite == CommsConfig().subscribers.subscribers_per_satellite
 
 
 def test_capacity_base_builds_beyond_the_coverage_floor() -> None:
@@ -412,16 +419,15 @@ def test_capacity_base_builds_beyond_the_coverage_floor() -> None:
     past the coverage floor. Coverage saturates at 1.0 well before full deployment.
     """
     config = CommsConfig(subscribers=SubscriberDials(subscribers_at_full_coverage=50_000_000))
-    traj = run_comms_model(config)
+    run = run_comms_model(config)
     coverage_floor = config.coverage.satellites_for_full_coverage
-    assert traj.fleet_target == 667
-    assert traj.binding_regime.value == "capacity"
+    assert run.cellular.fleet_target == 667
+    assert run.cellular.binding_regime.value == "capacity"
     # The build pushes the living fleet past the coverage floor (it is sizing capacity).
-    assert max(y.living_fleet for y in traj.years) > coverage_floor
+    assert max(y.living_fleet for y in run.fleet.years) > coverage_floor
     # Coverage saturates at 1.0 once the floor is met, before full deployment.
-    final = traj.years[-1]
-    assert final.coverage_fraction == pytest.approx(1.0)
-    assert final.buildout_fraction <= 1.0
+    assert run.fleet.years[-1].coverage_fraction == pytest.approx(1.0)
+    assert run.cellular.years[-1].buildout_fraction <= 1.0
 
 
 def test_final_year_cash_per_subscriber_is_over_the_served_base() -> None:
@@ -434,19 +440,24 @@ def test_final_year_cash_per_subscriber_is_over_the_served_base() -> None:
     (the fleet, and so the replacement cash, is unchanged).
     """
     config = CommsConfig()
-    traj = run_comms_model(config)
-    assert traj.final_year_replacement_cost_musd is not None
-    expected = traj.final_year_replacement_cost_musd * MUSD_TO_USD / traj.subscribers_served
-    assert traj.final_year_cash_cost_per_subscriber_usd == pytest.approx(
+    run = run_comms_model(config)
+    assert run.fleet.final_year_replacement_cost_musd is not None
+    expected = (
+        run.fleet.final_year_replacement_cost_musd * MUSD_TO_USD / run.cellular.subscribers_served
+    )
+    assert run.cellular.final_year_cash_cost_per_subscriber_usd == pytest.approx(
         expected, rel=COST_SUM_REL_TOL
     )
     half_base = config.subscribers.subscribers_at_full_coverage // 2
     overridden = run_comms_model(
         CommsConfig(subscribers=SubscriberDials(subscribers_served_override=half_base))
     )
-    assert overridden.subscribers_served == half_base
-    assert overridden.final_year_replacement_cost_musd == traj.final_year_replacement_cost_musd
-    assert overridden.final_year_cash_cost_per_subscriber_usd == pytest.approx(
+    assert overridden.cellular.subscribers_served == half_base
+    assert (
+        overridden.fleet.final_year_replacement_cost_musd
+        == run.fleet.final_year_replacement_cost_musd
+    )
+    assert overridden.cellular.final_year_cash_cost_per_subscriber_usd == pytest.approx(
         2.0 * expected, rel=COST_SUM_REL_TOL
     )
 
@@ -474,8 +485,8 @@ def test_comms_share_matches_shared_half_up_rounding() -> None:
         ),
         subscribers=_FLOOR_BINDING_SUBSCRIBERS,
     )
-    traj = run_comms_model(config)
-    for year in traj.years:
+    run = run_comms_model(config)
+    for year in run.fleet.years:
         expected = math.floor(year.fleet_launches_this_year * 1.0 + ROUND_TO_NEAREST_OFFSET)
         assert year.comms_launches_flown_this_year == expected
 
@@ -500,8 +511,8 @@ def test_comms_share_exact_half_rounds_up() -> None:
         ),
         subscribers=_FLOOR_BINDING_SUBSCRIBERS,
     )
-    traj = run_comms_model(config)
-    final = traj.years[-1]
+    run = run_comms_model(config)
+    final = run.fleet.years[-1]
     # The default window's final year is the year-10 cadence anchor (FY2036), where
     # the whole-fleet ramp flies exactly the year-10 dial (90 launches).
     assert final.year == config.metadata.base_year + config.metadata.horizon_years
@@ -519,10 +530,10 @@ def test_cost_plus_revenue_is_annual_cost_times_multiple() -> None:
     """Each year: cost-plus revenue == annualized fleet cost x the revenue multiple."""
     config = CommsConfig()
     multiple = config.revenue.revenue_multiple
-    traj = run_comms_model(config)
-    for year in traj.years:
+    run = run_comms_model(config)
+    for fleet_year, year in zip(run.fleet.years, run.cellular.years, strict=True):
         assert year.cost_plus_revenue_this_year_musd == pytest.approx(
-            year.annual_cost_this_year_musd * multiple, rel=COST_SUM_REL_TOL
+            fleet_year.annual_cost_this_year_musd * multiple, rel=COST_SUM_REL_TOL
         )
 
 
@@ -536,9 +547,9 @@ def test_cost_plus_margin_is_the_multiples_implied_margin() -> None:
     config = CommsConfig()
     multiple = config.revenue.revenue_multiple
     expected_margin_pct = (multiple - 1.0) / multiple * MARGIN_PERCENT_SCALE
-    traj = run_comms_model(config)
-    for year in traj.years:
-        if year.annual_cost_this_year_musd > 0.0:
+    run = run_comms_model(config)
+    for fleet_year, year in zip(run.fleet.years, run.cellular.years, strict=True):
+        if fleet_year.annual_cost_this_year_musd > 0.0:
             assert year.cost_plus_gross_margin_pct == pytest.approx(
                 expected_margin_pct, rel=COST_SUM_REL_TOL
             )
@@ -550,8 +561,8 @@ def test_arpu_revenue_is_served_base_times_arpu_annualized() -> None:
     """Each year: ARPU revenue == served subscribers x monthly ARPU x 12, in $M."""
     config = CommsConfig()
     arpu = config.revenue.arpu_usd_per_month
-    traj = run_comms_model(config)
-    for year in traj.years:
+    run = run_comms_model(config)
+    for year in run.cellular.years:
         expected_musd = year.subscribers_served_this_year * arpu * MONTHS_PER_YEAR / MUSD_TO_USD
         assert year.arpu_revenue_this_year_musd == pytest.approx(
             expected_musd, rel=COST_SUM_REL_TOL
@@ -561,9 +572,9 @@ def test_arpu_revenue_is_served_base_times_arpu_annualized() -> None:
 def test_gross_margin_is_revenue_minus_cost_over_revenue() -> None:
     """Both margins follow ``(revenue - cost) / revenue x 100`` against the annual cost."""
     config = CommsConfig()
-    traj = run_comms_model(config)
-    for year in traj.years:
-        cost = year.annual_cost_this_year_musd
+    run = run_comms_model(config)
+    for fleet_year, year in zip(run.fleet.years, run.cellular.years, strict=True):
+        cost = fleet_year.annual_cost_this_year_musd
         for revenue, margin in (
             (year.cost_plus_revenue_this_year_musd, year.cost_plus_gross_margin_pct),
             (year.arpu_revenue_this_year_musd, year.arpu_gross_margin_pct),
@@ -579,27 +590,27 @@ def test_subscribers_served_this_year_scales_with_buildout() -> None:
     """The per-year served count is the subscriber target scaled by the buildout fraction."""
     config = CommsConfig()
     target = config.subscribers.subscribers_at_full_coverage
-    traj = run_comms_model(config)
-    for year in traj.years:
+    cellular = run_comms_model(config).cellular
+    for year in cellular.years:
         assert year.subscribers_served_this_year == round(year.buildout_fraction * target)
     # The final year's per-year served count is the trajectory headline subscribers_served.
-    assert traj.years[-1].subscribers_served_this_year == traj.subscribers_served
+    assert cellular.years[-1].subscribers_served_this_year == cellular.subscribers_served
 
 
 def test_annual_cost_basis_is_sum_of_living_cohort_annualized_cost() -> None:
     """The annualized fleet cost equals the sum of the per-cohort annualized cost lines."""
-    traj = run_comms_model(CommsConfig())
-    for year in traj.years:
-        cohort_cost = sum(line.annual_cost_musd for line in year.cohort_lines)
+    run = run_comms_model(CommsConfig())
+    for year in run.fleet.years:
+        cohort_cost = sum(line.annual_cost_musd for line in year.cohort_costs)
         assert year.annual_cost_this_year_musd == pytest.approx(cohort_cost, rel=COST_SUM_REL_TOL)
 
 
 def test_cohort_lines_sum_to_fleet_revenue_both_cases() -> None:
     """Per-cohort revenues (both cases) sum to the fleet revenue line every year."""
-    traj = run_comms_model(CommsConfig())
-    for year in traj.years:
-        cost_plus = sum(line.cost_plus_revenue_musd for line in year.cohort_lines)
-        arpu = sum(line.arpu_revenue_musd for line in year.cohort_lines)
+    run = run_comms_model(CommsConfig())
+    for year in run.cellular.years:
+        cost_plus = sum(line.cost_plus_revenue_musd for line in year.cohort_revenue)
+        arpu = sum(line.arpu_revenue_musd for line in year.cohort_revenue)
         assert cost_plus == pytest.approx(
             year.cost_plus_revenue_this_year_musd, rel=COST_SUM_REL_TOL
         )
@@ -612,9 +623,9 @@ def test_cohort_arpu_subscribers_sum_to_year_served_exactly() -> None:
     The last living cohort absorbs the rounding remainder, so the integer parts sum
     with no drift versus the fleet-level served base.
     """
-    traj = run_comms_model(CommsConfig())
-    for year in traj.years:
-        allocated = sum(line.arpu_subscribers_served for line in year.cohort_lines)
+    run = run_comms_model(CommsConfig())
+    for year in run.cellular.years:
+        allocated = sum(line.arpu_subscribers_served for line in year.cohort_revenue)
         assert allocated == year.subscribers_served_this_year
 
 
@@ -626,14 +637,14 @@ def test_cohort_lines_track_living_cohorts_under_the_cliff() -> None:
     """
     config = CommsConfig()
     life = config.satellite.satellite_lifetime_years
-    traj = run_comms_model(config)
-    for year in traj.years:
+    run = run_comms_model(config)
+    for year in run.fleet.years:
         # Every cohort line is within the cliff window of this year.
-        for line in year.cohort_lines:
+        for line in year.cohort_costs:
             assert line.launch_year <= year.year < line.launch_year + life
             assert line.living_satellites > 0
         # The living-satellite counts sum to the year's living fleet.
-        assert sum(line.living_satellites for line in year.cohort_lines) == year.living_fleet
+        assert sum(line.living_satellites for line in year.cohort_costs) == year.living_fleet
 
 
 def test_cohort_cost_plus_margin_is_flat_across_cohorts() -> None:
@@ -641,9 +652,9 @@ def test_cohort_cost_plus_margin_is_flat_across_cohorts() -> None:
     config = CommsConfig()
     multiple = config.revenue.revenue_multiple
     expected_margin_pct = (multiple - 1.0) / multiple * MARGIN_PERCENT_SCALE
-    traj = run_comms_model(config)
-    for year in traj.years:
-        for line in year.cohort_lines:
+    run = run_comms_model(config)
+    for year in run.cellular.years:
+        for line in year.cohort_revenue:
             assert line.cost_plus_gross_margin_pct == pytest.approx(
                 expected_margin_pct, rel=COST_SUM_REL_TOL
             )
@@ -651,17 +662,22 @@ def test_cohort_cost_plus_margin_is_flat_across_cohorts() -> None:
 
 def test_steady_state_revenue_headlines_are_final_year_lines() -> None:
     """The trajectory steady-state revenue/margin headlines equal the final year's lines."""
-    traj = run_comms_model(CommsConfig())
-    final = traj.years[-1]
-    assert traj.steady_state_annual_cost_musd == pytest.approx(final.annual_cost_this_year_musd)
-    assert traj.steady_state_revenue_cost_plus_musd == pytest.approx(
+    run = run_comms_model(CommsConfig())
+    cellular = run.cellular
+    final = cellular.years[-1]
+    assert run.fleet.final_year_annual_cost_musd == pytest.approx(
+        run.fleet.years[-1].annual_cost_this_year_musd
+    )
+    assert cellular.steady_state_revenue_cost_plus_musd == pytest.approx(
         final.cost_plus_revenue_this_year_musd
     )
-    assert traj.steady_state_gross_margin_cost_plus_pct == pytest.approx(
+    assert cellular.steady_state_gross_margin_cost_plus_pct == pytest.approx(
         final.cost_plus_gross_margin_pct
     )
-    assert traj.steady_state_revenue_arpu_musd == pytest.approx(final.arpu_revenue_this_year_musd)
-    assert traj.steady_state_gross_margin_arpu_pct == pytest.approx(final.arpu_gross_margin_pct)
+    assert cellular.steady_state_revenue_arpu_musd == pytest.approx(
+        final.arpu_revenue_this_year_musd
+    )
+    assert cellular.steady_state_gross_margin_arpu_pct == pytest.approx(final.arpu_gross_margin_pct)
 
 
 def test_higher_arpu_lifts_arpu_revenue_and_margin() -> None:
@@ -670,8 +686,8 @@ def test_higher_arpu_lifts_arpu_revenue_and_margin() -> None:
     The cost-plus case is unchanged by the ARPU dial (revenue is cost-coupled), so the
     two cases are independent lenses, as designed.
     """
-    base = run_comms_model(CommsConfig())
-    higher = run_comms_model(CommsConfig(revenue=RevenueDials(arpu_usd_per_month=100.0)))
+    base = run_comms_model(CommsConfig()).cellular
+    higher = run_comms_model(CommsConfig(revenue=RevenueDials(arpu_usd_per_month=100.0))).cellular
     # ARPU revenue doubles (50 -> 100); the served base and cost are unchanged.
     assert higher.steady_state_revenue_arpu_musd == pytest.approx(
         2.0 * base.steady_state_revenue_arpu_musd, rel=COST_SUM_REL_TOL

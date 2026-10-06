@@ -88,7 +88,7 @@ from communications.constants import (
 )
 from communications.engine import (
     ZERO_MARGIN_PCT,
-    CommsTrajectory,
+    CellularRun,
     IridiumArpuBucket,
     IridiumArpuResult,
     arpu_stated_assumptions,
@@ -220,7 +220,8 @@ class IridiumPhysicsBlock(BaseModel):
 
 
 class TrajectorySummaryBlock(BaseModel):
-    """The shared trajectory headline fields (the ``CommsTrajectory`` summary).
+    """The trajectory headline fields: the run's shared fleet-and-cost record and its
+    cellular record, summarized.
 
     These are the fields every comms run reports (the fleet machinery the
     Iridium model shares with the High-Bandwidth Cellular Pure Play model):
@@ -337,10 +338,10 @@ class TrajectorySummaryBlock(BaseModel):
             "configured served target when whole launches overshoot)."
         )
     )
-    # Two families of shared-engine fields are computed-but-unpublished for Iridium:
-    # removed from this block but KEPT on the engine's shared CommsTrajectory (the
-    # cellular family reads them, and the equality tripwire rides that shared
-    # trajectory), so they must NOT be removed from the engine path:
+    # Two families of engine fields are computed-but-unpublished for Iridium:
+    # removed from this block but KEPT on the engine's cellular record, CellularTrajectory
+    # (the cellular family reads them, and the equality tripwire compares that record
+    # across the two entries), so they must NOT be removed from the engine path:
     #   - the cost-plus revenue case (steady_state_revenue_cost_plus_musd,
     #     steady_state_gross_margin_cost_plus_pct), REMOVED here in schema iridium-v3
     #     (investor direction 2026-07-10): the Iridium model now has a real published
@@ -475,25 +476,26 @@ class IridiumModelArtifact(BaseModel):
     )
 
 
-def _cumulative_launches_to_completion(trajectory: CommsTrajectory) -> int | None:
+def _cumulative_launches_to_completion(run: CellularRun) -> int | None:
     """Cumulative launches flown through the first full-coverage year.
 
-    Counts every launch (build and replacement alike) in years up to and
-    including :attr:`~communications.engine.CommsTrajectory.full_coverage_reached_year`;
-    None when the trajectory never reached the target.
+    Counts every launch (build and replacement alike) in the shared record's years up to
+    and including the cellular record's
+    :attr:`~communications.engine.CellularTrajectory.full_coverage_reached_year`;
+    None when the run never reached the target.
 
     Args:
-        trajectory: The completed run.
+        run: The completed run.
 
     Returns:
         The through-completion launch count, or None if never completed.
     """
-    completion_year = trajectory.full_coverage_reached_year
+    completion_year = run.cellular.full_coverage_reached_year
     if completion_year is None:
         return None
     return sum(
         year.comms_launches_flown_this_year
-        for year in trajectory.years
+        for year in run.fleet.years
         if year.year <= completion_year
     )
 
@@ -544,7 +546,7 @@ def _build_arpu_buckets_block(
 def build_iridium_artifact(
     *,
     config: CommsConfig,
-    trajectory: CommsTrajectory,
+    run: CellularRun,
     source_scenario_path: str,
     version_stamp: str,
 ) -> IridiumModelArtifact:
@@ -552,11 +554,15 @@ def build_iridium_artifact(
 
     Pure assembly: no IO. The caller loads the config, runs the model, and
     passes both in (so the artifact always describes exactly the run it was
-    built from).
+    built from). The cost totals and the years come from the run's shared
+    fleet-and-cost record (``run.fleet``); the target-era fields, the served base,
+    the built-fleet cost and the v5 physics block from its cellular record
+    (``run.cellular``).
 
     Args:
         config: The loaded scenario config (its ``iridium`` block must be set).
-        trajectory: The completed run for that config.
+        run: The completed run for that config (the Iridium entry's
+            :class:`~communications.engine.CellularRun`).
         source_scenario_path: The provenance path string for the scenario YAML.
         version_stamp: The caller-supplied stamp (git-describe or a date string).
 
@@ -564,15 +570,17 @@ def build_iridium_artifact(
         The populated, frozen :class:`IridiumModelArtifact`.
 
     Raises:
-        ValueError: If the config or trajectory does not carry the Iridium
+        ValueError: If the config or the run does not carry the Iridium
             block (the scenario did not select the Iridium model).
     """
-    if config.iridium is None or trajectory.iridium is None:
+    fleet = run.fleet
+    cellular = run.cellular
+    if config.iridium is None or cellular.iridium is None:
         raise ValueError(
             "the scenario does not select the Iridium model: it needs a top-level "
             "'iridium:' block (see scenarios/iridium.yaml)"
         )
-    physics = trajectory.iridium
+    physics = cellular.iridium
     provenance = IridiumProvenance(
         model_name=MODEL_NAME,
         schema_version=IRIDIUM_SCHEMA_VERSION,
@@ -580,34 +588,30 @@ def build_iridium_artifact(
         source_scenario_path=source_scenario_path,
         version_stamp=version_stamp,
     )
-    living_fleet_final_year = trajectory.years[-1].living_fleet
+    living_fleet_final_year = fleet.years[-1].living_fleet
     trajectory_summary = TrajectorySummaryBlock(
-        total_build_and_hold_cost_musd=trajectory.total_build_and_hold_cost_musd,
-        fleet_target=trajectory.fleet_target,
-        subscribers_per_satellite=trajectory.subscribers_per_satellite,
-        binding_regime=trajectory.binding_regime,
-        full_coverage_reached_year=trajectory.full_coverage_reached_year,
-        build_completes_in_horizon=trajectory.full_coverage_reached_year is not None,
-        subscribers_served=trajectory.subscribers_served,
-        steady_state_annual_cost_musd=trajectory.steady_state_annual_cost_musd,
-        built_fleet_annual_cost_musd=trajectory.built_fleet_annual_cost_musd,
+        total_build_and_hold_cost_musd=fleet.total_cost_through_final_year_musd,
+        fleet_target=cellular.fleet_target,
+        subscribers_per_satellite=cellular.subscribers_per_satellite,
+        binding_regime=cellular.binding_regime,
+        full_coverage_reached_year=cellular.full_coverage_reached_year,
+        build_completes_in_horizon=cellular.full_coverage_reached_year is not None,
+        subscribers_served=cellular.subscribers_served,
+        steady_state_annual_cost_musd=fleet.final_year_annual_cost_musd,
+        built_fleet_annual_cost_musd=cellular.built_fleet_annual_cost_musd,
         cost_per_subscriber_annualized_usd=usd_per_person(
-            trajectory.steady_state_annual_cost_musd, trajectory.subscribers_served
+            fleet.final_year_annual_cost_musd, cellular.subscribers_served
         ),
-        final_year_replacement_cost_musd=trajectory.final_year_replacement_cost_musd,
-        final_year_cash_cost_per_subscriber_usd=(
-            trajectory.final_year_cash_cost_per_subscriber_usd
-        ),
+        final_year_replacement_cost_musd=fleet.final_year_replacement_cost_musd,
+        final_year_cash_cost_per_subscriber_usd=(cellular.final_year_cash_cost_per_subscriber_usd),
         living_fleet_final_year=living_fleet_final_year,
-        cumulative_launches_to_completion=_cumulative_launches_to_completion(trajectory),
+        cumulative_launches_to_completion=_cumulative_launches_to_completion(run),
         cumulative_launches_final_year=sum(
-            year.comms_launches_flown_this_year for year in trajectory.years
+            year.comms_launches_flown_this_year for year in fleet.years
         ),
-        people_capacity_target_fleet=(
-            trajectory.fleet_target * trajectory.subscribers_per_satellite
-        ),
+        people_capacity_target_fleet=(cellular.fleet_target * cellular.subscribers_per_satellite),
         people_capacity_living_fleet_final_year=(
-            living_fleet_final_year * trajectory.subscribers_per_satellite
+            living_fleet_final_year * cellular.subscribers_per_satellite
         ),
     )
     orbit_scenario = OrbitScenarioBlock(
@@ -644,7 +648,7 @@ def build_iridium_artifact(
     revenue_arpu_buckets = (
         _build_arpu_buckets_block(
             physics.arpu,
-            trajectory.built_fleet_annual_cost_musd,
+            cellular.built_fleet_annual_cost_musd,
             arpu_stated_assumptions(config.iridium.arpu),
         )
         if physics.arpu is not None and config.iridium.arpu is not None
@@ -722,13 +726,13 @@ def export_iridium_json(
     curve_path = _anchored(checkout, dials.saturation.curve_path)
     curve = load_saturation_curve(curve_path)
     try:
-        trajectory = run_iridium_model(config, curve)
+        run = run_iridium_model(config, curve)
     except SaturationCurveMismatchError as exc:
         raise SaturationCurveMismatchError(f"{curve_path}: {exc}") from exc
     stamp = version_stamp if version_stamp is not None else date.today().isoformat()
     artifact = build_iridium_artifact(
         config=config,
-        trajectory=trajectory,
+        run=run,
         source_scenario_path=checkout.repo_relative(scenario),
         version_stamp=stamp,
     )
