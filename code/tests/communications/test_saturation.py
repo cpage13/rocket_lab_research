@@ -1,19 +1,26 @@
-"""End-to-end and seam tests of the saturation module and its contract (the phone class).
+"""End-to-end and seam tests of the saturation module and its contract (every class).
 
 The saturation curve (``communications.saturation``, the one module that imports numpy)
-counts how many co-channel beams a Walker shell keeps lit over people as the fleet grows;
-its contract (``communications.saturation_curve``) is numpy-free. These tests are the
-module's executable specification for the phone class, each naming what it exercises and
-what counts as success:
+counts how many co-channel beams a Walker shell keeps lit over people as the fleet grows, for
+the small terminal, the mounted terminal and the phone class; its contract
+(``communications.saturation_curve``) is numpy-free. These tests are the module's executable
+specification, each naming what it exercises and what counts as success:
 
 * through ``compute_saturation`` on synthetic global grids (a few fleets, one snapshot): a
   uniform band, where the supply bound is the time fraction over land and the 0.10 crossing
   is not reached; a two-band world, where maximum use matches its closed form; a dense
   mid-latitude band swept twice, where the 90 percent fleet reads maximum use, never a
-  sweep's last ceiling; capacity that does not fall between rows; determinism;
+  sweep's last ceiling; capacity that does not fall between rows; determinism; and a world
+  at one shared usage, where the classes order in aggregate and the sector-rule ceiling
+  bounds every directional row;
 * through the private seam ``_allocate`` with explicit satellite positions: one patch under
-  one overhead satellite; the per-cell area and one-layer-per-pair invariants;
-* the real grid at a coarse, fast setting, frozen at 1e-4 relative;
+  one overhead satellite; the per-cell area and one-layer-per-pair invariants; and the
+  directional rules: the serving set at f_serve, the pairwise admission, same-sector
+  satellites exempt, the full-sum price against its closed form, the keep rule, the
+  sector-rule ceiling and the first layer at each class's own people cap;
+* the sky sectors (rule D1), the pairs' sky geometry, the pair search's chunk budget, and the
+  vectorized admission against the rule taken candidate by candidate;
+* the real grid at a coarse, fast setting, every class frozen at 1e-4 relative;
 * numpy confinement (a subprocess), the people-per-beam arithmetic, the class constants,
   the checks' refusals, the grid loader's refusals and the contract's validators.
 
@@ -21,7 +28,8 @@ Every synthetic world also passes the module's own checks (the bounds at every s
 capacity per satellite never rising), so each is shaped for it: its capacity per satellite
 falls between its rows for a physical reason (a people cap or the tiling binding), never by
 the noise of one snapshot. The worlds' grids come from ``synthetic_population_grid`` and
-their inputs from ``synthetic_saturation_inputs`` (``conftest.py``).
+their inputs from ``synthetic_saturation_inputs`` (``conftest.py``), without the mounted
+terminal's extension (``small_sweep``).
 """
 
 from __future__ import annotations
@@ -32,8 +40,9 @@ import math
 import os
 import subprocess
 import sys
+import tracemalloc
 from collections.abc import Callable, Sequence
-from itertools import pairwise
+from itertools import combinations, pairwise
 from pathlib import Path
 from typing import Protocol
 
@@ -92,7 +101,7 @@ STAMP = "test"
 """The version stamp every curve here is computed with."""
 
 PHONE = DeviceClass.PHONE_CLASS
-"""The class this part computes."""
+"""The phone class, which takes one co-channel layer."""
 
 PeopleAt = Callable[[np.ndarray, np.ndarray], np.ndarray]
 """People per cell from the cell centres' latitudes and longitudes, degrees (the input of
@@ -173,6 +182,19 @@ def log_log_fleet(rows: tuple[CurveRow, ...], target: float) -> float | None:
     return None
 
 
+def small_sweep(inputs: SaturationInputs, snapshots_directional: int = 1) -> SaturationInputs:
+    """The inputs with no mounted-terminal extension and the directional classes at the given
+    snapshots, so a synthetic world's curve stays small and fast."""
+    sweep = SweepInputs.model_validate(
+        {
+            **inputs.sweep.model_dump(),
+            "mounted_terminal_extension": (),
+            "snapshots_directional": snapshots_directional,
+        }
+    )
+    return inputs.model_copy(update={"sweep": sweep})
+
+
 def phone_curve(curve: SaturationCurve) -> ClassCurve:
     """The phone class's curve, found by its key (a curve lists every class it has)."""
     (found,) = [entry for entry in curve.classes if entry.device_class is PHONE]
@@ -251,7 +273,7 @@ def uniform_band_curve(
     inputs = synthetic_saturation_inputs(
         uniform_band, fleets=BAND_FLEETS, beams_per_satellite=ONE_BEAM
     )
-    return compute_saturation(inputs, uniform_band, version_stamp=STAMP)
+    return compute_saturation(small_sweep(inputs), uniform_band, version_stamp=STAMP)
 
 
 @pytest.fixture(scope="module")
@@ -268,7 +290,7 @@ def two_band_world_curve(
     inputs = synthetic_saturation_inputs(
         two_band_world, fleets=BAND_FLEETS, beams_per_satellite=ONE_BEAM
     )
-    return compute_saturation(inputs, two_band_world, version_stamp=STAMP)
+    return compute_saturation(small_sweep(inputs), two_band_world, version_stamp=STAMP)
 
 
 @pytest.fixture(scope="module")
@@ -279,7 +301,7 @@ def mid_band_curves(
     grid = synthetic_population_grid(MID_BAND_CELL_DEG, mid_band_people)
     return tuple(
         compute_saturation(
-            synthetic_saturation_inputs(grid, fleets=fleets), grid, version_stamp=STAMP
+            small_sweep(synthetic_saturation_inputs(grid, fleets=fleets)), grid, version_stamp=STAMP
         )
         for fleets in MID_BAND_SWEEPS
     )
@@ -443,8 +465,11 @@ def test_two_runs_under_the_fixed_seed_are_equal(
     of wall time and memory (which the comparison sets to the first run's), and the two
     snapshots differ (a spread above zero), so the comparison covers the shared draw.
     """
-    inputs = synthetic_saturation_inputs(
-        uniform_band, fleets=BAND_FLEETS, snapshots=2, beams_per_satellite=ONE_BEAM
+    inputs = small_sweep(
+        synthetic_saturation_inputs(
+            uniform_band, fleets=BAND_FLEETS, snapshots=2, beams_per_satellite=ONE_BEAM
+        ),
+        snapshots_directional=2,
     )
     first = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
     second = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
@@ -495,6 +520,9 @@ def seam_limits(beams_per_satellite: float) -> sat._AllocationLimits:
         beam=sat._beam_model(inputs.shell),
         footprint_bands=inputs.sweep.footprint_bands,
         passes=inputs.sweep.passes,
+        spectrum_mhz=inputs.spectrum_mhz,
+        spectral_efficiency_bps_per_hz=_phone_inputs().spectral_efficiency_bps_per_hz,
+        directional=None,
     )
 
 
@@ -657,11 +685,94 @@ COARSE_REAL_ROWS = (
     ),
 )
 """The coarse rows as first computed (2026-10-05), frozen: fleet, L, capacity Gbps, U,
-ceiling, supply. They agree with the reference prototype's same snapshot at float
-precision."""
+ceiling, supply. They agree at float precision with the same snapshot of the saturation
+design's local prototype, which ``research/direct_communication/iridium_saturation_module.md``
+names."""
 
 COARSE_REAL_MAXIMUM_USE = 380946.7365253218
 """The phone class's maximum use on the shipped grid at the investor's usage, beams."""
+
+COARSE_DIRECTIONAL = {
+    DeviceClass.SMALL_TERMINAL_CLASS: (
+        684527.9051947582,
+        (
+            (
+                342,
+                20795.284357278433,
+                332.0094048847808,
+                0.4053661668085465,
+                118922.09479969715,
+                21404.93606919374,
+                0.007298063627728474,
+                73.68645507577428,
+                -16.226495844804184,
+            ),
+            (
+                992,
+                57317.3357433246,
+                911.7900760645404,
+                0.3851971488126653,
+                284755.15413186094,
+                61880.005071762134,
+                0.021388980458577216,
+                75.70820538796879,
+                -16.25263410855952,
+            ),
+            (
+                1980,
+                105783.56724985245,
+                1668.7218102640804,
+                0.3561736271038803,
+                415005.8943781192,
+                124314.10789697223,
+                0.038860488536891065,
+                69.9964800593951,
+                -15.422851798039009,
+            ),
+        ),
+    ),
+    DeviceClass.MOUNTED_TERMINAL_CLASS: (
+        1943778.1165993125,
+        (
+            (
+                342,
+                21219.844308904565,
+                421.61711937970705,
+                0.41364218925739893,
+                128941.14364361843,
+                21410.423077577965,
+                0.026664496864605185,
+                58.97992482795831,
+                -18.896911192752523,
+            ),
+            (
+                992,
+                59751.81653615736,
+                1173.8143304053624,
+                0.40155790682901454,
+                364336.338927603,
+                61905.084874337204,
+                0.06004851289809116,
+                52.75724194667607,
+                -15.914468840587588,
+            ),
+            (
+                1980,
+                115630.13266001342,
+                2224.6783701054187,
+                0.3893270459933112,
+                637680.7416468116,
+                124373.22731681664,
+                0.1174280164760068,
+                47.15112853069678,
+                -15.02233847489072,
+            ),
+        ),
+    ),
+}
+"""The directional classes' coarse rows as first computed (2026-10-05), frozen, with each
+class's maximum use: fleet, L, capacity Gbps, U, the sector-rule ceiling, supply, the kept
+stacked share, the median separation (degrees) and the mean full-sum interference (dB)."""
 
 
 @pytest.fixture(scope="module")
@@ -676,14 +787,20 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
     Sample: the default inputs (the investor's usage) at fleets 340, 1,000 and 2,000 and one
     snapshot.
 
-    Expected outcome: every row (L, capacity, U, the ceiling, the supply) and maximum use
-    within 1e-4 relative of the frozen values; no 0.10 crossing by 1,980 and no other marker;
-    the curve's envelope: schema, stamp, the input hash of its parameters, the grid's name,
-    digest, citations and licence, the three checks passed, the run measured, the stated
-    limits, and the phone class alone with no band yet.
+    Expected outcome: every class's rows (L, capacity, U, the ceiling, the supply, and for the
+    directional classes their stacking diagnostics) and maximum use within 1e-4 relative of
+    the frozen values; no 0.10 crossing by 1,980 and no other marker; the curve's envelope:
+    schema, stamp, the input hash of its parameters, the grid's name, digest, citations and
+    licence, the three checks passed, the run measured, the stated limits, and the three
+    classes (small terminal, mounted terminal, phone class) with no band yet.
     """
     inputs = SaturationInputs(
-        sweep=SweepInputs(fleets=COARSE_REAL_FLEETS, snapshots_phone_central=1)
+        sweep=SweepInputs(
+            fleets=COARSE_REAL_FLEETS,
+            mounted_terminal_extension=(),
+            snapshots_phone_central=1,
+            snapshots_directional=1,
+        )
     )
     curve = compute_saturation(inputs, real_grid, version_stamp=STAMP)
     rows = phone_curve(curve).rows
@@ -721,8 +838,34 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
     assert provenance.run_measurement.wall_time_s > 0
     assert provenance.run_measurement.peak_memory_mb > 0
     assert len(curve.limits) == 8
-    assert [entry.device_class for entry in curve.classes] == [PHONE]
+    assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
     assert curve.bands == ()
+    for device_class, (maximum_use, frozen_rows) in COARSE_DIRECTIONAL.items():
+        directional = class_curve(curve, device_class)
+        assert directional.markers.maximum_use_beams == pytest.approx(maximum_use, rel=1e-4)
+        assert directional.markers.saturation_not_reached_by == 1_980
+        for row, frozen in zip(directional.rows, frozen_rows, strict=True):
+            fleet, useful, capacity, ocean, ceiling, supply, share, separation, interference = (
+                frozen
+            )
+            assert (row.fleet, row.requested_fleet) == (fleet, walker_request_of(fleet))
+            assert row.useful_beams == pytest.approx(useful, rel=1e-4)
+            assert row.capacity_gbps == pytest.approx(capacity, rel=1e-4)
+            assert row.ocean_factor == pytest.approx(ocean, rel=1e-4)
+            assert row.ceiling_beams == pytest.approx(ceiling, rel=1e-4)
+            assert row.supply_beams == pytest.approx(supply, rel=1e-4)
+            assert row.directional is not None
+            assert row.directional.kept_stacked_share == pytest.approx(share, rel=1e-4)
+            assert row.directional.median_separation_deg == pytest.approx(separation, rel=1e-4)
+            assert row.directional.mean_full_sum_interference_db == pytest.approx(
+                interference, rel=1e-4
+            )
+            assert row.trim is None
+
+
+def walker_request_of(fleet: int) -> int:
+    """The coarse setting's request for a realized fleet (340, 1,000 and 2,000)."""
+    return dict(zip((342, 992, 1_980), COARSE_REAL_FLEETS, strict=True))[fleet]
 
 
 # ---------------------------------------------------------------------------
@@ -839,19 +982,19 @@ def _row(fleet: int, useful: float, capacity: float) -> CurveRow:
     [
         (
             lambda: sat._check_bounds(
-                PHONE, (sat._FleetSnapshots(342, (11.0,), (10.0,), (20.0,)),), 100.0
+                PHONE, (sat._FleetSnapshots(342, (11.0,), (10.0,), (20.0,), (1.0,), ()),), 100.0
             ),
             "useful beams 11.0 exceed",
         ),
         (
             lambda: sat._check_bounds(
-                PHONE, (sat._FleetSnapshots(342, (5.0,), (150.0,), (20.0,)),), 100.0
+                PHONE, (sat._FleetSnapshots(342, (5.0,), (150.0,), (20.0,), (1.0,), ()),), 100.0
             ),
             "the ceiling 150.0 exceeds maximum use",
         ),
         (
             lambda: sat._check_stall_floor(
-                (sat._FleetSnapshots(20_022, (90.0,), (100.0,), (200.0,)),), 0.98
+                (sat._FleetSnapshots(20_022, (90.0,), (100.0,), (200.0,), (1.0,), ()),), 0.98
             ),
             "under the stall floor",
         ),
@@ -1452,3 +1595,1030 @@ def test_load_population_grid_names_a_missing_member_once(tmp_path: Path) -> Non
     message = str(refused.value)
     assert "not a readable population grid" not in message
     assert message.count(str(archive)) == 1
+
+
+# ---------------------------------------------------------------------------
+# The sky sectors (rule D1), the pairs' sky geometry and the pair search's chunks
+# ---------------------------------------------------------------------------
+
+SMALL = DeviceClass.SMALL_TERMINAL_CLASS
+"""The small terminal, the first directional class."""
+
+MOUNTED = DeviceClass.MOUNTED_TERMINAL_CLASS
+"""The mounted terminal, the second directional class."""
+
+MASK_DEG = SaturationInputs().shell.elevation_mask_deg
+"""The default elevation mask, 25 degrees."""
+
+
+def class_inputs(device_class: DeviceClass) -> ClassInputs:
+    """A class's default inputs."""
+    return next(entry for entry in SaturationInputs().classes if entry.device_class is device_class)
+
+
+def satellite_seen_at(
+    cell_deg: tuple[float, float], elevation_deg: float, azimuth_deg: float, shell: ShellInputs
+) -> tuple[float, float]:
+    """The sub-satellite point, (latitude, longitude) degrees, of a satellite that a cell centre
+    sees at the given elevation and azimuth (from north through east): the point at the central
+    angle of that elevation, along the great circle leaving the cell at that bearing."""
+    orbit = EARTH_RADIUS_KM + shell.altitude_km
+    elevation = math.radians(elevation_deg)
+    central = math.acos(EARTH_RADIUS_KM * math.cos(elevation) / orbit) - elevation
+    lat1, lon1 = math.radians(cell_deg[0]), math.radians(cell_deg[1])
+    azimuth = math.radians(azimuth_deg)
+    lat2 = math.asin(
+        math.sin(lat1) * math.cos(central) + math.cos(lat1) * math.sin(central) * math.cos(azimuth)
+    )
+    lon2 = lon1 + math.atan2(
+        math.sin(azimuth) * math.sin(central) * math.cos(lat1),
+        math.cos(central) - math.sin(lat1) * math.sin(lat2),
+    )
+    return math.degrees(lat2), math.degrees(lon2)
+
+
+@pytest.mark.parametrize(
+    ("device_class", "edges_deg"), [(SMALL, (53.9, 25.0)), (MOUNTED, (69.4, 48.0, 25.0))]
+)
+def test_sky_sectors_split_the_sky_above_the_mask_into_equal_solid_angles(
+    device_class: DeviceClass, edges_deg: tuple[float, ...]
+) -> None:
+    """Objective: rule D1: a directional terminal's sky above the mask splits into sectors of
+    equal solid angle, ring by ring from the zenith, the last ring ending exactly at the mask.
+
+    Sample: each directional class's default wedges per ring, (1, 2) and (1, 3, 5), at the
+    default 25 degree mask.
+
+    Expected outcome: the strategy's ring edges (the small terminal's cap above 53.9 degrees;
+    the mounted terminal's cap above 69.4 and its ring of 3 down to 48.0), within 0.05 degree,
+    the last edge exactly the mask; every sector's solid angle, 2 pi (sin(top) - sin(bottom))
+    over its ring's wedges, equal to the sky's 2 pi (1 - sin 25 degrees) over the sector count
+    (1e-12 relative).
+    """
+    wedges = class_inputs(device_class).sector_wedges_per_ring
+    layout = sat._sector_layout(wedges, MASK_DEG)
+    assert [math.degrees(edge) for edge in layout.lower_edges_rad] == pytest.approx(
+        edges_deg, abs=0.05
+    )
+    assert layout.lower_edges_rad[-1] == math.radians(MASK_DEG)
+    assert layout.count == sum(wedges)
+    sky_per_sector = 2 * math.pi * (1 - math.sin(math.radians(MASK_DEG))) / sum(wedges)
+    tops = (math.pi / 2, *layout.lower_edges_rad[:-1])
+    for top, bottom, count in zip(tops, layout.lower_edges_rad, wedges, strict=True):
+        solid_angle = 2 * math.pi * (math.sin(top) - math.sin(bottom)) / count
+        assert solid_angle == pytest.approx(sky_per_sector, rel=1e-12)
+
+
+def test_a_direction_falls_in_its_ring_by_elevation_then_its_azimuth_wedge() -> None:
+    """Objective: rule D1's assignment: a direction's sector is its ring by elevation (each
+    ring's lower edge included), then its equal azimuth wedge counted from north through east.
+
+    Sample: the mounted terminal's layout (a cap; a ring of 3 wedges of 120 degrees down to
+    48.0 degrees; a ring of 5 wedges of 72 degrees down to the mask), its sectors numbered from
+    the cap (0), the ring of 3 (1 to 3), the ring of 5 (4 to 8); directions at the zenith, on
+    and a hair under each lower edge, either side of wedge boundaries, and a hair under the
+    mask (rounding at the view's limit).
+
+    Expected outcome: the zenith 0; on the cap's lower edge at 200 degrees 0, a hair under it
+    2; at 60 degrees elevation, azimuth 0 gives 1, 239.9 gives 2 and 240.1 gives 3; on the ring
+    of 3's lower edge at 359 degrees, 3; at 30 degrees elevation, 71.9 gives 4, 72.1 gives 5
+    and 359.9 gives 8; on the mask at 144.1 degrees, 6; a hair under it at 300 degrees, 8.
+    """
+    layout = sat._sector_layout(class_inputs(MOUNTED).sector_wedges_per_ring, MASK_DEG)
+    cap_edge, ring_edge, mask = layout.lower_edges_rad
+    hair = 1e-9
+    cases = (
+        (math.pi / 2, 0.0, 0),
+        (cap_edge, 200.0, 0),
+        (cap_edge - hair, 200.0, 2),
+        (math.radians(60.0), 0.0, 1),
+        (math.radians(60.0), 239.9, 2),
+        (math.radians(60.0), 240.1, 3),
+        (ring_edge, 359.0, 3),
+        (math.radians(30.0), 71.9, 4),
+        (math.radians(30.0), 72.1, 5),
+        (math.radians(30.0), 359.9, 8),
+        (mask, 144.1, 6),
+        (mask - hair, 300.0, 8),
+    )
+    elevation = np.array([case[0] for case in cases])
+    azimuth = np.radians([case[1] for case in cases])
+    assert sat._sector_of(elevation, azimuth, layout).tolist() == [case[2] for case in cases]
+
+
+SKY_DIRECTIONS_DEG = ((90.0, 0.0), (60.0, 10.0), (60.0, 130.0), (30.0, 200.0), (27.0, 75.0))
+"""Directions (elevation, azimuth from north) at which the sky-geometry test places its
+satellites, as the patch's cell centre sees them."""
+
+
+def test_each_pair_sees_its_satellite_in_its_sector_at_the_true_angles(
+    synthetic_population_grid: GridBuilder,
+) -> None:
+    """Objective: the pairs' sky geometry: the elevation and azimuth a cell sees each satellite
+    at place the pair in its sector (rule D1), and the angle between two satellites seen from a
+    cell is the true one (the separations of rule D4 and the gains of rule D5).
+
+    Sample: one populated 0.25 degree cell; five satellites placed where its centre sees them at
+    (elevation, azimuth) (90, 0), (60, 10), (60, 130), (30, 200) and (27, 75) degrees; the
+    mounted terminal's sectors.
+
+    Expected outcome: each pair's sector is that of its intended direction (0, 1, 2, 6 and 5);
+    the angle between every two of them, from the pairs' directions, equals the spherical
+    angle between their intended directions, cos = sin e1 sin e2 + cos e1 cos e2 cos(a1 - a2),
+    within 1e-9 radian.
+    """
+    grid = synthetic_population_grid(0.25, patch_people(0.25, 0))
+    cells = sat._demand_cells(grid, 1.0)
+    shell = SaturationInputs().shell
+    centre = (float(np.degrees(cells.lat_rad[0])), float(np.degrees(cells.lon_rad[0])))
+    satellites = satellites_at(
+        [satellite_seen_at(centre, el, az, shell) for el, az in SKY_DIRECTIONS_DEG]
+    )
+    beam = sat._beam_model(shell)
+    pairs = sat._pairs_in_view(satellites, cells, beam.max_central_angle_rad)
+    assert pairs.satellite.tolist() == list(range(len(SKY_DIRECTIONS_DEG)))
+    layout = sat._sector_layout(class_inputs(MOUNTED).sector_wedges_per_ring, MASK_DEG)
+    intended = sat._sector_of(
+        np.radians([el for el, _ in SKY_DIRECTIONS_DEG]),
+        np.radians([az for _, az in SKY_DIRECTIONS_DEG]),
+        layout,
+    )
+    assert intended.tolist() == [0, 1, 2, 6, 5]
+    sectors = sat._pair_sectors(pairs, satellites, cells, beam.orbit_radius_km, layout)
+    assert sectors.tolist() == intended.tolist()
+    directions = sat._pair_directions(pairs, satellites, cells, beam.orbit_radius_km).of(
+        np.arange(pairs.satellite.size)
+    )
+    for (u, (e1, a1)), (v, (e2, a2)) in combinations(enumerate(SKY_DIRECTIONS_DEG), 2):
+        e1, a1, e2, a2 = (math.radians(angle) for angle in (e1, a1, e2, a2))
+        expected = math.acos(
+            math.sin(e1) * math.sin(e2) + math.cos(e1) * math.cos(e2) * math.cos(a1 - a2)
+        )
+        found = math.acos(min(1.0, float(directions[u] @ directions[v])))
+        assert found == pytest.approx(expected, abs=1e-9)
+
+
+WIDE_VIEW_SHELL = ShellInputs(altitude_km=1200.0, inclination_deg=70.0, elevation_mask_deg=5.0)
+"""A wide-view shell (about a 28 degree view): near a pole its search windows span every
+column, the pair search's worst case for memory."""
+
+LOWERED_CHUNK_ELEMENTS = 700_000
+"""A lowered element budget: two of the wide view's polar windows (229 rows x 1,441 columns,
+about 330,000 elements each) to a chunk."""
+
+BYTES_PER_WINDOW_ELEMENT = 80
+"""The pair search's working memory per window element at the worst, every window cell a
+demand cell (measured with tracemalloc at about 70 bytes, 80 with the pairs found)."""
+
+BYTES_PER_PAIR_FOUND = 120
+"""The memory a pair found holds by the end of the search: its satellite, cell and angle as
+found and as kept, and the deduplication's keys and sort (measured at about 107 bytes)."""
+
+
+def test_the_pair_search_chunks_hold_their_element_budget_and_change_no_pair(
+    synthetic_population_grid: GridBuilder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Objective: the pair search's chunks bound its working memory where it is largest, a wide
+    view near a pole: every chunk's windows hold at most the element budget, and chunking
+    changes no pair.
+
+    Sample: every 0.25 degree cell populated (every window cell a demand cell, the worst case
+    for memory); the wide-view shell (1,200 km, a 5 degree mask), whose view near a pole spans
+    the whole turn of longitude; 8 satellites at 70 degrees north; the budget lowered to
+    700,000 elements; then the central shell at 5,400 requested satellites at the default
+    budget.
+
+    Expected outcome: the wide view's chunks tile the satellites in order, two to a chunk, each
+    within the lowered budget; the pairs equal those of one unbudgeted chunk; the traced peak
+    stays within 80 bytes a budgeted element plus 120 bytes a pair found, which one chunk of
+    all eight windows (2.6 million elements) would break; the central shell keeps chunks of
+    500 satellites (the last 402), well within the default budget.
+    """
+    cells = sat._demand_cells(synthetic_population_grid(0.25, everywhere_people), 1e-12)
+    limit = sat._central_angle_limit(WIDE_VIEW_SHELL)
+    satellites = satellites_at([(70.0, lon) for lon in np.linspace(-170.0, 170.0, 8)])
+    window_rows = 2 * sat._window_half_rows(cells, limit) + 1
+    monkeypatch.setattr(sat, "_PAIR_SEARCH_CHUNK_ELEMENTS", 10**12)
+    unbudgeted = sat._pairs_in_view(satellites, cells, limit)
+    monkeypatch.setattr(sat, "_PAIR_SEARCH_CHUNK_ELEMENTS", LOWERED_CHUNK_ELEMENTS)
+    chunks = sat._search_chunks(satellites, cells, limit)
+    assert [(start, stop) for start, stop, _ in chunks] == [(0, 2), (2, 4), (4, 6), (6, 8)]
+    for start, stop, half_cols in chunks:
+        assert (stop - start) * window_rows * (2 * half_cols + 1) <= LOWERED_CHUNK_ELEMENTS
+    tracemalloc.start()
+    budgeted = sat._pairs_in_view(satellites, cells, limit)
+    _, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    for field in ("satellite", "cell", "central_angle_rad"):
+        assert np.array_equal(getattr(budgeted, field), getattr(unbudgeted, field))
+    bound = (
+        LOWERED_CHUNK_ELEMENTS * BYTES_PER_WINDOW_ELEMENT
+        + budgeted.satellite.size * BYTES_PER_PAIR_FOUND
+    )
+    one_chunk = satellites.count * window_rows * (2 * chunks[0][2] + 1)
+    assert peak <= bound < one_chunk * BYTES_PER_WINDOW_ELEMENT
+    monkeypatch.undo()
+    central = sat._walker_positions(SaturationInputs().shell, 5_400, 0.0)
+    central_chunks = sat._search_chunks(
+        central, cells, sat._central_angle_limit(SaturationInputs().shell)
+    )
+    assert [stop - start for start, stop, _ in central_chunks] == [500] * 10 + [402]
+
+
+# ---------------------------------------------------------------------------
+# The directional classes through the _allocate seam (rules D2 to D6)
+# ---------------------------------------------------------------------------
+
+SE_ANCHOR = 0.65
+"""The link mapping's anchor, SE = 0.65 x log2(1 + SINR) (the curve's default)."""
+
+PATTERN_FLOOR_DB = -20.0
+"""The terminal pattern's floor, dB (the curve's default)."""
+
+
+def terminal_beamwidth_rad(device_class: DeviceClass) -> float:
+    """The terminal's half-power beamwidth, sqrt(4 pi / (1.133 x D)), from its directivity."""
+    directivity = 10 ** (class_inputs(device_class).directivity_dbi / 10)
+    return math.sqrt(4 * math.pi / (1.133 * directivity))
+
+
+def single_layer_sinr(device_class: DeviceClass) -> float:
+    """SINR_1 = 2^(SE_central / 0.65) - 1, the class's single-layer operating point."""
+    return 2 ** (class_inputs(device_class).spectral_efficiency_bps_per_hz / SE_ANCHOR) - 1
+
+
+def angle_between_deg(first: tuple[float, float], second: tuple[float, float]) -> float:
+    """The angle between two directions (elevation, azimuth), degrees, by spherical trigonometry."""
+    e1, a1, e2, a2 = (math.radians(value) for value in (*first, *second))
+    cosine = math.sin(e1) * math.sin(e2) + math.cos(e1) * math.cos(e2) * math.cos(a1 - a2)
+    return math.degrees(math.acos(min(1.0, cosine)))
+
+
+def directional_limits(
+    device_class: DeviceClass,
+    beams_per_satellite: float,
+    serving_rule: sat._ServingRule = sat._ServingRule.AT_SERVING_SHARE,
+) -> sat._AllocationLimits:
+    """A directional class's allocation limits at the defaults, with a chosen B and serving rule."""
+    inputs = SaturationInputs()
+    entry = class_inputs(device_class)
+    rules = sat._directional_rules(inputs, entry)
+    assert rules is not None
+    return sat._AllocationLimits(
+        beams_per_satellite=beams_per_satellite,
+        people_per_beam=sat._people_per_beam(inputs.spectrum_mhz, entry),
+        take_up=inputs.demand.take_up,
+        beam=sat._beam_model(inputs.shell),
+        footprint_bands=inputs.sweep.footprint_bands,
+        passes=inputs.sweep.passes,
+        spectrum_mhz=inputs.spectrum_mhz,
+        spectral_efficiency_bps_per_hz=entry.spectral_efficiency_bps_per_hz,
+        directional=dataclasses.replace(rules, serving_rule=serving_rule),
+    )
+
+
+OneCell = tuple[sat._DemandCells, tuple[float, float]]
+"""One populated 0.25 degree cell's demand cells and its centre (latitude, longitude), degrees."""
+
+
+@pytest.fixture(scope="module")
+def one_cell(synthetic_population_grid: GridBuilder) -> OneCell:
+    """One densely populated 0.25 degree cell at (0.125, 0.125), about 773 km^2 (no people cap
+    binds), and its centre."""
+    cells = sat._demand_cells(synthetic_population_grid(0.25, patch_people(0.25, 0)), 1.0)
+    return cells, (float(np.degrees(cells.lat_rad[0])), float(np.degrees(cells.lon_rad[0])))
+
+
+def allocate_seen_at(
+    one_cell: OneCell,
+    directions_deg: Sequence[tuple[float, float]],
+    limits: sat._AllocationLimits,
+) -> sat._Allocation:
+    """Allocate the one cell among satellites placed where its centre sees them at the given
+    (elevation, azimuth) directions, degrees, in that order (pair i is satellite i)."""
+    cells, centre = one_cell
+    shell = SaturationInputs().shell
+    points = [satellite_seen_at(centre, el, az, shell) for el, az in directions_deg]
+    satellites = satellites_at(points)
+    allocation = sat._allocate(satellites, cells, limits)
+    assert allocation.satellite.tolist() == list(range(len(directions_deg)))
+    return allocation
+
+
+def directional_of(allocation: sat._Allocation) -> sat._DirectionalAllocation:
+    """The allocation's directional part (a directional class's)."""
+    assert allocation.directional is not None
+    return allocation.directional
+
+
+SERVING_CASE_DEG = ((90.0, 0.0), (35.0, 170.0), (32.0, 270.0), (27.0, 195.0))
+"""The serving-set case: the zenith satellite, the stage-1 sliver, and two stage-2 candidates
+in the other ring half of the small terminal's sky."""
+
+
+def test_the_serving_set_holds_the_satellites_whose_layer_reaches_f_serve(
+    one_cell: OneCell,
+) -> None:
+    """Objective: rule D3: a satellite serves a cell when its committed layer covers at least
+    f_serve = 1 / SINR_1 (0.134 for the small terminal) of the cell's area; a thinner sliver
+    does not serve, and so never blocks a stacked candidate.
+
+    Sample: the small terminal, one cell, B = 4: a satellite at the zenith (its 4 beams cover
+    88.4 percent of the cell), one at (35, 170) degrees that takes the remaining 11.6 percent in
+    stage 1, and two stage-2 candidates in the other half of the ring: (32, 270), 58 degrees
+    from the zenith, and (27, 195), 63 degrees from the zenith but 22.8 from the sliver.
+
+    Expected outcome: every pair serves exactly when its first-layer and stacked beams cover at
+    least f_serve of the cell: the zenith satellite and the admitted candidate serve, the
+    sliver (share between 0 and f_serve) does not; the sliver's own stacking is refused (55
+    degrees from the zenith satellite, under a beamwidth) and so is the candidate at (32, 270);
+    the candidate at (27, 195) stacks, since the sliver is no serving satellite. With every
+    first-layer satellite serving (the diagnostic's any-share rule), the sliver blocks it. With
+    only the cell's main first-layer satellite serving (the diagnostic's main-satellite rule),
+    the serving set is exactly the zenith pair at the end of stage 2, so it was after stage 1
+    too (a set that only grows) and no stacked pair joined it: the candidate at (27, 195)
+    stacks but does not serve.
+    """
+    allocation = allocate_seen_at(one_cell, SERVING_CASE_DEG, directional_limits(SMALL, 4.0))
+    layers = directional_of(allocation)
+    cells, _ = one_cell
+    f_serve = 1 / single_layer_sinr(SMALL)
+    assert f_serve == pytest.approx(0.1344, abs=1e-4)
+    share = (layers.first_layer_beams + layers.stacked_beams) * allocation.footprint_km2
+    share = share / cells.area_km2[0]
+    assert layers.serving.tolist() == (share >= f_serve).tolist() == [True, False, False, True]
+    sliver = layers.first_layer_beams[1] * allocation.footprint_km2[1] / cells.area_km2[0]
+    assert 0 < sliver < f_serve
+    assert layers.first_layer_beams[0] == pytest.approx(4.0, rel=1e-12)
+    beamwidth_deg = math.degrees(terminal_beamwidth_rad(SMALL))
+    zenith, sliver_at, near, far = SERVING_CASE_DEG
+    assert angle_between_deg(sliver_at, zenith) < beamwidth_deg
+    assert angle_between_deg(near, zenith) < beamwidth_deg
+    assert angle_between_deg(far, zenith) > beamwidth_deg > angle_between_deg(far, sliver_at)
+    assert layers.sector[1] != layers.sector[3]
+    assert layers.stacked_beams[1] == layers.stacked_beams[2] == 0.0
+    assert layers.stacked_beams[3] > 0
+    any_share = allocate_seen_at(
+        one_cell, SERVING_CASE_DEG, directional_limits(SMALL, 4.0, sat._ServingRule.ANY_SHARE)
+    )
+    assert directional_of(any_share).stacked_beams[3] == 0.0
+    main_only = directional_of(
+        allocate_seen_at(
+            one_cell,
+            SERVING_CASE_DEG,
+            directional_limits(SMALL, 4.0, sat._ServingRule.MAIN_SATELLITE),
+        )
+    )
+    assert main_only.stacked_beams[3] > 0
+    assert main_only.serving.tolist() == [True, False, False, False]
+
+
+PAIRWISE_CASE_DEG = ((90.0, 0.0), (28.3, 170.0), (28.0, 190.0), (40.0, 270.0))
+"""The pairwise case: the zenith satellite, two candidates of one band either side of the ring
+halves' boundary, and a candidate within a beamwidth of the zenith."""
+
+
+def test_a_stacked_candidate_needs_a_beamwidth_from_the_serving_set_and_the_bands_admitted(
+    one_cell: OneCell,
+) -> None:
+    """Objective: rule D4's pairwise admission: a candidate is admitted only at least one
+    terminal beamwidth (60.3 degrees for the small terminal) from every satellite serving its
+    cell in another sector and from every candidate of its cell admitted earlier in the band
+    in another sector.
+
+    Sample: the small terminal, one cell, B = 150: a zenith satellite that covers the cell
+    alone in stage 1; candidates at (28.3, 170) and (28.0, 190) degrees, in one footprint band
+    and in the two halves of the ring, 17.6 degrees apart, each over 60.3 from the zenith; one
+    at (40, 270), 50 degrees from the zenith. Then the same without the (28.3, 170) satellite.
+
+    Expected outcome: the two band-mates share a band, the first by footprint taken first; it
+    stacks; its band-mate, closer to it than a beamwidth in the other sector, is refused; the
+    candidate at (40, 270) is refused by the serving zenith satellite. Without the first, its
+    band-mate stacks, so it was the earlier admitted candidate that refused it.
+    """
+    allocation = allocate_seen_at(one_cell, PAIRWISE_CASE_DEG, directional_limits(SMALL, 150.0))
+    layers = directional_of(allocation)
+    bands = sat._footprint_bands(allocation.footprint_km2, SaturationInputs().sweep.footprint_bands)
+    band_of = np.empty(allocation.satellite.size, dtype=np.int64)
+    for band in range(bands.count):
+        band_of[bands.members(band)] = band
+    assert band_of[1] == band_of[2]
+    assert allocation.footprint_km2[1] < allocation.footprint_km2[2]
+    assert layers.sector[1] != layers.sector[2]
+    beamwidth_deg = math.degrees(terminal_beamwidth_rad(SMALL))
+    zenith, first, second, steep = PAIRWISE_CASE_DEG
+    assert angle_between_deg(first, second) < beamwidth_deg
+    assert min(angle_between_deg(first, zenith), angle_between_deg(second, zenith)) > beamwidth_deg
+    assert angle_between_deg(steep, zenith) < beamwidth_deg
+    assert layers.serving[0]
+    assert layers.stacked_beams[1] > 0
+    assert layers.stacked_beams[2] == layers.stacked_beams[3] == 0.0
+    without_first = allocate_seen_at(
+        one_cell, (zenith, second, steep), directional_limits(SMALL, 150.0)
+    )
+    assert directional_of(without_first).stacked_beams[1] > 0
+
+
+def test_satellites_in_the_same_sector_are_exempt_from_each_other(one_cell: OneCell) -> None:
+    """Objective: satellites in one sky sector tile that sector's one layer, so the pairwise
+    rule never sets them against each other (rule D4).
+
+    Sample: the small terminal, one cell, B = 150: a zenith satellite covering the cell, and two
+    candidates of one band in the same half of the ring, at (28.3, 60) and (28.0, 80) degrees,
+    17.7 degrees apart (under a beamwidth), each over a beamwidth from the zenith.
+
+    Expected outcome: both stack, sharing their sector's area: their stacked shares of the cell
+    sum to one layer, each positive.
+    """
+    directions = ((90.0, 0.0), (28.3, 60.0), (28.0, 80.0))
+    allocation = allocate_seen_at(one_cell, directions, directional_limits(SMALL, 150.0))
+    layers = directional_of(allocation)
+    cells, _ = one_cell
+    assert layers.sector[1] == layers.sector[2]
+    assert angle_between_deg(directions[1], directions[2]) < math.degrees(
+        terminal_beamwidth_rad(SMALL)
+    )
+    stacked_share = layers.stacked_beams * allocation.footprint_km2 / cells.area_km2[0]
+    assert stacked_share[1] > 0 and stacked_share[2] > 0
+    assert stacked_share[1] + stacked_share[2] == pytest.approx(1.0, rel=1e-9)
+
+
+FULL_SUM_CASE_DEG = ((90.0, 0.0), (62.0, 120.0), (45.0, 300.0), (45.0, 330.0), (40.0, 200.0))
+"""The full-sum case (the mounted terminal): a first layer split between the zenith and the
+ring of 3; two stacked layers sharing one sector of the ring of 5; one in another sector."""
+
+
+def full_sum_capacity_mbps(
+    allocation: sat._Allocation,
+    cell_area_km2: float,
+    directions_deg: Sequence[tuple[float, float]],
+    *,
+    exclusions: bool,
+) -> float:
+    """The cell's capacity by rule D5's closed form, independently: for each served sub-pair q,
+    SINR_q = 1 / (1 / SINR_1 + the sum over the other sub-pairs p of f_p x g(theta_pq)), g a
+    Gaussian main lobe floored at -20 dB, the angles from the intended directions; with
+    ``exclusions``, two first-layer sub-pairs and two sub-pairs of one sector are left out."""
+    layers = directional_of(allocation)
+    beamwidth = terminal_beamwidth_rad(MOUNTED)
+    sinr_1 = single_layer_sinr(MOUNTED)
+    sub_pairs = [
+        (pair, is_first, beams)
+        for pair in range(allocation.satellite.size)
+        for is_first, beams in (
+            (True, float(layers.first_layer_beams[pair])),
+            (False, float(layers.stacked_beams[pair])),
+        )
+        if beams > 0
+    ]
+    capacity = 0.0
+    for pair, is_first, beams in sub_pairs:
+        interference = 0.0
+        for other, other_first, other_beams in sub_pairs:
+            if (other, other_first) == (pair, is_first):
+                continue
+            same_sector = layers.sector[other] == layers.sector[pair]
+            if exclusions and (same_sector or (is_first and other_first)):
+                continue
+            theta = math.radians(angle_between_deg(directions_deg[pair], directions_deg[other]))
+            gain_db = max(-12.0 * (theta / beamwidth) ** 2, PATTERN_FLOOR_DB)
+            share = other_beams * float(allocation.footprint_km2[other]) / cell_area_km2
+            interference += share * 10 ** (gain_db / 10)
+        sinr = 1 / (1 / sinr_1 + interference)
+        capacity += beams * SE_ANCHOR * math.log2(1 + sinr)
+    return capacity * SaturationInputs().spectrum_mhz
+
+
+def test_a_cells_capacity_is_the_full_sum_closed_form_at_the_realized_gains(
+    one_cell: OneCell,
+) -> None:
+    """Objective: rule D5: each served sub-pair is priced against the full sum of its cell's
+    other layers at the victim terminal's gain toward each, first-layer sub-pairs not against
+    each other and same-sector sub-pairs not against each other.
+
+    Sample: the mounted terminal (33.9 degree beamwidth), one cell, B = 2: satellites where the
+    cell centre sees them at (90, 0) and (62, 120) degrees (the first layer: the zenith's two
+    beams and the rest from the ring of 3), (45, 300) and (45, 330) (one sector of the ring of
+    5, sharing its stacked layer, 21 degrees apart) and (40, 200) (another sector).
+
+    Expected outcome: two first-layer sub-pairs in two sectors and three stacked ones, two in
+    one sector; the module's capacity with the stack equals the closed form at the realized
+    layers and the angles of the intended directions within 1e-7 relative; counting the
+    excluded pairs too would give a capacity more than 1 percent lower; the stack is kept, and
+    the stacked layers' median separation from their nearest layer of another sector is 45
+    degrees (the zenith satellite's).
+    """
+    allocation = allocate_seen_at(one_cell, FULL_SUM_CASE_DEG, directional_limits(MOUNTED, 2.0))
+    layers = directional_of(allocation)
+    cells, _ = one_cell
+    assert layers.first_layer_beams[0] == pytest.approx(2.0, rel=1e-12)
+    assert layers.first_layer_beams[1] > 0 and np.all(layers.first_layer_beams[2:] == 0)
+    assert np.all(layers.stacked_beams[:2] == 0) and np.all(layers.stacked_beams[2:] > 0)
+    assert layers.sector[2] == layers.sector[3] != layers.sector[4]
+    assert len({int(layers.sector[0]), int(layers.sector[1]), int(layers.sector[4])}) == 3
+    expected = full_sum_capacity_mbps(
+        allocation, float(cells.area_km2[0]), FULL_SUM_CASE_DEG, exclusions=True
+    )
+    assert layers.stacked_capacity_mbps[0] == pytest.approx(expected, rel=1e-7)
+    without_exclusions = full_sum_capacity_mbps(
+        allocation, float(cells.area_km2[0]), FULL_SUM_CASE_DEG, exclusions=False
+    )
+    assert without_exclusions < 0.99 * expected
+    assert layers.keeps_stack[0]
+    assert layers.cell_capacity_mbps[0] == layers.stacked_capacity_mbps[0]
+    assert allocation.capacity_mbps == pytest.approx(expected, rel=1e-7)
+    assert layers.statistics.median_separation_deg == pytest.approx(45.0, abs=1e-6)
+
+
+@pytest.mark.parametrize(
+    ("device_class", "stacked_at", "kept"),
+    [(SMALL, (29.0, 90.0), False), (MOUNTED, (40.0, 90.0), True)],
+    ids=["the small terminal drops", "the mounted terminal keeps"],
+)
+def test_the_keep_rule_drops_a_stack_that_lowers_capacity_and_its_beams_stay_spent(
+    one_cell: OneCell, device_class: DeviceClass, stacked_at: tuple[float, float], kept: bool
+) -> None:
+    """Objective: rule D6: a cell whose capacity with its stacked layers is below its first
+    layer alone (every first-layer beam at the central SE) keeps its first layer only; the
+    dropped stacked beams stay spent (never returned or re-spent) and L counts only kept beams.
+
+    Sample: one cell covered at the zenith (B = 150) and one stacked satellite that covers it
+    again: for the small terminal at (29, 90) degrees, 61 degrees from the zenith, just past its
+    60.3 degree beamwidth (a gain of -12.3 dB between the layers); for the mounted terminal at
+    (40, 90), 50 degrees off, past its 33.9 degree beamwidth (the -20 dB floor).
+
+    Expected outcome: the small terminal's stack lowers the cell's capacity, so it is dropped:
+    the cell carries exactly its first layer alone, L is the first layer's beams, and the
+    stacked beams stay placed on their satellite. The mounted terminal's raises it, so it is
+    kept: the cell carries the stacked capacity and L counts the stacked beams.
+    """
+    allocation = allocate_seen_at(
+        one_cell, ((90.0, 0.0), stacked_at), directional_limits(device_class, 150.0)
+    )
+    layers = directional_of(allocation)
+    first_alone = (
+        float(layers.first_layer_beams.sum())
+        * class_inputs(device_class).spectral_efficiency_bps_per_hz
+        * SaturationInputs().spectrum_mhz
+    )
+    stacked = float(layers.stacked_beams[1])
+    assert stacked > 0
+    assert allocation.beams[1] == stacked
+    assert bool(layers.keeps_stack[0]) is kept
+    if kept:
+        assert layers.stacked_capacity_mbps[0] > first_alone
+        assert layers.cell_capacity_mbps[0] == layers.stacked_capacity_mbps[0]
+        assert allocation.useful_beams == pytest.approx(
+            float(layers.first_layer_beams.sum()) + stacked, rel=1e-12
+        )
+    else:
+        assert layers.stacked_capacity_mbps[0] < first_alone
+        assert layers.cell_capacity_mbps[0] == pytest.approx(first_alone, rel=1e-12)
+        assert allocation.useful_beams == pytest.approx(
+            float(layers.first_layer_beams.sum()), rel=1e-12
+        )
+        assert layers.statistics.beams == 0.0
+    assert allocation.capacity_mbps == pytest.approx(float(layers.cell_capacity_mbps.sum()))
+
+
+SATELLITE_LIMITED_BAND_DEG = (20.0, 40.0)
+"""The satellite-limited world's band of 0.5 degree cells, degrees north."""
+
+SATELLITE_LIMITED_PEOPLE = 30.0
+"""People in each cell of the satellite-limited world: under one beam of every class at the
+investor's usage (the mounted terminal's people cap is 0.75 beams)."""
+
+SATELLITE_LIMITED_FLEET = 300
+"""The satellite-limited world's requested fleet (realized 306): too few satellites for the
+mounted terminal's people caps, so many cells stay under their caps after stage 1."""
+
+SIDEREAL_DAY_S = 86164.0905
+"""One sidereal day, s, the span the snapshot times are drawn over (the curve's pinned value)."""
+
+SERVED_BEAMS_FLOOR = 1e-9
+"""A sub-pair places a layer when it places more than this many beams (the module's floor)."""
+
+COVERED_SHORTFALL_SHARE = 1e-9
+"""A cell's first layer covers it when it leaves at most this share of the cell uncovered (the
+module's convention; in the satellite-limited world a covered cell misses by rounding only and
+a short one by more than 1e-5 of its area)."""
+
+
+def satellite_limited_people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+    """30 people in every cell between 20 and 40 degrees north."""
+    inside = (lat > SATELLITE_LIMITED_BAND_DEG[0]) & (lat < SATELLITE_LIMITED_BAND_DEG[1])
+    return np.where(inside, SATELLITE_LIMITED_PEOPLE, 0.0)
+
+
+def counted_stacked_beams(
+    allocation: sat._Allocation, cells: sat._DemandCells, sectors: int, *, covered_only: bool
+) -> float:
+    """The stacked beams the statistics count, computed independently: every stacked sub-pair
+    over the floor of a cell that keeps its stack (and with ``covered_only``, that its first
+    layer covers) whose cell holds a served sub-pair in another sector."""
+    layers = directional_of(allocation)
+    cell = allocation.cell
+    stacked = layers.stacked_beams > SERVED_BEAMS_FLOOR
+    served = stacked | (layers.first_layer_beams > SERVED_BEAMS_FLOOR)
+    served_keys = np.unique(cell[served] * sectors + layers.sector[served])
+    sectors_served = np.bincount(served_keys // sectors, minlength=cells.count)
+    first_area = np.bincount(
+        cell, weights=layers.first_layer_beams * allocation.footprint_km2, minlength=cells.count
+    )
+    covers = first_area >= cells.area_km2 * (1 - COVERED_SHORTFALL_SHARE)
+    counted = stacked & layers.keeps_stack[cell] & (sectors_served[cell] >= 2)
+    if covered_only:
+        counted &= covers[cell]
+    return float(layers.stacked_beams[counted].sum())
+
+
+def test_the_statistics_count_stacks_only_in_cells_their_first_layer_covers(
+    synthetic_population_grid: GridBuilder, synthetic_saturation_inputs: SaturationInputsBuilder
+) -> None:
+    """Objective: the kept stacked share and its two statistics count a stacked layer only in a
+    cell its first layer covers. In a covered cell every stage-2 beam overlaps another sector's
+    first layer; in a cell its first layer leaves short, stage 2 may complete that first layer
+    instead, which the fluid allocation cannot tell from stacking, so those beams count in L,
+    never as stacked layers.
+
+    Sample: 0.5 degree cells between 20 and 40 degrees north, 30 people each, so the mounted
+    terminal's people caps (0.75 beams) outrun 306 satellites (requested 300) at the snapshot
+    draw's first time; the default B and the investor's usage.
+
+    Expected outcome: cells the first layer leaves short keep stage-2 beams beside a served
+    layer of another sector, more than ten times the stacked beams of the covered cells (these
+    completions are what the statistics would count without the rule); the statistics' beams
+    equal, within 1e-12 relative, an independent count of the kept stacked sub-pairs over the
+    floor of the covered cells that sit beside a served sub-pair of another sector.
+    """
+    grid = synthetic_population_grid(MID_BAND_CELL_DEG, satellite_limited_people)
+    inputs = synthetic_saturation_inputs(grid, fleets=SHARED_USAGE_FLEETS)
+    cells = sat._demand_cells(grid, inputs.demand.density_threshold_per_km2)
+    first_time = float(np.random.default_rng(inputs.sweep.seed).uniform(0.0, SIDEREAL_DAY_S))
+    satellites = sat._walker_positions(inputs.shell, SATELLITE_LIMITED_FLEET, first_time)
+    assert satellites.count == 306
+    allocation = sat._allocate(satellites, cells, directional_limits(MOUNTED, 150.0))
+    sectors = sum(class_inputs(MOUNTED).sector_wedges_per_ring)
+    covered = counted_stacked_beams(allocation, cells, sectors, covered_only=True)
+    every_cell = counted_stacked_beams(allocation, cells, sectors, covered_only=False)
+    assert every_cell > 10 * covered
+    assert directional_of(allocation).statistics.beams == pytest.approx(covered, rel=1e-12, abs=0.0)
+
+
+def test_the_sector_rule_ceiling_sums_each_sectors_smallest_footprint(one_cell: OneCell) -> None:
+    """Objective: the sector-rule ceiling (stage 9): per cell in view, the sum over its sky
+    sectors of the cell's area over the sector's smallest footprint in view, capped by its
+    people; it bounds a directional class's L where a one-layer ceiling would not.
+
+    Sample: the full-sum case (the mounted terminal, B = 2): satellites in four sectors, two of
+    them sharing one (at equal footprints).
+
+    Expected outcome: the ceiling equals the cell's area over each sector's smallest footprint,
+    summed over the four sectors (1e-12 relative); L is at most the ceiling and more than one
+    layer at the smallest footprint in view (the phone class's ceiling for this cell).
+    """
+    allocation = allocate_seen_at(one_cell, FULL_SUM_CASE_DEG, directional_limits(MOUNTED, 2.0))
+    layers = directional_of(allocation)
+    cells, _ = one_cell
+    area = float(cells.area_km2[0])
+    smallest: dict[int, float] = {}
+    for sector, footprint in zip(
+        layers.sector.tolist(), allocation.footprint_km2.tolist(), strict=True
+    ):
+        smallest[sector] = min(smallest.get(sector, math.inf), footprint)
+    assert len(smallest) == 4
+    expected = sum(area / footprint for footprint in smallest.values())
+    assert allocation.ceiling_beams == pytest.approx(expected, rel=1e-12)
+    assert area / float(allocation.footprint_km2.min()) < allocation.useful_beams
+    assert allocation.useful_beams <= allocation.ceiling_beams
+
+
+@pytest.mark.parametrize("device_class", [SMALL, MOUNTED])
+def test_a_directional_first_layer_is_the_phone_allocation_at_its_own_people_cap(
+    synthetic_population_grid: GridBuilder, device_class: DeviceClass
+) -> None:
+    """Objective: rule D2: a directional class's first layer is the phone allocation run with
+    the class's own people cap.
+
+    Sample: a 3 x 3 patch of 0.25 degree cells, 1,000 people each, under the five
+    crowded-patch satellites, B = 150. About 4.5 beams tile a cell; at the investor's usage the
+    small terminal's people cap is 3.1 beams and the phone class's 3.6 (both bind), the mounted
+    terminal's 25 (it does not).
+
+    Expected outcome: the class's first-layer beams equal, pair by pair, the beams the phone
+    allocation places at the class's people per beam (exactly: the same fill), and differ from
+    the phone class's own allocation at its people per beam (832 / 3).
+    """
+    grid = synthetic_population_grid(0.25, patch_people_of(1_000.0))
+    cells = sat._demand_cells(grid, 1.0)
+    points = [
+        (PATCH_CENTRE_DEG[0] + d_lat, PATCH_CENTRE_DEG[1] + d_lon)
+        for d_lat, d_lon in CROWD_OFFSETS_DEG
+    ]
+    limits = directional_limits(device_class, 150.0)
+    directional = directional_of(sat._allocate(satellites_at(points), cells, limits))
+    at_class_cap = sat._allocate(
+        satellites_at(points), cells, dataclasses.replace(limits, directional=None)
+    )
+    assert np.array_equal(directional.first_layer_beams, at_class_cap.beams)
+    assert at_class_cap.beams.sum() > 0
+    phone_own = sat._allocate(satellites_at(points), cells, seam_limits(150.0))
+    assert not np.allclose(directional.first_layer_beams, phone_own.beams)
+
+
+def patch_people_of(people_per_cell: float) -> PeopleAt:
+    """A 3 x 3 patch of 0.25 degree cells around the patch centre, the given people each."""
+
+    def people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+        inside = (np.abs(lat - PATCH_CENTRE_DEG[0]) < 0.375) & (
+            np.abs(lon - PATCH_CENTRE_DEG[1]) < 0.375
+        )
+        return np.where(inside, people_per_cell, 0.0)
+
+    return people
+
+
+def admitted_one_by_one(
+    candidates: np.ndarray,
+    pair_cell: np.ndarray,
+    sector: np.ndarray,
+    direction: np.ndarray,
+    serving: np.ndarray,
+    cos_beamwidth: float,
+) -> np.ndarray:
+    """Rule D4's admission taken candidate by candidate, as the rule reads (the reference for
+    the module's vectorized form)."""
+    admitted = np.zeros(candidates.size, dtype=bool)
+    taken: dict[int, list[int]] = {}
+    for position, candidate in enumerate(candidates.tolist()):
+        cell = int(pair_cell[candidate])
+        references = [int(p) for p in np.flatnonzero(serving & (pair_cell == cell))]
+        references += taken.get(cell, [])
+        clear = all(
+            sector[other] == sector[candidate]
+            or float(direction[other] @ direction[candidate]) <= cos_beamwidth
+            for other in references
+        )
+        if clear:
+            admitted[position] = True
+            taken.setdefault(cell, []).append(candidate)
+    return admitted
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3])
+@pytest.mark.parametrize("device_class", [SMALL, MOUNTED])
+def test_the_vectorized_admission_equals_the_rule_taken_candidate_by_candidate(
+    seed: int, device_class: DeviceClass
+) -> None:
+    """Objective: the module's admission, vectorized rank by rank within cells, is rule D4's
+    sequential admission exactly (the trickiest code of stage 2).
+
+    Sample: random cells (five, with 40 satellites in view each, at random directions above the
+    mask), the class's sectors, a random tenth of the pairs serving their cells and a random
+    three fifths of them as one band's candidates in a random order within each cell.
+
+    Expected outcome: the admitted candidates equal those of the rule taken candidate by
+    candidate (the serving set's satellites and the earlier admitted candidates of the cell, in
+    other sectors, each at least a beamwidth away), for every seed and both classes; some are
+    refused and some admitted.
+    """
+    rng = np.random.default_rng(seed)
+    n_cells, per_cell = 5, 40
+    pair_cell = np.repeat(np.arange(n_cells), per_cell)
+    elevation = np.radians(rng.uniform(MASK_DEG, 90.0, pair_cell.size))
+    azimuth = rng.uniform(0.0, 2 * math.pi, pair_cell.size)
+    direction = np.stack(
+        [
+            np.cos(elevation) * np.sin(azimuth),
+            np.cos(elevation) * np.cos(azimuth),
+            np.sin(elevation),
+        ],
+        axis=1,
+    )
+    layout = sat._sector_layout(class_inputs(device_class).sector_wedges_per_ring, MASK_DEG)
+    sector = sat._sector_of(elevation, azimuth, layout)
+    serving = rng.random(pair_cell.size) < 0.1
+    chosen = np.flatnonzero(rng.random(pair_cell.size) < 0.6)
+    candidates = chosen[np.lexsort((rng.random(chosen.size), pair_cell[chosen]))]
+    directions = sat._PairDirections(
+        satellite=np.arange(pair_cell.size),
+        cell=pair_cell,
+        satellite_km=direction,
+        cell_km=np.zeros((n_cells, 3)),
+    )
+    cos_beamwidth = math.cos(terminal_beamwidth_rad(device_class))
+    serving_lookup = sat._serving_index(np.flatnonzero(serving), pair_cell, n_cells)
+    found = sat._admitted(candidates, pair_cell, sector, directions, serving_lookup, cos_beamwidth)
+    expected = admitted_one_by_one(candidates, pair_cell, sector, direction, serving, cos_beamwidth)
+    assert found.tolist() == expected.tolist()
+    assert 0 < found.sum() < found.size
+
+
+def shared_usage(inputs: SaturationInputs) -> SaturationInputs:
+    """The inputs with every class at one shared usage, 1 Mbps x 2.5 percent, so the
+    classes' people per beam differ only by their central SE (640, 800 and 208)."""
+    classes = [
+        {**entry.model_dump(), "active_rate_mbps": 1.0, "concurrency_peak": 0.025}
+        for entry in inputs.classes
+    ]
+    return SaturationInputs.model_validate({**inputs.model_dump(), "classes": classes})
+
+
+SHARED_USAGE_FLEETS = (1_000, 4_000)
+"""The shared-usage world's requested fleets (realized 992 and 3,969)."""
+
+CAPPED_BAND_PEOPLE = 1.25 * 208.0
+"""People in each cell of the shared-usage world's equatorial band: 1.25 phone beams at 208
+people per beam, so every class's people cap binds there."""
+
+
+def shared_usage_people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+    """A dense band of 0.5 degree cells from 40 to 42 north (tiling binds) and a sparse band
+    within 2 degrees of the equator (the people caps bind)."""
+    dense = (lat > MID_BAND_DEG[0]) & (lat < MID_BAND_DEG[1])
+    return np.where(
+        dense, DENSE_PEOPLE_PER_CELL, np.where(np.abs(lat) < 2.0, CAPPED_BAND_PEOPLE, 0.0)
+    )
+
+
+@pytest.fixture(scope="module")
+def shared_usage_curve(
+    synthetic_population_grid: GridBuilder, synthetic_saturation_inputs: SaturationInputsBuilder
+) -> SaturationCurve:
+    """The shared-usage world's curve: every class at 1 Mbps x 2.5 percent, fleets 1,000 and
+    4,000, one snapshot, no mounted extension."""
+    grid = synthetic_population_grid(MID_BAND_CELL_DEG, shared_usage_people)
+    inputs = shared_usage(
+        small_sweep(synthetic_saturation_inputs(grid, fleets=SHARED_USAGE_FLEETS))
+    )
+    return compute_saturation(inputs, grid, version_stamp=STAMP)
+
+
+def class_curve(curve: SaturationCurve, device_class: DeviceClass) -> ClassCurve:
+    """One class's curve, found by its key."""
+    (found,) = [entry for entry in curve.classes if entry.device_class is device_class]
+    return found
+
+
+def test_at_one_shared_usage_the_classes_order_in_aggregate(
+    shared_usage_curve: SaturationCurve,
+) -> None:
+    """Objective: the class ordering in aggregate at one shared usage (the strategy's § 5,
+    Phase 2): with every class at 1 Mbps x 2.5 percent the people served follow capacity, the
+    small terminal's at least the phone class's and the mounted terminal's at least the small
+    terminal's, at every fleet.
+
+    Sample: a synthetic world of 0.5 degree cells: a dense band at 40 to 42 north, where tiling
+    binds, and a sparse equatorial band, where every class's people cap binds (equal capacity
+    there); fleets 1,000 and 4,000, one snapshot.
+
+    Expected outcome: the curve lists the small terminal, the mounted terminal and the phone
+    class; at both fleets capacity orders mounted terminal >= small terminal >= phone class
+    (1e-9 relative), the directional classes strictly above the phone class.
+    """
+    assert [entry.device_class for entry in shared_usage_curve.classes] == list(DeviceClass)
+    rows = {
+        device_class: class_curve(shared_usage_curve, device_class).rows
+        for device_class in DeviceClass
+    }
+    for small, mounted, phone in zip(rows[SMALL], rows[MOUNTED], rows[PHONE], strict=True):
+        assert small.fleet == mounted.fleet == phone.fleet
+        assert small.capacity_gbps >= phone.capacity_gbps * (1 - 1e-9)
+        assert mounted.capacity_gbps >= small.capacity_gbps * (1 - 1e-9)
+        assert small.capacity_gbps > phone.capacity_gbps
+
+
+def test_the_sector_rule_ceiling_bounds_each_directional_row(
+    shared_usage_curve: SaturationCurve,
+) -> None:
+    """Objective: the sector-rule ceiling bounds a directional class's L at every row, and
+    maximum use bounds the ceiling; each directional row carries its stacking diagnostics, the
+    phone class's none.
+
+    Sample: the shared-usage world's curve (fleets 1,000 and 4,000, one snapshot).
+
+    Expected outcome: for both directional classes, at every row, L <= min(ceiling, supply)
+    and ceiling <= maximum use (1e-9 relative), and the diagnostics exist (their statistics
+    present exactly when stacked beams are kept); the phone class's rows carry none.
+    """
+    for device_class in (SMALL, MOUNTED):
+        curve = class_curve(shared_usage_curve, device_class)
+        for row in curve.rows:
+            assert row.useful_beams <= min(row.ceiling_beams, row.supply_beams) * (1 + 1e-9)
+            assert row.ceiling_beams <= curve.markers.maximum_use_beams * (1 + 1e-9)
+            assert row.directional is not None
+            stacked = row.directional.kept_stacked_share > 0
+            assert (row.directional.median_separation_deg is not None) == stacked
+    for row in class_curve(shared_usage_curve, PHONE).rows:
+        assert row.directional is None
+
+
+EXTENSION_TEST_FLEETS = (500, 1_000)
+"""The extension test's requested fleets (realized 506 and 992): two, the fewest the contract
+takes, since a marker reads the elasticity between rows."""
+
+EXTENSION_TEST_MOUNTED = (4_000,)
+"""The extension test's mounted-terminal extension (realized 3,969)."""
+
+
+def test_the_mounted_terminal_runs_over_its_extension_through_compute_saturation(
+    synthetic_population_grid: GridBuilder, synthetic_saturation_inputs: SaturationInputsBuilder
+) -> None:
+    """Objective: compute_saturation runs the mounted terminal over the sweep's fleets and its
+    extension, every other class over the fleets alone, each row keyed by its realized fleet
+    and carrying its request, and each class's markers read its own rows.
+
+    Sample: the shared-usage world (every class at 1 Mbps x 2.5 percent) at fleets 500 and
+    1,000 (realized 506 and 992) with the mounted terminal's extension 4,000 (realized 3,969),
+    one snapshot, with a second fleet under 1,000, since the contract
+    takes two fleets at least.
+
+    Expected outcome: the classes in the class key's order; the mounted terminal's rows 506,
+    992 and 3,969, requested 500, 1,000 and 4,000, its 3,969 row a directional row with its
+    diagnostics; the small terminal's and the phone class's rows 506 and 992, requested 500 and
+    1,000; each class's 0.10 crossing not reached by its own last row (capacity still rises
+    steeply here), 3,969 for the mounted terminal and 992 for the others.
+    """
+    grid = synthetic_population_grid(MID_BAND_CELL_DEG, shared_usage_people)
+    inputs = shared_usage(synthetic_saturation_inputs(grid, fleets=EXTENSION_TEST_FLEETS))
+    sweep = SweepInputs.model_validate(
+        {
+            **inputs.sweep.model_dump(),
+            "mounted_terminal_extension": EXTENSION_TEST_MOUNTED,
+            "snapshots_directional": 1,
+        }
+    )
+    curve = compute_saturation(
+        inputs.model_copy(update={"sweep": sweep}), grid, version_stamp=STAMP
+    )
+    assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
+    fleets_rows = [(506, 500), (992, 1_000)]
+    expected = {SMALL: fleets_rows, MOUNTED: [*fleets_rows, (3_969, 4_000)], PHONE: fleets_rows}
+    for device_class, keyed in expected.items():
+        entry = class_curve(curve, device_class)
+        assert [(row.fleet, row.requested_fleet) for row in entry.rows] == keyed
+        assert entry.markers.saturation_number is None
+        assert entry.markers.saturation_not_reached_by == keyed[-1][0]
+    assert class_curve(curve, MOUNTED).rows[-1].directional is not None
+
+
+TIER_TEST_CPUS = 8
+"""The CPU count the memory-tier test pins (``os.process_cpu_count``, as the module reads it),
+so the schedule it checks does not depend on the machine's CPUs."""
+
+
+def test_the_memory_tiers_change_no_number(
+    uniform_band: PopulationGrid,
+    synthetic_saturation_inputs: SaturationInputsBuilder,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Objective: the sweep's schedule changes no number: when the memory budget limits the
+    workers, each class runs down its fleets in memory tiers (each tier's largest task alone
+    first, the schedule the real grid's top fleets take), and the curve equals the one run
+    with a worker per CPU.
+
+    Sample: the uniform band (B = 1) at 1,000 and 10,000 requested satellites (realized 992
+    and 10,000), one snapshot, the CPU count pinned to 8; computed once at the default budget
+    and once with the budget lowered to this process's peak plus two of the task peaks the
+    first run measured, so whether the budget binds depends on neither the machine's CPUs nor
+    a worker's own peak.
+
+    Expected outcome: at the default budget (room for at least eight task peaks) one process
+    runs the three classes' largest tasks and one pool the rest; with the budget binding (room
+    for about two), each class's 992 task, a tier of its own (under half of 10,000), runs alone
+    too: four alone runs. The two curves are equal in everything but the run's own
+    measurement.
+    """
+    monkeypatch.setattr(sat.os, "process_cpu_count", lambda: TIER_TEST_CPUS)
+    inputs = small_sweep(
+        synthetic_saturation_inputs(uniform_band, fleets=BAND_FLEETS, beams_per_satellite=ONE_BEAM)
+    )
+    alone_runs: list[list[float]] = []
+    run_alone = sat._run_alone
+
+    def counted_run_alone(
+        indices: Sequence[int],
+        tasks: Sequence[sat._SnapshotTask],
+        context: sat._SweepContext,
+        results: dict[int, sat._SnapshotResult],
+    ) -> None:
+        run_alone(indices, tasks, context, results)
+        alone_runs.append([results[index].worker_peak_mb for index in indices])
+
+    monkeypatch.setattr(sat, "_run_alone", counted_run_alone)
+    free = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
+    assert len(alone_runs) == 1
+    task_peak_mb = max(alone_runs[0])
+    room = (sat._MEMORY_BUDGET_MB - sat._own_peak_mb()) / task_peak_mb
+    assert room >= TIER_TEST_CPUS
+    monkeypatch.setattr(sat, "_MEMORY_BUDGET_MB", sat._own_peak_mb() + 2 * task_peak_mb)
+    tiered = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
+    assert len(alone_runs) == 1 + 1 + len(DeviceClass)
+    measured_as_free = tiered.model_copy(
+        update={
+            "provenance": tiered.provenance.model_copy(
+                update={"run_measurement": free.provenance.run_measurement}
+            )
+        }
+    )
+    assert measured_as_free == free
