@@ -160,8 +160,8 @@ BASE_YEAR_DEFAULT: Final[int] = 2026
 matching the DC model's base year so the two share a timeline."""
 
 HORIZON_YEARS_DEFAULT: Final[int] = 10
-"""SCENARIO. Default analysis horizon (FY2026 + 10 = FY2036, the full-coverage
-target year), matching the DC model's 10-year horizon."""
+"""SCENARIO. Default analysis horizon (FY2026 + 10 = FY2036, the horizon's final
+year), matching the DC model's 10-year horizon."""
 
 # ===========================================================================
 # Satellite spec dials (the fixed CELLULAR direct-to-cell bird)
@@ -542,8 +542,9 @@ ECOSYSTEM_ASSUMPTION_NOTE: Final[str] = (
     "Pure Play model)."
 )
 """SOURCED_ESTIMATE (0.8 ecosystem assumption; COMM-661 to COMM-676). The stated
-ecosystem assumption behind the Iridium model's phone-class tier, carried on the
-Iridium-model result and surfaced in the assumptions output. Keeps the three lanes
+ecosystem assumption behind the Iridium model's phone class, carried on the Iridium
+record and published in the artifact's physics block and first among its assumptions.
+Keeps the three lanes
 separate: the Iridium model is the MSS lane, never the unmodified-phone cellular lane
 (the High-Bandwidth Cellular Pure Play model)."""
 

@@ -286,7 +286,7 @@ class CoverageDials(BaseModel):
 
     @model_validator(mode="after")
     def _floor_at_or_below_cap(self) -> CoverageDials:
-        """Reject a coverage floor above the saturation cap.
+        """Reject a coverage floor above the fleet cap.
 
         The fleet target is ``min(cap, max(floor, capacity_need))``: with the floor
         above the cap the target silently becomes the cap while the binding regime

@@ -1,7 +1,9 @@
 """Process conventions shared by the command-line entry points.
 
-``rklb-value`` (:mod:`data_center.cli`) and the Iridium promotion command
-(``python -m communications.json_output``) follow one convention:
+``rklb-value`` (:mod:`data_center.cli`), the Iridium promotion command
+(``python -m communications.json_output``) and the saturation command
+(``python -m communications.saturation``, which writes the promoted saturation
+curve) follow one convention:
 
 * stdout carries only the command's product (a report, a JSON artifact, a
   schema); status and errors are log records on stderr, through the handler
