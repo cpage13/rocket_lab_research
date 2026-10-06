@@ -1,9 +1,8 @@
 """Shared fixtures for the communications test suite (clean-rewrite, slim).
 
-This conftest is the slim rewrite version: it provides the default ``CommsConfig``
-fixture, built purely on the rewritten ``communications.config``, and the Iridium
-scenario and artifact paths (from the repository-anchored fixtures in
-``tests/conftest.py``, never the working directory).
+This conftest is the slim rewrite version: it provides the Iridium scenario and
+artifact paths (from the repository-anchored fixtures in ``tests/conftest.py``, never
+the working directory).
 The pre-rewrite old tree (its src modules, test files, and scenario YAML) was
 retired in the investor-directed 2026-07-07 alignment cleanup, so the whole
 ``tests/communications/`` directory now collects and runs cleanly. The live suite
@@ -36,7 +35,7 @@ import numpy as np
 import pytest
 
 from communications import saturation as sat
-from communications.config import CommsConfig, IridiumDials
+from communications.config import IridiumDials
 from communications.constants import GBPS_TO_MBPS, SATURATION_CURVE_PATH_DEFAULT, DeviceClass
 from communications.saturation import PopulationGrid
 from communications.saturation_curve import (
@@ -311,12 +310,6 @@ class SaturationInputsBuilder(Protocol):
     ) -> SaturationInputs:
         """Return the inputs for a synthetic grid at the given sweep."""
         ...
-
-
-@pytest.fixture
-def default_comms_config() -> CommsConfig:
-    """Return the default (central-case) comms config."""
-    return CommsConfig()
 
 
 @pytest.fixture(scope="session")

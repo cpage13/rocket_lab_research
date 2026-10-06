@@ -370,14 +370,6 @@ ratio, so a build-and-hold space cost is never compared against an annual ground
 cost."""
 
 # ===========================================================================
-# Output schema version (Phase 5)
-# ===========================================================================
-
-SCHEMA_VERSION: Final[str] = "comms-v1"
-"""The light comms-output schema version tag, surfaced in the output metadata
-(Phase 5). ``v1`` is the clean-rewrite schema (no provenance envelope)."""
-
-# ===========================================================================
 # The Iridium model: L-band max-outcome scenario (the MSS lane) dials + physics
 # ===========================================================================
 #
@@ -1062,7 +1054,6 @@ __all__ = [
     "SATELLITES_PER_LAUNCH_DEFAULT",
     "SATELLITE_BUILD_COST_MUSD_DEFAULT",
     "SATELLITE_LIFETIME_YEARS_DEFAULT",
-    "SCHEMA_VERSION",
     "SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT",
     "SUBSCRIBERS_PER_SATELLITE_DEFAULT",
     # Iridium-model (L-band max-outcome) additions.
