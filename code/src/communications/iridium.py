@@ -10,7 +10,8 @@ before it reads the dials the curve depends on, the Iridium promotion command
 before anything else. The message is the one the Iridium promotion command gives today.
 
 The Iridium entry, :func:`run_iridium_model`, takes the config and its saturation curve, both
-required, so a run without a curve cannot be written. On every run it narrows the config, then
+required, so the curve's presence is a type fact: no call runs the Iridium family without
+one. On every run it narrows the config, then
 checks that the curve was computed for the config's own inputs (the identity check,
 :func:`communications.saturation_curve.check_curve_matches`), and only then runs. Until the
 shared fleet-and-cost loop lands, the run itself is the interim shared path the cellular entry

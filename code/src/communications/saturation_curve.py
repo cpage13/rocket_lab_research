@@ -1227,7 +1227,8 @@ _EMPTY_FLEET: Final[int] = 0
 
 _EMPTY_FLEET_READING: Final[float] = 0.0
 """Useful beams, capacity, people and the share of maximum use at a fleet of 0 (its ocean
-factor, beams over people over the beams offered, does not exist, and is read as None)."""
+factor, the share of the beams offered that lie over people, does not exist, and is read as
+None)."""
 
 _FULL_TIME_DOWNLINK_SHARE: Final[float] = 1.0
 """The largest downlink share d: the band in full-time downlink use, the curve's own basis

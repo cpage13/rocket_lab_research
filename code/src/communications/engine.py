@@ -1794,7 +1794,7 @@ def run_comms_trajectory(config: CommsConfig) -> CommsTrajectory:
 
     The interim shared path both entries call (the cellular entry :func:`run_comms_model`
     and the Iridium entry ``communications.iridium.run_iridium_model``), so no year loop is
-    copied into the Iridium family; the shared fleet-and-cost loop replaces it. Serves
+    copied into the Iridium family, until the shared fleet-and-cost loop replaces it. Serves
     both families: the High-Bandwidth Cellular Pure Play model (no ``iridium``
     block) and the Iridium model (the density derived from the ``iridium`` block).
     Iterates the model years 0..``horizon_years`` inclusive (FY2026..FY2036 at
