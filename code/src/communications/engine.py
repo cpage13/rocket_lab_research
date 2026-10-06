@@ -249,9 +249,11 @@ Iridium artifact's ARPU margin) reports 0.0 in its place, its published values u
 mirroring the data-center fleet-margin guard."""
 
 NO_ANNUAL_COST_MUSD: Final[float] = 0.0
-"""The per-satellite annual cost ($M/yr) returned for a non-positive satellite life
-(guarded, though the lifetime dial is ``ge=1``): with no life to spread it over, the
-annualized cost basis is 0.0."""
+"""The annualized cost ($M/yr) of nothing: the per-satellite annual cost returned for a
+non-positive satellite life (guarded, though the lifetime dial is ``ge=1``: with no life to
+spread it over, the annualized cost basis is 0.0), and the start of the shared loop's sum of a
+year's cohort cost lines, so a year with no living cohort carries 0.0, a float, as the record's
+types say."""
 
 
 # ---------------------------------------------------------------------------
@@ -886,9 +888,9 @@ class FleetTrajectory:
         final_year_replacement_cost_musd: The FINAL model year's cash replacement line, $M
             (``years[-1].replacement_cost_this_year_musd``): cohort-timed and lumpy, the
             cost of replacing what that year's rule counts as replacement, NOT an
-            annualized basis. ``None`` when the final year replaced no retiring cohort (no
-            cash replacement basis exists that year, so none is published as if it were
-            one).
+            annualized basis. ``None`` when the final year's rule counted no replacement
+            (its ``satellites_replaced_this_year`` is 0: no cash replacement basis exists that
+            year, so none is published as if it were one).
         final_year_annual_cost_musd: The FINAL model year's ANNUALIZED fleet cost, $M/yr
             (``years[-1].annual_cost_this_year_musd``; ``0.0`` with nothing on orbit).
     """
@@ -1727,14 +1729,18 @@ def run_fleet_loop(
         trajectory's cost totals.
 
     Raises:
-        ValueError: If ``satellites_per_launch`` is below
-            :data:`MIN_SATELLITES_PER_LAUNCH`.
+        ValueError: If ``satellites_per_launch`` is not an integer (a bool or a float is
+            not one) or is below :data:`MIN_SATELLITES_PER_LAUNCH`.
         DeploymentRuleError: If the rule returns an impossible deployment for a year.
     """
-    if satellites_per_launch < MIN_SATELLITES_PER_LAUNCH:
+    if (
+        not isinstance(satellites_per_launch, int)
+        or isinstance(satellites_per_launch, bool)
+        or satellites_per_launch < MIN_SATELLITES_PER_LAUNCH
+    ):
         raise ValueError(
-            f"the fleet loop deploys whole launches, so satellites_per_launch must be at "
-            f"least {MIN_SATELLITES_PER_LAUNCH}; got {satellites_per_launch}"
+            f"the fleet loop deploys whole launches, so satellites_per_launch must be an "
+            f"integer of at least {MIN_SATELLITES_PER_LAUNCH}; got {satellites_per_launch!r}"
         )
     life = config.satellite.satellite_lifetime_years
     coverage_floor = config.coverage.satellites_for_full_coverage
@@ -1812,7 +1818,9 @@ def run_fleet_loop(
             for build in cohort_builds
             if cohort_is_alive_at(build.launch_year, fy, life)
         )
-        annual_cost_this_year_musd = sum(line.annual_cost_musd for line in cohort_costs)
+        annual_cost_this_year_musd = sum(
+            (line.annual_cost_musd for line in cohort_costs), NO_ANNUAL_COST_MUSD
+        )
 
         years.append(
             FleetYear(
@@ -1953,12 +1961,12 @@ def _cellular_cohort_revenue(
         # the last living cohort takes the remainder so the parts sum exactly.
         if idx == last_index:
             cohort_subscribers = subscribers_served_this_year - subscribers_allocated
-        elif fleet_year.living_fleet > 0:
+        else:
+            # A cohort line exists only for a living cohort with satellites, so the living
+            # fleet that sums the same window is never 0 here.
             cohort_subscribers = round(
                 subscribers_served_this_year * cost.living_satellites / fleet_year.living_fleet
             )
-        else:
-            cohort_subscribers = 0
         subscribers_allocated += cohort_subscribers
         arpu_revenue_musd = cohort_subscribers * arpu_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
         lines.append(

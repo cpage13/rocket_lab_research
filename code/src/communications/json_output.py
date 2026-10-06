@@ -603,7 +603,7 @@ def build_iridium_artifact(
             fleet.final_year_annual_cost_musd, cellular.subscribers_served
         ),
         final_year_replacement_cost_musd=fleet.final_year_replacement_cost_musd,
-        final_year_cash_cost_per_subscriber_usd=(cellular.final_year_cash_cost_per_subscriber_usd),
+        final_year_cash_cost_per_subscriber_usd=cellular.final_year_cash_cost_per_subscriber_usd,
         living_fleet_final_year=living_fleet_final_year,
         cumulative_launches_to_completion=_cumulative_launches_to_completion(run),
         cumulative_launches_final_year=sum(

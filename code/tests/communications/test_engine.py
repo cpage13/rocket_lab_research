@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from enum import StrEnum
+from typing import assert_never
 
 import pytest
 
@@ -33,8 +35,10 @@ from common.cadence import ROUND_TO_NEAREST_OFFSET, CadenceDials
 from communications.config import (
     CommsCadenceDials,
     CommsConfig,
+    CommsMetadataDials,
     CoverageDials,
     RevenueDials,
+    SatelliteDials,
     SubscriberDials,
 )
 from communications.constants import MONTHS_PER_YEAR
@@ -605,7 +609,7 @@ def test_annual_cost_basis_is_sum_of_living_cohort_annualized_cost() -> None:
         assert year.annual_cost_this_year_musd == pytest.approx(cohort_cost, rel=COST_SUM_REL_TOL)
 
 
-def test_cohort_lines_sum_to_fleet_revenue_both_cases() -> None:
+def test_cohort_revenue_sums_to_the_year_revenue_both_cases() -> None:
     """Per-cohort revenues (both cases) sum to the fleet revenue line every year."""
     run = run_comms_model(CommsConfig())
     for year in run.cellular.years:
@@ -629,7 +633,7 @@ def test_cohort_arpu_subscribers_sum_to_year_served_exactly() -> None:
         assert allocated == year.subscribers_served_this_year
 
 
-def test_cohort_lines_track_living_cohorts_under_the_cliff() -> None:
+def test_cohort_costs_track_living_cohorts_under_the_cliff() -> None:
     """Each year's cohort lines are exactly the cohorts alive under the 5-year cliff.
 
     The cohort lines carry one entry per living cohort, and their living-satellite
@@ -807,15 +811,179 @@ def test_the_loop_refuses_an_impossible_deployment(
     assert isinstance(refused.value, ValueError)
 
 
-def test_the_loop_refuses_a_launch_that_carries_no_satellite() -> None:
-    """The loop deploys whole launches, so a launch must carry at least one satellite.
+class BreakYear(StrEnum):
+    """The year a test rule turns wrong in: the first year the cadence share allows a launch,
+    or the horizon's final year (both with launches allowed, so the bounds are above zero)."""
 
-    Sample: the config defaults with zero satellites per launch.
+    FIRST_WITH_LAUNCHES = "first_with_launches"
+    FINAL = "final"
 
-    Expected: a ValueError naming the bound and the count, before any year runs.
+
+def _steps_of(config: CommsConfig) -> list[DeploymentStep]:
+    """The steps the loop hands a rule that deploys nothing, one per model year."""
+    seen: list[DeploymentStep] = []
+
+    def deploys_nothing(step: DeploymentStep) -> Deployment:
+        seen.append(step)
+        return Deployment(satellites_added=0, satellites_replaced=0)
+
+    run_fleet_loop(
+        config, deploys_nothing, satellites_per_launch=config.satellite.satellites_per_launch
+    )
+    return seen
+
+
+def _break_year(config: CommsConfig, when: BreakYear) -> int:
+    """The model year a test rule turns wrong in."""
+    match when:
+        case BreakYear.FIRST_WITH_LAUNCHES:
+            return next(step.year for step in _steps_of(config) if step.launches_allowed > 0)
+        case BreakYear.FINAL:
+            return config.metadata.base_year + config.metadata.horizon_years
+        case _:
+            assert_never(when)
+
+
+def _wrong_from(
+    year: int, wrong: Callable[[DeploymentStep], Deployment]
+) -> Callable[[DeploymentStep], Deployment]:
+    """A rule that flies every allowed launch before ``year`` and is ``wrong`` from it on."""
+
+    def rule(step: DeploymentStep) -> Deployment:
+        return _fly_every_launch(step) if step.year < year else wrong(step)
+
+    return rule
+
+
+def _adds_a_bool(step: DeploymentStep) -> Deployment:
+    """Adds ``True`` (a bool is not a count, though it passes a multiple test at one)."""
+    return Deployment(satellites_added=True, satellites_replaced=0)
+
+
+def _replaces_a_bool(step: DeploymentStep) -> Deployment:
+    """Adds one satellite and counts ``True`` of it as replacement."""
+    return Deployment(satellites_added=1, satellites_replaced=True)
+
+
+@pytest.mark.parametrize(
+    ("satellites_per_launch", "when", "wrong", "condition"),
+    [
+        pytest.param(
+            12,
+            BreakYear.FIRST_WITH_LAUNCHES,
+            _adds_beyond_the_cadence,
+            "adds more than the cadence share allows",
+            id="beyond the cadence, first year with launches",
+        ),
+        pytest.param(
+            12,
+            BreakYear.FINAL,
+            _adds_beyond_the_cadence,
+            "adds more than the cadence share allows",
+            id="beyond the cadence, final year",
+        ),
+        pytest.param(
+            12,
+            BreakYear.FIRST_WITH_LAUNCHES,
+            _replaces_more_than_it_adds,
+            "replaces more than it adds",
+            id="more replaced than added, a nonzero addition",
+        ),
+        pytest.param(
+            1,
+            BreakYear.FIRST_WITH_LAUNCHES,
+            _adds_a_bool,
+            "does not add whole launches",
+            id="a bool addition at one per launch",
+        ),
+        pytest.param(
+            1,
+            BreakYear.FIRST_WITH_LAUNCHES,
+            _replaces_a_bool,
+            "does not replace whole launches",
+            id="a bool replacement at one per launch",
+        ),
+    ],
+)
+def test_the_loop_refuses_an_impossible_deployment_where_launches_are_allowed(
+    satellites_per_launch: int,
+    when: BreakYear,
+    wrong: Callable[[DeploymentStep], Deployment],
+    condition: str,
+) -> None:
+    """The rule check holds where its bounds are above zero, and refuses a bool count.
+
+    Objective: the refusals above break in FY2026, where the default share allows no launch, so
+    their bounds are 0; these break where launches are allowed (the first such year and the
+    final year), and at one satellite per launch, where a bool would pass a multiple test.
+
+    Sample: the config defaults (or one satellite per launch) under a rule that flies every
+    allowed launch before the break year and is wrong in one way from it on.
+
+    Expected: DeploymentRuleError (a ValueError) naming the break year and the condition.
     """
-    with pytest.raises(ValueError, match="satellites_per_launch must be at least 1; got 0"):
-        run_fleet_loop(CommsConfig(), _fly_every_launch, satellites_per_launch=0)
+    config = CommsConfig(satellite=SatelliteDials(satellites_per_launch=satellites_per_launch))
+    year = _break_year(config, when)
+    assert next(s.launches_allowed for s in _steps_of(config) if s.year == year) > 0
+    with pytest.raises(DeploymentRuleError, match=f"in {year} {condition}") as refused:
+        run_fleet_loop(
+            config, _wrong_from(year, wrong), satellites_per_launch=satellites_per_launch
+        )
+    assert isinstance(refused.value, ValueError)
+
+
+@pytest.mark.parametrize(
+    ("satellites_per_launch", "shown"),
+    [(0, "0"), (12.0, "12.0"), (True, "True")],
+    ids=["no satellite", "a float", "a bool"],
+)
+def test_the_loop_refuses_a_count_per_launch_that_is_not_whole(
+    satellites_per_launch: int, shown: str
+) -> None:
+    """The loop deploys whole launches, so a launch carries a whole number of satellites.
+
+    Objective: the loop refuses its own count per launch when it is not an integer of at least
+    one (a bool or a float is not one), naming the argument, rather than running a bool as one
+    per launch or blaming the rule for a float.
+
+    Sample: the config defaults with 0, 12.0 and True satellites per launch.
+
+    Expected: a ValueError naming the bound and the count given, before any year runs.
+    """
+    with pytest.raises(
+        ValueError, match=rf"satellites_per_launch must be an integer of at least 1; got {shown}$"
+    ):
+        run_fleet_loop(
+            CommsConfig(), _fly_every_launch, satellites_per_launch=satellites_per_launch
+        )
+
+
+def test_an_empty_year_carries_a_float_annualized_cost() -> None:
+    """The shared record's types hold in a year with no living cohort.
+
+    Objective: ``FleetYear.annual_cost_this_year_musd`` and
+    ``FleetTrajectory.final_year_annual_cost_musd`` are floats as declared, 0.0 where no cohort
+    is alive (the sum of no cohort lines starts from ``NO_ANNUAL_COST_MUSD``), never the int 0.
+
+    Sample: the config defaults' first years (no comms launch before the share allows one), and
+    a one-year horizon at the default share (no comms launch at all).
+
+    Expected: every empty year's annualized cost, and the empty final year's, is the float 0.0.
+    """
+    per_launch = CommsConfig().satellite.satellites_per_launch
+    target = CommsConfig().coverage.satellites_for_full_coverage
+    fleet = run_fleet_loop(CommsConfig(), cellular_rule(target), satellites_per_launch=per_launch)
+    empty = [year for year in fleet.years if not year.cohort_costs]
+    assert empty
+    assert {type(year.annual_cost_this_year_musd) for year in empty} == {float}
+    short = run_fleet_loop(
+        CommsConfig(metadata=CommsMetadataDials(base_year=2026, horizon_years=1)),
+        cellular_rule(target),
+        satellites_per_launch=per_launch,
+    )
+    assert not short.years[-1].cohort_costs
+    assert type(short.final_year_annual_cost_musd) is float
+    assert short.final_year_annual_cost_musd == 0.0
 
 
 def test_the_cohort_cost_lines_are_each_living_cohort_at_its_locked_cost() -> None:
@@ -832,9 +1000,12 @@ def test_the_cohort_cost_lines_are_each_living_cohort_at_its_locked_cost() -> No
     Expected: every year, one line per living cohort, oldest first, each within the 5-year
     cliff and holding every satellite its launch year deployed; each line's cost is its
     satellites times the per-satellite cost at its launch year's price, exactly; the lines'
-    satellites sum to the living fleet and their costs to the annualized fleet cost; and some
-    year carries cohorts locked at two prices (so a line priced at the current year's launch
-    price would fail here).
+    satellites sum to the living fleet and their costs to the annualized fleet cost; some year
+    carries cohorts locked at two prices (so a line priced at the current year's launch price
+    would fail here); and the replacement split under this family-neutral rule, the one p6's
+    rule reads: each year replaces the lesser of its deployment and the deployment one life
+    earlier (the step's retirements), its replacement line those satellites at the build cost
+    plus their launches at the year's price, and some year replaces satellites.
     """
     config = CommsConfig()
     per_launch = config.satellite.satellites_per_launch
@@ -842,6 +1013,7 @@ def test_the_cohort_cost_lines_are_each_living_cohort_at_its_locked_cost() -> No
     fleet = run_fleet_loop(config, _fly_every_launch, satellites_per_launch=per_launch)
     by_year = {year.year: year for year in fleet.years}
     saw_two_prices = False
+    saw_a_replacement = False
     for year in fleet.years:
         launch_years = [line.launch_year for line in year.cohort_costs]
         assert launch_years == sorted(set(launch_years))
@@ -865,7 +1037,21 @@ def test_the_cohort_cost_lines_are_each_living_cohort_at_its_locked_cost() -> No
             by_year[line.launch_year].launch_cost_per_launch_musd for line in year.cohort_costs
         }
         saw_two_prices = saw_two_prices or len(launch_prices) > 1
+        retiring = (
+            by_year[year.year - life].satellites_deployed_this_year
+            if year.year - life in by_year
+            else 0
+        )
+        replaced = min(year.satellites_deployed_this_year, retiring)
+        assert year.satellites_replaced_this_year == replaced
+        assert year.replacement_cost_this_year_musd == pytest.approx(
+            replaced * config.satellite.satellite_build_cost_musd
+            + replaced // per_launch * year.launch_cost_per_launch_musd,
+            rel=COST_SUM_REL_TOL,
+        )
+        saw_a_replacement = saw_a_replacement or replaced > 0
     assert saw_two_prices
+    assert saw_a_replacement
 
 
 def test_margin_is_none_where_revenue_is_not_positive() -> None:
@@ -873,7 +1059,7 @@ def test_margin_is_none_where_revenue_is_not_positive() -> None:
 
     Objective: ``margin_pct`` returns None where revenue is not positive, never a number
     published as if it were a margin; the cellular record shows its published 0.0 there (the
-    cost-plus and gross-margin tests above).
+    cost-plus margin tests and the margin-formula test above).
 
     Sample: revenue 0.0 and -1.0 against a 1.0 cost; revenue 4.0 against 1.0.
 
