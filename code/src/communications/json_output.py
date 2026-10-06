@@ -10,7 +10,7 @@ the stated-assumptions lines from
 promotion pattern (``data_center.json_output`` + the ``rklb-value --promote``
 path): a typed Pydantic artifact serialized by the shared
 :func:`common.file_io.render_artifact_json`, written into the repo-root
-``communications/models/`` workstream.
+``communications/models/`` folder.
 
 The command is the Iridium promotion command only. It loads the scenario and
 narrows it to its Iridium dials first
@@ -31,7 +31,7 @@ Command-line usage, from the repo root::
         scenarios/iridium.yaml communications/models/iridium/default.json
 
 A relative OUTPUT path is anchored to the REPO ROOT (promoted artifacts live in
-the repo-root ``communications/models/`` workstream, never under ``code/``),
+the repo-root ``communications/models/`` folder, never under ``code/``),
 while a relative SCENARIO path resolves against the working directory as usual,
 so the documented command works verbatim from ``code/``. The version stamp is
 whatever string the caller passes (``--version-stamp``, e.g. a git-describe
@@ -683,7 +683,7 @@ def export_iridium_json(
     atomic rename, so a failed write leaves any existing file as it was; an
     output path that is a symbolic link or not a regular file is refused). A
     relative ``output_path`` or curve path is anchored to the REPO ROOT of the
-    source checkout (the promoted ``communications/models/`` workstream lives
+    source checkout (the promoted ``communications/models/`` folder lives
     there, never under ``code/``); an absolute path is used as-is. The
     ``scenario_path`` resolves against the working directory as usual and is
     recorded repository-relative in the provenance header.
@@ -742,7 +742,7 @@ def _build_parser() -> CliArgumentParser:
             "Run the Iridium model (formerly Model B) from a scenario YAML, on the "
             "saturation curve its iridium.saturation.curve_path names, and write "
             "the promoted JSON artifact into the repo-root communications/models/ "
-            "workstream."
+            "folder."
         ),
     )
     parser.add_argument(

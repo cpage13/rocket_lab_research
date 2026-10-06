@@ -19,8 +19,9 @@ And the curves the engine's tests read, session-scoped: the committed curve, loa
 loader (``committed_saturation_curve``); a builder of a synthetic curve for any Iridium dials,
 its parameters the inputs those dials imply, so the identity check passes, and its rows
 spanning the real grid, so every fleet a test reads sits inside it
-(``synthetic_saturation_curve``); and a builder of the same curve cut short at a given row,
-for a reading past a class's last row (``short_saturation_curve``).
+(``synthetic_saturation_curve``); a builder of the same curve cut short at a given row, for a
+reading past a class's last row (``short_saturation_curve``); and the cut itself, for any
+curve (``cut_saturation_curve``).
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ from communications.saturation import PopulationGrid
 from communications.saturation_curve import (
     SATURATION_CURVE_SCHEMA_VERSION,
     BandCurve,
+    BandName,
     ClassCurve,
     ClassMarkers,
     CurveProvenance,
@@ -86,8 +88,8 @@ no-ocean bound, and every reading is hand-workable (L, capacity and people linea
 SYNTHETIC_MAXIMUM_USE_OVER_LAST_ROW = 2.0
 """The synthetic curve's maximum use over its last row's useful beams. With L linear in N the
 elasticity is 1 at every midpoint, so no crossing under 0.10 or 0.25 is reached, and L stays
-under 90 percent of maximum use: no marker is placed, each curve not reached by its last row,
-as the module's own marker rules read such rows."""
+under 90 percent of maximum use: the module's own marker rules (``_markers``, which give the
+synthetic curve its markers) place no marker, each curve not reached by its last row."""
 
 SYNTHETIC_TRIM = 0.0
 """The synthetic phone class's interference trim at every floor: none."""
@@ -101,21 +103,22 @@ NO_STACKED_BEAMS = DirectionalDiagnostics(
 """A directional row's diagnostics when it keeps no stacked beam (the synthetic curve's)."""
 
 
-class SyntheticCurveBuilder(Protocol):
-    """The builder ``synthetic_saturation_curve`` returns: Iridium dials in, a curve out."""
+SyntheticCurveBuilder = Callable[[IridiumDials], SaturationCurve]
+"""The builder ``synthetic_saturation_curve`` returns: Iridium dials in, the curve whose
+parameters they imply out (spelled the same way in the tests that take it, which cannot import
+from this file)."""
 
-    def __call__(self, dials: IridiumDials) -> SaturationCurve:
-        """Return the synthetic curve whose parameters the dials imply."""
-        ...
+ShortCurveBuilder = Callable[[IridiumDials, int], SaturationCurve]
+"""The builder ``short_saturation_curve`` returns: Iridium dials and a last row's fleet in, the
+synthetic curve for the dials with every curve ending at that row out."""
 
+CurveCut = Callable[[SaturationCurve, int], SaturationCurve]
+"""The cut ``cut_saturation_curve`` returns: any curve and a row's fleet in, the curve with every
+curve ending at that row out."""
 
-class ShortCurveBuilder(Protocol):
-    """The builder ``short_saturation_curve`` returns: Iridium dials and a last row's fleet
-    in, a curve out."""
-
-    def __call__(self, dials: IridiumDials, last_fleet: int) -> SaturationCurve:
-        """Return the synthetic curve for the dials, every curve ending at the given row."""
-        ...
+MIN_ROWS_FOR_MARKERS = 2
+"""The fewest rows a curve's markers can be read on: the elasticity is read between two rows
+(as the sweep's at least two fleets give every computed curve)."""
 
 
 def _synthetic_rows(
@@ -157,15 +160,12 @@ def _synthetic_rows(
     return tuple(rows)
 
 
-def _synthetic_markers(rows: Sequence[CurveRow], maximum_use: float) -> ClassMarkers:
-    """The markers of linear rows: no crossing, not reached by the last row, no 90 percent fleet."""
-    return ClassMarkers(
-        maximum_use_beams=maximum_use,
-        saturation_number=None,
-        saturation_not_reached_by=rows[-1].fleet,
-        elasticity_under_0p25_fleet=None,
-        fleet_at_90pct_of_maximum_use=None,
-    )
+def _synthetic_markers(curve_key: DeviceClass | BandName, rows: Sequence[CurveRow]) -> ClassMarkers:
+    """A synthetic curve's markers: the module's own (``_markers``) on its rows, against its
+    maximum use, :data:`SYNTHETIC_MAXIMUM_USE_OVER_LAST_ROW` x the last row's L (derived here
+    alone, for every class and band point)."""
+    maximum_use = SYNTHETIC_MAXIMUM_USE_OVER_LAST_ROW * rows[-1].useful_beams
+    return sat._markers(curve_key, rows, maximum_use)
 
 
 def build_synthetic_curve(dials: IridiumDials) -> SaturationCurve:
@@ -174,8 +174,10 @@ def build_synthetic_curve(dials: IridiumDials) -> SaturationCurve:
     Every class and band point at the parameters' requested fleets (the real grid, 342 to
     40,000 realized; the mounted terminal with its extension, to 64,009), each row L = N x B
     at U = 1 with capacity L x the spectrum x the class's central SE (the phone class's for a
-    band point, B a band point's own when it sets one), so the identity check passes for the
-    dials and the curve passes the completeness check the loader runs.
+    band point, B a band point's own when it sets one), its markers the module's own on its rows
+    (none placed), so the identity check passes for the dials and the curve passes the
+    completeness check the loader runs. It is a valid curve for the engine's tests, not an
+    oracle of the marker rules, which are tested where they live.
     """
     parameters = saturation_inputs_for(dials)
     sweep = parameters.sweep
@@ -205,12 +207,11 @@ def build_synthetic_curve(dials: IridiumDials) -> SaturationCurve:
                 parameters.trim.floors_dbi if device_class is DeviceClass.PHONE_CLASS else None
             ),
         )
-        maximum_use = SYNTHETIC_MAXIMUM_USE_OVER_LAST_ROW * rows[-1].useful_beams
         classes.append(
             ClassCurve(
                 device_class=device_class,
                 rows=rows,
-                markers=_synthetic_markers(rows, maximum_use),
+                markers=_synthetic_markers(device_class, rows),
             )
         )
     bands = []
@@ -222,9 +223,8 @@ def build_synthetic_curve(dials: IridiumDials) -> SaturationCurve:
             sectored=sectored[DeviceClass.PHONE_CLASS],
             trim_floors_dbi=None,
         )
-        maximum_use = SYNTHETIC_MAXIMUM_USE_OVER_LAST_ROW * rows[-1].useful_beams
         bands.append(
-            BandCurve(point=point, rows=rows, markers=_synthetic_markers(rows, maximum_use))
+            BandCurve(point=point, rows=rows, markers=_synthetic_markers(point.name, rows))
         )
     return SaturationCurve(
         schema_version=SATURATION_CURVE_SCHEMA_VERSION,
@@ -257,11 +257,16 @@ def build_synthetic_curve(dials: IridiumDials) -> SaturationCurve:
 
 def cut_curve_short(curve: SaturationCurve, last_fleet: int) -> SaturationCurve:
     """Return a curve with every class's and band point's rows cut after the row at
-    ``last_fleet``, each curve's markers not reached by that row, its parameters unchanged (so
-    the identity check still passes, while the completeness check refuses its short rows).
+    ``last_fleet``, each curve's markers recomputed from its kept rows and its own maximum use
+    by the module's ``_markers`` (so they are valid on any curve: each marker is the one the
+    kept rows place, and a saturation number they no longer reach becomes not reached by the
+    cut), its parameters unchanged (so the identity check still passes, while the completeness
+    check refuses its short rows).
 
     Raises:
-        ValueError: If ``last_fleet`` is not the fleet of a row every curve holds.
+        ValueError: If ``last_fleet`` is not the fleet of a row every curve holds, or keeps
+            fewer than :data:`MIN_ROWS_FOR_MARKERS` rows (the markers read the elasticity
+            between rows).
     """
     holding = [entry.rows for entry in curve.classes] + [band.rows for band in curve.bands]
     if any(last_fleet not in [row.fleet for row in rows] for rows in holding):
@@ -270,23 +275,26 @@ def cut_curve_short(curve: SaturationCurve, last_fleet: int) -> SaturationCurve:
             f"{[row.fleet for row in curve.classes[-1].rows]}"
         )
 
-    def short(rows: tuple[CurveRow, ...], markers: ClassMarkers) -> dict[str, object]:
-        kept = tuple(row for row in rows if row.fleet <= last_fleet)
-        return {
-            "rows": kept,
-            "markers": markers.model_copy(update={"saturation_not_reached_by": kept[-1].fleet}),
-        }
+    def kept(rows: tuple[CurveRow, ...]) -> tuple[CurveRow, ...]:
+        cut = tuple(row for row in rows if row.fleet <= last_fleet)
+        if len(cut) < MIN_ROWS_FOR_MARKERS:
+            raise ValueError(
+                f"a cut at {last_fleet} keeps {len(cut)} row, and a curve's markers need "
+                f"{MIN_ROWS_FOR_MARKERS}"
+            )
+        return cut
 
-    return curve.model_copy(
-        update={
-            "classes": tuple(
-                entry.model_copy(update=short(entry.rows, entry.markers)) for entry in curve.classes
-            ),
-            "bands": tuple(
-                band.model_copy(update=short(band.rows, band.markers)) for band in curve.bands
-            ),
-        }
-    )
+    classes = []
+    for entry in curve.classes:
+        rows = kept(entry.rows)
+        markers = sat._markers(entry.device_class, rows, entry.markers.maximum_use_beams)
+        classes.append(entry.model_copy(update={"rows": rows, "markers": markers}))
+    bands = []
+    for band in curve.bands:
+        rows = kept(band.rows)
+        markers = sat._markers(band.point.name, rows, band.markers.maximum_use_beams)
+        bands.append(band.model_copy(update={"rows": rows, "markers": markers}))
+    return curve.model_copy(update={"classes": tuple(classes), "bands": tuple(bands)})
 
 
 class SaturationInputsBuilder(Protocol):
@@ -424,11 +432,21 @@ def synthetic_saturation_curve() -> SyntheticCurveBuilder:
 @pytest.fixture(scope="session")
 def short_saturation_curve() -> ShortCurveBuilder:
     """Return a builder of the synthetic curve for any Iridium dials cut short at a given row
-    (``cut_curve_short``), for a reading past a class's last row: its parameters are still the
-    dials' (the identity check passes), while the completeness check refuses its rows, so it is
-    read in Python, never loaded from a file."""
+    (``cut_curve_short``, each curve's markers recomputed from its kept rows), for a reading
+    past a class's last row: its parameters are still the dials' (the identity check passes),
+    while the completeness check refuses its rows, so it is read in Python, never loaded from a
+    file."""
 
     def build(dials: IridiumDials, last_fleet: int) -> SaturationCurve:
         return cut_curve_short(build_synthetic_curve(dials), last_fleet)
 
     return build
+
+
+@pytest.fixture(scope="session")
+def cut_saturation_curve() -> CurveCut:
+    """Return the cut itself (``cut_curve_short``), for a test that cuts a curve other than the
+    synthetic one: the committed curve, say, whose markers reach saturation, so the cut's
+    markers are shown recomputed from the kept rows (the test modules cannot import this file,
+    under the suite's importlib import mode)."""
+    return cut_curve_short

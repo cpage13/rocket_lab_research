@@ -48,9 +48,6 @@ _NOT_AN_IRIDIUM_SCENARIO = (
 )
 """The family's refusal, word for word the command's message before the narrowing function."""
 
-_COMMITTED_CURVE = Path("communications") / "models" / "iridium" / "saturation_curve.json"
-"""The promoted saturation curve, repository-relative (the shipped scenario's curve path)."""
-
 _READ_ONLY_DIR_MODE = stat.S_IRUSR | stat.S_IXUSR
 """A directory the owner can list and enter but not write into."""
 
@@ -301,7 +298,8 @@ def test_a_relative_curve_path_is_anchored_to_the_repository_root(
     loader wrapped to record the path it is given.
 
     Expected outcome: exit 0, the artifact written, and the curve read once, from the
-    repository root's ``communications/models/iridium/saturation_curve.json``.
+    repository root's ``communications/models/iridium/saturation_curve.json`` (the default
+    curve path, ``SATURATION_CURVE_PATH_DEFAULT``).
     """
     loaded: list[Path] = []
     load = json_output.load_saturation_curve
@@ -317,7 +315,7 @@ def test_a_relative_curve_path_is_anchored_to_the_repository_root(
     assert main([str(iridium_yaml), str(out_path), "--version-stamp", "test"]) == EXIT_OK
 
     assert out_path.is_file()
-    assert loaded == [repo_dir / _COMMITTED_CURVE]
+    assert loaded == [repo_dir / SATURATION_CURVE_PATH_DEFAULT]
 
 
 def test_a_scenario_runs_on_a_curve_computed_for_its_inputs(
