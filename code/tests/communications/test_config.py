@@ -6,7 +6,8 @@ Covers the slim ``CommsConfig`` dial tree: all-defaults construction, the frozen
 classes' own defaults and bounds are tested once, in
 ``tests/common/test_cadence_move.py``), the satellite / coverage / comms-share /
 ground blocks, the field bounds, the cross-field validators (coverage floor at or
-below the cap, off-peak concurrency at or below the peak), and the YAML loader pair.
+below the cap, off-peak concurrency at or below the peak), the YAML loader pair, and the
+Iridium saturation block (its defaults, the shipped scenario's block, its bounds).
 Mirrors the data-center
 ``test_config.py`` assertion style without importing ``data_center`` (forbidden).
 """
@@ -29,6 +30,7 @@ from communications.config import (
     IridiumDials,
     RevenueDials,
     SatelliteDials,
+    SaturationDials,
     SubscriberDials,
     comms_config_from_dict,
     load_comms_config,
@@ -37,6 +39,7 @@ from communications.constants import (
     ARPU_USD_PER_MONTH_DEFAULT,
     BASE_YEAR_DEFAULT,
     COMMS_SHARE_DEFAULT,
+    DOWNLINK_SHARE_DEFAULT,
     GROUND_BASIS_DEFAULT,
     HORIZON_YEARS_DEFAULT,
     MAX_FLEET_SATELLITES_DEFAULT,
@@ -45,6 +48,7 @@ from communications.constants import (
     SATELLITE_LIFETIME_YEARS_DEFAULT,
     SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
     SATELLITES_PER_LAUNCH_DEFAULT,
+    SATURATION_CURVE_PATH_DEFAULT,
     SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT,
     SUBSCRIBERS_PER_SATELLITE_DEFAULT,
 )
@@ -369,3 +373,64 @@ def test_offpeak_concurrency_above_peak_fails_at_load(tmp_path: Path) -> None:
         IridiumDials(concurrency_peak=0.01, concurrency_offpeak=0.02)
     equal = IridiumDials(concurrency_peak=0.01, concurrency_offpeak=0.01)
     assert equal.concurrency_offpeak == equal.concurrency_peak
+
+
+# -- the Iridium saturation block (ADRs 005 and 008) ---------------------
+
+
+def test_every_iridium_config_carries_the_saturation_block(iridium_yaml: Path) -> None:
+    """Objective: the saturation block is defaulted on every Iridium config, and the shipped
+    scenario writes it out.
+
+    Sample: bare ``IridiumDials()``; ``scenarios/iridium.yaml``.
+
+    Expected outcome: the defaults are the named constants, 0.67 and the promoted curve's
+    repository-relative path; the shipped scenario sets the block explicitly
+    (``saturation:`` with both fields) and it loads equal to the defaults.
+    """
+    dials = SaturationDials()
+    assert dials.downlink_share == DOWNLINK_SHARE_DEFAULT == 0.67
+    assert dials.curve_path == SATURATION_CURVE_PATH_DEFAULT
+    assert SATURATION_CURVE_PATH_DEFAULT == "communications/models/iridium/saturation_curve.json"
+    assert IridiumDials().saturation == dials
+    text = iridium_yaml.read_text(encoding="utf-8")
+    assert "\n  saturation:\n    downlink_share: 0.67" in text
+    assert "    curve_path: communications/models/iridium/saturation_curve.json" in text
+    loaded = load_comms_config(iridium_yaml).iridium
+    assert loaded is not None
+    assert loaded.saturation == dials
+
+
+@pytest.mark.parametrize("share", [0.0, 1.5])
+def test_a_downlink_share_out_of_bounds_fails_at_load(tmp_path: Path, share: float) -> None:
+    """Objective: the downlink share is a fraction above 0 and at most 1.
+
+    Sample: a scenario setting ``iridium.saturation.downlink_share`` to 0, then to 1.5.
+
+    Expected outcome: each fails at load with the field named; 1.0, the band in full-time
+    use, loads.
+    """
+    scenario = tmp_path / "share.yaml"
+    scenario.write_text(f"iridium:\n  saturation:\n    downlink_share: {share}\n", encoding="utf-8")
+    with pytest.raises(ValidationError, match=r"iridium\.saturation\.downlink_share"):
+        load_comms_config(scenario)
+    scenario.write_text("iridium:\n  saturation:\n    downlink_share: 1.0\n", encoding="utf-8")
+    loaded = load_comms_config(scenario).iridium
+    assert loaded is not None
+    assert loaded.saturation.downlink_share == 1.0
+
+
+def test_the_saturation_block_is_frozen_and_refuses_unknown_keys(tmp_path: Path) -> None:
+    """Objective: the block follows the config's contract (frozen, ``extra="forbid"``), and its
+    curve path may be absolute.
+
+    Expected outcome: assignment and an unknown key raise ValidationError; an absolute path
+    loads as given.
+    """
+    dials = SaturationDials()
+    with pytest.raises(ValidationError):
+        dials.downlink_share = 0.5
+    with pytest.raises(ValidationError):
+        SaturationDials.model_validate({"bogus_dial": 1.0})
+    absolute = str(tmp_path / "curve.json")
+    assert SaturationDials(curve_path=absolute).curve_path == absolute

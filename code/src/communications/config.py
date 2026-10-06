@@ -53,7 +53,9 @@ cost-coupled multiple or a price applied to a sized base. The blocks:
   L-band max-outcome) MSS dials, default ``None`` so the config stays the
   High-Bandwidth Cellular Pure Play model (formerly Model A). Present, it selects
   the Iridium derivation (the per-satellite density is derived from L-band physics
-  instead of read from the High-Bandwidth Cellular Pure Play model's fixed dial).
+  instead of read from the High-Bandwidth Cellular Pure Play model's fixed dial). Its
+  ``saturation`` block (:class:`SaturationDials`, defaulted) holds the downlink time share
+  and the promoted saturation curve's path.
 
 This model imports only from ``common.*`` and ``communications.*`` (never
 ``data_center``, per the cross-import guard) and uses none of the forbidden
@@ -91,6 +93,7 @@ from communications.constants import (
     COMMS_SHARE_DEFAULT,
     CONCURRENCY_OFFPEAK_DEFAULT,
     CONCURRENCY_PEAK_DEFAULT,
+    DOWNLINK_SHARE_DEFAULT,
     GROUND_BASIS_DEFAULT,
     HORIZON_YEARS_DEFAULT,
     IOT_DEVICES_DEFAULT,
@@ -105,6 +108,7 @@ from communications.constants import (
     SATELLITE_LIFETIME_YEARS_DEFAULT,
     SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
     SATELLITES_PER_LAUNCH_DEFAULT,
+    SATURATION_CURVE_PATH_DEFAULT,
     SPECTRUM_MHZ_DEFAULT,
     SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT,
     SUBSCRIBERS_PER_SATELLITE_DEFAULT,
@@ -591,6 +595,40 @@ class IridiumArpuDials(BaseModel):
         return self
 
 
+class SaturationDials(BaseModel):
+    """The Iridium model's saturation block: the downlink time share and the promoted curve.
+
+    Nested as the ``saturation`` field of :class:`IridiumDials`, with every field defaulted, so
+    every Iridium config carries the block (the shipped scenario writes it out). Neither field
+    is an input of the curve: the curve is computed with the band in full-time use (d = 1, ADR
+    008) and one promoted file serves every scenario.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    downlink_share: float = Field(
+        default=DOWNLINK_SHARE_DEFAULT,
+        gt=0,
+        le=1.0,
+        description=(
+            "The downlink time share d of Iridium's time-division duplex band, a fraction "
+            "above 0 and at most 1 (ADR 008). Default 0.67, Certus 700's 2 : 1 down-to-up rate "
+            "split (COMM-620); 0.5 is the symmetric frame and 0.75 an estimated alternative. "
+            "Configurable."
+        ),
+    )
+    curve_path: str = Field(
+        default=SATURATION_CURVE_PATH_DEFAULT,
+        min_length=1,
+        description=(
+            "The promoted saturation curve's path, repository-relative (an absolute path is "
+            "allowed, so a test can point at a temporary curve). Default "
+            "communications/models/iridium/saturation_curve.json, where the saturation "
+            "command writes it."
+        ),
+    )
+
+
 class IridiumDials(BaseModel):
     """The Iridium model's (L-band max-outcome) input dials: the MSS lane.
 
@@ -700,6 +738,13 @@ class IridiumDials(BaseModel):
             "GroundInterfaceDials.scenario_name precedent: an optional block carries "
             "its own label). The Iridium scenario YAML sets no metadata block, so the "
             "Iridium-model label lives here. Configurable."
+        ),
+    )
+    saturation: SaturationDials = Field(
+        default_factory=SaturationDials,
+        description=(
+            "The saturation block (:class:`SaturationDials`): the downlink time share and the "
+            "promoted saturation curve's path. Defaulted, so every Iridium config carries it."
         ),
     )
     arpu: IridiumArpuDials | None = Field(
@@ -876,6 +921,7 @@ __all__ = [
     "IridiumDials",
     "RevenueDials",
     "SatelliteDials",
+    "SaturationDials",
     "SubscriberDials",
     "comms_config_from_dict",
     "load_comms_config",

@@ -940,6 +940,26 @@ IRIDIUM_NEXT_BEAMS_PER_SATELLITE: Final[int] = 48
 (Starlink's flying direct-to-cell array forms 48 too, COMM-408): the band's low beam
 count, against the central count the calibration derives at the reference panel."""
 
+# ===========================================================================
+# The Iridium scenario's saturation block (ADRs 005 and 008): the downlink share and the
+# promoted curve's path, the two defaults of ``communications.config.SaturationDials``
+# ===========================================================================
+
+DOWNLINK_SHARE_DEFAULT: Final[float] = 0.67
+"""SCENARIO (ADR 008, ``docs/adr/008-downlink-time-share-scales-people.md``; COMM-620,
+COMM-662). The downlink time share d of Iridium's time-division duplex band (COMM-662: the
+uplink and the downlink share its tones in time): Certus 700's 2 : 1 down-to-up rate split
+(COMM-620: 704 kbps down, 352 up), 704 / (704 + 352) to two figures. The saturation curve is
+computed at d = 1; ADR 008 scales people, and every capacity but the satellite's peak, by d
+when the curve is read. ADR 008's documented alternatives: 0.5, the symmetric frame, and 0.75,
+an estimate. A scenario setting."""
+
+SATURATION_CURVE_PATH_DEFAULT: Final[str] = "communications/models/iridium/saturation_curve.json"
+"""The promoted saturation curve, repository-relative (ADR 005: ``saturation_curve.json``
+carries each class's spectrum bound), where ``python -m communications.saturation`` writes it.
+A scenario may name an absolute path instead (a test's temporary curve). A fixed file location,
+not a tunable."""
+
 __all__ = [
     "ARPU_USD_PER_MONTH_DEFAULT",
     "BASE_YEAR_DEFAULT",
@@ -1052,4 +1072,7 @@ __all__ = [
     "TRIM_SEED",
     "TRIM_VICTIMS",
     "UNIFORM_BEAMWIDTH_FACTOR",
+    # The Iridium scenario's saturation block (ADRs 005 and 008).
+    "DOWNLINK_SHARE_DEFAULT",
+    "SATURATION_CURVE_PATH_DEFAULT",
 ]
