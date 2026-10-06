@@ -4847,6 +4847,34 @@ def test_between_rows_a_reading_is_log_log() -> None:
         assert at_row.ocean_factor == row.ocean_factor
 
 
+def test_the_phone_class_reads_ninety_percent_of_maximum_use_at_its_ninety_percent_marker(
+    committed_saturation_curve: SaturationCurve,
+) -> None:
+    """Objective: the log-log rule's two copies agree: the saturation module places the 90
+    percent marker by it (``_fleet_reaching``, the fleet where L reaches 90 percent of maximum
+    use, rounded half up) and the readings read L by it, so a reading at the marker gives 0.90
+    of maximum use within the marker's rounding to a whole fleet.
+
+    Sample: the committed curve's phone class at its 90 percent marker (read from the curve,
+    never frozen) and one satellite either side, at d = 1 and the reference panel.
+
+    Expected outcome: the marker is placed; the share of maximum use is under 0.90 one satellite
+    below the marker and over it one satellite above (the crossing lies within half a satellite
+    of the marker); at the marker it is 0.90 within half a satellite's change of the share (the
+    larger of the two one-satellite steps, halved).
+    """
+    curve = committed_saturation_curve
+    (phone,) = [entry for entry in curve.classes if entry.device_class is PHONE]
+    marker = phone.markers.fleet_at_90pct_of_maximum_use
+    assert marker is not None
+    below, at, above = (
+        read_fleet(curve, PHONE, fleet, downlink_share=1.0, panel_factor=1.0).share_of_maximum_use
+        for fleet in (marker - 1, marker, marker + 1)
+    )
+    assert below < 0.9 < above
+    assert at == pytest.approx(0.9, abs=max(at - below, above - at) / 2)
+
+
 def test_people_are_the_capacity_over_the_busy_hour_load_times_d_and_the_panel() -> None:
     """Objective: people at a fleet are the capacity over the class's busy-hour load per person
     (its rate while active times its busy-hour share, from the curve's parameters), times the

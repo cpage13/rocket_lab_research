@@ -33,10 +33,11 @@ family can read a curve without importing numpy:
   :class:`SaturationCurveMismatchError` naming the first field that differs;
 * the readings the engine takes from a class's curve at any fleet: :func:`useful_beams_at`
   and :func:`capacity_gbps_at` on the curve's own basis (d = 1, the reference panel),
-  :func:`people_at` at a downlink share and a panel factor, and :func:`read_fleet`, all of a
-  fleet's readings at once (a :class:`FleetReading`). They follow the edge rules: at a row its
-  own values; between rows log-log; below the first row linear through the origin (so U is
-  flat there); at a fleet of 0 no beams and no U; past the class's last row a
+  :func:`people_at` at a downlink share and a panel factor (the scenario's panel area over the
+  curve's reference panel area), and :func:`read_fleet`, all of a fleet's readings at once (a
+  :class:`FleetReading`), each fleet placed on the rows once. They follow the edge rules: at a
+  row its own values; between rows log-log; below the first row linear through the origin (so
+  U is flat there); at a fleet of 0 no beams and no U; past the class's last row a
   :class:`CurveBeyondLastRowError`, never an extrapolation or a clamp.
 
 Every model is a frozen pydantic model with ``extra="forbid"`` that refuses a NaN or an
@@ -1271,11 +1272,6 @@ _FULL_TIME_DOWNLINK_SHARE: Final[float] = 1.0
 (ADR 008)."""
 
 
-def _shown(value: object) -> str:
-    """Return a JSON-form value as JSON text, for a message (``8.0``, ``"phone_class"``)."""
-    return json.dumps(value)
-
-
 def _first_difference(
     path: str, expected: object, found: object
 ) -> tuple[str, object, object] | None:
@@ -1333,10 +1329,10 @@ def check_curve_matches(inputs: SaturationInputs, curve: SaturationCurve) -> Non
         return
     path, expected, found = difference
     raise SaturationCurveMismatchError(
-        f"the saturation curve was computed for other inputs: {path} is {_shown(expected)} for "
-        f"this run but {_shown(found)} in the curve's parameters; a run reads only a curve "
-        "computed for its own inputs (promote one with python -m communications.saturation and "
-        "name it in iridium.saturation.curve_path)"
+        f"the saturation curve was computed for other inputs: {path} is {json.dumps(expected)} "
+        f"for this run but {json.dumps(found)} in the curve's parameters; a run reads only a "
+        "curve computed for its own inputs (promote one with python -m communications.saturation "
+        "and name it in iridium.saturation.curve_path)"
     )
 
 
@@ -1344,9 +1340,11 @@ def check_curve_matches(inputs: SaturationInputs, curve: SaturationCurve) -> Non
 class FleetReading:
     """One class's readings at one fleet, at a downlink share d and a panel factor.
 
-    The panel factor is the scenario's panel over the curve's reference panel. Useful beams,
-    capacity and people scale with it; the share of maximum use and the ocean factor do not
-    (each is a ratio on the curve's own basis).
+    The panel factor is the scenario's panel area over the curve's reference panel area
+    (``curve.parameters.shell.reference_aperture_m2``, the panel the curve is computed at): a
+    ratio, never an area. Useful beams scale with the panel factor alone; capacity with d and
+    the panel factor, scaled once, and people derive from that scaled capacity; the share of
+    maximum use and the ocean factor do not scale (each is a ratio on the curve's own basis).
 
     Attributes:
         fleet: The fleet read, satellites.
@@ -1355,8 +1353,8 @@ class FleetReading:
         share_of_maximum_use: L over the class's maximum use (the panel factor cancels); 0.0 at
             a fleet of 0.
         ocean_factor: U = L / (N x B), read from the curve's rows; None at a fleet of 0.
-        people: The capacity over the class's busy-hour load per person, x d x the panel
-            factor, unrounded (a caller rounds half up where it publishes a count).
+        people: That scaled capacity over the class's busy-hour load per person, unrounded (a
+            caller rounds half up where it publishes a count).
     """
 
     fleet: int
@@ -1377,14 +1375,143 @@ class _BelowFirstRow(StrEnum):
     """The first row's value: the ocean factor, flat where L is linear in N."""
 
 
-def _check_fleet(fleet: int) -> None:
-    """Refuse a negative fleet (a count of satellites).
+@dataclass(frozen=True)
+class _RowQuantity:
+    """One quantity a curve's rows carry, as the readings read it.
+
+    Attributes:
+        name: Its name, for a message.
+        value_of: Its value at a row.
+        below_first_row: How it reads below the class's first row.
+    """
+
+    name: str
+    value_of: Callable[[CurveRow], float]
+    below_first_row: _BelowFirstRow
+
+
+_USEFUL_BEAMS: Final[_RowQuantity] = _RowQuantity(
+    "useful beams", lambda row: row.useful_beams, _BelowFirstRow.THROUGH_THE_ORIGIN
+)
+"""L, beams on the curve's own basis: linear through the origin below the first row."""
+
+_CAPACITY: Final[_RowQuantity] = _RowQuantity(
+    "capacity", lambda row: row.capacity_gbps, _BelowFirstRow.THROUGH_THE_ORIGIN
+)
+"""The capacity, Gbps on the curve's own basis: linear through the origin below the first row."""
+
+_OCEAN_FACTOR: Final[_RowQuantity] = _RowQuantity(
+    "ocean factor", lambda row: row.ocean_factor, _BelowFirstRow.FLAT
+)
+"""U: flat below the first row, where L is linear in N and B is fixed."""
+
+_NOT_BETWEEN_ROWS: Final[float] = 0.0
+"""The fraction a bracket carries at a row and below the first row, where no reading uses it."""
+
+
+@dataclass(frozen=True)
+class _Bracket:
+    """A positive fleet's place on a class's central curve, found once for every quantity read
+    there: the class's curve looked up, the fleet's range checked and the rows bisected once.
+
+    Attributes:
+        curve: The class's central curve.
+        fleet: The fleet, above 0 and at most the class's last row's.
+        high: The row at the fleet, or the first row above it.
+        low: The row below the fleet when the fleet lies between two rows; None at a row and
+            below the first row.
+        fraction: Between two rows, ln(N / N_low) / ln(N_high / N_low), the fleet's place
+            between them in ln N; :data:`_NOT_BETWEEN_ROWS` otherwise.
+    """
+
+    curve: ClassCurve
+    fleet: int
+    high: CurveRow
+    low: CurveRow | None
+    fraction: float
+
+    def read(self, quantity: _RowQuantity) -> float:
+        """Return a quantity at the fleet, by the edge rules: at a row, the row's own value;
+        below the first row, as the quantity's rule says; between two rows, log-log (the
+        quantity's logarithm linear in ln N).
+
+        Raises:
+            SaturationCurveError: Between two rows at which the quantity is not positive at
+                both (its logarithm does not exist). A loaded curve's rows never are (the
+                completeness check refuses one), so this guards a curve built in Python.
+        """
+        high, low = self.high, self.low
+        if high.fleet == self.fleet:
+            return quantity.value_of(high)
+        if low is None:
+            if quantity.below_first_row is _BelowFirstRow.FLAT:
+                return quantity.value_of(high)
+            return self.fleet * quantity.value_of(high) / high.fleet
+        low_value, high_value = quantity.value_of(low), quantity.value_of(high)
+        if low_value <= 0 or high_value <= 0:
+            raise SaturationCurveError(
+                f"the {self.curve.device_class.value} curve's {quantity.name} must be positive "
+                f"at both rows around {self.fleet} satellites to read between them log-log; got "
+                f"{low_value} at {low.fleet} satellites and {high_value} at {high.fleet}"
+            )
+        return math.exp(math.log(low_value) + self.fraction * math.log(high_value / low_value))
+
+
+def _class_curve_of(curve: SaturationCurve, device_class: DeviceClass) -> ClassCurve:
+    """Return a class's curve: the central one, which the engine reads (never a band point's).
 
     Raises:
-        ValueError: Naming the fleet.
+        SaturationCurveError: If the curve holds no curve for the class.
     """
+    for entry in curve.classes:
+        if entry.device_class is device_class:
+            return entry
+    raise SaturationCurveError(f"the saturation curve holds no {device_class.value} curve to read")
+
+
+def _bracket(curve: SaturationCurve, device_class: DeviceClass, fleet: int) -> _Bracket | None:
+    """Find a fleet's place on a class's central curve, once for every quantity read there.
+
+    Args:
+        curve: The curve.
+        device_class: The class, whose central curve is read.
+        fleet: The fleet, satellites, at least 0.
+
+    Returns:
+        The fleet's place, or None at a fleet of 0, which places no beam.
+
+    Raises:
+        SaturationCurveError: If the curve holds no curve for the class.
+        ValueError: For a negative fleet.
+        CurveBeyondLastRowError: For a fleet past the class's last row (a curve is never
+            extrapolated or clamped).
+    """
+    entry = _class_curve_of(curve, device_class)
     if fleet < _EMPTY_FLEET:
         raise ValueError(f"a fleet is a count of satellites, at least 0; got {fleet}")
+    if fleet == _EMPTY_FLEET:
+        return None
+    rows = entry.rows
+    last = rows[-1]
+    if fleet > last.fleet:
+        raise CurveBeyondLastRowError(
+            f"the {device_class.value} curve's last row is at {last.fleet} satellites, and a "
+            f"reading at {fleet} satellites lies past it: a curve is never extrapolated or "
+            "clamped, so a fleet past its last row needs a curve whose sweep reaches it"
+        )
+    index = bisect_left(rows, fleet, key=lambda row: row.fleet)
+    high = rows[index]
+    if high.fleet == fleet or index == 0:
+        return _Bracket(curve=entry, fleet=fleet, high=high, low=None, fraction=_NOT_BETWEEN_ROWS)
+    low = rows[index - 1]
+    fraction = math.log(fleet / low.fleet) / math.log(high.fleet / low.fleet)
+    return _Bracket(curve=entry, fleet=fleet, high=high, low=low, fraction=fraction)
+
+
+def _reading(bracket: _Bracket | None, quantity: _RowQuantity) -> float:
+    """Return a quantity at a fleet :func:`_bracket` placed: 0.0 at a fleet of 0 (no beams and
+    no capacity), else the bracket's reading."""
+    return _EMPTY_FLEET_READING if bracket is None else bracket.read(quantity)
 
 
 def _check_factors(downlink_share: float, panel_factor: float) -> None:
@@ -1402,75 +1529,34 @@ def _check_factors(downlink_share: float, panel_factor: float) -> None:
         raise ValueError(f"the panel factor must be a positive finite number; got {panel_factor}")
 
 
-def _class_curve_of(curve: SaturationCurve, device_class: DeviceClass) -> ClassCurve:
-    """Return a class's curve: the central one, which the engine reads (never a band point's).
+def _busy_hour_load_mbps(curve: SaturationCurve, device_class: DeviceClass) -> float:
+    """Return a class's busy-hour load per person, Mbps: its rate while active times its
+    busy-hour share, read from the curve's parameters (which the identity check ties to the
+    named constants; they hold exactly one entry per class, so the class is always found)."""
+    return next(
+        entry.active_rate_mbps * entry.concurrency_peak
+        for entry in curve.parameters.classes
+        if entry.device_class is device_class
+    )
 
-    Raises:
-        SaturationCurveError: If the curve holds no curve for the class.
-    """
-    for entry in curve.classes:
-        if entry.device_class is device_class:
-            return entry
-    raise SaturationCurveError(f"the saturation curve holds no {device_class.value} curve to read")
 
-
-def _read_rows(
-    entry: ClassCurve,
-    fleet: int,
-    value_of: Callable[[CurveRow], float],
-    *,
-    quantity: str,
-    below_first_row: _BelowFirstRow,
-) -> float:
-    """Read one row quantity of a class's curve at a positive fleet, by the edge rules.
-
-    At a row's fleet, the row's own value; between two rows, log-log (the value's logarithm
-    linear in ln N); below the first row, as ``below_first_row`` says; past the last row,
-    refused.
+def _scaled_capacity_and_people(
+    capacity_gbps: float, load_mbps: float, *, downlink_share: float, panel_factor: float
+) -> tuple[float, float]:
+    """Scale a capacity on the curve's basis (d = 1, the reference panel) to d and the panel
+    factor, once, and derive the people that scaled capacity serves: the one place both scale.
 
     Args:
-        entry: The class's curve.
-        fleet: The fleet, above 0.
-        value_of: The quantity, read from a row.
-        quantity: The quantity's name, for a message.
-        below_first_row: The rule below the first row.
+        capacity_gbps: The capacity on the curve's basis, Gbps.
+        load_mbps: The class's busy-hour load per person, Mbps.
+        downlink_share: The downlink share d.
+        panel_factor: The scenario's panel area over the curve's reference panel area.
 
     Returns:
-        The quantity at the fleet.
-
-    Raises:
-        CurveBeyondLastRowError: For a fleet past the class's last row.
-        SaturationCurveError: For a fleet between two rows at which the quantity is not positive
-            at both (its logarithm does not exist). A loaded curve's rows never are (the
-            completeness check refuses one), so this guards a curve built in Python.
+        The scaled capacity, Gbps, and the people it serves (it over the load), unrounded.
     """
-    rows = entry.rows
-    first, last = rows[0], rows[-1]
-    name = entry.device_class.value
-    if fleet > last.fleet:
-        raise CurveBeyondLastRowError(
-            f"the {name} curve's last row is at {last.fleet} satellites, and a reading at "
-            f"{fleet} satellites lies past it: a curve is never extrapolated or clamped, so a "
-            "fleet past its last row needs a curve whose sweep reaches it"
-        )
-    if fleet < first.fleet:
-        if below_first_row is _BelowFirstRow.FLAT:
-            return value_of(first)
-        return fleet * value_of(first) / first.fleet
-    index = bisect_left([row.fleet for row in rows], fleet)
-    high = rows[index]
-    if high.fleet == fleet:
-        return value_of(high)
-    low = rows[index - 1]
-    low_value, high_value = value_of(low), value_of(high)
-    if low_value <= 0 or high_value <= 0:
-        raise SaturationCurveError(
-            f"the {name} curve's {quantity} must be positive at both rows around {fleet} "
-            f"satellites to read between them log-log; got {low_value} at {low.fleet} "
-            f"satellites and {high_value} at {high.fleet}"
-        )
-    fraction = math.log(fleet / low.fleet) / math.log(high.fleet / low.fleet)
-    return math.exp(math.log(low_value) + fraction * math.log(high_value / low_value))
+    scaled_gbps = capacity_gbps * downlink_share * panel_factor
+    return scaled_gbps, scaled_gbps * GBPS_TO_MBPS / load_mbps
 
 
 def useful_beams_at(curve: SaturationCurve, device_class: DeviceClass, fleet: int) -> float:
@@ -1494,17 +1580,7 @@ def useful_beams_at(curve: SaturationCurve, device_class: DeviceClass, fleet: in
             at both rows around the fleet.
         ValueError: For a negative fleet.
     """
-    entry = _class_curve_of(curve, device_class)
-    _check_fleet(fleet)
-    if fleet == _EMPTY_FLEET:
-        return _EMPTY_FLEET_READING
-    return _read_rows(
-        entry,
-        fleet,
-        lambda row: row.useful_beams,
-        quantity="useful beams",
-        below_first_row=_BelowFirstRow.THROUGH_THE_ORIGIN,
-    )
+    return _reading(_bracket(curve, device_class, fleet), _USEFUL_BEAMS)
 
 
 def capacity_gbps_at(curve: SaturationCurve, device_class: DeviceClass, fleet: int) -> float:
@@ -1525,36 +1601,7 @@ def capacity_gbps_at(curve: SaturationCurve, device_class: DeviceClass, fleet: i
             positive at both rows around the fleet.
         ValueError: For a negative fleet.
     """
-    entry = _class_curve_of(curve, device_class)
-    _check_fleet(fleet)
-    if fleet == _EMPTY_FLEET:
-        return _EMPTY_FLEET_READING
-    return _read_rows(
-        entry,
-        fleet,
-        lambda row: row.capacity_gbps,
-        quantity="capacity",
-        below_first_row=_BelowFirstRow.THROUGH_THE_ORIGIN,
-    )
-
-
-def _busy_hour_load_mbps(curve: SaturationCurve, device_class: DeviceClass) -> float:
-    """Return a class's busy-hour load per person, Mbps: its rate while active times its
-    busy-hour share, read from the curve's parameters (which the identity check ties to the
-    named constants; they hold one entry per class)."""
-    loads = {
-        entry.device_class: entry.active_rate_mbps * entry.concurrency_peak
-        for entry in curve.parameters.classes
-    }
-    return loads[device_class]
-
-
-def _people(
-    capacity_gbps: float, load_mbps: float, *, downlink_share: float, panel_factor: float
-) -> float:
-    """Return the people a capacity serves: the capacity over the busy-hour load per person,
-    x d x the panel factor, unrounded."""
-    return capacity_gbps * GBPS_TO_MBPS / load_mbps * downlink_share * panel_factor
+    return _reading(_bracket(curve, device_class, fleet), _CAPACITY)
 
 
 def people_at(
@@ -1567,17 +1614,19 @@ def people_at(
 ) -> float:
     """Return the people a class's curve serves at a fleet, unrounded.
 
-    The capacity at the fleet (:func:`capacity_gbps_at`) over the class's busy-hour load per
-    person (its rate while active times its busy-hour share, from the curve's parameters), x
-    the downlink share d x the panel factor (the scenario's panel over the curve's reference
-    panel). People stay floats here; a caller rounds half up where it publishes a count.
+    The capacity at the fleet (:func:`capacity_gbps_at`) x the downlink share d x the panel
+    factor, over the class's busy-hour load per person (its rate while active times its
+    busy-hour share, from the curve's parameters). The panel factor is the scenario's panel
+    area over the curve's reference panel area (``curve.parameters.shell.reference_aperture_m2``):
+    a ratio, never an area. People stay floats here; a caller rounds half up where it
+    publishes a count.
 
     Args:
         curve: The curve.
         device_class: The class, whose central curve is read.
         fleet: The fleet, satellites, at least 0.
         downlink_share: The downlink share d, above 0 and at most 1.
-        panel_factor: The panel factor, above 0.
+        panel_factor: The scenario's panel area over the curve's reference panel area, above 0.
 
     Returns:
         People, unrounded.
@@ -1589,13 +1638,13 @@ def people_at(
         ValueError: For a negative fleet, or a factor out of its range.
     """
     _check_factors(downlink_share, panel_factor)
-    capacity_gbps = capacity_gbps_at(curve, device_class, fleet)
-    return _people(
-        capacity_gbps,
+    _, people = _scaled_capacity_and_people(
+        _reading(_bracket(curve, device_class, fleet), _CAPACITY),
         _busy_hour_load_mbps(curve, device_class),
         downlink_share=downlink_share,
         panel_factor=panel_factor,
     )
+    return people
 
 
 def read_fleet(
@@ -1606,20 +1655,23 @@ def read_fleet(
     downlink_share: float,
     panel_factor: float,
 ) -> FleetReading:
-    """Return all of a class's readings at a fleet, by the edge rules.
+    """Return all of a class's readings at a fleet, by the edge rules, from one bracketing of
+    the fleet.
 
-    Useful beams, capacity and people as :func:`useful_beams_at`, :func:`capacity_gbps_at` and
-    :func:`people_at` read them, scaled to d and the panel; the share of maximum use, L over
-    the class's maximum use; the ocean factor U, read from the rows like L (log-log between
-    rows, since U = L / (N x B) with B fixed) but flat below the first row. At a fleet of 0 the
-    readings are 0 and U is None.
+    Useful beams as :func:`useful_beams_at` reads them, x the panel factor; capacity as
+    :func:`capacity_gbps_at` reads it, x d x the panel factor, and people from that scaled
+    capacity, as :func:`people_at` gives them; the share of maximum use, L over the class's
+    maximum use on the curve's own basis; the ocean factor U, read from the rows like L
+    (log-log between rows, since U = L / (N x B) with B fixed) but flat below the first row. At
+    a fleet of 0 the readings are 0 and U is None. The panel factor is the scenario's panel
+    area over the curve's reference panel area (``curve.parameters.shell.reference_aperture_m2``).
 
     Args:
         curve: The curve.
         device_class: The class, whose central curve is read.
         fleet: The fleet, satellites, at least 0.
         downlink_share: The downlink share d, above 0 and at most 1.
-        panel_factor: The panel factor, above 0.
+        panel_factor: The scenario's panel area over the curve's reference panel area, above 0.
 
     Returns:
         The readings.
@@ -1627,40 +1679,34 @@ def read_fleet(
     Raises:
         CurveBeyondLastRowError: For a fleet past the class's last row.
         SaturationCurveError: If the curve holds no curve for the class, a quantity is not
-            positive at both rows around the fleet, or the class's maximum use is 0.
+            positive at both rows around the fleet, or the class's maximum use is 0 (never on
+            a loaded curve: the completeness check refuses one).
         ValueError: For a negative fleet, or a factor out of its range.
     """
     _check_factors(downlink_share, panel_factor)
-    entry = _class_curve_of(curve, device_class)
-    useful_beams = useful_beams_at(curve, device_class, fleet)
-    capacity_gbps = capacity_gbps_at(curve, device_class, fleet)
-    people = _people(
-        capacity_gbps,
+    bracket = _bracket(curve, device_class, fleet)
+    useful_beams = _reading(bracket, _USEFUL_BEAMS)
+    capacity_gbps, people = _scaled_capacity_and_people(
+        _reading(bracket, _CAPACITY),
         _busy_hour_load_mbps(curve, device_class),
         downlink_share=downlink_share,
         panel_factor=panel_factor,
     )
-    if fleet == _EMPTY_FLEET:
+    if bracket is None:
         share_of_maximum_use, ocean_factor = _EMPTY_FLEET_READING, None
     else:
-        maximum_use = entry.markers.maximum_use_beams
+        maximum_use = bracket.curve.markers.maximum_use_beams
         if maximum_use <= 0:
             raise SaturationCurveError(
                 f"the {device_class.value} curve's maximum use is {maximum_use} beams, so no "
                 "share of it can be read"
             )
         share_of_maximum_use = useful_beams / maximum_use
-        ocean_factor = _read_rows(
-            entry,
-            fleet,
-            lambda row: row.ocean_factor,
-            quantity="ocean factor",
-            below_first_row=_BelowFirstRow.FLAT,
-        )
+        ocean_factor = bracket.read(_OCEAN_FACTOR)
     return FleetReading(
         fleet=fleet,
         useful_beams=useful_beams * panel_factor,
-        capacity_gbps=capacity_gbps * downlink_share * panel_factor,
+        capacity_gbps=capacity_gbps,
         share_of_maximum_use=share_of_maximum_use,
         ocean_factor=ocean_factor,
         people=people,
