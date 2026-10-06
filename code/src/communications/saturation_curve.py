@@ -19,8 +19,9 @@ family can read a curve without importing numpy:
   fleet, which the module builds every shell with and the contract checks every row by;
 * :func:`exceeds_bound` at :data:`BOUNDS_RELATIVE_TOLERANCE`, the one test of the curve's
   bounds, which the computation and the completeness check share;
-* :func:`check_curve_complete`, what a promoted curve must carry (and necessary conditions on
-  the markers its rows can give), and :func:`load_saturation_curve`, which reads a promoted
+* :func:`check_curve_complete`, what a promoted curve must carry (every row's useful beams,
+  capacity and ocean factor and every maximum use above 0 among it, and necessary conditions
+  on the markers its rows can give), and :func:`load_saturation_curve`, which reads a promoted
   curve and refuses one with a repeated key, a number out of range, another schema, a value
   pydantic's strict mode refuses (an integer field given a string, a float or a boolean; a
   float field given a string or a boolean, while a JSON integer there reads as the same
@@ -877,8 +878,8 @@ def curve_input_hash(parameters: SaturationInputs) -> str:
 class SaturationCurveError(ValueError):
     """A saturation curve that cannot be used: a key repeated in one JSON object, a number out of
     range, another schema, a JSON type or a shape the contract refuses, altered parameters or input
-    hash, or a curve that fails its completeness check (something missing or misplaced, or markers
-    its rows cannot give). The base of the curve's errors."""
+    hash, or a curve that fails its completeness check (something missing or misplaced, a quantity
+    not above 0, or markers its rows cannot give). The base of the curve's errors."""
 
 
 def _check_rows_requested(name: str, rows: Sequence[CurveRow], requested: Sequence[int]) -> None:
@@ -952,6 +953,37 @@ def _check_markers_on_rows(name: str, rows: Sequence[CurveRow], markers: ClassMa
             )
 
 
+def _check_positive(name: str, rows: Sequence[CurveRow], markers: ClassMarkers) -> None:
+    """Refuse a curve whose maximum use, or any row's useful beams, capacity or ocean factor, is
+    not above 0.
+
+    A computed curve's never is: the computation refuses a row whose capacity is not positive
+    (its markers read the capacity's elasticity), a row with capacity has lit beams over people
+    (so L and U are positive too), and maximum use is at least every row's ceiling, which is at
+    least its L. The readings take the logarithms of these values between rows and divide by
+    maximum use, so a file holding a 0 would read zeros at and below its row, silently.
+
+    Raises:
+        SaturationCurveError: Naming the curve, the row (or its maximum use), the quantity and
+            its value.
+    """
+    if markers.maximum_use_beams <= 0:
+        raise SaturationCurveError(
+            f"the {name} maximum use is {markers.maximum_use_beams} beams, not above 0"
+        )
+    for row in rows:
+        for quantity, value in (
+            ("useful beams", row.useful_beams),
+            ("capacity", row.capacity_gbps),
+            ("ocean factor", row.ocean_factor),
+        ):
+            if value <= 0:
+                raise SaturationCurveError(
+                    f"the {name} row at {row.fleet} satellites has its {quantity} at {value}, "
+                    "not above 0"
+                )
+
+
 def _check_row_placement(name: str, row: CurveRow, *, directional: bool, trim: bool) -> None:
     """Refuse a row whose stacking diagnostics or trim are not where the contract puts them.
 
@@ -988,8 +1020,10 @@ def check_curve_complete(curve: SaturationCurve) -> None:
     fleets (the mounted terminal's with its extension); the stacking diagnostics on every row of
     a class whose parameters give it sky sectors (a band point's rows by the phone class's) and
     on no other row, as the computation places them; the interference trim, at the parameters'
-    floors, on every row of the phone class's central curve and on no other row; and markers
-    that meet the necessary conditions of :func:`_check_markers_on_rows`.
+    floors, on every row of the phone class's central curve and on no other row; every row's
+    useful beams, capacity and ocean factor, and every class's and band point's maximum use,
+    above 0, as a computed curve's always are (:func:`_check_positive`); and markers that meet
+    the necessary conditions of :func:`_check_markers_on_rows`.
 
     Args:
         curve: The curve.
@@ -997,7 +1031,7 @@ def check_curve_complete(curve: SaturationCurve) -> None:
     Raises:
         SaturationCurveError: Naming the curve and what is missing or misplaced (a class, a band
             point, the limits, the checks, the grid's digest, a row, its diagnostics or its
-            trim), or a marker its rows cannot give.
+            trim), a quantity not above 0, or a marker its rows cannot give.
     """
     parameters = curve.parameters
     sweep = parameters.sweep
@@ -1041,6 +1075,7 @@ def check_curve_complete(curve: SaturationCurve) -> None:
                     f"{[at_floor.floor_dbi for at_floor in row.trim]}, not the parameters' "
                     f"{floors}"
                 )
+        _check_positive(name, entry.rows, entry.markers)
         _check_markers_on_rows(name, entry.rows, entry.markers)
     for band, point in zip(curve.bands, parameters.bands, strict=True):
         name = f"band point {band.point.name.value}"
@@ -1053,6 +1088,7 @@ def check_curve_complete(curve: SaturationCurve) -> None:
             _check_row_placement(
                 name, row, directional=sectored[DeviceClass.PHONE_CLASS], trim=False
             )
+        _check_positive(name, band.rows, band.markers)
         _check_markers_on_rows(name, band.rows, band.markers)
 
 
@@ -1405,8 +1441,8 @@ def _read_rows(
     Raises:
         CurveBeyondLastRowError: For a fleet past the class's last row.
         SaturationCurveError: For a fleet between two rows at which the quantity is not positive
-            at both (its logarithm does not exist; a computed curve's capacity, and with it L
-            and U, is positive at every row).
+            at both (its logarithm does not exist). A loaded curve's rows never are (the
+            completeness check refuses one), so this guards a curve built in Python.
     """
     rows = entry.rows
     first, last = rows[0], rows[-1]

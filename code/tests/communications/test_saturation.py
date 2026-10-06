@@ -3055,6 +3055,76 @@ def test_one_bounds_tolerance_serves_the_computation_and_the_completeness_check(
         )
 
 
+@pytest.mark.parametrize(
+    ("alter", "message"),
+    [
+        (
+            lambda d: d["classes"][0]["rows"][0].update(
+                useful_beams=0.0, capacity_gbps=0.0, ocean_factor=0.0
+            ),
+            "the small_terminal_class row at 342 satellites has its useful beams at 0.0, not "
+            "above 0",
+        ),
+        (
+            lambda d: d["classes"][1]["rows"][1].update(capacity_gbps=0.0),
+            "the mounted_terminal_class row at 992 satellites has its capacity at 0.0, not above 0",
+        ),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(ocean_factor=0.0),
+            "the phone_class row at 342 satellites has its ocean factor at 0.0, not above 0",
+        ),
+        (
+            lambda d: d["bands"][5]["rows"][1].update(useful_beams=0.0),
+            "the band point beams_48 row at 992 satellites has its useful beams at 0.0, not "
+            "above 0",
+        ),
+        (
+            lambda d: d["classes"][0]["markers"].update(maximum_use_beams=0.0),
+            "the small_terminal_class maximum use is 0.0 beams, not above 0",
+        ),
+        (
+            lambda d: d["bands"][0]["markers"].update(maximum_use_beams=0.0),
+            "the band point taper maximum use is 0.0 beams, not above 0",
+        ),
+    ],
+    ids=[
+        "a class's first row zeroed",
+        "a class row's capacity at 0",
+        "a class row's ocean factor at 0",
+        "a band point row's useful beams at 0",
+        "a class's maximum use at 0",
+        "a band point's maximum use at 0",
+    ],
+)
+def test_the_completeness_check_refuses_a_row_or_a_maximum_use_not_above_zero(
+    tmp_path: Path, alter: Callable[[dict[str, object]], object], message: str
+) -> None:
+    """Objective: a curve the engine reads holds no zero where the computation never writes one
+    (amendment A9): every row's useful beams, capacity and ocean factor and every maximum use are
+    above 0, for every class and band point, so a curve file with a zeroed row no longer loads
+    and reads zeros silently at and below that row (the readings take logarithms between rows
+    and divide by maximum use).
+
+    Sample: the complete bare curve's JSON with one quantity set to 0 in turn: the small
+    terminal's first row zeroed whole (L, capacity and U, the review's case), a mounted terminal
+    row's capacity, a phone row's ocean factor, a band point row's useful beams, a class's and a
+    band point's maximum use; each checked as a curve and loaded from a file.
+
+    Expected outcome: ``check_curve_complete`` refuses each with a SaturationCurveError naming
+    the curve, the row (or its maximum use), the quantity and its value; the loader refuses the
+    file with the same words after the file's path.
+    """
+    data = json.loads(render_artifact_json(complete_bare_curve()))
+    alter(data)
+    with pytest.raises(SaturationCurveError) as refused:
+        check_curve_complete(SaturationCurve.model_validate(data))
+    assert str(refused.value) == message
+    path = write_curve_json(tmp_path / "zeroed.json", data)
+    with pytest.raises(SaturationCurveError) as refused_at_load:
+        load_saturation_curve(path)
+    assert str(refused_at_load.value) == f"{path}: {message}"
+
+
 def _phone_trim_json() -> list[dict[str, float]]:
     """The complete bare curve's phone trim, as JSON."""
     return [{"floor_dbi": floor, "trim": 0.01} for floor in SaturationInputs().trim.floors_dbi]
