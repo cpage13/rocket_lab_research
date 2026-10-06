@@ -23,7 +23,7 @@ for one class on one set of inputs; this version runs stages 2 to 11 for every c
    class's central SE (a beam's rate) over the class's busy-hour load per person.
 3. **The shell and the snapshots.** A circular Walker Delta shell: P = round(sqrt(N)) planes
    of S = round(N / P) satellites (Python's ``round``, an exact half to the even neighbour,
-   as the reference shell has it; the contract's ``walker_shape``), the realized fleet P x S
+   the curve's pinned convention; the contract's ``walker_shape``), the realized fleet P x S
    keying the row and the request carried on it, phasing F = 1, two-body motion with the
    Earth turning under it. The snapshot times are drawn once per run,
    ``numpy.random.default_rng(seed).uniform(0, sidereal day, n)``, and shared by every fleet
@@ -234,6 +234,14 @@ _WINDOW_SIDES: Final[int] = 2
 """A search window reaches as many columns east of its satellite's column as west, so one
 turn of longitude takes half the grid's columns (rounded up) on each side."""
 
+_WINDOW_CENTRE_CELLS: Final[int] = 1
+"""A search window's centre row or column, the one under its satellite: a window reaching h
+rows (or columns) on each side spans 2h + 1."""
+
+_MIN_CHUNK_SATELLITES: Final[int] = 1
+"""The fewest satellites a pair-search chunk holds: one satellite whose window alone exceeds
+:data:`_PAIR_SEARCH_CHUNK_ELEMENTS` is still searched, whole, in a chunk of its own."""
+
 _COSINE_BOUNDS: Final[tuple[float, float]] = (-1.0, 1.0)
 """A cosine's range: a dot product of unit vectors is clipped into it before the arccos,
 since rounding can carry it a hair outside."""
@@ -291,10 +299,14 @@ _DECIBELS_PER_DECADE: Final[float] = 10.0
 """A power ratio in decibels is ten times its base-10 logarithm."""
 
 _SERVED_BEAMS_FLOOR: Final[float] = 1e-9
-"""The reference's convention (its full-sum check's threshold): a pair places a layer when it
-places more than this many beams; less is the passes' rounding, not a layer. It decides which
-sub-pairs the full sum prices and which cells carry stacked beams (rules D5 and D6), and the
-main satellite and any-share serving sets of the diagnostic (rule D3)."""
+"""A pair places a layer when it places more than this many beams; less is the passes'
+rounding dust, not a layer. The proportional passes leave satellites and cells with about
+1e-13 beams, which a later band spreads over many pairs; this floor sits about four orders
+above that dust and far below any real layer (one whole layer of a 0.25 degree cell holds from
+about a tenth of a beam, at the mask, to four and a half, overhead). It decides which pairs
+can be stage 2's candidates (rule D4), which sub-pairs the full sum prices and which cells
+carry stacked beams (rules D5 and D6), and the main-satellite and any-share serving sets of
+the diagnostic (rule D3)."""
 
 _COVERED_SHORTFALL_SHARE: Final[float] = 1e-9
 """The most of a cell's area its first layer may leave uncovered and still cover the cell, as a
@@ -829,9 +841,10 @@ def _search_chunks(
 
     Satellites are taken in order, at most :data:`_PAIR_SEARCH_CHUNK_SATELLITES` a chunk, and
     fewer when the chunk's windows would hold more than :data:`_PAIR_SEARCH_CHUNK_ELEMENTS`
-    elements (never fewer than one satellite). Every satellite of a chunk searches the
-    chunk's widest window: the columns its view spans at its poleward edge plus the margin,
-    or one full turn when the view reaches :data:`_WINDOW_LATITUDE_CAP_DEG`, never more.
+    elements (never fewer than :data:`_MIN_CHUNK_SATELLITES`). Every satellite of a chunk
+    searches the chunk's widest window: the columns its view spans at its poleward edge plus
+    the margin, or one full turn when the view reaches :data:`_WINDOW_LATITUDE_CAP_DEG`, never
+    more.
 
     Args:
         satellites: The satellites.
@@ -845,7 +858,9 @@ def _search_chunks(
     limit_deg = math.degrees(max_central_angle_rad)
     window_cap_rad = math.radians(_WINDOW_LATITUDE_CAP_DEG)
     full_turn_half_cols: int = math.ceil(n_lon / _WINDOW_SIDES)
-    window_rows = 2 * _window_half_rows(cells, max_central_angle_rad) + 1
+    window_rows = (
+        _WINDOW_SIDES * _window_half_rows(cells, max_central_angle_rad) + _WINDOW_CENTRE_CELLS
+    )
 
     def widest_half_columns(lat: npt.NDArray[np.float64]) -> int:
         """The columns either side of centre that the widest window of these satellites spans."""
@@ -860,7 +875,10 @@ def _search_chunks(
     while start < satellites.count:
         stop = min(start + _PAIR_SEARCH_CHUNK_SATELLITES, satellites.count)
         half_cols = widest_half_columns(satellites.lat_rad[start:stop])
-        allowed = max(1, _PAIR_SEARCH_CHUNK_ELEMENTS // (window_rows * (2 * half_cols + 1)))
+        window_cols = _WINDOW_SIDES * half_cols + _WINDOW_CENTRE_CELLS
+        allowed = max(
+            _MIN_CHUNK_SATELLITES, _PAIR_SEARCH_CHUNK_ELEMENTS // (window_rows * window_cols)
+        )
         if stop - start > allowed:
             stop = start + allowed
             half_cols = widest_half_columns(satellites.lat_rad[start:stop])
@@ -1535,7 +1553,11 @@ class _ServingRule(StrEnum):
 
     MAIN_SATELLITE = "main_satellite"
     """Only the cell's main first-layer satellite (the most first-layer area) serves it, and
-    no stacked layer joins: the prototype's reference set."""
+    no stacked layer joins: the main satellite as the reference set, within this module's
+    admission (its band-mate rule and same-sector exemption kept, a cell without a main
+    satellite free to stack). It is the reference set of the saturation design's local
+    prototype, which ``research/direct_communication/iridium_saturation_module.md`` names, but
+    not that prototype's rule."""
 
     ANY_SHARE = "any_share"
     """Every satellite that places a layer in the cell serves it."""
@@ -2589,8 +2611,7 @@ def _directional_diagnostics(fleet: _FleetSnapshots) -> DirectionalDiagnostics:
 
     The kept stacked share is the snapshot mean of each snapshot's kept stacked layers over
     its L; the median separation and the mean full-sum interference are the means over the
-    snapshots that keep stacked layers, None when none does (as the prototype averaged its
-    snapshots).
+    snapshots that keep stacked layers, None when none does.
     """
     shares = [
         statistics.beams / useful if useful > _NONE_LEFT else _NONE_LEFT
@@ -2869,7 +2890,11 @@ def _method(inputs: SaturationInputs) -> str:
         f"floored at {inputs.sidelobe_floor_db:g} dB: SE = {inputs.se_anchor_bps_per_hz:g} x "
         "log2(1 + SINR), the single-layer SINR_1 = 2^(central SE / that anchor) - 1; a cell "
         "keeps its stacked layers only when they do not lower its capacity, the dropped beams "
-        "spent. A circular Walker Delta shell at "
+        "spent. Each directional row reports its kept stacked share (the share of L in the kept "
+        "stacked sub-pairs, in cells their first layer covers, that the full sum prices against "
+        "a layer of another sector), their beam-weighted median separation from the nearest "
+        "such layer and their beam-weighted mean full-sum interference in dB, none of them "
+        "measured against the cell's main satellite alone. A circular Walker Delta shell at "
         f"{shell.altitude_km:g} km and {shell.inclination_deg:g} degrees (P = round(sqrt(N)) "
         "planes of S = round(N / P), the realized N = P x S, phasing F = 1) with a "
         f"{shell.elevation_mask_deg:g} degree mask; a square {shell.reference_aperture_m2:g} "

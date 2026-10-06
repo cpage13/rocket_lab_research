@@ -685,8 +685,9 @@ COARSE_REAL_ROWS = (
     ),
 )
 """The coarse rows as first computed (2026-10-05), frozen: fleet, L, capacity Gbps, U,
-ceiling, supply. They agree with the reference prototype's same snapshot at float
-precision."""
+ceiling, supply. They agree at float precision with the same snapshot of the saturation
+design's local prototype, which ``research/direct_communication/iridium_saturation_module.md``
+names."""
 
 COARSE_REAL_MAXIMUM_USE = 380946.7365253218
 """The phone class's maximum use on the shipped grid at the investor's usage, beams."""
@@ -1759,7 +1760,7 @@ def test_each_pair_sees_its_satellite_in_its_sector_at_the_true_angles(
 
 WIDE_VIEW_SHELL = ShellInputs(altitude_km=1200.0, inclination_deg=70.0, elevation_mask_deg=5.0)
 """A wide-view shell (about a 28 degree view): near a pole its search windows span every
-column, the pair search's worst case for memory (the p1 review's scenario S1.8)."""
+column, the pair search's worst case for memory."""
 
 LOWERED_CHUNK_ELEMENTS = 700_000
 """A lowered element budget: two of the wide view's polar windows (229 rows x 1,441 columns,
@@ -1777,8 +1778,9 @@ found and as kept, and the deduplication's keys and sort (measured at about 107 
 def test_the_pair_search_chunks_hold_their_element_budget_and_change_no_pair(
     synthetic_population_grid: GridBuilder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Objective: the pair search's chunks bound its working memory (the p1 review's scenario
-    S1.8): every chunk's windows hold at most the element budget, and chunking changes no pair.
+    """Objective: the pair search's chunks bound its working memory where it is largest, a wide
+    view near a pole: every chunk's windows hold at most the element budget, and chunking
+    changes no pair.
 
     Sample: every 0.25 degree cell populated (every window cell a demand cell, the worst case
     for memory); the wide-view shell (1,200 km, a 5 degree mask), whose view near a pole spans
