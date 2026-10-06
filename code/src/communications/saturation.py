@@ -67,8 +67,9 @@ for one class on one set of inputs; this version runs stages 2 to 11 for every c
    served by its smallest footprint in view, one layer for the phone class and one per sky
    sector for a directional class, capped by its people) and the supply (each satellite's
    beams, capped by what its cells could take); for a directional class, its kept stacked
-   share, their median separation from their cell's nearest layer in another sector and
-   their mean full-sum interference.
+   share (the share of L in the kept stacked layers of cells their first layer covers, each
+   on a layer of another sector), their median separation from their cell's nearest layer in
+   another sector and their mean full-sum interference.
 10. **Maximum use**, in closed form and independent of the fleet: every cell served by the
     best satellite the shell can ever offer it, at central angle max(0, |latitude| -
     inclination), capped by its people; for a directional class one layer per sky sector,
@@ -294,6 +295,15 @@ _SERVED_BEAMS_FLOOR: Final[float] = 1e-9
 places more than this many beams; less is the passes' rounding, not a layer. It decides which
 sub-pairs the full sum prices and which cells carry stacked beams (rules D5 and D6), and the
 main satellite and any-share serving sets of the diagnostic (rule D3)."""
+
+_COVERED_SHORTFALL_SHARE: Final[float] = 1e-9
+"""The most of a cell's area its first layer may leave uncovered and still cover the cell, as a
+share of the area. Where a band's area binds a cell, the fill's scale sets the cell's first
+layer to its area exactly in arithmetic, so only rounding leaves a hair uncovered (at most about
+1e-12 of a cell's area on the shipped grid, a cell holding up to dozens of pairs); a cell its
+people cap or the satellites leave short misses by far more (1e-7 at the least there, most by
+over 1e-3). The stacked layers' statistics count only covered cells (rule D4's stage 2 may
+complete a short cell's first layer instead of stacking on it)."""
 
 _MEDIAN_WEIGHT_SHARE: Final[float] = 0.5
 """A weighted median is the value at which the cumulative weight first reaches half."""
@@ -2059,10 +2069,13 @@ def _price_layers(
 class _StackStatistics:
     """The kept stacked layers' statistics in one snapshot (the curve's directional diagnostics).
 
-    A kept stacked layer here is a stacked sub-pair of a cell that keeps its stack and that
-    sits on a layer of another sector in its cell; a stacked sub-pair that shares its sector
-    with every other layer of its cell completes that sector's one layer (rule D5 prices it so)
-    and counts in L, not here.
+    A kept stacked layer here is a stacked sub-pair of a cell that keeps its stack and that its
+    first layer covers, sitting on a layer of another sector in its cell. In a covered cell
+    every stage-2 beam overlaps another sector's first layer, so it stacks; in a cell its first
+    layer leaves short, stage 2 may complete that first layer instead, which the fluid
+    allocation cannot tell from stacking, so those beams count in L, not here. A stacked
+    sub-pair that shares its sector with every other layer of its cell completes that sector's
+    one layer (rule D5 prices it so) and counts in L, not here.
 
     Attributes:
         beams: The kept stacked layers' beams.
@@ -2078,12 +2091,28 @@ class _StackStatistics:
 
 
 def _stack_statistics(
-    pricing: _Pricing, keeps_stack: npt.NDArray[np.bool_], pair_cell: npt.NDArray[np.int64]
+    pricing: _Pricing,
+    keeps_stack: npt.NDArray[np.bool_],
+    first_layer_covers: npt.NDArray[np.bool_],
+    pair_cell: npt.NDArray[np.int64],
 ) -> _StackStatistics:
-    """Return the kept stacked layers' beams, median separation and mean interference."""
+    """Return the kept stacked layers' beams, median separation and mean interference.
+
+    Args:
+        pricing: The full-sum pricing (rule D5).
+        keeps_stack: Whether each cell keeps its stacked beams (rule D6).
+        first_layer_covers: Whether each cell's first layer covers it
+            (:data:`_COVERED_SHORTFALL_SHARE`).
+        pair_cell: Every pair's cell.
+
+    Returns:
+        The statistics of the stacked sub-pairs :class:`_StackStatistics` counts.
+    """
+    cell = pair_cell[pricing.pair]
     kept = (
         ~pricing.is_first_layer
-        & keeps_stack[pair_cell[pricing.pair]]
+        & keeps_stack[cell]
+        & first_layer_covers[cell]
         & (pricing.nearest_cosine > _NO_NEIGHBOUR_COSINE)
     )
     weight = pricing.beams[kept]
@@ -2185,6 +2214,7 @@ def _directional_allocation(
     stacked_capacity = np.where(pricing.has_stack, pricing.stacked_capacity, first_alone)
     cell_capacity = np.where(keeps_stack, pricing.stacked_capacity, first_alone)
     cell_capacity_mbps = cell_capacity * spectrum_mhz
+    first_layer_covers = first.remaining.key_area_km2 <= _COVERED_SHORTFALL_SHARE * cells.area_km2
     return _DirectionalAllocation(
         sector=sector,
         first_layer_beams=first.beams,
@@ -2195,7 +2225,7 @@ def _directional_allocation(
         cell_capacity_mbps=cell_capacity_mbps,
         useful_beams=first.useful_beams + float(stacked.beams[keeps_stack[pairs.cell]].sum()),
         capacity_mbps=float(cell_capacity_mbps.sum()),
-        statistics=_stack_statistics(pricing, keeps_stack, pairs.cell),
+        statistics=_stack_statistics(pricing, keeps_stack, first_layer_covers, pairs.cell),
     )
 
 

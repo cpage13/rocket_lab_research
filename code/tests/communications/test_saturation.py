@@ -2166,6 +2166,90 @@ def test_the_keep_rule_drops_a_stack_that_lowers_capacity_and_its_beams_stay_spe
     assert allocation.capacity_mbps == pytest.approx(float(layers.cell_capacity_mbps.sum()))
 
 
+SATELLITE_LIMITED_BAND_DEG = (20.0, 40.0)
+"""The satellite-limited world's band of 0.5 degree cells, degrees north."""
+
+SATELLITE_LIMITED_PEOPLE = 30.0
+"""People in each cell of the satellite-limited world: under one beam of every class at the
+investor's usage (the mounted terminal's people cap is 0.75 beams)."""
+
+SATELLITE_LIMITED_FLEET = 300
+"""The satellite-limited world's requested fleet (realized 306): too few satellites for the
+mounted terminal's people caps, so many cells stay under their caps after stage 1."""
+
+SIDEREAL_DAY_S = 86164.0905
+"""One sidereal day, s, the span the snapshot times are drawn over (the curve's pinned value)."""
+
+SERVED_BEAMS_FLOOR = 1e-9
+"""A sub-pair places a layer when it places more than this many beams (the module's floor)."""
+
+COVERED_SHORTFALL_SHARE = 1e-9
+"""A cell's first layer covers it when it leaves at most this share of the cell uncovered (the
+module's convention; in the satellite-limited world a covered cell misses by rounding only and
+a short one by more than 1e-5 of its area)."""
+
+
+def satellite_limited_people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+    """30 people in every cell between 20 and 40 degrees north."""
+    inside = (lat > SATELLITE_LIMITED_BAND_DEG[0]) & (lat < SATELLITE_LIMITED_BAND_DEG[1])
+    return np.where(inside, SATELLITE_LIMITED_PEOPLE, 0.0)
+
+
+def counted_stacked_beams(
+    allocation: sat._Allocation, cells: sat._DemandCells, sectors: int, *, covered_only: bool
+) -> float:
+    """The stacked beams the statistics count, computed independently: every stacked sub-pair
+    over the floor of a cell that keeps its stack (and with ``covered_only``, that its first
+    layer covers) whose cell holds a served sub-pair in another sector."""
+    layers = directional_of(allocation)
+    cell = allocation.cell
+    stacked = layers.stacked_beams > SERVED_BEAMS_FLOOR
+    served = stacked | (layers.first_layer_beams > SERVED_BEAMS_FLOOR)
+    served_keys = np.unique(cell[served] * sectors + layers.sector[served])
+    sectors_served = np.bincount(served_keys // sectors, minlength=cells.count)
+    first_area = np.bincount(
+        cell, weights=layers.first_layer_beams * allocation.footprint_km2, minlength=cells.count
+    )
+    covers = first_area >= cells.area_km2 * (1 - COVERED_SHORTFALL_SHARE)
+    counted = stacked & layers.keeps_stack[cell] & (sectors_served[cell] >= 2)
+    if covered_only:
+        counted &= covers[cell]
+    return float(layers.stacked_beams[counted].sum())
+
+
+def test_the_statistics_count_stacks_only_in_cells_their_first_layer_covers(
+    synthetic_population_grid: GridBuilder, synthetic_saturation_inputs: SaturationInputsBuilder
+) -> None:
+    """Objective: the kept stacked share and its two statistics count a stacked layer only in a
+    cell its first layer covers. In a covered cell every stage-2 beam overlaps another sector's
+    first layer; in a cell its first layer leaves short, stage 2 may complete that first layer
+    instead, which the fluid allocation cannot tell from stacking, so those beams count in L,
+    never as stacked layers (the numerics review's satellite-limited case, round 1).
+
+    Sample: 0.5 degree cells between 20 and 40 degrees north, 30 people each, so the mounted
+    terminal's people caps (0.75 beams) outrun 306 satellites (requested 300) at the snapshot
+    draw's first time; the default B and the investor's usage.
+
+    Expected outcome: cells the first layer leaves short keep stage-2 beams beside a served
+    layer of another sector, more than ten times the stacked beams of the covered cells (these
+    completions are what the statistics would count without the rule); the statistics' beams
+    equal, within 1e-12 relative, an independent count of the kept stacked sub-pairs over the
+    floor of the covered cells that sit beside a served sub-pair of another sector.
+    """
+    grid = synthetic_population_grid(MID_BAND_CELL_DEG, satellite_limited_people)
+    inputs = synthetic_saturation_inputs(grid, fleets=SHARED_USAGE_FLEETS)
+    cells = sat._demand_cells(grid, inputs.demand.density_threshold_per_km2)
+    first_time = float(np.random.default_rng(inputs.sweep.seed).uniform(0.0, SIDEREAL_DAY_S))
+    satellites = sat._walker_positions(inputs.shell, SATELLITE_LIMITED_FLEET, first_time)
+    assert satellites.count == 306
+    allocation = sat._allocate(satellites, cells, directional_limits(MOUNTED, 150.0))
+    sectors = sum(class_inputs(MOUNTED).sector_wedges_per_ring)
+    covered = counted_stacked_beams(allocation, cells, sectors, covered_only=True)
+    every_cell = counted_stacked_beams(allocation, cells, sectors, covered_only=False)
+    assert every_cell > 10 * covered
+    assert directional_of(allocation).statistics.beams == pytest.approx(covered, rel=1e-12, abs=0.0)
+
+
 def test_the_sector_rule_ceiling_sums_each_sectors_smallest_footprint(one_cell: OneCell) -> None:
     """Objective: the sector-rule ceiling (stage 9): per cell in view, the sum over its sky
     sectors of the cell's area over the sector's smallest footprint in view, capped by its
