@@ -551,11 +551,14 @@ IRIDIUM_SCENARIO_NAME_DEFAULT: Final[str] = "Iridium L-band max-outcome (every d
 block (the optional block's single label home, mirroring ``GroundInterfaceDials``): one run
 reports every device class side by side."""
 
-RETIRED_CAP_READING_FLEET: Final[int] = MAX_FLEET_SATELLITES_DEFAULT
-"""INVESTOR_SET (2026-06-26, as :data:`MAX_FLEET_SATELLITES_DEFAULT`). The 2,000-satellite
-fleet the Iridium model once inherited from the cellular family as a cap, which the
-saturation module retires for Iridium (ADR 005): the Iridium model reads the curve at this
-fleet, labeled the retired cap, and keeps it for comparison only. It caps nothing."""
+RETIRED_CAP_READING_FLEET: Final[int] = 2_000
+"""INVESTOR_SET (2026-06-26, the cellular family's fleet cap then, which the Iridium model
+inherited through ``iridium-v5``). The 2,000-satellite fleet the Iridium model once took from
+the cellular family as a cap, which the saturation module retires for Iridium (ADR 005): the
+Iridium model reads the curve at this fleet, labeled the retired cap, and keeps it for
+comparison only. It caps nothing. It is its own constant, not
+:data:`MAX_FLEET_SATELLITES_DEFAULT`, so a later change to the cellular family's live fleet cap
+never moves this historical reading."""
 
 # ===========================================================================
 # The Iridium model's prices (investor-set, 2026-10-03 and 2026-10-04): each class's and

@@ -55,6 +55,7 @@ from communications.constants import (
     ORBIT_INCLINATION_DEG_SCENARIO,
     ORBIT_SCENARIO_BASIS,
     ORBIT_SCENARIO_SOURCE_STATUS,
+    RETIRED_CAP_READING_FLEET,
     DeviceClass,
 )
 from communications.engine import (
@@ -148,6 +149,7 @@ READING_TARGETS = (
     (340, 123.25, ((2.73, 491.1), (0.34, 413.6), (2.34, 421.8))),
     (2_000, 725.0, ((13.89, 2_500.3), (1.85, 2_223.2), (11.71, 2_107.0))),
 )
+HISTORICAL_FLEET_CAP = 2_000  # the cap the Iridium model inherited through iridium-v5 (ADR 005).
 
 # The module's own values on the committed curve (the re-promotion rule re-freezes them).
 FROZEN_PEOPLE = {
@@ -1055,6 +1057,25 @@ def test_the_readings_at_the_reported_fleets(
     shared_run = run_iridium_model(shared, committed_saturation_curve)
     fleets = [reading.fleet for reading in shared_run.iridium.saturation.readings]
     assert fleets == [340, 2_000, 768, 1_280]
+
+
+def test_the_retired_cap_reading_is_its_own_constant_at_the_historical_cap(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
+    """Objective: the retired cap's reading stays at the 2,000-satellite fleet cap the Iridium
+    model inherited from the cellular family through ``iridium-v5`` (ADR 005), whatever the
+    cellular family's live fleet cap becomes: the reading is its own named constant, not that
+    live default.
+
+    Sample: the named constant; the shipped scenario's run.
+
+    Expected outcome: the constant equals the historical cap, 2,000; the run's second reading,
+    labeled the retired cap, reads that fleet.
+    """
+    assert RETIRED_CAP_READING_FLEET == HISTORICAL_FLEET_CAP
+    run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
+    reading = run.iridium.saturation.readings[1]
+    assert (reading.label, reading.fleet) == (RETIRED_CAP_LABEL, HISTORICAL_FLEET_CAP)
 
 
 def test_the_iot_reading_at_the_reported_fleets(
