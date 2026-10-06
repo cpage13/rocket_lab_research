@@ -10,7 +10,10 @@ retiring cohorts' replacement counts, never a build tranche), the low-target
 sanity case (the target reached at the first launch, HOLD from the next year),
 the cliff bite, and the launch-share rounding. They use the real shared cadence /
 cohort spine (no mocks), so they also act as an integration check on the
-``common.*`` seam.
+``common.*`` seam. The shared fleet-and-cost loop (``run_fleet_loop``) has its own
+tests at the end, under deployment rules written here: it refuses an impossible
+deployment, and its cohort cost lines carry each living cohort at the cost locked at
+its launch.
 
 The frozen end-to-end numbers (the Iridium baseline, the saturation companion, and
 the equality tripwire that holds the cellular default's cost per subscriber) live in
@@ -22,6 +25,7 @@ compared, where a tight relative tolerance is used).
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 
 import pytest
 
@@ -38,7 +42,13 @@ from communications.engine import (
     MARGIN_PERCENT_SCALE,
     MUSD_TO_USD,
     CommsTrajectory,
+    Deployment,
+    DeploymentRuleError,
+    DeploymentStep,
+    margin_pct,
+    per_satellite_annual_cost_musd,
     run_comms_model,
+    run_fleet_loop,
 )
 
 # The default-config horizon is 10 years after the base year, so the trajectory
@@ -668,3 +678,188 @@ def test_higher_arpu_lifts_arpu_revenue_and_margin() -> None:
     assert higher.steady_state_revenue_cost_plus_musd == pytest.approx(
         base.steady_state_revenue_cost_plus_musd, rel=COST_SUM_REL_TOL
     )
+
+
+# -- the shared fleet-and-cost loop under a deployment rule (run_fleet_loop) --
+
+
+def _fly_every_launch(step: DeploymentStep) -> Deployment:
+    """A family-neutral test rule: fly every launch the cadence share allows, and count as
+    replacement only the part that matches the year's retirements."""
+    added = step.launches_allowed * step.satellites_per_launch
+    return Deployment(
+        satellites_added=added, satellites_replaced=min(added, step.retiring_this_year)
+    )
+
+
+def _adds_part_of_a_launch(step: DeploymentStep) -> Deployment:
+    """Adds one satellite short of the allowance once any launch is allowed."""
+    added = max(0, step.launches_allowed * step.satellites_per_launch - 1)
+    return Deployment(satellites_added=added, satellites_replaced=0)
+
+
+def _adds_a_negative_count(step: DeploymentStep) -> Deployment:
+    """Adds minus one launch's worth (a multiple of the launch, but not a count)."""
+    return Deployment(satellites_added=-step.satellites_per_launch, satellites_replaced=0)
+
+
+def _adds_a_float_count(step: DeploymentStep) -> Deployment:
+    """Adds the allowance as a float, against the type (a count is an integer)."""
+    added = float(step.launches_allowed * step.satellites_per_launch)
+    return Deployment(satellites_added=added, satellites_replaced=0)
+
+
+def _adds_beyond_the_cadence(step: DeploymentStep) -> Deployment:
+    """Adds one whole launch more than the cadence share allows."""
+    added = (step.launches_allowed + 1) * step.satellites_per_launch
+    return Deployment(satellites_added=added, satellites_replaced=0)
+
+
+def _replaces_part_of_a_launch(step: DeploymentStep) -> Deployment:
+    """Adds the allowance and counts one satellite of it as replacement."""
+    added = step.launches_allowed * step.satellites_per_launch
+    return Deployment(satellites_added=added, satellites_replaced=1)
+
+
+def _replaces_more_than_it_adds(step: DeploymentStep) -> Deployment:
+    """Adds the allowance and counts one launch more than it as replacement."""
+    added = step.launches_allowed * step.satellites_per_launch
+    return Deployment(
+        satellites_added=added, satellites_replaced=added + step.satellites_per_launch
+    )
+
+
+@pytest.mark.parametrize(
+    ("rule", "broken"),
+    [
+        pytest.param(
+            _adds_part_of_a_launch,
+            r"in 20[0-9]{2} does not add whole launches: satellites added \d+, ",
+            id="part_of_a_launch",
+        ),
+        pytest.param(
+            _adds_a_negative_count,
+            "in 2026 does not add whole launches: satellites added -12, ",
+            id="negative",
+        ),
+        pytest.param(
+            _adds_a_float_count,
+            r"in 2026 does not add whole launches: satellites added 0\.0, ",
+            id="float",
+        ),
+        pytest.param(
+            _adds_beyond_the_cadence,
+            r"in 2026 adds more than the cadence share allows: satellites added 12, at most 0 \(",
+            id="beyond_the_cadence",
+        ),
+        pytest.param(
+            _replaces_part_of_a_launch,
+            "in 2026 does not replace whole launches: satellites replaced 1, ",
+            id="replaces_part_of_a_launch",
+        ),
+        pytest.param(
+            _replaces_more_than_it_adds,
+            "in 2026 replaces more than it adds: satellites replaced 12, satellites added 0",
+            id="replaces_more_than_it_adds",
+        ),
+    ],
+)
+def test_the_loop_refuses_an_impossible_deployment(
+    rule: Callable[[DeploymentStep], Deployment], broken: str
+) -> None:
+    """The loop checks every deployment its rule returns.
+
+    Objective: a deployment adds whole launches (a count of zero or more, a multiple of the
+    satellites a launch carries), at most the launches the cadence share allows, and counts
+    whole launches of that addition, at most all of it, as replacement; the loop refuses
+    anything else with a typed error (a ValueError, so the promotion command reports it as
+    one ERROR line) naming the year and the broken condition.
+
+    Sample: the config defaults (12 per launch; FY2026 allows no comms launch) under six
+    rules, each wrong in one way: part of a launch, a negative count, a float count, a launch
+    beyond the cadence, a replacement of part of a launch, and more replacement than addition.
+
+    Expected: each raises DeploymentRuleError naming the year and the condition it breaks
+    (the five that are wrong from the first year name FY2026).
+    """
+    config = CommsConfig()
+    with pytest.raises(DeploymentRuleError, match=broken) as refused:
+        run_fleet_loop(config, rule, satellites_per_launch=config.satellite.satellites_per_launch)
+    assert isinstance(refused.value, ValueError)
+
+
+def test_the_loop_refuses_a_launch_that_carries_no_satellite() -> None:
+    """The loop deploys whole launches, so a launch must carry at least one satellite.
+
+    Sample: the config defaults with zero satellites per launch.
+
+    Expected: a ValueError naming the bound and the count, before any year runs.
+    """
+    with pytest.raises(ValueError, match="satellites_per_launch must be at least 1; got 0"):
+        run_fleet_loop(CommsConfig(), _fly_every_launch, satellites_per_launch=0)
+
+
+def test_the_cohort_cost_lines_are_each_living_cohort_at_its_locked_cost() -> None:
+    """The shared record's cohort cost lines: each living cohort at the cost locked at launch.
+
+    Objective: the per-cohort lock-in. A cohort's per-satellite annual cost is fixed at its
+    launch year's launch price, so a later year's cadence cost-down never reprices it, and
+    the annualized fleet cost is the sum of the living cohorts' lines.
+
+    Sample: the config defaults (a launch price that falls as the whole-fleet cadence
+    ramps) under a test rule that flies every launch the cadence share allows, so cohorts
+    launched at different prices live side by side.
+
+    Expected: every year, one line per living cohort, oldest first, each within the 5-year
+    cliff and holding every satellite its launch year deployed; each line's cost is its
+    satellites times the per-satellite cost at its launch year's price, exactly; the lines'
+    satellites sum to the living fleet and their costs to the annualized fleet cost; and some
+    year carries cohorts locked at two prices (so a line priced at the current year's launch
+    price would fail here).
+    """
+    config = CommsConfig()
+    per_launch = config.satellite.satellites_per_launch
+    life = config.satellite.satellite_lifetime_years
+    fleet = run_fleet_loop(config, _fly_every_launch, satellites_per_launch=per_launch)
+    by_year = {year.year: year for year in fleet.years}
+    saw_two_prices = False
+    for year in fleet.years:
+        launch_years = [line.launch_year for line in year.cohort_costs]
+        assert launch_years == sorted(set(launch_years))
+        for line in year.cohort_costs:
+            assert line.launch_year <= year.year < line.launch_year + life
+            launched = by_year[line.launch_year]
+            assert line.living_satellites == launched.satellites_deployed_this_year
+            assert line.living_satellites > 0
+            locked_cost_per_satellite = per_satellite_annual_cost_musd(
+                satellite_build_cost_musd=config.satellite.satellite_build_cost_musd,
+                launch_cost_per_launch_musd=launched.launch_cost_per_launch_musd,
+                satellites_per_launch=per_launch,
+                satellite_lifetime_years=life,
+            )
+            assert line.annual_cost_musd == line.living_satellites * locked_cost_per_satellite
+        assert sum(line.living_satellites for line in year.cohort_costs) == year.living_fleet
+        assert year.annual_cost_this_year_musd == pytest.approx(
+            sum(line.annual_cost_musd for line in year.cohort_costs), rel=COST_SUM_REL_TOL
+        )
+        launch_prices = {
+            by_year[line.launch_year].launch_cost_per_launch_musd for line in year.cohort_costs
+        }
+        saw_two_prices = saw_two_prices or len(launch_prices) > 1
+    assert saw_two_prices
+
+
+def test_margin_is_none_where_revenue_is_not_positive() -> None:
+    """The one margin function is undefined without revenue.
+
+    Objective: ``margin_pct`` returns None where revenue is not positive, never a number
+    published as if it were a margin; the cellular record shows its published 0.0 there (the
+    cost-plus and gross-margin tests above).
+
+    Sample: revenue 0.0 and -1.0 against a 1.0 cost; revenue 4.0 against 1.0.
+
+    Expected: None, None, and 75.0 percent.
+    """
+    assert margin_pct(0.0, 1.0) is None
+    assert margin_pct(-1.0, 1.0) is None
+    assert margin_pct(4.0, 1.0) == pytest.approx(75.0)

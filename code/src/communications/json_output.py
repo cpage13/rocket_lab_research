@@ -87,6 +87,7 @@ from communications.constants import (
     DeviceClass,
 )
 from communications.engine import (
+    ZERO_MARGIN_PCT,
     CommsTrajectory,
     IridiumArpuBucket,
     IridiumArpuResult,
@@ -522,8 +523,12 @@ def _build_arpu_buckets_block(
             :func:`~communications.engine.arpu_stated_assumptions`), carried inline.
 
     Returns:
-        The populated :class:`RevenueArpuBucketsBlock`.
+        The populated :class:`RevenueArpuBucketsBlock`, its margin
+        :data:`~communications.engine.ZERO_MARGIN_PCT` where
+        :func:`~communications.engine.margin_pct` is None (no revenue), as the v5
+        artifact has always published it.
     """
+    margin = margin_pct(result.arpu_revenue_total_musd_yr, built_fleet_annual_cost_musd)
     return RevenueArpuBucketsBlock(
         standard=_arpu_bucket_block(result.standard),
         premium=_arpu_bucket_block(result.premium),
@@ -531,9 +536,7 @@ def _build_arpu_buckets_block(
         government=_arpu_bucket_block(result.government),
         total_connections=result.total_connections,
         arpu_revenue_total_musd=result.arpu_revenue_total_musd_yr,
-        arpu_margin_vs_steady_state_cost_pct=margin_pct(
-            result.arpu_revenue_total_musd_yr, built_fleet_annual_cost_musd
-        ),
+        arpu_margin_vs_steady_state_cost_pct=margin if margin is not None else ZERO_MARGIN_PCT,
         stated_assumptions=stated_assumptions,
     )
 

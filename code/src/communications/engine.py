@@ -5,8 +5,10 @@ horizon and returns a :class:`CommsTrajectory` of plain-numeric per-year rollups
 The same treadmill serves both model families: the High-Bandwidth Cellular Pure
 Play model (a fixed subscriber-density dial) and the Iridium model (the density
 derived from L-band physics when ``config.iridium`` is set). Each family has its own
-entry, and both call this one path (the interim shared path, until the shared
-fleet-and-cost loop lands): the cellular entry is ``run_comms_model(config)`` here,
+entry, and both call this one path (the interim shared path, until the entries move
+onto the shared fleet-and-cost loop, :func:`run_fleet_loop`, which runs a fleet under a
+family's deployment rule and returns the shared fleet-and-cost record,
+:class:`FleetTrajectory`): the cellular entry is ``run_comms_model(config)`` here,
 which refuses a config with an ``iridium`` block (:class:`NotACellularConfigError`);
 the Iridium entry is ``communications.iridium.run_iridium_model(config, curve)``,
 which checks its saturation curve against the config before the run. The interim
@@ -128,7 +130,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Protocol
 
 from common.cadence import (
     ROUND_TO_NEAREST_OFFSET,
@@ -208,15 +210,23 @@ satellite. A density that rounds below this describes a satellite that cannot ca
 a single subscriber at the configured load, so the fleet sizing would divide by zero;
 the derivation raises a clear error instead. A structural bound, not a tunable."""
 
+MIN_SATELLITES_PER_LAUNCH: Final[int] = 1
+"""The fewest satellites a launch carries in the shared fleet-and-cost loop: one. The loop
+deploys and costs whole launches (a cohort is a multiple of the satellites per launch, and the
+launches flown are its quotient), so a count below one has no launch to divide into; the loop
+refuses it with a clear error instead. A structural bound, not a tunable."""
+
 MARGIN_PERCENT_SCALE: Final[float] = 100.0
 """The percent scale for a gross margin: ``(revenue - cost) / revenue`` times this
 yields a percentage (e.g. 0.333 -> 33.3), mirroring the data-center fleet-margin
 convention so the two models report margin in the same unit."""
 
 ZERO_MARGIN_PCT: Final[float] = 0.0
-"""The gross-margin percent when revenue is zero (an empty fleet, or a build-out
-year before any satellite is on orbit): the margin is undefined, so it reports 0.0
-rather than dividing by zero, mirroring the data-center fleet-margin guard."""
+"""The margin percent the cellular family publishes where revenue is not positive (an
+empty fleet, or a build-out year before any satellite is on orbit): the margin is
+undefined there, so :func:`margin_pct` returns None and the cellular record (with the
+Iridium artifact's ARPU margin) reports 0.0 in its place, its published values unchanged,
+mirroring the data-center fleet-margin guard."""
 
 NO_ANNUAL_COST_MUSD: Final[float] = 0.0
 """The per-satellite annual cost ($M/yr) returned for a non-positive satellite life
@@ -658,7 +668,7 @@ def usd_per_person(cost_musd: float | None, people_served: int) -> float | None:
 # ---------------------------------------------------------------------------
 
 
-def _per_satellite_annual_cost_musd(
+def per_satellite_annual_cost_musd(
     *,
     satellite_build_cost_musd: float,
     launch_cost_per_launch_musd: float,
@@ -674,7 +684,10 @@ def _per_satellite_annual_cost_musd(
     (``cost_annual = node_total / service_life``). The launch cost is the
     deployment-year per-launch cost (priced at the whole-fleet cadence), so a cohort
     launched in a cheaper-cadence year carries a lower annual cost for its whole life
-    (the cost-down is locked in at launch, mirroring the DC per-cohort cost).
+    (the cost-down is locked in at launch, mirroring the DC per-cohort cost). The one
+    annualization: the shared fleet-and-cost loop locks each cohort's cost with it
+    (:func:`run_fleet_loop`), and a family prices a fleet the trajectory does not hold
+    with it at a chosen year's launch price.
 
     Args:
         satellite_build_cost_musd: The flat per-satellite hardware build cost, $M.
@@ -694,26 +707,35 @@ def _per_satellite_annual_cost_musd(
     return lifetime_cost_per_satellite_musd / satellite_lifetime_years
 
 
-def margin_pct(revenue_musd: float, cost_musd: float) -> float:
-    """A margin as a percent: ``(revenue - cost) / revenue x 100``.
+def margin_pct(revenue_musd: float, cost_musd: float) -> float | None:
+    """A margin as a percent: ``(revenue - cost) / revenue x 100``, or None without revenue.
 
-    The one margin formula: the per-cohort and per-year gross margins, and the
-    published ARPU margin (whose cost is the built fleet's annualized cost).
-    Mirrors the DC fleet-margin formula, including its zero-revenue guard (a year
-    with no living fleet, hence no revenue, reports :data:`ZERO_MARGIN_PCT` rather
-    than dividing by zero).
+    The one margin formula, for every family: the cellular family's per-cohort and
+    per-year margins, and the Iridium artifact's published ARPU margin (whose cost is
+    the built fleet's annualized cost). Mirrors the DC fleet-margin formula. A margin
+    is undefined where revenue is not positive (a year with no living fleet, hence no
+    revenue), so it is None there, never a number published as if it were a margin:
+    each record decides what it shows in its place (the cellular record keeps its
+    published :data:`ZERO_MARGIN_PCT`).
 
     Args:
         revenue_musd: The annual revenue, $M.
         cost_musd: The annual cost (the annualized cost basis), $M.
 
     Returns:
-        The margin in percent, or :data:`ZERO_MARGIN_PCT` when revenue is not
-        positive.
+        The margin in percent, or None when revenue is not positive.
     """
     if revenue_musd <= 0.0:
-        return ZERO_MARGIN_PCT
+        return None
     return (revenue_musd - cost_musd) / revenue_musd * MARGIN_PERCENT_SCALE
+
+
+def _cellular_margin_pct(revenue_musd: float, cost_musd: float) -> float:
+    """The cellular family's published margin: :func:`margin_pct`, with
+    :data:`ZERO_MARGIN_PCT` where it is None (revenue not positive), so the cellular
+    record's values do not move."""
+    margin = margin_pct(revenue_musd, cost_musd)
+    return margin if margin is not None else ZERO_MARGIN_PCT
 
 
 # ---------------------------------------------------------------------------
@@ -723,16 +745,17 @@ def margin_pct(revenue_musd: float, cost_musd: float) -> float:
 
 @dataclass(frozen=True)
 class _CohortBuild:
-    """One deployed cohort's facts for the economics overlay (engine-internal).
+    """One deployed cohort's locked-in cost (engine-internal): the per-cohort lock-in.
 
     Tracks, per cohort (one per launch year), the satellites deployed and the
     per-satellite ANNUAL cost locked in at launch (built from the deployment-year
     launch cost, so the cadence cost-down is fixed for the cohort's life, mirroring
     the DC per-cohort cost). The cohort-cliff survival reuses the shared
     ``common.cohort.cohort_is_alive_at`` (no separate cliff machinery). This rides
-    alongside the shared ``LivedCohort`` list (which drives the build/cost treadmill,
-    unchanged); the parallel record adds only the per-satellite annual cost the
-    treadmill does not carry.
+    alongside the shared ``LivedCohort`` list (which carries the living fleet under
+    the cliff); the parallel record adds only the per-satellite annual cost the
+    ``LivedCohort`` does not carry, from which each year's cohort cost lines
+    (:class:`FleetCohortCost`) are drawn.
 
     Attributes:
         launch_year: The fiscal year this cohort deployed (a unique key: at most one
@@ -740,12 +763,186 @@ class _CohortBuild:
         satellites: The satellites in this cohort (always strictly positive: empty
             years are not recorded).
         per_satellite_annual_cost_musd: The per-satellite annual cost ($M/yr) locked
-            in at launch (:func:`_per_satellite_annual_cost_musd`).
+            in at launch (:func:`per_satellite_annual_cost_musd`).
     """
 
     launch_year: int
     satellites: int
     per_satellite_annual_cost_musd: float
+
+
+@dataclass(frozen=True)
+class FleetCohortCost:
+    """One living cohort's cost line in one year: its satellites at its locked annual cost.
+
+    A cohort is one year's deployment; the cohort cliff retires it whole, so while it
+    lives its living satellites are all it deployed. Its per-satellite annual cost is
+    locked at its launch year's launch price (:func:`per_satellite_annual_cost_musd`),
+    so a later year's cadence cost-down never reprices it.
+
+    Attributes:
+        launch_year: The fiscal year the cohort deployed (its identity across the years).
+        living_satellites: The cohort's satellites alive this year.
+        annual_cost_musd: ``living_satellites`` times the cohort's locked per-satellite
+            annual cost, $M/yr.
+    """
+
+    launch_year: int
+    living_satellites: int
+    annual_cost_musd: float
+
+
+@dataclass(frozen=True)
+class FleetYear:
+    """One model year of the shared fleet-and-cost record (plain numerics, no cells).
+
+    What every family's fleet shares: the cadence, the deployment its rule chose, the
+    living fleet under the cohort cliff, and the cost lines. A family's own lines (a
+    target, its served people, its revenue) live in its own record, beside this one.
+
+    Attributes:
+        year: The fiscal year (e.g. 2036).
+        fleet_launches_this_year: The whole-fleet integer cadence this year (the shared
+            logistic ramp). The launch price is priced at this.
+        comms_launches_flown_this_year: The comms launches flown this year: the
+            satellites the rule deployed over the satellites per launch, a whole count
+            at most the cadence share's launches.
+        satellites_deployed_this_year: Satellites added this year
+            (= ``comms_launches_flown_this_year * satellites_per_launch``).
+        living_fleet: Living satellites this year under the service-life cliff, counted
+            AFTER this year's cohort is added.
+        coverage_fraction: ``living_fleet / coverage_floor``, at most 1.0
+            (:data:`FULL_COVERAGE_FRACTION`): can everyone see a satellite.
+        launch_cost_per_launch_musd: The per-launch price at the whole-fleet cadence this
+            year, $M.
+        build_cost_this_year_musd: Satellite hardware build cost this year, $M
+            (= ``satellites_deployed_this_year * satellite_build_cost_musd``).
+        launch_cost_this_year_musd: Launch cost this year, $M
+            (= ``comms_launches_flown_this_year * launch_cost_per_launch_musd``).
+        total_cost_this_year_musd: ``build_cost_this_year_musd +
+            launch_cost_this_year_musd``, the year's deployment cash.
+        satellites_replaced_this_year: The satellites of this year's deployment the rule
+            counts as replacing retired satellites (whole launches, at most the year's
+            deployment); ``0`` when nothing is replaced.
+        replacement_cost_this_year_musd: The cash cost of the replaced satellites, $M:
+            their build cost plus their whole launches at this year's per-launch price.
+            ``0.0`` in a year that replaces nothing.
+        annual_cost_this_year_musd: The ANNUALIZED fleet cost this year, $M/yr: the sum
+            of this year's ``cohort_costs``, each living satellite at its cohort's
+            locked per-satellite annual cost (lifetime cost spread over the life). NOT
+            the deployment cash (``total_cost_this_year_musd``) and NOT the cash
+            replacement line: the two conventions converge only in clean rotational
+            steady state (equal cohorts, a full lifecycle elapsed); in any other year
+            either can be the larger (the cash line replaces whatever cohort retires
+            that year, which may be a large cohort or none).
+        cohort_costs: One cost line per living cohort, oldest first (empty in a year with
+            no living fleet).
+    """
+
+    year: int
+    fleet_launches_this_year: int
+    comms_launches_flown_this_year: int
+    satellites_deployed_this_year: int
+    living_fleet: int
+    coverage_fraction: float
+    launch_cost_per_launch_musd: float
+    build_cost_this_year_musd: float
+    launch_cost_this_year_musd: float
+    total_cost_this_year_musd: float
+    satellites_replaced_this_year: int
+    replacement_cost_this_year_musd: float
+    annual_cost_this_year_musd: float
+    cohort_costs: tuple[FleetCohortCost, ...]
+
+
+@dataclass(frozen=True)
+class FleetTrajectory:
+    """The shared fleet-and-cost record of one run: every model year and the cost totals.
+
+    Attributes:
+        years: One :class:`FleetYear` per model year (FY2026..FY2036 at the defaults).
+        total_cost_through_final_year_musd: The cumulative deployment cash over the
+            trajectory (the sum of every year's ``total_cost_this_year_musd``), $M.
+        final_year_replacement_cost_musd: The FINAL model year's cash replacement line, $M
+            (``years[-1].replacement_cost_this_year_musd``): cohort-timed and lumpy, the
+            cost of replacing what that year's rule counts as replacement, NOT an
+            annualized basis. ``None`` when the final year replaced no retiring cohort (no
+            cash replacement basis exists that year, so none is published as if it were
+            one).
+        final_year_annual_cost_musd: The FINAL model year's ANNUALIZED fleet cost, $M/yr
+            (``years[-1].annual_cost_this_year_musd``; ``0.0`` with nothing on orbit).
+    """
+
+    years: tuple[FleetYear, ...]
+    total_cost_through_final_year_musd: float
+    final_year_replacement_cost_musd: float | None
+    final_year_annual_cost_musd: float
+
+
+@dataclass(frozen=True)
+class DeploymentStep:
+    """What a deployment rule reads for one model year (and all it may read).
+
+    Attributes:
+        year: The fiscal year being deployed.
+        launches_allowed: The year's comms launches under the cadence share (the
+            whole-fleet cadence times ``share_of_fleet``, rounded half up).
+        satellites_per_launch: The satellites one launch carries this run.
+        living_before: The satellites of prior cohorts still alive this year, before
+            this year's launches.
+        retiring_this_year: The satellites that aged off the cohort cliff at the start
+            of this year (last year's living fleet less ``living_before``).
+        years_so_far: The shared records of the years already computed, oldest first
+            (empty in the first model year).
+    """
+
+    year: int
+    launches_allowed: int
+    satellites_per_launch: int
+    living_before: int
+    retiring_this_year: int
+    years_so_far: tuple[FleetYear, ...]
+
+
+@dataclass(frozen=True)
+class Deployment:
+    """A deployment rule's answer for one model year.
+
+    Attributes:
+        satellites_added: The satellites deployed this year: whole launches, at most
+            ``launches_allowed x satellites_per_launch``.
+        satellites_replaced: The part of them counted as replacing retired satellites:
+            whole launches, at most ``satellites_added``.
+    """
+
+    satellites_added: int
+    satellites_replaced: int
+
+
+class DeploymentRule(Protocol):
+    """A family's deployment rule: how many satellites a year adds and how many replace.
+
+    A rule reads only its :class:`DeploymentStep` and keeps no state between calls, so
+    the loop can run it on any trajectory, and twice with one rule gives one record.
+    """
+
+    def __call__(self, step: DeploymentStep) -> Deployment:
+        """Decide one model year's deployment.
+
+        Args:
+            step: The year's cadence allowance, living fleet, retirements and the years
+                already computed.
+
+        Returns:
+            The satellites the year adds and how many of them count as replacement.
+        """
+        ...
+
+
+class DeploymentRuleError(ValueError):
+    """A deployment rule returned an impossible deployment: an addition that is not whole
+    launches or exceeds the cadence share's launches, or a replacement that is not whole
+    launches or exceeds the addition."""
 
 
 @dataclass(frozen=True)
@@ -1459,6 +1656,232 @@ def _comms_launches_for_year(year_idx: int, config: CommsConfig) -> tuple[int, i
 
 
 # ---------------------------------------------------------------------------
+# The shared fleet-and-cost loop: one loop under a family's deployment rule.
+# ---------------------------------------------------------------------------
+
+
+def _is_whole_launches(count: int, satellites_per_launch: int) -> bool:
+    """Whether a satellite count is whole launches: an integer of zero or more, a multiple
+    of the satellites per launch (a bool or a float is not a count)."""
+    return (
+        isinstance(count, int)
+        and not isinstance(count, bool)
+        and count >= 0
+        and count % satellites_per_launch == 0
+    )
+
+
+def _check_deployment(step: DeploymentStep, deployment: Deployment) -> None:
+    """Refuse a deployment no year can fly: the loop's check of its rule.
+
+    A year adds whole launches, at most the launches the cadence share allows it, and
+    counts whole launches of that addition, at most all of it, as replacement. The
+    checks run in that order, so each refusal names the first condition broken.
+
+    Args:
+        step: The year's step, as the rule read it.
+        deployment: What the rule returned for it.
+
+    Raises:
+        DeploymentRuleError: If the deployment breaks a condition, naming the year, the
+            count and the bound.
+    """
+    per_launch = step.satellites_per_launch
+    added = deployment.satellites_added
+    replaced = deployment.satellites_replaced
+    deployment_in_year = f"the deployment rule's deployment in {step.year}"
+    whole_launches = (
+        f"where a count is an integer of zero or more and a multiple of {per_launch}, the "
+        "satellites per launch"
+    )
+    if not _is_whole_launches(added, per_launch):
+        raise DeploymentRuleError(
+            f"{deployment_in_year} does not add whole launches: satellites added {added!r}, "
+            f"{whole_launches}"
+        )
+    allowed = step.launches_allowed * per_launch
+    if added > allowed:
+        raise DeploymentRuleError(
+            f"{deployment_in_year} adds more than the cadence share allows: satellites added "
+            f"{added}, at most {allowed} (launches allowed {step.launches_allowed}, "
+            f"satellites per launch {per_launch})"
+        )
+    if not _is_whole_launches(replaced, per_launch):
+        raise DeploymentRuleError(
+            f"{deployment_in_year} does not replace whole launches: satellites replaced "
+            f"{replaced!r}, {whole_launches}"
+        )
+    if replaced > added:
+        raise DeploymentRuleError(
+            f"{deployment_in_year} replaces more than it adds: satellites replaced "
+            f"{replaced}, satellites added {added}"
+        )
+
+
+def run_fleet_loop(
+    config: CommsConfig, rule: DeploymentRule, *, satellites_per_launch: int
+) -> FleetTrajectory:
+    """Run the shared fleet-and-cost loop over the horizon under a deployment rule.
+
+    The loop every family's fleet runs on; it holds no family branch. For each model year
+    (``base_year`` to ``base_year + horizon_years``), in order:
+
+    1. Price the cadence (:func:`_comms_launches_for_year`): the whole-fleet launches,
+       the comms launches the share allows, and the per-launch price at the whole-fleet
+       cadence.
+    2. Under the shared cohort cliff, the living fleet of prior cohorts this year
+       (``living_before``) and the satellites that aged off at the start of the year
+       (last year's living fleet less ``living_before``).
+    3. Ask the rule for the year's deployment (a :class:`DeploymentStep` in, a
+       :class:`Deployment` out) and check it (:func:`_check_deployment`).
+    4. Append the cohort; the living fleet after it and the coverage fraction against
+       the coverage floor.
+    5. The cost lines: build, launch (the launches flown, the deployment's whole
+       launches, at the year's price) and their total; the replacement line (the
+       replaced satellites' build cost plus their whole launches at the year's price).
+    6. Lock a new cohort's per-satellite annual cost at this year's launch price
+       (:func:`per_satellite_annual_cost_musd`; a year that deploys nothing adds no
+       cohort line), then one cost line per living cohort and their sum, the
+       annualized fleet cost.
+
+    The trajectory's totals follow: the cumulative deployment cash, the final year's
+    cash replacement (None when it replaced nothing), and the final year's annualized
+    cost.
+
+    Args:
+        config: The comms config (the cadence, comms-cadence, launch-cost, satellite,
+            coverage and metadata blocks).
+        rule: The family's deployment rule; it reads only its step and keeps no state.
+        satellites_per_launch: The satellites one launch carries this run (at least
+            :data:`MIN_SATELLITES_PER_LAUNCH`).
+
+    Returns:
+        The :class:`FleetTrajectory`: one :class:`FleetYear` per model year and the
+        trajectory's cost totals.
+
+    Raises:
+        ValueError: If ``satellites_per_launch`` is below
+            :data:`MIN_SATELLITES_PER_LAUNCH`.
+        DeploymentRuleError: If the rule returns an impossible deployment for a year.
+    """
+    if satellites_per_launch < MIN_SATELLITES_PER_LAUNCH:
+        raise ValueError(
+            f"the fleet loop deploys whole launches, so satellites_per_launch must be at "
+            f"least {MIN_SATELLITES_PER_LAUNCH}; got {satellites_per_launch}"
+        )
+    life = config.satellite.satellite_lifetime_years
+    coverage_floor = config.coverage.satellites_for_full_coverage
+    build_cost_musd = config.satellite.satellite_build_cost_musd
+    # The shared cliff runs on the LivedCohort list (every year's cohort, empty ones
+    # included); the lock-in rides beside it on the deploying cohorts only.
+    cohorts: list[LivedCohort] = []
+    cohort_builds: list[_CohortBuild] = []
+    years: list[FleetYear] = []
+
+    for year_idx in range(config.metadata.horizon_years + 1):
+        fy = config.metadata.base_year + year_idx
+        fleet_launches, comms_launches, launch_cost_per_launch_musd = _comms_launches_for_year(
+            year_idx, config
+        )
+        # The prior cohorts alive at the end of last year and still alive this year; the
+        # difference is the satellites that aged off the cliff at the start of this year.
+        living_prior_year = sum(c.units_deployed for c in living_cohorts(cohorts, fy - 1, life))
+        living_before = sum(c.units_deployed for c in living_cohorts(cohorts, fy, life))
+        step = DeploymentStep(
+            year=fy,
+            launches_allowed=comms_launches,
+            satellites_per_launch=satellites_per_launch,
+            living_before=living_before,
+            retiring_this_year=living_prior_year - living_before,
+            years_so_far=tuple(years),
+        )
+        deployment = rule(step)
+        _check_deployment(step, deployment)
+        satellites_added = deployment.satellites_added
+        satellites_replaced = deployment.satellites_replaced
+        # The launches flown is the deployment's whole-launch count; the cadence share
+        # may have allowed more than the rule used, and only the flown launches are costed.
+        comms_launches_flown = satellites_added // satellites_per_launch
+
+        cohorts.append(LivedCohort(launch_year=fy, units_deployed=satellites_added))
+        living_after = sum(c.units_deployed for c in living_cohorts(cohorts, fy, life))
+        coverage_fraction = min(FULL_COVERAGE_FRACTION, living_after / coverage_floor)
+
+        build_cost_this_year_musd = satellites_added * build_cost_musd
+        launch_cost_this_year_musd = comms_launches_flown * launch_cost_per_launch_musd
+        total_cost_this_year_musd = build_cost_this_year_musd + launch_cost_this_year_musd
+        # The replaced satellites are whole launches (the check), so their launches divide
+        # exactly; their line is their build cost plus those launches at this year's price.
+        replacement_launches = satellites_replaced // satellites_per_launch
+        replacement_cost_this_year_musd = (
+            satellites_replaced * build_cost_musd
+            + replacement_launches * launch_cost_per_launch_musd
+        )
+
+        # Lock this year's cohort's per-satellite annual cost at this year's launch price,
+        # so the cadence cost-down is fixed for its life. Only a cohort that deploys is
+        # recorded (an empty one would carry no satellites, no cost and no line).
+        if satellites_added > 0:
+            cohort_builds.append(
+                _CohortBuild(
+                    launch_year=fy,
+                    satellites=satellites_added,
+                    per_satellite_annual_cost_musd=per_satellite_annual_cost_musd(
+                        satellite_build_cost_musd=build_cost_musd,
+                        launch_cost_per_launch_musd=launch_cost_per_launch_musd,
+                        satellites_per_launch=satellites_per_launch,
+                        satellite_lifetime_years=life,
+                    ),
+                )
+            )
+        # One cost line per living cohort, oldest first; their sum is the annualized
+        # fleet cost (the margin's cost basis), not the deployment cash.
+        cohort_costs = tuple(
+            FleetCohortCost(
+                launch_year=build.launch_year,
+                living_satellites=build.satellites,
+                annual_cost_musd=build.satellites * build.per_satellite_annual_cost_musd,
+            )
+            for build in cohort_builds
+            if cohort_is_alive_at(build.launch_year, fy, life)
+        )
+        annual_cost_this_year_musd = sum(line.annual_cost_musd for line in cohort_costs)
+
+        years.append(
+            FleetYear(
+                year=fy,
+                fleet_launches_this_year=fleet_launches,
+                comms_launches_flown_this_year=comms_launches_flown,
+                satellites_deployed_this_year=satellites_added,
+                living_fleet=living_after,
+                coverage_fraction=coverage_fraction,
+                launch_cost_per_launch_musd=launch_cost_per_launch_musd,
+                build_cost_this_year_musd=build_cost_this_year_musd,
+                launch_cost_this_year_musd=launch_cost_this_year_musd,
+                total_cost_this_year_musd=total_cost_this_year_musd,
+                satellites_replaced_this_year=satellites_replaced,
+                replacement_cost_this_year_musd=replacement_cost_this_year_musd,
+                annual_cost_this_year_musd=annual_cost_this_year_musd,
+                cohort_costs=cohort_costs,
+            )
+        )
+
+    # The horizon is at least MIN_HORIZON_YEARS (a config bound), so the loop above
+    # always yields the base year plus at least one more; the final year exists.
+    final_year = years[-1]
+    return FleetTrajectory(
+        years=tuple(years),
+        total_cost_through_final_year_musd=sum(y.total_cost_this_year_musd for y in years),
+        final_year_replacement_cost_musd=(
+            final_year.replacement_cost_this_year_musd
+            if final_year.satellites_replaced_this_year > 0
+            else None
+        ),
+        final_year_annual_cost_musd=final_year.annual_cost_this_year_musd,
+    )
+
+
+# ---------------------------------------------------------------------------
 # The build-and-hold treadmill: one model year.
 # ---------------------------------------------------------------------------
 
@@ -1514,8 +1937,8 @@ def _cohort_economics_for_year(
             cohort_subscribers = 0
         subscribers_allocated += cohort_subscribers
         arpu_revenue_musd = cohort_subscribers * arpu_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
-        cost_plus_margin_pct = margin_pct(cost_plus_revenue_musd, annual_cost_musd)
-        arpu_margin_pct = margin_pct(arpu_revenue_musd, annual_cost_musd)
+        cost_plus_margin_pct = _cellular_margin_pct(cost_plus_revenue_musd, annual_cost_musd)
+        arpu_margin_pct = _cellular_margin_pct(arpu_revenue_musd, annual_cost_musd)
         lines.append(
             CommsCohortYear(
                 launch_year=build.launch_year,
@@ -1658,7 +2081,7 @@ def _compute_comms_year(
     # revenue, an undefined margin); skipping it keeps the cohort lines to the real
     # living satellites.
     if satellites_added > 0:
-        per_satellite_annual_cost_musd = _per_satellite_annual_cost_musd(
+        locked_cost_per_satellite_musd = per_satellite_annual_cost_musd(
             satellite_build_cost_musd=build_cost_musd,
             launch_cost_per_launch_musd=launch_cost_per_launch_musd,
             satellites_per_launch=satellites_per_launch,
@@ -1668,7 +2091,7 @@ def _compute_comms_year(
             _CohortBuild(
                 launch_year=fy,
                 satellites=satellites_added,
-                per_satellite_annual_cost_musd=per_satellite_annual_cost_musd,
+                per_satellite_annual_cost_musd=locked_cost_per_satellite_musd,
             )
         )
     # The annualized fleet cost (the margin cost basis): sum over living cohorts of
@@ -1693,14 +2116,16 @@ def _compute_comms_year(
     arpu_usd_per_month = config.revenue.arpu_usd_per_month
     # Case 1, COST-PLUS: revenue = annual cost x the multiple (cost-coupled).
     cost_plus_revenue_this_year_musd = annual_cost_this_year_musd * revenue_multiple
-    cost_plus_gross_margin_pct = margin_pct(
+    cost_plus_gross_margin_pct = _cellular_margin_pct(
         cost_plus_revenue_this_year_musd, annual_cost_this_year_musd
     )
     # Case 2, ARPU: revenue = served base x monthly ARPU x 12 (price x served base).
     arpu_revenue_this_year_musd = (
         subscribers_served_this_year * arpu_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
     )
-    arpu_gross_margin_pct = margin_pct(arpu_revenue_this_year_musd, annual_cost_this_year_musd)
+    arpu_gross_margin_pct = _cellular_margin_pct(
+        arpu_revenue_this_year_musd, annual_cost_this_year_musd
+    )
     cohort_lines = _cohort_economics_for_year(
         fy=fy,
         life=life,
@@ -1767,13 +2192,13 @@ def _built_fleet_annual_cost_musd(
     if final_year.living_fleet >= fleet_target:
         return final_year.annual_cost_this_year_musd
     built_fleet_satellites = _ceil_to_launch(fleet_target, satellites_per_launch)
-    per_satellite_annual_cost_musd = _per_satellite_annual_cost_musd(
+    final_year_cost_per_satellite_musd = per_satellite_annual_cost_musd(
         satellite_build_cost_musd=config.satellite.satellite_build_cost_musd,
         launch_cost_per_launch_musd=final_year.launch_cost_per_launch_musd,
         satellites_per_launch=satellites_per_launch,
         satellite_lifetime_years=config.satellite.satellite_lifetime_years,
     )
-    return built_fleet_satellites * per_satellite_annual_cost_musd
+    return built_fleet_satellites * final_year_cost_per_satellite_musd
 
 
 # ---------------------------------------------------------------------------
@@ -2027,6 +2452,13 @@ __all__ = [
     "CommsCohortYear",
     "CommsTrajectory",
     "CommsYear",
+    "Deployment",
+    "DeploymentRule",
+    "DeploymentRuleError",
+    "DeploymentStep",
+    "FleetCohortCost",
+    "FleetTrajectory",
+    "FleetYear",
     "IridiumArpuBucket",
     "IridiumArpuResult",
     "IridiumResult",
@@ -2041,8 +2473,10 @@ __all__ = [
     "derive_per_satellite_capacity_gbps",
     "iridium_assumptions",
     "margin_pct",
+    "per_satellite_annual_cost_musd",
     "resolve_device_spectral_efficiency",
     "run_comms_model",
+    "run_fleet_loop",
     "subscribers_served_at",
     "usd_per_person",
 ]
