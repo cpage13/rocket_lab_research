@@ -2866,6 +2866,37 @@ def _check_realized_fleets(requested: Sequence[int]) -> None:
         )
 
 
+def _class_limits(inputs: SaturationInputs, device_class: DeviceClass) -> _AllocationLimits:
+    """Return one class's allocation limits as the curve's inputs set them.
+
+    The one place they are built, so the curve and every recomputation of one of its rows
+    allocate alike: B from the capacity calibration and the reference panel, the class's
+    people per beam (the spectrum times its central SE over its busy-hour load), the take-up,
+    the beam model, the fill's bands and passes, the spectrum and the class's central SE, and
+    a directional class's rules D1 to D6 at the module's serving rule (None for the phone
+    class).
+
+    Args:
+        inputs: The curve's inputs (one entry per class, the contract guarantees).
+        device_class: The class.
+
+    Returns:
+        The class's limits.
+    """
+    entry = next(entry for entry in inputs.classes if entry.device_class is device_class)
+    return _AllocationLimits(
+        beams_per_satellite=_beams_per_satellite(inputs.shell),
+        people_per_beam=_people_per_beam(inputs.spectrum_mhz, entry),
+        take_up=inputs.demand.take_up,
+        beam=_beam_model(inputs.shell),
+        footprint_bands=inputs.sweep.footprint_bands,
+        passes=inputs.sweep.passes,
+        spectrum_mhz=inputs.spectrum_mhz,
+        spectral_efficiency_bps_per_hz=entry.spectral_efficiency_bps_per_hz,
+        directional=_directional_rules(inputs, entry),
+    )
+
+
 def _method(inputs: SaturationInputs) -> str:
     """Return the method, stated as the rule, at the inputs' values."""
     shell, sweep = inputs.shell, inputs.sweep
@@ -2994,21 +3025,8 @@ def compute_saturation(
     for requested in fleets_of.values():
         _check_realized_fleets(requested)
     cells = _demand_cells(population, inputs.demand.density_threshold_per_km2)
-    beam = _beam_model(inputs.shell)
-    beams_per_satellite = _beams_per_satellite(inputs.shell)
     limits = {
-        entry.device_class: _AllocationLimits(
-            beams_per_satellite=beams_per_satellite,
-            people_per_beam=_people_per_beam(inputs.spectrum_mhz, entry),
-            take_up=inputs.demand.take_up,
-            beam=beam,
-            footprint_bands=sweep.footprint_bands,
-            passes=sweep.passes,
-            spectrum_mhz=inputs.spectrum_mhz,
-            spectral_efficiency_bps_per_hz=entry.spectral_efficiency_bps_per_hz,
-            directional=_directional_rules(inputs, entry),
-        )
-        for entry in inputs.classes
+        entry.device_class: _class_limits(inputs, entry.device_class) for entry in inputs.classes
     }
     snapshots_of = {
         device_class: (
@@ -3055,7 +3073,7 @@ def compute_saturation(
         rows = _class_rows(
             fleets,
             fleets_of[device_class],
-            beams_per_satellite=beams_per_satellite,
+            beams_per_satellite=class_limits.beams_per_satellite,
             directional=class_limits.directional is not None,
         )
         _check_capacity_per_satellite(device_class, rows)
