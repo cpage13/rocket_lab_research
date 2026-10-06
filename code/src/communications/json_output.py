@@ -492,11 +492,15 @@ class IotCheckRowBlock(BaseModel):
     uplink_tone_share_low: float | None = Field(
         description=(
             "The messages' channel time over the uplink's tone time at the low airtime, a "
-            "fraction; null for data IoT (its bursts are not single-tone messages)."
+            "fraction. Null for data IoT: its bursts are not single-tone messages, and the "
+            "tone time of the single-tone messages it sends beside them goes unreported."
         )
     )
     uplink_tone_share_high: float | None = Field(
-        description="The same at the high airtime, a fraction; null for data IoT."
+        description=(
+            "The same at the high airtime, a fraction; null for data IoT, whose messages' "
+            "tone time goes unreported (as above)."
+        )
     )
 
 

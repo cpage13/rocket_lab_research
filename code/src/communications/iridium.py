@@ -376,7 +376,9 @@ class IotCheckRowRecord:
         uplink_bits_share_with_mac: The same over the MAC efficiency.
         access_attempts_per_second_per_beam: One attempt per message or burst.
         uplink_tone_share_low: Minimal-packet IoT's message channel time over the uplink's
-            tone time at the low airtime, a fraction; None for data IoT and with no uplink.
+            tone time at the low airtime, a fraction; None with no uplink, and None for data
+            IoT, whose bursts are not single-tone messages (the tone time of the single-tone
+            messages it sends beside them goes unreported).
         uplink_tone_share_high: The same at the high airtime.
     """
 
@@ -396,7 +398,8 @@ class IotCheckRecord:
     Attributes:
         minimal_packet_iot: Minimal-packet IoT's rows.
         data_iot: Data IoT's rows (its tone shares None: its bursts are not single-tone
-            messages).
+            messages, and the tone time of the single-tone messages it sends beside them goes
+            unreported).
     """
 
     minimal_packet_iot: tuple[IotCheckRowRecord, ...]
@@ -500,8 +503,9 @@ class _IotUsage:
     Attributes:
         bytes_per_day: The device's daily volume, bytes.
         attempts_per_day: Its access attempts a day, one per message or burst.
-        single_tone_messages_per_day: Its messages a day on single tones, None when its traffic
-            is not single-tone messages (data IoT's bursts).
+        single_tone_messages_per_day: Its messages a day read on single tones; None for data
+            IoT, whose bursts are not single-tone messages, so the tone time of the messages it
+            sends beside them goes unreported.
     """
 
     bytes_per_day: int
@@ -523,7 +527,7 @@ _DATA_IOT_USAGE: Final[_IotUsage] = _IotUsage(
     single_tone_messages_per_day=None,
 )
 """A data IoT device: 4 bursts of 100 KB a day beside the 48 messages; its bursts are not
-single-tone."""
+single-tone, and its messages' tone time goes unreported (no tone share)."""
 
 
 def iridium_dials_of(config: CommsConfig) -> IridiumDials:
