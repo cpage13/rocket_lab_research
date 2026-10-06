@@ -15,9 +15,9 @@ tests at the end, under deployment rules written here: it refuses an impossible
 deployment, and its cohort cost lines carry each living cohort at the cost locked at
 its launch.
 
-The frozen end-to-end numbers (the Iridium baseline, the saturation companion, and
-the equality tripwire that holds the cellular default's cost per subscriber) live in
-``test_iridium_model.py``; this file checks structural and counting invariants,
+The frozen end-to-end numbers of the Iridium family, and the equality tripwire that
+compares an Iridium run's shared fleet-and-cost record with a cellular run's whole, live
+in ``test_iridium_model.py``; this file checks structural and counting invariants,
 which are exact integers (no float tolerance needed except where a cost sum is
 compared, where a tight relative tolerance is used).
 """
@@ -383,7 +383,7 @@ def test_unreached_target_reports_none_and_runs() -> None:
     """A target too high to reach within the horizon still runs, reporting None."""
     unreachable_target = 100_000
     config = CommsConfig(
-        # Floor the fleet at 100,000 and lift the saturation cap above it so the floor
+        # Floor the fleet at 100,000 and lift the cellular fleet cap above it so the floor
         # (not the cap) is the fleet target; the tiny base keeps capacity below it.
         coverage=CoverageDials(
             satellites_for_full_coverage=unreachable_target,

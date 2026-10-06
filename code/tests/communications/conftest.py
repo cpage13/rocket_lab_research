@@ -326,12 +326,6 @@ def iridium_yaml(scenarios_dir: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
-def iridium_saturation_yaml(scenarios_dir: Path) -> Path:
-    """The saturation companion scenario, ``scenarios/iridium_saturation.yaml``."""
-    return scenarios_dir / "iridium_saturation.yaml"
-
-
-@pytest.fixture(scope="session")
 def promoted_iridium_artifact(repo_dir: Path) -> Path:
     """The committed promoted artifact, ``communications/models/iridium/default.json``."""
     return repo_dir / "communications" / "models" / "iridium" / "default.json"
@@ -410,8 +404,10 @@ def committed_saturation_curve(repo_dir: Path) -> SaturationCurve:
     """The committed promoted curve, ``communications/models/iridium/saturation_curve.json``,
     loaded with ``load_saturation_curve`` (its schema, input hash and completeness checked).
 
-    Its numbers are the promotion's: a test reads what it needs from the curve and freezes
-    none of them, so a re-promotion needs no test edit.
+    Its numbers are the promotion's. The curve's own tests read what they need from it and
+    freeze none of them; the Iridium model's end-to-end tests (``test_iridium_model.py``)
+    freeze the people and markers the engine reads from it, as the committed ``default.json``
+    does, so a re-promotion re-freezes those on purpose (the re-promotion rule).
     """
     return load_saturation_curve(repo_dir / SATURATION_CURVE_PATH_DEFAULT)
 

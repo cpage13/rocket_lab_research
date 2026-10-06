@@ -171,25 +171,33 @@ def test_a_successful_promotion_logs_its_status_and_prints_nothing(
 
 
 @pytest.mark.parametrize(
-    "iridium_dials",
-    ["aperture_m2: 1.0e+308", "active_user_rate_mbps: 5.0e-324"],
-    ids=["a panel too large", "a rate that underflows to zero"],
+    ("iridium_dials", "reason"),
+    [
+        ("aperture_m2: 1.0e+308", "a value the model cannot compute ("),
+        (
+            "aperture_m2: 1.0e-323",
+            "iridium.aperture_m2 (1e-323 m^2) over the saturation curve's reference panel (25.0 "
+            "m^2) gives a panel factor of 0.0; it must be a positive finite number",
+        ),
+    ],
+    ids=["a panel too large", "a panel so small its factor underflows to zero"],
 )
 def test_a_value_the_model_cannot_compute_is_one_error_line(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture, iridium_dials: str
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, iridium_dials: str, reason: str
 ) -> None:
     """Objective: a finite dial the model cannot compute with ends the command in one error
     record, never a traceback (before the fix the run's ``OverflowError``, and a
     ``ZeroDivisionError``, escaped as one).
 
-    Sample: a scenario selecting the Iridium model with a panel of 1.0e308 m^2 (the run
-    overflows), and one with an active rate of 5.0e-324 Mbps (the rate times the concurrency
-    underflows to zero, and the run divides by it); both finite, so both load, and neither is an
-    input of the curve, so the identity check passes.
+    Sample: a scenario selecting the Iridium model with a panel of 1.0e308 m^2 (the people at a
+    fleet overflow to infinity and cannot become a count), and one with a panel of 1.0e-323 m^2
+    (its ratio to the reference panel underflows to zero, which the Iridium entry refuses,
+    naming the setting); both finite, so both load, and neither is an input of the curve, so
+    the identity check passes. (The one-usage dial whose product underflowed is retired.)
 
     Expected outcome: exit 1; exactly one ERROR record, on one line and with no exception
-    attached, naming the scenario and saying a value is one the model cannot compute; no
-    artifact written.
+    attached, naming the scenario and the reason (a value the model cannot compute; the panel
+    factor named with ``iridium.aperture_m2``); no artifact written.
     """
     scenario = tmp_path / "cannot_compute.yaml"
     scenario.write_text(f"iridium:\n  {iridium_dials}\n", encoding="utf-8")
@@ -201,7 +209,7 @@ def test_a_value_the_model_cannot_compute_is_one_error_line(
     assert len(records) == 1
     message = records[0].getMessage()
     assert "\n" not in message
-    assert message.startswith(f"could not promote {scenario}: a value the model cannot compute (")
+    assert message.startswith(f"could not promote {scenario}: {reason}")
     assert records[0].exc_info is None
     assert not out_path.exists()
 
@@ -373,9 +381,9 @@ def test_a_scenario_runs_on_a_curve_computed_for_its_inputs(
     promotion writes a curve to a temporary folder; a scenario at 10.5 MHz whose
     ``iridium.saturation.curve_path`` is that file's absolute path.
 
-    Expected outcome: exit 0 and the artifact written, its physics at 10.5 MHz with the frozen
-    coordinated-span density, 40,950 people per satellite (10.5 x 0.65 x 0.15 Gbps over 1.0 x
-    0.025 Mbps).
+    Expected outcome: exit 0 and the artifact written, its physics at 10.5 MHz and the phone
+    class's satellite peak at the default 15.4 m^2 panel, 0.630630 Gbps (10.5 x 0.65 x 0.15 x
+    0.616).
     """
     curve_path = tmp_path / "coordinated_curve.json"
     curve = synthetic_saturation_curve(IridiumDials(spectrum_mhz=10.5))
@@ -389,6 +397,8 @@ def test_a_scenario_runs_on_a_curve_computed_for_its_inputs(
 
     assert main([str(scenario), str(out_path), "--version-stamp", "test"]) == EXIT_OK
 
-    physics = json.loads(out_path.read_text(encoding="utf-8"))["iridium_physics"]
-    assert physics["spectrum_mhz"] == 10.5
-    assert physics["subscribers_per_satellite"] == 40_950
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["iridium_physics"]["spectrum_mhz"] == 10.5
+    phone = payload["classes"][2]
+    assert phone["device_class"] == "phone_class"
+    assert phone["per_satellite_capacity_gbps"] == pytest.approx(10.5 * 0.65 * 0.15 * 0.616)

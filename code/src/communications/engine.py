@@ -23,15 +23,11 @@ target from the dials (:func:`compute_fleet_target`), runs the loop under
 (:func:`build_cellular_record`, a :class:`CellularTrajectory`), returning the two
 records as a :class:`CellularRun`.
 
-THE IRIDIUM FAMILY. Its entry is ``communications.iridium.run_iridium_model(config,
-curve)``, which checks its saturation curve against the config before it runs. Until
-the Iridium family is built there, that entry sizes the fleet by the density path in
-this module (the L-band derivations below: the spectral efficiency, the per-satellite
-capacity, the derived density, the aperture-coupled satellites per launch, and the v5
-physics block, :func:`build_iridium_result`) and runs it through the cellular rule and
-record, so its run is a :class:`CellularRun` whose record carries the v5 block. This
-module imports neither the Iridium family module nor the curve's contract: a family
-hands the loop its rule.
+THE IRIDIUM FAMILY lives in ``communications.iridium``: its entry,
+``run_iridium_model(config, curve)``, checks its saturation curve against the config,
+runs this loop under its own rule (every launch the cadence share allows, no target and
+no cap) and builds its own record from the curve's readings. This module imports neither
+the Iridium family module nor the curve's contract: a family hands the loop its rule.
 
 It mirrors the data-center model's fleet engine (the per-year loop in
 ``data_center/engine.py`` plus the living-cohort rollup in ``data_center/fleet.py``)
@@ -44,10 +40,11 @@ with three deliberate differences, all driven by the comms design:
    deploys what its family's rule decides. The cellular rule (the treadmill) builds
    toward the FLEET TARGET (the CAPACITY-sized fleet, :func:`compute_fleet_target`:
    the subscriber target divided by the per-satellite density, floored by the
-   coverage floor and capped by the saturation cap) and then HOLDS: once the target
+   coverage floor and capped by the cellular fleet cap) and then HOLDS: once the target
    is reached it deploys only enough whole launches to replace the cohorts ageing off
    the service-life cliff, so the living count stays at (or as close as launch
-   granularity allows to) the fleet target.
+   granularity allows to) the fleet target. The Iridium rule flies every launch the
+   cadence share allows, as the DC fleet does.
 3. Two cadence roles. The shared whole-fleet logistic ramp
    (``common.cadence.compute_launches_per_year``, the 90/year FY2036 ramp) sets
    the WHOLE-fleet launch count. The comms slice flies a SHARE of it
@@ -84,15 +81,13 @@ base), and the served count RAMPS with the buildout
 (``min(base, people_capacity) x min(1.0, living_fleet / fleet_target)``, where the
 base is the target or the served override and ``people_capacity`` is
 ``fleet_target x subscribers_per_satellite``), so the served count never exceeds what
-the fleet can carry: it reaches the target at full deployment unless the saturation
-cap binds (or an override asks for more than the fleet carries), in which case it
+the fleet can carry: it reaches the target at full deployment unless the fleet cap
+binds (or an override asks for more than the fleet carries), in which case it
 reaches the fleet's people capacity. This is a sized-base mapping, NOT the old
 spectrum -> capacity -> demand chain (cut). The cellular record reports the
 served-people count at the FINAL year's buildout
-(``CellularTrajectory.subscribers_served``), the final-year cash cost per served
-person (``final_year_cash_cost_per_subscriber_usd``), and, interim for the Iridium v5
-artifact, the built fleet's annualized cost (``built_fleet_annual_cost_musd``, its
-published ARPU margin's cost basis).
+(``CellularTrajectory.subscribers_served``) and the final-year cash cost per served
+person (``final_year_cash_cost_per_subscriber_usd``).
 
 THE REPLACEMENT LINE. The loop costs as replacement what the rule counts: the
 replaced satellites' build cost plus their whole launches at the year's price. Only
@@ -128,9 +123,9 @@ the satellite life, locked at launch, summed over the living cohorts (matching t
 ``cost_annual = node_total / service_life`` convention). It is a different convention
 from the cash replacement line (which the final-year cash per-subscriber figure
 reads); the two converge only in clean rotational steady state, and in any single
-year either can be the larger (the cash line is cohort-timed: the promoted Iridium
-scenario's FY2036 cash replacement is 250.0 $M against a 145.0 $M annualized cost,
-while a year that replaces no cohort carries no cash replacement at all). Case 1
+year either can be the larger (the cash line is cohort-timed: a final year that
+replaces a large cohort carries a cash replacement above its annualized cost, while a
+year that replaces no cohort carries no cash replacement at all). Case 1
 (COST-PLUS): revenue = annual cost x ``revenue_multiple`` (cost-coupled, the DC
 central R = 1.5 mirror). Case 2 (PRICES-TODAY / ARPU): revenue = served subscribers x
 ``arpu_usd_per_month`` x 12. The margin in both is ``(revenue - cost) / revenue``, a
@@ -160,29 +155,8 @@ from common.cadence import (
 )
 from common.cohort import LivedCohort, cohort_is_alive_at, living_cohorts
 from common.provenance import as_float, as_int
-from communications.config import CommsConfig, IridiumArpuDials, IridiumDials
-from communications.constants import (
-    APERTURE_FOLD_CAVEAT_NOTE,
-    APERTURE_NO_FOLD_LIMIT_M2,
-    APERTURE_REFERENCE_M2,
-    ARPU_MIX_TOTAL_PCT,
-    ECOSYSTEM_ASSUMPTION_NOTE,
-    GBPS_TO_MBPS,
-    IRIDIUM_OPERATIONS_COST_MUSD,
-    MONTHS_PER_YEAR,
-    MOUNTED_TERMINAL_CLASS_SE_CENTRAL,
-    MOUNTED_TERMINAL_CLASS_SE_HIGH,
-    MOUNTED_TERMINAL_CLASS_SE_LOW,
-    PHONE_CLASS_SE_CENTRAL,
-    PHONE_CLASS_SE_HIGH,
-    PHONE_CLASS_SE_LOW,
-    REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE,
-    SMALL_TERMINAL_CLASS_SE_CENTRAL,
-    SMALL_TERMINAL_CLASS_SE_HIGH,
-    SMALL_TERMINAL_CLASS_SE_LOW,
-    BindingRegime,
-    DeviceClass,
-)
+from communications.config import CommsConfig
+from communications.constants import MONTHS_PER_YEAR, BindingRegime
 
 logger = logging.getLogger(__name__)
 
@@ -224,12 +198,6 @@ below this tolerance, while 1e-9 of a launch is far below any meaningful fractio
 share dial can express, so the tolerance only ever repairs representation error. A
 fixed numerical constant, not a tunable."""
 
-MIN_SUBSCRIBERS_PER_SATELLITE: Final[int] = 1
-"""The smallest derived subscriber density the fleet sizing accepts: one person per
-satellite. A density that rounds below this describes a satellite that cannot carry
-a single subscriber at the configured load, so the fleet sizing would divide by zero;
-the derivation raises a clear error instead. A structural bound, not a tunable."""
-
 MIN_SATELLITES_PER_LAUNCH: Final[int] = 1
 """The fewest satellites a launch carries in the shared fleet-and-cost loop: one. The loop
 deploys and costs whole launches (a cohort is a multiple of the satellites per launch, and the
@@ -237,16 +205,17 @@ launches flown are its quotient), so a count below one has no launch to divide i
 refuses it with a clear error instead. A structural bound, not a tunable."""
 
 MARGIN_PERCENT_SCALE: Final[float] = 100.0
-"""The percent scale for a gross margin: ``(revenue - cost) / revenue`` times this
-yields a percentage (e.g. 0.333 -> 33.3), mirroring the data-center fleet-margin
-convention so the two models report margin in the same unit."""
+"""The percent scale for a margin: ``(revenue - cost) / revenue`` times this yields a
+percentage (e.g. 0.333 -> 33.3), mirroring the data-center fleet-margin convention so the
+two models report margin in the same unit. The margin is a full-cost margin (revenue less
+the full annualized build and launch cost), never a gross one."""
 
 ZERO_MARGIN_PCT: Final[float] = 0.0
 """The margin percent the cellular family publishes where revenue is not positive (an
 empty fleet, or a build-out year before any satellite is on orbit): the margin is
-undefined there, so :func:`margin_pct` returns None and the cellular record (with the
-Iridium artifact's ARPU margin) reports 0.0 in its place, its published values unchanged,
-mirroring the data-center fleet-margin guard."""
+undefined there, so :func:`margin_pct` returns None and the cellular record reports 0.0
+in its place, its published values unchanged, mirroring the data-center fleet-margin
+guard (the Iridium record publishes the None)."""
 
 NO_ANNUAL_COST_MUSD: Final[float] = 0.0
 """The annualized cost ($M/yr) of nothing: the per-satellite annual cost returned for a
@@ -313,7 +282,7 @@ def _ceil_to_launch(satellites_needed: int, satellites_per_launch: int) -> int:
 # capacity NEED is the subscriber target divided by the per-satellite attached
 # density (rounded UP, since a partial satellite's worth of need still requires a
 # whole satellite of capacity). The fleet target floors that at the coverage floor
-# (everyone must see a satellite) and caps it at the saturation cap (past which the
+# (everyone must see a satellite) and caps it at the fleet cap (past which the
 # spread servable base is exhausted). Which term binds is reported as the
 # BindingRegime (the investor's coverage-vs-capacity question).
 # ---------------------------------------------------------------------------
@@ -346,12 +315,12 @@ def compute_fleet_target(
         subscribers_per_satellite: The attached subscribers one satellite carries.
         coverage_floor: The minimum fleet for everyone to see a satellite (the lower
             bound on the target).
-        max_fleet_satellites: The saturation cap (the upper bound on the target).
+        max_fleet_satellites: The cellular fleet cap (the upper bound on the target).
 
     Returns:
         A 2-tuple ``(fleet_target, binding_regime)``: the capacity-sized fleet the
         build-out fills toward, and which constraint set it (the coverage floor, the
-        capacity need, or the saturation cap).
+        capacity need, or the fleet cap).
     """
     capacity_need = math.ceil(subscriber_target / subscribers_per_satellite)
     floored = max(coverage_floor, capacity_need)
@@ -363,219 +332,6 @@ def compute_fleet_target(
     else:
         binding_regime = BindingRegime.CAPACITY
     return fleet_target, binding_regime
-
-
-# ---------------------------------------------------------------------------
-# The Iridium model (formerly Model B; L-band max-outcome): the pure L-band
-# derivation spine.
-#
-# The Iridium model DERIVES the per-satellite subscriber density from L-band
-# physics (held spectrum, device spectral efficiency, satellite aperture area,
-# per-user active rate, busy-hour concurrency) instead of reading the fixed
-# subscribers_per_satellite dial of the High-Bandwidth Cellular Pure Play model
-# (formerly Model A), then feeds the SAME compute_fleet_target above. These are
-# pure derivations (primitives or the dials in, primitives out, no side effects);
-# the Iridium entry (communications.iridium.run_iridium_model) wires them in before
-# it runs the shared loop under the cellular rule. THE THREE LANES
-# stay separate: the Iridium model is the MSS lane (purpose-built or in-chipset
-# devices on owned L-band), NOT cellular direct-to-cell to an unmodified phone
-# (the High-Bandwidth Cellular Pure Play model) and NOT broadband.
-# ---------------------------------------------------------------------------
-
-
-def resolve_device_spectral_efficiency(dials: IridiumDials) -> float:
-    """Resolve the Iridium-model spectral efficiency (bps/Hz) from the dials (0.7 step 1).
-
-    Returns the explicit ``spectral_efficiency_bps_per_hz`` override when set,
-    otherwise the central spectral-efficiency tier for the ``device_class`` (the
-    investor's three device categories, a three-row mapping): ``PHONE_CLASS`` to
-    :data:`PHONE_CLASS_SE_CENTRAL` (0.65), ``SMALL_TERMINAL_CLASS`` to
-    :data:`SMALL_TERMINAL_CLASS_SE_CENTRAL` (2.0), ``MOUNTED_TERMINAL_CLASS`` to
-    :data:`MOUNTED_TERMINAL_CLASS_SE_CENTRAL` (2.5).
-
-    Args:
-        dials: The Iridium-model :class:`~communications.config.IridiumDials` block
-            (the device class plus the optional override).
-
-    Returns:
-        The spectral efficiency in bps/Hz to use in the capacity derivation.
-    """
-    if dials.spectral_efficiency_bps_per_hz is not None:
-        return dials.spectral_efficiency_bps_per_hz
-    class_central: dict[DeviceClass, float] = {
-        DeviceClass.PHONE_CLASS: PHONE_CLASS_SE_CENTRAL,
-        DeviceClass.SMALL_TERMINAL_CLASS: SMALL_TERMINAL_CLASS_SE_CENTRAL,
-        DeviceClass.MOUNTED_TERMINAL_CLASS: MOUNTED_TERMINAL_CLASS_SE_CENTRAL,
-    }
-    return class_central[dials.device_class]
-
-
-def derive_per_satellite_capacity_gbps(
-    spectrum_mhz: float, spectral_efficiency_bps_per_hz: float, aperture_m2: float
-) -> float:
-    """Derive the per-satellite capacity in Gbps (0.7 step 2).
-
-    ::
-
-        per_sat_capacity_gbps = spectrum_mhz x spectral_efficiency_bps_per_hz
-                                x REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE
-                                x (aperture_m2 / APERTURE_REFERENCE_M2)
-
-    The reuse calibration (:data:`REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE`) folds the
-    effective ~150x beam-count-times-frequency-reuse multiplier of a modern
-    digital-beamforming satellite together with the Mbps-to-Gbps scaling, calibrated
-    AT the :data:`APERTURE_REFERENCE_M2` (25 m^2) reference aperture, so the aperture
-    factor is 1.0 at the default and every baseline number is unchanged. The aperture
-    factor is linear in area (a bigger array forms proportionally more simultaneous
-    beams, the reuse term) and is CONSERVATIVE: it ignores the additional per-link
-    SNR lift a larger aperture also gives. Worked at the phone-class default aperture:
-    8 x 0.65 x 0.15 x (25 / 25) = 0.78 Gbps.
-
-    Args:
-        spectrum_mhz: The held L-band width, MHz.
-        spectral_efficiency_bps_per_hz: The device spectral efficiency, bps/Hz.
-        aperture_m2: The satellite flat-array area, m^2 (the aperture factor divides
-            by :data:`APERTURE_REFERENCE_M2`).
-
-    Returns:
-        The per-satellite capacity, Gbps.
-    """
-    aperture_factor = aperture_m2 / APERTURE_REFERENCE_M2
-    return (
-        spectrum_mhz
-        * spectral_efficiency_bps_per_hz
-        * REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE
-        * aperture_factor
-    )
-
-
-def derive_iridium_satellites_per_launch(
-    *, configured_satellites_per_launch: int, aperture_m2: float
-) -> int:
-    """Derive the aperture-coupled effective satellites-per-launch (0.7 step 10).
-
-    ::
-
-        effective = max(1, floor(configured x APERTURE_REFERENCE_M2 / aperture_m2))
-
-    Multiply BEFORE dividing (keeps the ratio exact at clean apertures: 12 x 25 / 60
-    = 5.0 exactly in floats). The ``floor`` is deliberate, the opposite convention
-    from the density's round-half-up: a partial satellite cannot fly, so per-launch
-    capacity is never overstated. The ``max(1, ...)`` floor means an arbitrarily
-    large aperture still flies one satellite per launch (the AST pattern: a 223 m^2
-    array flies 1 per launch). Equals the configured value EXACTLY at the 25 m^2
-    default aperture (the launch-coupling identity, so the High-Bandwidth Cellular
-    Pure Play model's behavior is unchanged).
-    Mass context for the inverse-linear coupling: ~800 kg at the 25 m^2 reference
-    (COMM-256) scales roughly linearly with area, ~1,920 kg at 60 m^2. The published
-    coupling is the inverse-AREA convention (5 per launch at 60 m^2); the separate
-    estimate-bound mass quotient reads 6 (floor of ~13,000 kg over ~1,920 kg). Close
-    but distinct conventions: this function implements the area convention.
-
-    Args:
-        configured_satellites_per_launch: The High-Bandwidth Cellular Pure Play
-            model's satellites-per-launch dial (the count at the reference aperture).
-        aperture_m2: The satellite flat-array area, m^2.
-
-    Returns:
-        The effective whole satellites per launch (at least 1).
-    """
-    return max(
-        1,
-        math.floor(configured_satellites_per_launch * APERTURE_REFERENCE_M2 / aperture_m2),
-    )
-
-
-def derive_iridium_subscribers_per_satellite(
-    *,
-    per_satellite_capacity_gbps: float,
-    active_user_rate_mbps: float,
-    concurrency_peak: float,
-) -> int:
-    """Derive the per-satellite subscriber density (people) fed to the fleet sizing (0.7 step 3).
-
-    ::
-
-        offered_load_per_subscriber_mbps = active_user_rate_mbps x concurrency_peak
-        subscribers_per_satellite = round_half_up(
-            per_satellite_capacity_gbps x GBPS_TO_MBPS / offered_load_per_subscriber_mbps)
-
-    Uses the shared :func:`common.cadence.round_half_up` (NOT ``floor`` or ``int()``): it matches
-    the engine's rounding idiom AND is robust to floating-point representation error
-    at the exact-integer boundary (e.g. 31200.0000001 rounds to 31200). This is the
-    OPPOSITE rounding convention from the launch coupling's ``floor``, and both are
-    deliberate. Worked at the phone-class baseline: 0.78 x 1000 / (1.0 x 0.025) =
-    780 / 0.025 = 31,200.
-
-    Args:
-        per_satellite_capacity_gbps: The derived per-satellite capacity, Gbps.
-        active_user_rate_mbps: The per-subscriber active data rate, Mbps.
-        concurrency_peak: The busy-hour peak concurrency fraction.
-
-    Returns:
-        The derived subscribers-per-satellite density (people, a whole count, at least
-        :data:`MIN_SUBSCRIBERS_PER_SATELLITE`).
-
-    Raises:
-        ValueError: If the density rounds below one person per satellite (for example
-            a 0.01 m^2 aperture at full peak concurrency): such dials describe a
-            satellite that cannot carry a single subscriber, and the fleet sizing
-            would divide by zero.
-    """
-    offered_load_per_subscriber_mbps = active_user_rate_mbps * concurrency_peak
-    per_satellite_capacity_mbps = per_satellite_capacity_gbps * GBPS_TO_MBPS
-    density = round_half_up(per_satellite_capacity_mbps / offered_load_per_subscriber_mbps)
-    if density < MIN_SUBSCRIBERS_PER_SATELLITE:
-        raise ValueError(
-            "the Iridium dials derive fewer than one subscriber per satellite: "
-            f"per-satellite capacity {per_satellite_capacity_mbps:g} Mbps over a "
-            f"per-subscriber peak load of {offered_load_per_subscriber_mbps:g} Mbps "
-            f"(active rate {active_user_rate_mbps:g} Mbps x peak concurrency "
-            f"{concurrency_peak:g}) rounds to {density}. Raise the aperture, the "
-            "spectrum, or the spectral efficiency, or lower the active rate or the "
-            "peak concurrency."
-        )
-    return density
-
-
-def derive_iridium_per_user_rates(
-    *,
-    spectrum_mhz: float,
-    spectral_efficiency_bps_per_hz: float,
-    active_user_rate_mbps: float,
-    concurrency_peak: float,
-    concurrency_offpeak: float,
-) -> tuple[float, float]:
-    """Derive the Iridium-model (peak, off-peak) per-user rates in Mbps (0.7 step 5).
-
-    The peak per-user rate is the active rate by construction (the service tier). The
-    off-peak rate is the smaller of the single-beam Shannon pool and the rate a
-    subscriber gets when the concurrency drops from peak to off-peak::
-
-        beam_pool_mbps = spectrum_mhz x spectral_efficiency_bps_per_hz   (MHz x bps/Hz = Mbps)
-        per_user_rate_offpeak_mbps = min(
-            beam_pool_mbps,
-            active_user_rate_mbps x concurrency_peak / concurrency_offpeak)
-
-    Worked at the phone-class baseline: peak = 1.0 Mbps; beam_pool = 8 x 0.65 = 5.2
-    Mbps; off-peak = min(5.2, 1.0 x 0.025 / 0.005) = min(5.2, 5.0) = 5.0 Mbps.
-
-    Args:
-        spectrum_mhz: The held L-band width, MHz.
-        spectral_efficiency_bps_per_hz: The device spectral efficiency, bps/Hz.
-        active_user_rate_mbps: The per-subscriber active rate, Mbps (the peak rate).
-        concurrency_peak: The busy-hour peak concurrency fraction.
-        concurrency_offpeak: The off-peak concurrency fraction.
-
-    Returns:
-        A 2-tuple ``(per_user_rate_peak_mbps, per_user_rate_offpeak_mbps)``, Mbps.
-    """
-    beam_pool_mbps = spectrum_mhz * spectral_efficiency_bps_per_hz
-    per_user_rate_peak_mbps = active_user_rate_mbps
-    per_user_rate_offpeak_mbps = min(
-        beam_pool_mbps, active_user_rate_mbps * concurrency_peak / concurrency_offpeak
-    )
-    return per_user_rate_peak_mbps, per_user_rate_offpeak_mbps
 
 
 # ---------------------------------------------------------------------------
@@ -607,7 +363,7 @@ def subscribers_served_at(
     and it is capped at ``people_capacity`` (the most people the fleet target can
     carry at its per-satellite density), so the model never reports serving more
     people than the fleet carries. The cap binds only in the saturated regime (the
-    target needs more satellites than the saturation cap allows) or when an override
+    target needs more satellites than the fleet cap allows) or when an override
     asks for more than the fleet carries; in the coverage and capacity regimes the
     fleet target's capacity is at or above the target by construction.
 
@@ -733,8 +489,8 @@ def margin_pct(revenue_musd: float, cost_musd: float) -> float | None:
     """A margin as a percent: ``(revenue - cost) / revenue x 100``, or None without revenue.
 
     The one margin formula, for every family: the cellular family's per-cohort and
-    per-year margins, and the Iridium artifact's published ARPU margin (whose cost is
-    the built fleet's annualized cost). Mirrors the DC fleet-margin formula. A margin
+    per-year margins, and each Iridium device class's own margin (its own revenue against
+    the year's whole-fleet annualized cost). Mirrors the DC fleet-margin formula. A margin
     is undefined where revenue is not positive (a year with no living fleet, hence no
     revenue), so it is None there, never a number published as if it were a margin:
     each record decides what it shows in its place (the cellular record keeps its
@@ -980,7 +736,7 @@ class CellularSizing:
         fleet_target: The capacity-sized fleet the build fills toward and holds
             (:func:`compute_fleet_target`).
         binding_regime: Which constraint set the target (the coverage floor, the capacity
-            need, or the saturation cap).
+            need, or the fleet cap).
         subscribers_per_satellite: The per-satellite density that sized the target (people).
         satellites_per_launch: The satellites per launch the run deploys with.
     """
@@ -1074,12 +830,12 @@ class CellularTrajectory:
         years: One :class:`CellularYear` per model year, in the shared record's order.
         fleet_target: The capacity-sized fleet the build-out fills toward
             (:func:`compute_fleet_target`: the subscriber target divided by the
-            per-satellite density, floored by the coverage floor, capped by the saturation
+            per-satellite density, floored by the coverage floor, capped by the fleet
             cap). The cellular rule builds and holds to THIS, not the floor.
         subscribers_per_satellite: The attached-subscribers-per-satellite density that sized
             the fleet.
         binding_regime: Which constraint set the fleet target (the coverage floor, the
-            capacity need, or the saturation cap), the investor's coverage-vs-capacity
+            capacity need, or the fleet cap), the investor's coverage-vs-capacity
             answer for this scenario.
         full_coverage_reached_year: The first fiscal year the living fleet reached the
             FLEET TARGET (full deployment, :func:`first_year_at_target`), or ``None`` if it
@@ -1099,14 +855,6 @@ class CellularTrajectory:
         steady_state_gross_margin_arpu_pct: The steady-state ARPU margin, percent; unlike
             the cost-plus margin, it depends on whether the ARPU revenue clears the
             annualized cost at the served base.
-        built_fleet_annual_cost_musd: Interim, read only by the Iridium artifact (v5): the
-            BUILT fleet's annualized cost, $M/yr, the published ARPU margin's cost basis.
-            When the final-year living fleet is at or above the fleet target it equals the
-            final year's annualized cost; otherwise it projects the whole-launch built fleet
-            (the target rounded up to whole launches) at the final year's per-satellite
-            annual cost.
-        iridium: Interim: the Iridium entry's v5 physics block (:class:`IridiumResult`) on
-            an Iridium run, ``None`` on a cellular run. It never perturbs the fields above.
     """
 
     years: tuple[CellularYear, ...]
@@ -1120,8 +868,6 @@ class CellularTrajectory:
     steady_state_gross_margin_cost_plus_pct: float
     steady_state_revenue_arpu_musd: float
     steady_state_gross_margin_arpu_pct: float
-    built_fleet_annual_cost_musd: float
-    iridium: IridiumResult | None
 
 
 @dataclass(frozen=True)
@@ -1138,441 +884,6 @@ class CellularRun:
 
     fleet: FleetTrajectory
     cellular: CellularTrajectory
-
-
-@dataclass(frozen=True)
-class IridiumArpuBucket:
-    """One billable-connection ARPU revenue bucket (a mix slice of the pool).
-
-    Attributes:
-        mix_pct: The bucket's share of the billable-connection pool, percent (the
-            investor-set dial; for the standard bucket the reported count is the
-            people-identity residual, so the count is not exactly ``mix_pct`` of the
-            pool, off only by the premium bucket's rounding).
-        price_usd_month: The bucket's monthly price, USD per connection per month (the
-            investor-set dial).
-        count: The derived connection count in this bucket (people for standard and
-            premium, DEVICES for IoT, contracts for government); an integer.
-        revenue_musd_yr: The bucket's annual revenue, $M/yr
-            (``count x price_usd_month x MONTHS_PER_YEAR / 1e6``).
-    """
-
-    mix_pct: float
-    price_usd_month: float
-    count: int
-    revenue_musd_yr: float
-
-
-@dataclass(frozen=True)
-class IridiumArpuResult:
-    """The four-bucket ARPU revenue case computed at the built fleet's people capacity.
-
-    Attached to :attr:`IridiumResult.arpu` when the scenario carries a populated
-    :class:`~communications.config.IridiumArpuDials` block; ``None`` otherwise. The
-    four buckets partition ONE pool anchored to fleet CAPACITY
-    (``fleet_target x subscribers_per_satellite``), so every count is linear in the
-    satellite count. Subscribers are PEOPLE (standard, premium); IoT are DEVICES;
-    government is a contract line: :attr:`total_connections` is a BILLABLE-CONNECTIONS
-    accounting total, NOT one summed people population. The people identity
-    (``standard.count + premium.count == people_capacity``) is exact by construction
-    (standard is the residual). All revenues are estimate-tier.
-
-    Attributes:
-        standard: The STANDARD personal (phone-class) people bucket.
-        premium: The PREMIUM terminal (gain-antenna) people bucket.
-        iot: The IoT DEVICE bucket (the mix residual to 100).
-        government: The GOVERNMENT contract bucket.
-        total_connections: The billable-connection pool size, round-half-up of the
-            float pool ``people_capacity / people_share`` (an accounting total across
-            people, devices, and contracts, not a people count).
-        arpu_revenue_total_musd_yr: The sum of the four bucket revenues, $M/yr.
-    """
-
-    standard: IridiumArpuBucket
-    premium: IridiumArpuBucket
-    iot: IridiumArpuBucket
-    government: IridiumArpuBucket
-    total_connections: int
-    arpu_revenue_total_musd_yr: float
-
-
-@dataclass(frozen=True)
-class IridiumResult:
-    """The Iridium model's (L-band max-outcome) physics result block.
-
-    Attached to the cellular record's interim :attr:`CellularTrajectory.iridium` by
-    the Iridium entry (``config.iridium`` is non-None); ``None`` on a run of the
-    High-Bandwidth Cellular Pure Play model. All fields are estimate-tier derived
-    quantities. Subscribers are PEOPLE; ``iot_devices`` is a separate DEVICE
-    passthrough, never folded into the people count. This is the MSS lane (owned
-    L-band, purpose-built or in-chipset devices), NEVER the cellular
-    unmodified-phone lane (the High-Bandwidth Cellular Pure Play model). See
-    :attr:`ecosystem_assumption`.
-
-    Attributes:
-        spectrum_mhz: The held L-band width used, MHz (echo of the dial).
-        aperture_m2: The satellite flat-array area used, m^2 (echo of the dial).
-        device_class: The device class that set the spectral-efficiency tier.
-        spectral_efficiency_bps_per_hz: The resolved spectral efficiency used, bps/Hz
-            (the override when set, else the ``device_class`` central).
-        per_satellite_capacity_gbps: The derived per-satellite capacity, Gbps
-            (0.7 step 2).
-        fleet_aggregate_capacity_gbps: ``per_satellite_capacity_gbps x fleet_target``,
-            the built-out fleet's aggregate capacity, Gbps (0.7 step 6).
-        subscribers_per_satellite: The derived per-satellite density (people) that
-            sized the fleet (echo of what fed :func:`compute_fleet_target`).
-        effective_satellites_per_launch: The aperture-coupled per-launch count the
-            deployment used (0.7 step 10; equals the configured value at the default
-            aperture).
-        active_user_rate_mbps: The per-subscriber active data rate, Mbps.
-        concurrency_peak: The busy-hour peak concurrency fraction.
-        concurrency_offpeak: The off-peak concurrency fraction.
-        beam_pool_mbps: The single-beam Shannon pool, ``spectrum_mhz x SE``, Mbps.
-        per_user_rate_peak_mbps: The peak per-user rate, Mbps (the active rate).
-        per_user_rate_offpeak_mbps: The off-peak per-user rate, Mbps (0.7 step 5).
-        iot_devices: The passthrough IoT DEVICE count (not people; zero sizing effect).
-        operations_cost_musd: The Iridium model's operations cost, $M
-            (:data:`IRIDIUM_OPERATIONS_COST_MUSD`, 0.0, an explicit stated assumption,
-            a fixed line to research and add later).
-        ecosystem_assumption: The stated ecosystem assumption behind the phone-class
-            tier (:data:`ECOSYSTEM_ASSUMPTION_NOTE`): in-chipset L-band support, 0 dBi,
-            a forward assumption; the Iridium model never claims to reach an
-            unmodified handset.
-        arpu: The four-bucket ARPU revenue case (:class:`IridiumArpuResult`) computed
-            at the built fleet's people capacity, or ``None`` when the scenario carries
-            no ``arpu`` block. When set, its IoT bucket count is the model's published
-            IoT device count (the ``iot_devices`` passthrough above is superseded at the
-            output/assumptions layer; one IoT truth per artifact).
-    """
-
-    spectrum_mhz: float
-    aperture_m2: float
-    device_class: DeviceClass
-    spectral_efficiency_bps_per_hz: float
-    per_satellite_capacity_gbps: float
-    fleet_aggregate_capacity_gbps: float
-    subscribers_per_satellite: int
-    effective_satellites_per_launch: int
-    active_user_rate_mbps: float
-    concurrency_peak: float
-    concurrency_offpeak: float
-    beam_pool_mbps: float
-    per_user_rate_peak_mbps: float
-    per_user_rate_offpeak_mbps: float
-    iot_devices: int
-    operations_cost_musd: float
-    ecosystem_assumption: str
-    arpu: IridiumArpuResult | None = None
-
-
-def _arpu_bucket(mix_pct: float, price_usd_month: float, count: int) -> IridiumArpuBucket:
-    """Build one ARPU bucket, computing its annual revenue from the count and price.
-
-    Args:
-        mix_pct: The bucket's mix share of the pool, percent (the dial, carried as-is).
-        price_usd_month: The bucket's monthly price, USD per connection per month.
-        count: The bucket's derived connection count.
-
-    Returns:
-        The populated :class:`IridiumArpuBucket` (revenue = count x price x months / 1e6).
-    """
-    revenue_musd_yr = count * price_usd_month * MONTHS_PER_YEAR / MUSD_TO_USD
-    return IridiumArpuBucket(
-        mix_pct=mix_pct,
-        price_usd_month=price_usd_month,
-        count=count,
-        revenue_musd_yr=revenue_musd_yr,
-    )
-
-
-def derive_arpu_buckets(people_capacity: int, dials: IridiumArpuDials) -> IridiumArpuResult:
-    """Derive the four ARPU revenue buckets from the people capacity and the mix dials.
-
-    Implements the design's pool algebra verbatim. One pool rides fleet CAPACITY (the
-    ``people_capacity`` passed in, ``fleet_target x subscribers_per_satellite``), so
-    every bucket count is linear in the satellite count. The people share (standard +
-    premium, as a fraction of 100) inverts the pool
-    (``total_connections = people_capacity / people_share``); the premium, IoT, and
-    government counts are round-half-up of their mix slice of that pool; and STANDARD
-    is the RESIDUAL (``people_capacity - premium_count``), so the people identity
-    (``standard_count + premium_count == people_capacity``) is exact by construction
-    (no rounding drift). Subscribers are PEOPLE (standard, premium); IoT are DEVICES;
-    government is a contract line: the pool is a billable-connections accounting frame,
-    not one summed people population.
-
-    Args:
-        people_capacity: The built fleet's people capacity
-            (``fleet_target x subscribers_per_satellite``), a positive integer.
-        dials: The validated :class:`~communications.config.IridiumArpuDials` (the four
-            mixes sum to 100 within the epsilon; both people mixes are strictly
-            positive, so ``people_share`` is never zero).
-
-    Returns:
-        The populated :class:`IridiumArpuResult`: the four buckets, the
-        billable-connection total, and the summed annual revenue.
-    """
-    people_share = (dials.standard_mix_pct + dials.premium_mix_pct) / ARPU_MIX_TOTAL_PCT
-    total_connections_float = people_capacity / people_share
-    premium_count = round_half_up(
-        total_connections_float * dials.premium_mix_pct / ARPU_MIX_TOTAL_PCT
-    )
-    standard_count = people_capacity - premium_count
-    iot_count = round_half_up(total_connections_float * dials.iot_mix_pct / ARPU_MIX_TOTAL_PCT)
-    government_count = round_half_up(
-        total_connections_float * dials.government_mix_pct / ARPU_MIX_TOTAL_PCT
-    )
-    standard = _arpu_bucket(dials.standard_mix_pct, dials.standard_price_usd_month, standard_count)
-    premium = _arpu_bucket(dials.premium_mix_pct, dials.premium_price_usd_month, premium_count)
-    iot = _arpu_bucket(dials.iot_mix_pct, dials.iot_price_usd_month, iot_count)
-    government = _arpu_bucket(
-        dials.government_mix_pct, dials.government_price_usd_month, government_count
-    )
-    total_revenue_musd_yr = (
-        standard.revenue_musd_yr
-        + premium.revenue_musd_yr
-        + iot.revenue_musd_yr
-        + government.revenue_musd_yr
-    )
-    return IridiumArpuResult(
-        standard=standard,
-        premium=premium,
-        iot=iot,
-        government=government,
-        total_connections=round_half_up(total_connections_float),
-        arpu_revenue_total_musd_yr=total_revenue_musd_yr,
-    )
-
-
-def build_iridium_result(
-    dials: IridiumDials,
-    *,
-    fleet_target: int,
-    subscribers_per_satellite: int,
-    effective_satellites_per_launch: int,
-) -> IridiumResult:
-    """Assemble the :class:`IridiumResult` from the dials and the sized fleet.
-
-    Resolves the spectral efficiency, re-derives the per-satellite capacity and the
-    per-user rates from the dials (the pure derivations above), computes the fleet
-    aggregate as ``per_satellite_capacity_gbps x fleet_target`` (0.7 step 6), and
-    echoes the derived density and the aperture-coupled effective
-    satellites-per-launch (both passed in, already computed once by the Iridium entry,
-    ``communications.iridium.run_iridium_model``, so the density that sized the fleet
-    and the density reported here cannot drift). The operations cost and the
-    ecosystem assumption are the stated Iridium-model constants
-    (:data:`IRIDIUM_OPERATIONS_COST_MUSD`, :data:`ECOSYSTEM_ASSUMPTION_NOTE`). When
-    the dials carry an ``arpu`` block, the four-bucket revenue case is derived here
-    at the built fleet's people capacity (``fleet_target x subscribers_per_satellite``,
-    :func:`derive_arpu_buckets`) and attached; it is ``None`` otherwise.
-
-    Args:
-        dials: The Iridium-model :class:`~communications.config.IridiumDials` block.
-        fleet_target: The capacity-sized fleet target (from
-            :func:`compute_fleet_target`).
-        subscribers_per_satellite: The derived per-satellite density that sized the
-            fleet (echoed onto the result).
-        effective_satellites_per_launch: The aperture-coupled per-launch count the
-            deployment used (echoed onto the result).
-
-    Returns:
-        The populated :class:`IridiumResult` physics block (with the ARPU revenue case
-        when the ``arpu`` dials are set).
-    """
-    spectral_efficiency = resolve_device_spectral_efficiency(dials)
-    per_satellite_capacity_gbps = derive_per_satellite_capacity_gbps(
-        dials.spectrum_mhz, spectral_efficiency, dials.aperture_m2
-    )
-    beam_pool_mbps = dials.spectrum_mhz * spectral_efficiency
-    per_user_rate_peak_mbps, per_user_rate_offpeak_mbps = derive_iridium_per_user_rates(
-        spectrum_mhz=dials.spectrum_mhz,
-        spectral_efficiency_bps_per_hz=spectral_efficiency,
-        active_user_rate_mbps=dials.active_user_rate_mbps,
-        concurrency_peak=dials.concurrency_peak,
-        concurrency_offpeak=dials.concurrency_offpeak,
-    )
-    # The ARPU revenue case rides the built fleet's people CAPACITY (not the served
-    # target), so every bucket count scales with the satellite count. None when the
-    # scenario carries no arpu block (the bare-dials path, including the tripwire).
-    arpu = (
-        derive_arpu_buckets(fleet_target * subscribers_per_satellite, dials.arpu)
-        if dials.arpu is not None
-        else None
-    )
-    return IridiumResult(
-        spectrum_mhz=dials.spectrum_mhz,
-        aperture_m2=dials.aperture_m2,
-        device_class=dials.device_class,
-        spectral_efficiency_bps_per_hz=spectral_efficiency,
-        per_satellite_capacity_gbps=per_satellite_capacity_gbps,
-        fleet_aggregate_capacity_gbps=per_satellite_capacity_gbps * fleet_target,
-        subscribers_per_satellite=subscribers_per_satellite,
-        effective_satellites_per_launch=effective_satellites_per_launch,
-        active_user_rate_mbps=dials.active_user_rate_mbps,
-        concurrency_peak=dials.concurrency_peak,
-        concurrency_offpeak=dials.concurrency_offpeak,
-        beam_pool_mbps=beam_pool_mbps,
-        per_user_rate_peak_mbps=per_user_rate_peak_mbps,
-        per_user_rate_offpeak_mbps=per_user_rate_offpeak_mbps,
-        iot_devices=dials.iot_devices,
-        operations_cost_musd=IRIDIUM_OPERATIONS_COST_MUSD,
-        ecosystem_assumption=ECOSYSTEM_ASSUMPTION_NOTE,
-        arpu=arpu,
-    )
-
-
-def arpu_stated_assumptions(dials: IridiumArpuDials) -> tuple[str, ...]:
-    """Return the ARPU case's stated-assumption lines (one source of truth).
-
-    The four posture statements the published four-bucket case carries: full
-    sell-through on capacity, the honest mix posture (people-and-government share,
-    the de-anchored government line, IoT the residual, the constant-mix convention),
-    the built-fleet convention (revenue and the margin's cost basis both at the built
-    fleet), and the margin definition (how the published margin is measured).
-    Consumed both by :func:`iridium_assumptions` (spliced into the full assumptions
-    tuple) and by the promoted artifact's ``revenue_arpu_buckets`` block, so the two
-    never drift.
-
-    Args:
-        dials: The validated :class:`~communications.config.IridiumArpuDials` (its
-            mixes populate the honest posture line).
-
-    Returns:
-        The four ARPU-posture strings, in stable order.
-    """
-    people_and_gov_pct = dials.standard_mix_pct + dials.premium_mix_pct + dials.government_mix_pct
-    return (
-        (
-            "Full sell-through on capacity: the four-bucket case assumes every "
-            "serveable billable-connection slot the built fleet can carry is sold, so "
-            "revenue rides the built fleet's people capacity (fleet_target x density), "
-            "above the served target, with no penetration or utilization haircut. "
-            "Clearly optimistic, stated, investor-owned."
-        ),
-        (
-            "Mix posture (stated honestly): the people-and-government share "
-            f"({people_and_gov_pct:.4g} percent of the billable-connection pool) is "
-            "loosely anchored on the FY2025 book's like-for-like people-plus-government "
-            "share (about 21.2 percent, COMM-617/618); government is deliberately "
-            "de-anchored from the book's 4.8 percent to "
-            f"{dials.government_mix_pct} percent so the baseline government line "
-            "reproduces today's one fixed EMSS contract (COMM-619) rather than scaling a "
-            "share; IoT is the residual that closes the mix to 100. The mix is held "
-            "constant as the fleet grows (v1); a time-varying mix schedule is the "
-            "documented v2 extension."
-        ),
-        (
-            "Built-fleet convention: the revenue case and its margin's cost basis are "
-            "both computed at the built fleet (fleet_target), so on a scenario that "
-            "does not complete its build inside the horizon (the trajectory summary's "
-            "build_completes_in_horizon is false) the case describes the completed "
-            "fleet, not the final horizon year's smaller actual fleet."
-        ),
-        (
-            "Margin definition: the published ARPU margin measures revenue against the "
-            "built fleet's full build, launch, and replacement cost, annualized over "
-            "the satellite life (built_fleet_annual_cost_musd). Operations cost is the "
-            "explicit zero pending research and corporate overhead is never included, "
-            "so it is an operating-style margin (the data-center model's convention), "
-            "not a gross margin and not a net margin."
-        ),
-    )
-
-
-def iridium_assumptions(dials: IridiumDials) -> tuple[str, ...]:
-    """Return the Iridium model's stated-assumptions lines (the assumptions output).
-
-    Takes the dials because one line is conditional on them (the aperture fold
-    caveat, 0.8a). Always states: the ecosystem assumption
-    (:data:`ECOSYSTEM_ASSUMPTION_NOTE`, 0.8); that operations cost is assumed zero
-    (:data:`IRIDIUM_OPERATIONS_COST_MUSD`, an explicit investor-instructed assumption,
-    a fixed line to research and add later); the estimate tiers (the
-    spectral-efficiency bands, the reuse calibration, the aperture reference and its
-    linear conservative scaling, the concurrency pair, the active rate) as
-    estimate-tier, investor-owned values; and that the Iridium model is the MSS lane
-    (owned L-band, purpose-built or in-chipset devices), never the cellular
-    unmodified-phone lane. The revenue-case line is conditional on ``dials.arpu``: with
-    the four-bucket ARPU case set it states the PUBLISHED case (the Iridium model's
-    only published revenue case) plus the full sell-through assumption, the honest mix
-    posture, the built-fleet convention, and the IoT-count supersession; with no
-    ``arpu`` block it states the DEFERRED case (no revenue case is published on that
-    path; the per-tier MSS ARPUs plug in via the ARPU block). The synthetic cost-plus
-    line is off every Iridium-facing surface as of iridium-v3 (investor direction
-    2026-07-10); it stays the cellular family's shared-engine convention on the
-    trajectory. Conditionally
-    appends :data:`APERTURE_FOLD_CAVEAT_NOTE` when ``dials.aperture_m2`` exceeds
-    :data:`APERTURE_NO_FOLD_LIMIT_M2` (0.8a: a documented note, never a validation
-    error, so the above-limit what-if stays computable).
-
-    Args:
-        dials: The Iridium-model :class:`~communications.config.IridiumDials` block
-            (its aperture drives the conditional fold caveat, its concurrency and
-            active rate populate the estimate-tier lines, and its optional ``arpu``
-            block selects the published-case vs deferred-case revenue lines).
-
-    Returns:
-        The stated-assumptions lines, in stable order, as a tuple of strings.
-    """
-    lines: list[str] = [
-        ECOSYSTEM_ASSUMPTION_NOTE,
-        (
-            f"Operations cost is assumed zero ({IRIDIUM_OPERATIONS_COST_MUSD} USD "
-            "millions per year): an explicit investor-instructed assumption, a fixed "
-            "operations line to research and add later, stated here rather than "
-            "silently omitted."
-        ),
-        (
-            "Spectral efficiency is estimate-tier and investor-owned: the phone-class "
-            f"band is {PHONE_CLASS_SE_LOW} to {PHONE_CLASS_SE_HIGH}, the "
-            f"small-terminal-class band {SMALL_TERMINAL_CLASS_SE_LOW} to "
-            f"{SMALL_TERMINAL_CLASS_SE_HIGH}, the large-terminal-class band "
-            f"{MOUNTED_TERMINAL_CLASS_SE_LOW} to {MOUNTED_TERMINAL_CLASS_SE_HIGH} bps/Hz (class "
-            f"centrals {PHONE_CLASS_SE_CENTRAL} / {SMALL_TERMINAL_CLASS_SE_CENTRAL} / "
-            f"{MOUNTED_TERMINAL_CLASS_SE_CENTRAL})."
-        ),
-        (
-            f"The reuse calibration ({REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE} Gbps per "
-            "MHz per unit spectral efficiency) is calibrated at the "
-            f"{APERTURE_REFERENCE_M2} m^2 reference aperture; per-satellite capacity "
-            "scales linearly with aperture area, which is conservative (it ignores "
-            "the additional per-link SNR lift a larger aperture also gives)."
-        ),
-        (
-            f"The busy-hour concurrency pair (peak {dials.concurrency_peak}, off-peak "
-            f"{dials.concurrency_offpeak}) and the per-subscriber active rate "
-            f"({dials.active_user_rate_mbps} Mbps) are estimate-tier, investor-owned "
-            "values."
-        ),
-    ]
-    if dials.arpu is not None:
-        lines.append(
-            "The prices-today ARPU revenue case is PUBLISHED for the Iridium model as "
-            "the four-bucket case (standard personal, premium terminal, IoT devices, "
-            "government): an investor-set price-and-mix sheet dated 2026-07-09. It is the "
-            "Iridium model's only published revenue case."
-        )
-        lines.extend(arpu_stated_assumptions(dials.arpu))
-        lines.append(
-            "IoT count supersession (one IoT truth): with the ARPU case on, the "
-            "published IoT device count derives from the revenue mix (the IoT bucket "
-            "count), and the former fixed iot_devices passthrough dial is superseded "
-            "(reported only on the no-ARPU path)."
-        )
-    else:
-        lines.append(
-            "The prices-today ARPU revenue case is DEFERRED for the Iridium model on "
-            "this no-ARPU configuration: the four-bucket ARPU case is the Iridium "
-            "model's published revenue when its block is set, so on this configuration "
-            "the Iridium model publishes no revenue case, and the per-tier MSS ARPUs "
-            "plug in via the ARPU block."
-        )
-    lines.append(
-        "The Iridium model is the MSS lane (owned L-band, purpose-built or "
-        "in-chipset devices), never the cellular direct-to-cell unmodified-phone "
-        "lane (the High-Bandwidth Cellular Pure Play model)."
-    )
-    if dials.aperture_m2 > APERTURE_NO_FOLD_LIMIT_M2:
-        lines.append(APERTURE_FOLD_CAVEAT_NOTE)
-    return tuple(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -1986,52 +1297,10 @@ def _cellular_cohort_revenue(
     return tuple(lines)
 
 
-def _built_fleet_annual_cost_musd(
-    config: CommsConfig,
-    *,
-    final_year: FleetYear,
-    fleet_target: int,
-    satellites_per_launch: int,
-) -> float:
-    """The built fleet's annualized cost: the Iridium artifact's ARPU margin's cost basis, $M/yr.
-
-    Interim: the cellular record carries it only for the Iridium v5 artifact. A revenue
-    case computed at the fleet target needs a cost for the same fleet. When the
-    final-year living fleet is at or above the fleet target, the built fleet is on
-    orbit, so this is that year's annualized fleet cost (each cohort at its own
-    locked-in launch price). Otherwise (a build that does not complete inside the
-    horizon, or a hold that fell short) it projects the whole-launch built fleet (the
-    fleet target rounded up to whole launches, exactly the fleet the overshoot rule
-    builds) at the final year's per-satellite annual cost.
-
-    Args:
-        config: The comms config (the build cost and the satellite life).
-        final_year: The final model year's shared record (its living fleet, annualized
-            cost, and per-launch price).
-        fleet_target: The capacity-sized fleet target.
-        satellites_per_launch: The satellites per launch this run deployed with.
-
-    Returns:
-        The built fleet's annualized cost, $M/yr.
-    """
-    if final_year.living_fleet >= fleet_target:
-        return final_year.annual_cost_this_year_musd
-    built_fleet_satellites = _ceil_to_launch(fleet_target, satellites_per_launch)
-    final_year_cost_per_satellite_musd = per_satellite_annual_cost_musd(
-        satellite_build_cost_musd=config.satellite.satellite_build_cost_musd,
-        launch_cost_per_launch_musd=final_year.launch_cost_per_launch_musd,
-        satellites_per_launch=satellites_per_launch,
-        satellite_lifetime_years=config.satellite.satellite_lifetime_years,
-    )
-    return built_fleet_satellites * final_year_cost_per_satellite_musd
-
-
 def build_cellular_record(
     config: CommsConfig,
     fleet: FleetTrajectory,
     sizing: CellularSizing,
-    *,
-    iridium: IridiumResult | None,
 ) -> CellularTrajectory:
     """Build the cellular family's record of a run on its shared fleet-and-cost record.
 
@@ -2045,7 +1314,7 @@ def build_cellular_record(
     is no revenue), with the revenue on each cohort cost line. Then the headlines: the
     completion year, the final year's served people and its cash cost per person (the
     shared final-year replacement over them, :func:`usd_per_person`), the steady-state
-    revenue and margins (the final year's), and the interim built-fleet cost.
+    revenue and margins (the final year's).
 
     It logs a WARNING when a served override exceeds the target's people capacity (the
     served count is capped there; the fleet is sized from the target, not the override)
@@ -2059,7 +1328,6 @@ def build_cellular_record(
             :func:`cellular_rule` for ``sizing.fleet_target``.
         sizing: How the fleet was sized (the target, its regime, the density, the
             satellites per launch).
-        iridium: Interim: the Iridium entry's v5 physics block, or None on a cellular run.
 
     Returns:
         The :class:`CellularTrajectory`.
@@ -2148,13 +1416,6 @@ def build_cellular_record(
         steady_state_gross_margin_cost_plus_pct=final_year.cost_plus_gross_margin_pct,
         steady_state_revenue_arpu_musd=final_year.arpu_revenue_this_year_musd,
         steady_state_gross_margin_arpu_pct=final_year.arpu_gross_margin_pct,
-        built_fleet_annual_cost_musd=_built_fleet_annual_cost_musd(
-            config,
-            final_year=final_fleet_year,
-            fleet_target=fleet_target,
-            satellites_per_launch=sizing.satellites_per_launch,
-        ),
-        iridium=iridium,
     )
 
 
@@ -2183,7 +1444,7 @@ def run_comms_model(config: CommsConfig) -> CellularRun:
     curve against the config before it runs); this entry refuses it, so through the two
     entries no Iridium config runs without its curve. Any other config is sized from its
     dials (:func:`compute_fleet_target`: the subscriber target over the fixed per-satellite
-    density, floored by the coverage floor, capped by the saturation cap), deployed on the
+    density, floored by the coverage floor, capped by the fleet cap), deployed on the
     shared fleet-and-cost loop (:func:`run_fleet_loop`) under the cellular rule
     (:func:`cellular_rule`: build to the target, then hold it, replacing each retiring
     cohort), at the configured satellites per launch, and recorded by
@@ -2222,9 +1483,7 @@ def run_comms_model(config: CommsConfig) -> CellularRun:
     fleet = run_fleet_loop(
         config, cellular_rule(fleet_target), satellites_per_launch=satellites_per_launch
     )
-    return CellularRun(
-        fleet=fleet, cellular=build_cellular_record(config, fleet, sizing, iridium=None)
-    )
+    return CellularRun(fleet=fleet, cellular=build_cellular_record(config, fleet, sizing))
 
 
 __all__ = [
@@ -2240,25 +1499,13 @@ __all__ = [
     "FleetCohortCost",
     "FleetTrajectory",
     "FleetYear",
-    "IridiumArpuBucket",
-    "IridiumArpuResult",
-    "IridiumResult",
     "NotACellularConfigError",
-    "arpu_stated_assumptions",
     "build_cellular_record",
-    "build_iridium_result",
     "cellular_rule",
     "compute_fleet_target",
-    "derive_arpu_buckets",
-    "derive_iridium_per_user_rates",
-    "derive_iridium_satellites_per_launch",
-    "derive_iridium_subscribers_per_satellite",
-    "derive_per_satellite_capacity_gbps",
     "first_year_at_target",
-    "iridium_assumptions",
     "margin_pct",
     "per_satellite_annual_cost_musd",
-    "resolve_device_spectral_efficiency",
     "run_comms_model",
     "run_fleet_loop",
     "subscribers_served_at",

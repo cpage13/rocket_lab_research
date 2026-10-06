@@ -5,10 +5,11 @@ Covers the slim ``CommsConfig`` dial tree: all-defaults construction, the frozen
 ``common.cadence`` classes themselves, with their load-time validators; the
 classes' own defaults and bounds are tested once, in
 ``tests/common/test_cadence_move.py``), the satellite / coverage / comms-share /
-ground blocks, the field bounds, the cross-field validators (coverage floor at or
-below the cap, the fleet cap at its default on an Iridium config, off-peak concurrency at
-or below the peak), every float dial of an Iridium config finite, the YAML loader pair,
-and the Iridium saturation block (its defaults, the shipped scenario's block, its bounds).
+ground blocks, the field bounds, the cross-field validators (the coverage floor at or
+below the fleet cap; on an Iridium config every cellular sizing and revenue dial at its
+default and no ground block), a retired Iridium setting refused at load, every float dial of
+an Iridium config finite, the YAML loader pair, and the Iridium saturation block (its
+defaults, the shipped scenario's block, its bounds).
 Mirrors the data-center
 ``test_config.py`` assertion style without importing ``data_center`` (forbidden).
 """
@@ -174,7 +175,7 @@ def test_coverage_dials_default_floor_is_investor_set_340() -> None:
 
 
 def test_coverage_dials_default_cap_is_investor_set_2000() -> None:
-    """The saturation CAP default is the investor-set 2,000 (the upper fleet bound)."""
+    """The cellular fleet CAP default is the investor-set 2,000 (the upper fleet bound)."""
     cov = CoverageDials()
     assert cov.max_fleet_satellites == MAX_FLEET_SATELLITES_DEFAULT
     assert cov.max_fleet_satellites == 2_000
@@ -338,7 +339,7 @@ def test_load_comms_config_malformed_yaml_raises(tmp_path: Path) -> None:
 
 
 def test_coverage_floor_above_cap_fails_at_load(tmp_path: Path) -> None:
-    """A coverage floor above the saturation cap fails at config load, with a clear message.
+    """A coverage floor above the cellular fleet cap fails at config load, with a clear message.
 
     Objective: the floor-at-or-below-cap rule. Before it existed, a 340 floor over a
     100 cap loaded silently, sized a 100-satellite fleet, and labeled it the coverage
@@ -358,70 +359,138 @@ def test_coverage_floor_above_cap_fails_at_load(tmp_path: Path) -> None:
     assert equal.satellites_for_full_coverage == equal.max_fleet_satellites
 
 
-def test_offpeak_concurrency_above_peak_fails_at_load(tmp_path: Path) -> None:
-    """An off-peak concurrency above the busy-hour peak fails at config load.
+IRIDIUM_FIXED_BLOCKS: tuple[tuple[str, type[BaseModel]], ...] = (
+    ("coverage", CoverageDials),
+    ("subscribers", SubscriberDials),
+    ("revenue", RevenueDials),
+)
+"""The blocks whose every field an Iridium config keeps at its default (E3): the cellular
+family's sizing and revenue dials, and the coverage floor the Iridium path pins."""
 
-    Objective: the off-peak-at-or-below-peak rule (off peak is the quieter hour).
-    Before it existed, 0.025 off peak over a 0.005 peak loaded and produced an
-    off-peak per-user rate below the peak rate. Expected: that pair fails in a
-    scenario YAML and as a bare block, naming both fields; equal values load.
+
+def _a_non_default(block: type[BaseModel], field_name: str) -> object:
+    """A valid value of a block's field other than its default: one more than a numeric default
+    (the floor stays under the cap, the cap over the floor), 1 for an unset optional count."""
+    default = getattr(block(), field_name)
+    return 1 if default is None else default + 1
+
+
+def test_iridium_config_refuses_every_cellular_sizing_and_revenue_field(tmp_path: Path) -> None:
+    """Objective: on an Iridium config every field of the ``coverage``, ``subscribers`` and
+    ``revenue`` blocks keeps its default and ``ground`` stays unset (E3; guard G34): the Iridium
+    path reads none of the cellular family's sizing and revenue dials and pins the coverage
+    floor at 340. The test walks each block's own fields, so a field added later is covered
+    with no edit here; it is on the value, so a config written out whole still loads.
+
+    Sample: for every field of the three blocks, a scenario with an ``iridium:`` block and that
+    field at a value other than its default (the cap also at 1,999 and 3,000, p4's samples);
+    the same scenario without the ``iridium:`` block; a scenario with an ``iridium:`` block and
+    a ``ground`` block; an Iridium scenario writing every field at its default; the default
+    Iridium config round-tripped through ``model_dump`` and ``model_validate``.
+
+    Expected outcome: the walk meets the floor, the cap, the target, the density, the served
+    override, the multiple and the ARPU; each Iridium scenario fails at load (a
+    ValidationError, a ValueError) naming the field, its default and the value; the cellular
+    scenario loads with the value; the ground block is refused naming ``ground``, and loads on
+    a cellular config; every field at its default and the round trip both load.
     """
-    scenario = tmp_path / "offpeak_above_peak.yaml"
-    scenario.write_text(
-        "iridium:\n  concurrency_peak: 0.005\n  concurrency_offpeak: 0.025\n",
-        encoding="utf-8",
-    )
-    with pytest.raises(ValidationError, match="must not exceed iridium.concurrency_peak"):
+    scenario = tmp_path / "iridium.yaml"
+    walked: list[str] = []
+    for block_name, block in IRIDIUM_FIXED_BLOCKS:
+        for field_name in block.model_fields:
+            default = getattr(block(), field_name)
+            values = [_a_non_default(block, field_name)]
+            if (block_name, field_name) == ("coverage", "max_fleet_satellites"):
+                values += [MAX_FLEET_SATELLITES_DEFAULT - 1, 3_000]
+            for value in values:
+                written = {block_name: {field_name: value}}
+                scenario.write_text(
+                    yaml.safe_dump({**written, "iridium": {"spectrum_mhz": 8.0}}), encoding="utf-8"
+                )
+                with pytest.raises(ValidationError) as refused:
+                    load_comms_config(scenario)
+                assert (
+                    f"{block_name}.{field_name} is not a setting on an Iridium config (one with an "
+                    "'iridium:' block)"
+                ) in str(refused.value)
+                assert f"keeps its default, {default!r}; got {value!r}" in str(refused.value)
+                assert isinstance(refused.value, ValueError)
+                scenario.write_text(yaml.safe_dump(written), encoding="utf-8")
+                assert (
+                    getattr(getattr(load_comms_config(scenario), block_name), field_name) == value
+                )
+            walked.append(f"{block_name}.{field_name}")
+    assert {
+        "coverage.satellites_for_full_coverage",
+        "coverage.max_fleet_satellites",
+        "subscribers.subscribers_at_full_coverage",
+        "subscribers.subscribers_per_satellite",
+        "subscribers.subscribers_served_override",
+        "revenue.revenue_multiple",
+        "revenue.arpu_usd_per_month",
+    } <= set(walked)
+    scenario.write_text("ground: {}\niridium:\n  spectrum_mhz: 8.0\n", encoding="utf-8")
+    with pytest.raises(ValidationError, match="ground is not a setting on an Iridium config"):
         load_comms_config(scenario)
-    with pytest.raises(ValidationError, match="concurrency_offpeak"):
-        IridiumDials(concurrency_peak=0.01, concurrency_offpeak=0.02)
-    equal = IridiumDials(concurrency_peak=0.01, concurrency_offpeak=0.01)
-    assert equal.concurrency_offpeak == equal.concurrency_peak
-
-
-@pytest.mark.parametrize("cap", [MAX_FLEET_SATELLITES_DEFAULT - 1, 3_000])
-def test_an_iridium_config_refuses_a_fleet_cap_other_than_its_default(
-    tmp_path: Path, cap: int
-) -> None:
-    """Objective: the fleet cap is a setting of the cellular family only; an Iridium config keeps
-    it at its default (2,000), which still caps the Iridium model's fleet until that model sizes
-    its own, and is refused at load otherwise, naming the field. The test is on the value, so a
-    config written out whole (every field set) still loads.
-
-    Sample: a scenario with an ``iridium:`` block and ``coverage.max_fleet_satellites`` at
-    1,999, then 3,000; the same scenario without the ``iridium:`` block; an Iridium scenario
-    writing the cap at its default; the default Iridium config round-tripped through
-    ``model_dump`` and ``model_validate``.
-
-    Expected outcome: the Iridium scenario fails at load (a ValidationError, a ValueError)
-    naming ``coverage.max_fleet_satellites``, its default and the value; the cellular one loads
-    with the value; the cap written at its default and the round trip both load.
-    """
-    scenario = tmp_path / "capped.yaml"
+    scenario.write_text("ground: {}\n", encoding="utf-8")
+    assert load_comms_config(scenario).ground == GroundInterfaceDials()
+    defaults = {name: block().model_dump() for name, block in IRIDIUM_FIXED_BLOCKS}
     scenario.write_text(
-        f"coverage:\n  max_fleet_satellites: {cap}\niridium:\n  spectrum_mhz: 8.0\n",
-        encoding="utf-8",
+        yaml.safe_dump({**defaults, "iridium": {"spectrum_mhz": 8.0}}), encoding="utf-8"
     )
-    with pytest.raises(ValidationError) as refused:
-        load_comms_config(scenario)
-    assert (
-        "coverage.max_fleet_satellites is not a setting on an Iridium config (one with an "
-        f"'iridium:' block): it keeps its default, {MAX_FLEET_SATELLITES_DEFAULT}, the "
-        "cellular family's fleet cap, which also caps the Iridium model's fleet until that "
-        f"model sizes its own; got {cap}"
-    ) in str(refused.value)
-    scenario.write_text(f"coverage:\n  max_fleet_satellites: {cap}\n", encoding="utf-8")
-    assert load_comms_config(scenario).coverage.max_fleet_satellites == cap
-    scenario.write_text(
-        f"coverage:\n  max_fleet_satellites: {MAX_FLEET_SATELLITES_DEFAULT}\n"
-        "iridium:\n  spectrum_mhz: 8.0\n",
-        encoding="utf-8",
-    )
-    assert load_comms_config(scenario).coverage.max_fleet_satellites == (
-        MAX_FLEET_SATELLITES_DEFAULT
+    assert load_comms_config(scenario).coverage.satellites_for_full_coverage == (
+        SATELLITES_FOR_FULL_COVERAGE_DEFAULT
     )
     whole = CommsConfig(iridium=IridiumDials()).model_dump()
     assert CommsConfig.model_validate(whole).iridium == IridiumDials()
+
+
+RETIRED_IRIDIUM_SETTINGS: tuple[tuple[str, ...], ...] = (
+    ("device_class",),
+    ("spectral_efficiency_bps_per_hz",),
+    ("active_user_rate_mbps",),
+    ("concurrency_peak",),
+    ("concurrency_offpeak",),
+    ("iot_devices",),
+    ("arpu", "standard_mix_pct"),
+    ("arpu", "premium_mix_pct"),
+    ("arpu", "iot_mix_pct"),
+    ("arpu", "government_mix_pct"),
+    ("arpu", "standard_price_usd_month"),
+    ("arpu", "premium_price_usd_month"),
+    ("arpu", "iot_price_usd_month"),
+    ("arpu", "government_price_usd_month"),
+)
+"""The Iridium settings the switch retires (K11 to K18): the device class, the SE override, the
+one usage for every class, the IoT passthrough, the four-bucket sheet's mixes and prices, the
+single IoT price and the government price."""
+
+
+def test_a_retired_iridium_setting_fails_at_load_naming_it(tmp_path: Path) -> None:
+    """Objective: a scenario still setting a retired Iridium setting fails at load, naming it,
+    rather than being silently ignored (``extra="forbid"``).
+
+    Sample: an Iridium scenario setting each retired field in turn (each class's usage and its
+    spectral efficiency are named constants; the IoT counts are the books'; there is no
+    government price), at a plausible value.
+
+    Expected outcome: each fails at load with one ValidationError located at that field
+    (``iridium.device_class``, ``iridium.arpu.government_price_usd_month``, say), of the type
+    pydantic gives an unknown key.
+    """
+    scenario = tmp_path / "retired.yaml"
+    for path in RETIRED_IRIDIUM_SETTINGS:
+        setting: object = 1.0
+        for key in reversed(path):
+            setting = {key: setting}
+        scenario.write_text(yaml.safe_dump({"iridium": setting}), encoding="utf-8")
+        with pytest.raises(ValidationError) as refused:
+            load_comms_config(scenario)
+        errors = refused.value.errors()
+        assert [".".join(map(str, error["loc"])) for error in errors] == [
+            ".".join(("iridium", *path))
+        ], path
+        assert errors[0]["type"] == "extra_forbidden"
 
 
 def _float_dial_paths(block: type[BaseModel]) -> list[tuple[str, ...]]:

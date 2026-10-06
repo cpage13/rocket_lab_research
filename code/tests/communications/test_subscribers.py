@@ -1,8 +1,8 @@
 """Tests for the capacity dimension: fleet sizing and the buildout-to-subscribers map.
 
-These cover the capacity-sized model: the fleet target is the subscriber target
-divided by the per-satellite density, floored by the coverage floor and capped by
-the saturation cap (:func:`compute_fleet_target`), with the binding regime reported;
+These cover the cellular family's capacity-sized model: the fleet target is the
+subscriber target divided by the per-satellite density, floored by the coverage floor and
+capped by the fleet cap (:func:`compute_fleet_target`), with the binding regime reported;
 the served count RAMPS with the buildout (the subscriber target, or the served
 override, capped at the fleet target's people capacity and scaled by the fraction of
 the capacity-sized fleet on orbit); the engine reports the served-people count at the
@@ -19,12 +19,11 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
-from communications.config import CommsConfig, IridiumDials, SubscriberDials
+from communications.config import CommsConfig, SubscriberDials
 from communications.constants import (
     MAX_FLEET_SATELLITES_DEFAULT,
     SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
@@ -37,8 +36,6 @@ from communications.engine import (
     run_comms_model,
     subscribers_served_at,
 )
-from communications.iridium import run_iridium_model
-from communications.saturation_curve import SaturationCurve
 
 # A representative subscriber target distinct from the dialled default, so a test
 # asserting "result == base" cannot pass by coincidence against the default.
@@ -55,19 +52,12 @@ NON_BINDING_PEOPLE_CAPACITY = 1_000_000_000
 # A people capacity below the sample base, so the ceiling binds.
 BINDING_PEOPLE_CAPACITY = 25_000_000
 
-# The Iridium phone-class tier at a 10 Mbps active rate: density 780 / (10 x 0.025)
-# = 3,120 per satellite, so the 10M target needs 3,206 satellites, above the 2,000
-# cap (saturated); the capped fleet carries 2,000 x 3,120 = 6,240,000 people.
-SATURATING_ACTIVE_RATE_MBPS = 10.0
-SATURATED_DENSITY_PER_SATELLITE = 3_120
-SATURATED_PEOPLE_CAPACITY = 6_240_000
-
 # The three investor scenarios: the 10M baseline plus the 50M / 100M targets.
 BASELINE_TARGET = 10_000_000
 SCENARIO_50M_TARGET = 50_000_000
 SCENARIO_100M_TARGET = 100_000_000
 
-# Targets at and past the saturation cap on the cellular defaults (75,000 per
+# Targets at and past the fleet cap on the cellular defaults (75,000 per
 # satellite, 2,000-satellite cap): 150M needs exactly the 2,000 satellites (the
 # boundary: the cap binds, and its capacity still carries the whole target, so
 # it is served in full); 200M needs 2,667, so the capped fleet serves only 150M.
@@ -421,40 +411,12 @@ def test_partial_deployment_reports_proportional_subscribers() -> None:
     )
 
 
-def test_saturated_regime_serves_at_most_the_fleet_capacity(
-    synthetic_saturation_curve: Callable[[IridiumDials], SaturationCurve],
-) -> None:
-    """A saturated run serves the capped fleet's people capacity, not the full target.
-
-    Objective: the served base never exceeds what the fleet carries. On the Iridium
-    phone-class tier at a 10 Mbps active rate the density is 3,120 per satellite, so
-    the 10M target needs 3,206 satellites and the fleet pins at the 2,000 cap. The run
-    goes through the Iridium entry on a synthetic curve stamped for its dials.
-    Expected: the regime is saturated and the run (all-in share, so the build
-    completes) serves 6,240,000 people (2,000 x 3,120), below the 10M target.
-    """
-    dials = IridiumDials(active_user_rate_mbps=SATURATING_ACTIVE_RATE_MBPS)
-    config = CommsConfig.model_validate(
-        {
-            "comms_cadence": {"share_of_fleet": 1.0},
-            "iridium": dials.model_dump(),
-        }
-    )
-    cellular = run_iridium_model(config, synthetic_saturation_curve(dials)).cellular
-    assert cellular.subscribers_per_satellite == SATURATED_DENSITY_PER_SATELLITE
-    assert cellular.fleet_target == MAX_FLEET_SATELLITES_DEFAULT
-    assert cellular.binding_regime is BindingRegime.SATURATED
-    assert cellular.full_coverage_reached_year is not None
-    assert cellular.subscribers_served == SATURATED_PEOPLE_CAPACITY
-    assert cellular.subscribers_served < config.subscribers.subscribers_at_full_coverage
-
-
 @pytest.mark.parametrize(
     "subscriber_target",
     [BASELINE_TARGET, SCENARIO_50M_TARGET, SCENARIO_100M_TARGET, AT_CAP_TARGET, ABOVE_CAP_TARGET],
 )
 def test_served_below_target_only_in_the_saturated_regime(subscriber_target: int) -> None:
-    """The regime label and the served count agree: only saturation serves below target.
+    """The regime label and the served count agree: only the cap-bound regime serves below target.
 
     Objective: regime-label consistency across the coverage, capacity, and saturated
     regimes on the cellular defaults (75,000 per satellite, 340 floor, 2,000 cap),

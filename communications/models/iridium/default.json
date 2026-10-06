@@ -1,102 +1,1194 @@
 {
   "provenance": {
     "model_name": "iridium",
-    "schema_version": "iridium-v5",
-    "scenario_name": "Iridium L-band max-outcome (phone-class baseline)",
+    "schema_version": "iridium-v6",
+    "scenario_name": "Iridium L-band max-outcome (every device class)",
     "source_scenario_path": "code/scenarios/iridium.yaml",
-    "version_stamp": "2026-09-23"
+    "version_stamp": "2026-10-06"
   },
   "trajectory_summary": {
-    "total_build_and_hold_cost_musd": 1450.0,
-    "fleet_target": 340,
-    "subscribers_per_satellite": 31200,
-    "binding_regime": "coverage",
-    "full_coverage_reached_year": 2031,
-    "build_completes_in_horizon": true,
-    "subscribers_served": 10000000,
-    "steady_state_annual_cost_musd": 144.99999999999997,
-    "built_fleet_annual_cost_musd": 144.99999999999997,
-    "cost_per_subscriber_annualized_usd": 14.499999999999996,
-    "final_year_replacement_cost_musd": 250.0,
-    "final_year_cash_cost_per_subscriber_usd": 25.0,
-    "living_fleet_final_year": 348,
-    "cumulative_launches_to_completion": 29,
-    "cumulative_launches_final_year": 58,
-    "people_capacity_target_fleet": 10608000,
-    "people_capacity_living_fleet_final_year": 10857600
+    "total_cost_through_final_year_musd": 8729.0,
+    "final_year_annual_cost_musd": 1554.4,
+    "final_year_replacement_cost_musd": 406.0,
+    "living_fleet_final_year": 4288,
+    "cumulative_launches_final_year": 301,
+    "coverage_floor_reached_year": 2031,
+    "cost_per_satellite_year_musd": 0.3625
   },
   "orbit_scenario": {
     "altitude_km": 450.0,
     "inclination_deg": 53.0,
     "source_status": "scenario",
-    "basis": "Simulation-informed scenario, not an engine derivation: the project coverage simulation's 95 percent column reads 341 satellites at 450 km, 53 degrees, and a 25 degree elevation mask (investor-rounded to the 340 dial), and no polar candidate below 375 passed. Honest bounds (2026-07-14 audit): a fuller integer-phasing search finds 320 passing the same stored geographic metric, the saved 341 case is the robust one under equal-area weighting, the metric is geographic rather than population-weighted, the production minimum-search screens a single phasing family, and finite sampled periods do not prove continuous operational availability. 340 is a supported conservative scenario; the exact floor is an engineering decision."
+    "basis": "Simulation-informed scenario, set by no config dial (the saturation curve's shell is computed at it): the project coverage simulation's 95 percent column reads 341 satellites at 450 km, 53 degrees, and a 25 degree elevation mask (investor-rounded to the 340 dial), and no polar candidate below 375 passed. Honest bounds (2026-07-14 audit): a fuller integer-phasing search finds 320 passing the same stored geographic metric, the saved 341 case is the robust one under equal-area weighting, the metric is geographic rather than population-weighted, the production minimum-search screens a single phasing family, and finite sampled periods do not prove continuous operational availability. 340 is a supported conservative scenario; the exact floor is an engineering decision."
   },
   "iridium_physics": {
     "spectrum_mhz": 8.0,
-    "aperture_m2": 25.0,
-    "device_class": "phone_class",
-    "spectral_efficiency_bps_per_hz": 0.65,
-    "per_satellite_capacity_gbps": 0.78,
-    "fleet_aggregate_capacity_gbps": 265.2,
-    "subscribers_per_satellite": 31200,
-    "effective_satellites_per_launch": 12,
-    "active_user_rate_mbps": 1.0,
-    "concurrency_peak": 0.025,
-    "concurrency_offpeak": 0.005,
-    "beam_pool_mbps": 5.2,
-    "per_user_rate_peak_mbps": 1.0,
-    "per_user_rate_offpeak_mbps": 5.0,
-    "iot_devices": 51670320,
+    "aperture_m2": 15.4,
+    "satellites_per_launch": 16,
     "operations_cost_musd": 0.0,
-    "ecosystem_assumption": "The Iridium model's phone-class tier assumes phone-form-factor devices with in-chipset support for Iridium's 1616 to 1626.5 MHz L-band (0 dBi, no external antenna). A literally-unmodified 2026 phone receives nothing on this band: no phone has an L-band MSS radio and the band is not a deployed 3GPP NTN band (COMM-668 / COMM-669 / COMM-670). Today's real in-chipset path on this band is Project Stardust (NB-IoT NTN): messaging and IoT, kbps-class, no voice (COMM-661 to COMM-676). The phone-class data-grade tier (active rate ~1 Mbps) is therefore a forward assumption: a future where standard chipsets include the band grown up from the Stardust path, 0 dBi, no external antenna, at the cost of the low phone-class SE tier (a knowingly-taken ~4x capacity haircut versus a gain terminal). Boosted-antenna devices are purpose-built (our hardware, no chipset assumption). The Iridium model is the MSS lane and never claims to reach an unmodified handset; the unmodified-phone lane stays on cellular spectrum (the High-Bandwidth Cellular Pure Play model)."
+    "ecosystem_assumption": "The Iridium model's phone-class tier assumes phone-form-factor devices with in-chipset support for Iridium's 1616 to 1626.5 MHz L-band (0 dBi, no external antenna). A literally-unmodified 2026 phone receives nothing on this band: no phone has an L-band MSS radio and the band is not a deployed 3GPP NTN band (COMM-668 / COMM-669 / COMM-670). Today's real in-chipset path on this band is Project Stardust (NB-IoT NTN): messaging and IoT, kbps-class, no voice (COMM-661 to COMM-676). The phone class's data-grade service (its own usage, a named constant) is therefore a forward assumption: a future where standard chipsets include the band grown up from the Stardust path, 0 dBi, no external antenna, at the cost of the low phone-class SE tier (a knowingly-taken ~4x capacity haircut versus a gain terminal). Boosted-antenna devices are purpose-built (our hardware, no chipset assumption). The Iridium model is the MSS lane and never claims to reach an unmodified handset; the unmodified-phone lane stays on cellular spectrum (the High-Bandwidth Cellular Pure Play model)."
   },
-  "revenue_arpu_buckets": {
-    "standard": {
-      "mix_pct": 15.0,
+  "classes": [
+    {
+      "device_class": "small_terminal_class",
       "price_usd_per_month": 15.0,
-      "count": 9360000,
-      "annual_revenue_musd": 1684.8
+      "active_user_rate_mbps": 2.0,
+      "concurrency_peak": 0.025,
+      "concurrency_offpeak": 0.005,
+      "spectral_efficiency_bps_per_hz": 2.0,
+      "per_satellite_capacity_gbps": 1.4784,
+      "beam_pool_mbps": 10.72,
+      "per_user_rate_peak_mbps": 2.0,
+      "per_user_rate_offpeak_mbps": 10.0,
+      "maximum_use_beams": 421669.18959997105,
+      "saturation_number": 19995,
+      "saturation_not_reached_by": null,
+      "elasticity_under_0p25_fleet": 15292,
+      "fleet_at_90pct_of_maximum_use": null,
+      "binding_limit_at_horizon_end": "launch_cadence",
+      "marginal_intervals": [
+        {
+          "lower_fleet": 0,
+          "upper_fleet": 342,
+          "people_added_per_satellite": 8026.150558907727,
+          "revenue_per_satellite_year_musd": 1.444707100603391,
+          "pays": true
+        },
+        {
+          "lower_fleet": 342,
+          "upper_fleet": 506,
+          "people_added_per_satellite": 7472.594334926542,
+          "revenue_per_satellite_year_musd": 1.3450669802867774,
+          "pays": true
+        },
+        {
+          "lower_fleet": 506,
+          "upper_fleet": 756,
+          "people_added_per_satellite": 7639.606335847237,
+          "revenue_per_satellite_year_musd": 1.3751291404525028,
+          "pays": true
+        },
+        {
+          "lower_fleet": 756,
+          "upper_fleet": 992,
+          "people_added_per_satellite": 6891.784900168313,
+          "revenue_per_satellite_year_musd": 1.2405212820302962,
+          "pays": true
+        },
+        {
+          "lower_fleet": 992,
+          "upper_fleet": 1482,
+          "people_added_per_satellite": 6581.3065949812,
+          "revenue_per_satellite_year_musd": 1.184635187096616,
+          "pays": true
+        },
+        {
+          "lower_fleet": 1482,
+          "upper_fleet": 1980,
+          "people_added_per_satellite": 6084.475642049005,
+          "revenue_per_satellite_year_musd": 1.0952056155688208,
+          "pays": true
+        },
+        {
+          "lower_fleet": 1980,
+          "upper_fleet": 3025,
+          "people_added_per_satellite": 5189.456538437453,
+          "revenue_per_satellite_year_musd": 0.9341021769187414,
+          "pays": true
+        },
+        {
+          "lower_fleet": 3025,
+          "upper_fleet": 3969,
+          "people_added_per_satellite": 4424.104690390051,
+          "revenue_per_satellite_year_musd": 0.7963388442702091,
+          "pays": true
+        },
+        {
+          "lower_fleet": 3969,
+          "upper_fleet": 5402,
+          "people_added_per_satellite": 3753.1857315243483,
+          "revenue_per_satellite_year_musd": 0.6755734316743827,
+          "pays": true
+        },
+        {
+          "lower_fleet": 5402,
+          "upper_fleet": 6006,
+          "people_added_per_satellite": 3142.446154194927,
+          "revenue_per_satellite_year_musd": 0.5656403077550869,
+          "pays": true
+        },
+        {
+          "lower_fleet": 6006,
+          "upper_fleet": 8010,
+          "people_added_per_satellite": 2543.671411549587,
+          "revenue_per_satellite_year_musd": 0.4578608540789257,
+          "pays": true
+        },
+        {
+          "lower_fleet": 8010,
+          "upper_fleet": 10000,
+          "people_added_per_satellite": 1884.7713368567652,
+          "revenue_per_satellite_year_musd": 0.33925884063421774,
+          "pays": false
+        },
+        {
+          "lower_fleet": 10000,
+          "upper_fleet": 11990,
+          "people_added_per_satellite": 1407.7403384521865,
+          "revenue_per_satellite_year_musd": 0.2533932609213936,
+          "pays": false
+        },
+        {
+          "lower_fleet": 11990,
+          "upper_fleet": 14042,
+          "people_added_per_satellite": 1067.00302358903,
+          "revenue_per_satellite_year_musd": 0.1920605442460254,
+          "pays": false
+        },
+        {
+          "lower_fleet": 14042,
+          "upper_fleet": 16002,
+          "people_added_per_satellite": 783.7238050441771,
+          "revenue_per_satellite_year_musd": 0.14107028490795187,
+          "pays": false
+        },
+        {
+          "lower_fleet": 16002,
+          "upper_fleet": 17956,
+          "people_added_per_satellite": 546.2485627698709,
+          "revenue_per_satellite_year_musd": 0.09832474129857675,
+          "pays": false
+        },
+        {
+          "lower_fleet": 17956,
+          "upper_fleet": 20022,
+          "people_added_per_satellite": 339.1137133877245,
+          "revenue_per_satellite_year_musd": 0.06104046840979041,
+          "pays": false
+        },
+        {
+          "lower_fleet": 20022,
+          "upper_fleet": 22052,
+          "people_added_per_satellite": 152.1309613466483,
+          "revenue_per_satellite_year_musd": 0.02738357304239669,
+          "pays": false
+        },
+        {
+          "lower_fleet": 22052,
+          "upper_fleet": 24025,
+          "people_added_per_satellite": 39.40940497843176,
+          "revenue_per_satellite_year_musd": 0.007093692896117716,
+          "pays": false
+        },
+        {
+          "lower_fleet": 24025,
+          "upper_fleet": 25921,
+          "people_added_per_satellite": 52.620809269774284,
+          "revenue_per_satellite_year_musd": 0.009471745668559371,
+          "pays": false
+        },
+        {
+          "lower_fleet": 25921,
+          "upper_fleet": 28056,
+          "people_added_per_satellite": 14.99336829050782,
+          "revenue_per_satellite_year_musd": 0.002698806292291408,
+          "pays": false
+        },
+        {
+          "lower_fleet": 28056,
+          "upper_fleet": 29929,
+          "people_added_per_satellite": 52.58187436100813,
+          "revenue_per_satellite_year_musd": 0.009464737384981464,
+          "pays": false
+        },
+        {
+          "lower_fleet": 29929,
+          "upper_fleet": 34040,
+          "people_added_per_satellite": 22.883951043227572,
+          "revenue_per_satellite_year_musd": 0.0041191111877809635,
+          "pays": false
+        },
+        {
+          "lower_fleet": 34040,
+          "upper_fleet": 40000,
+          "people_added_per_satellite": 28.970164517319493,
+          "revenue_per_satellite_year_musd": 0.005214629613117508,
+          "pays": false
+        }
+      ]
     },
-    "premium": {
-      "mix_pct": 2.0,
+    {
+      "device_class": "mounted_terminal_class",
       "price_usd_per_month": 100.0,
-      "count": 1248000,
-      "annual_revenue_musd": 1497.6
+      "active_user_rate_mbps": 5.0,
+      "concurrency_peak": 0.1,
+      "concurrency_offpeak": 0.02,
+      "spectral_efficiency_bps_per_hz": 2.5,
+      "per_satellite_capacity_gbps": 1.8479999999999999,
+      "beam_pool_mbps": 13.4,
+      "per_user_rate_peak_mbps": 5.0,
+      "per_user_rate_offpeak_mbps": 13.4,
+      "maximum_use_beams": 1197367.3198251764,
+      "saturation_number": null,
+      "saturation_not_reached_by": 64009,
+      "elasticity_under_0p25_fleet": 32967,
+      "fleet_at_90pct_of_maximum_use": null,
+      "binding_limit_at_horizon_end": "launch_cadence",
+      "marginal_intervals": [
+        {
+          "lower_fleet": 0,
+          "upper_fleet": 342,
+          "people_added_per_satellite": 1016.5792179811168,
+          "revenue_per_satellite_year_musd": 1.21989506157734,
+          "pays": true
+        },
+        {
+          "lower_fleet": 342,
+          "upper_fleet": 506,
+          "people_added_per_satellite": 957.4010756717549,
+          "revenue_per_satellite_year_musd": 1.148881290806106,
+          "pays": true
+        },
+        {
+          "lower_fleet": 506,
+          "upper_fleet": 756,
+          "people_added_per_satellite": 993.6394748888221,
+          "revenue_per_satellite_year_musd": 1.1923673698665862,
+          "pays": true
+        },
+        {
+          "lower_fleet": 756,
+          "upper_fleet": 992,
+          "people_added_per_satellite": 898.0523695213739,
+          "revenue_per_satellite_year_musd": 1.0776628434256488,
+          "pays": true
+        },
+        {
+          "lower_fleet": 992,
+          "upper_fleet": 1482,
+          "people_added_per_satellite": 877.5253769121672,
+          "revenue_per_satellite_year_musd": 1.0530304522946006,
+          "pays": true
+        },
+        {
+          "lower_fleet": 1482,
+          "upper_fleet": 1980,
+          "people_added_per_satellite": 871.4221711098577,
+          "revenue_per_satellite_year_musd": 1.0457066053318294,
+          "pays": true
+        },
+        {
+          "lower_fleet": 1980,
+          "upper_fleet": 3025,
+          "people_added_per_satellite": 777.9490698421126,
+          "revenue_per_satellite_year_musd": 0.9335388838105352,
+          "pays": true
+        },
+        {
+          "lower_fleet": 3025,
+          "upper_fleet": 3969,
+          "people_added_per_satellite": 718.6606897047944,
+          "revenue_per_satellite_year_musd": 0.8623928276457534,
+          "pays": true
+        },
+        {
+          "lower_fleet": 3969,
+          "upper_fleet": 5402,
+          "people_added_per_satellite": 630.975395717457,
+          "revenue_per_satellite_year_musd": 0.7571704748609484,
+          "pays": true
+        },
+        {
+          "lower_fleet": 5402,
+          "upper_fleet": 6006,
+          "people_added_per_satellite": 583.0988819256952,
+          "revenue_per_satellite_year_musd": 0.6997186583108342,
+          "pays": true
+        },
+        {
+          "lower_fleet": 6006,
+          "upper_fleet": 8010,
+          "people_added_per_satellite": 511.44469452477404,
+          "revenue_per_satellite_year_musd": 0.6137336334297288,
+          "pays": true
+        },
+        {
+          "lower_fleet": 8010,
+          "upper_fleet": 10000,
+          "people_added_per_satellite": 432.95243967668944,
+          "revenue_per_satellite_year_musd": 0.5195429276120274,
+          "pays": true
+        },
+        {
+          "lower_fleet": 10000,
+          "upper_fleet": 11990,
+          "people_added_per_satellite": 368.283115057373,
+          "revenue_per_satellite_year_musd": 0.44193973806884757,
+          "pays": true
+        },
+        {
+          "lower_fleet": 11990,
+          "upper_fleet": 14042,
+          "people_added_per_satellite": 314.746200475638,
+          "revenue_per_satellite_year_musd": 0.37769544057076554,
+          "pays": true
+        },
+        {
+          "lower_fleet": 14042,
+          "upper_fleet": 16002,
+          "people_added_per_satellite": 274.87719004404477,
+          "revenue_per_satellite_year_musd": 0.32985262805285376,
+          "pays": false
+        },
+        {
+          "lower_fleet": 16002,
+          "upper_fleet": 17956,
+          "people_added_per_satellite": 241.93751224883601,
+          "revenue_per_satellite_year_musd": 0.2903250146986032,
+          "pays": false
+        },
+        {
+          "lower_fleet": 17956,
+          "upper_fleet": 20022,
+          "people_added_per_satellite": 216.73096444485898,
+          "revenue_per_satellite_year_musd": 0.2600771573338308,
+          "pays": false
+        },
+        {
+          "lower_fleet": 20022,
+          "upper_fleet": 22052,
+          "people_added_per_satellite": 192.83478640305347,
+          "revenue_per_satellite_year_musd": 0.23140174368366417,
+          "pays": false
+        },
+        {
+          "lower_fleet": 22052,
+          "upper_fleet": 24025,
+          "people_added_per_satellite": 210.64618731658476,
+          "revenue_per_satellite_year_musd": 0.2527754247799017,
+          "pays": false
+        },
+        {
+          "lower_fleet": 24025,
+          "upper_fleet": 25921,
+          "people_added_per_satellite": 168.8424030860821,
+          "revenue_per_satellite_year_musd": 0.20261088370329852,
+          "pays": false
+        },
+        {
+          "lower_fleet": 25921,
+          "upper_fleet": 28056,
+          "people_added_per_satellite": 145.4096624614335,
+          "revenue_per_satellite_year_musd": 0.17449159495372019,
+          "pays": false
+        },
+        {
+          "lower_fleet": 28056,
+          "upper_fleet": 29929,
+          "people_added_per_satellite": 114.46818633349011,
+          "revenue_per_satellite_year_musd": 0.13736182360018814,
+          "pays": false
+        },
+        {
+          "lower_fleet": 29929,
+          "upper_fleet": 34040,
+          "people_added_per_satellite": 90.39687221914954,
+          "revenue_per_satellite_year_musd": 0.10847624666297945,
+          "pays": false
+        },
+        {
+          "lower_fleet": 34040,
+          "upper_fleet": 40000,
+          "people_added_per_satellite": 67.96658848030492,
+          "revenue_per_satellite_year_musd": 0.0815599061763659,
+          "pays": false
+        },
+        {
+          "lower_fleet": 40000,
+          "upper_fleet": 47961,
+          "people_added_per_satellite": 45.27265370563173,
+          "revenue_per_satellite_year_musd": 0.054327184446758076,
+          "pays": false
+        },
+        {
+          "lower_fleet": 47961,
+          "upper_fleet": 64009,
+          "people_added_per_satellite": 25.153223314900313,
+          "revenue_per_satellite_year_musd": 0.03018386797788037,
+          "pays": false
+        }
+      ]
     },
-    "iot": {
-      "mix_pct": 82.805,
-      "price_usd_per_month": 8.0,
-      "count": 51670320,
-      "annual_revenue_musd": 4960.35072
+    {
+      "device_class": "phone_class",
+      "price_usd_per_month": 15.0,
+      "active_user_rate_mbps": 0.75,
+      "concurrency_peak": 0.025,
+      "concurrency_offpeak": 0.005,
+      "spectral_efficiency_bps_per_hz": 0.65,
+      "per_satellite_capacity_gbps": 0.48048,
+      "beam_pool_mbps": 3.4840000000000004,
+      "per_user_rate_peak_mbps": 0.75,
+      "per_user_rate_offpeak_mbps": 3.4840000000000004,
+      "maximum_use_beams": 234663.1896995982,
+      "saturation_number": 20652,
+      "saturation_not_reached_by": null,
+      "elasticity_under_0p25_fleet": 16058,
+      "fleet_at_90pct_of_maximum_use": 15642,
+      "binding_limit_at_horizon_end": "launch_cadence",
+      "marginal_intervals": [
+        {
+          "lower_fleet": 0,
+          "upper_fleet": 342,
+          "people_added_per_satellite": 6892.520915751184,
+          "revenue_per_satellite_year_musd": 1.2406537648352132,
+          "pays": true
+        },
+        {
+          "lower_fleet": 342,
+          "upper_fleet": 506,
+          "people_added_per_satellite": 6463.070643156752,
+          "revenue_per_satellite_year_musd": 1.1633527157682155,
+          "pays": true
+        },
+        {
+          "lower_fleet": 506,
+          "upper_fleet": 756,
+          "people_added_per_satellite": 6458.707673727136,
+          "revenue_per_satellite_year_musd": 1.1625673812708845,
+          "pays": true
+        },
+        {
+          "lower_fleet": 756,
+          "upper_fleet": 992,
+          "people_added_per_satellite": 5889.264945667434,
+          "revenue_per_satellite_year_musd": 1.060067690220138,
+          "pays": true
+        },
+        {
+          "lower_fleet": 992,
+          "upper_fleet": 1482,
+          "people_added_per_satellite": 5534.055916277941,
+          "revenue_per_satellite_year_musd": 0.9961300649300294,
+          "pays": true
+        },
+        {
+          "lower_fleet": 1482,
+          "upper_fleet": 1980,
+          "people_added_per_satellite": 5025.03539592,
+          "revenue_per_satellite_year_musd": 0.9045063712656,
+          "pays": true
+        },
+        {
+          "lower_fleet": 1980,
+          "upper_fleet": 3025,
+          "people_added_per_satellite": 4351.48047691709,
+          "revenue_per_satellite_year_musd": 0.7832664858450762,
+          "pays": true
+        },
+        {
+          "lower_fleet": 3025,
+          "upper_fleet": 3969,
+          "people_added_per_satellite": 3799.6038952367794,
+          "revenue_per_satellite_year_musd": 0.6839287011426203,
+          "pays": true
+        },
+        {
+          "lower_fleet": 3969,
+          "upper_fleet": 5402,
+          "people_added_per_satellite": 3172.1209096630123,
+          "revenue_per_satellite_year_musd": 0.5709817637393422,
+          "pays": true
+        },
+        {
+          "lower_fleet": 5402,
+          "upper_fleet": 6006,
+          "people_added_per_satellite": 2768.584997393814,
+          "revenue_per_satellite_year_musd": 0.49834529953088647,
+          "pays": true
+        },
+        {
+          "lower_fleet": 6006,
+          "upper_fleet": 8010,
+          "people_added_per_satellite": 2149.038284434783,
+          "revenue_per_satellite_year_musd": 0.38682689119826086,
+          "pays": true
+        },
+        {
+          "lower_fleet": 8010,
+          "upper_fleet": 10000,
+          "people_added_per_satellite": 1620.570035836838,
+          "revenue_per_satellite_year_musd": 0.2917026064506309,
+          "pays": false
+        },
+        {
+          "lower_fleet": 10000,
+          "upper_fleet": 11990,
+          "people_added_per_satellite": 1269.712136682662,
+          "revenue_per_satellite_year_musd": 0.22854818460287915,
+          "pays": false
+        },
+        {
+          "lower_fleet": 11990,
+          "upper_fleet": 14042,
+          "people_added_per_satellite": 961.2723120230723,
+          "revenue_per_satellite_year_musd": 0.173029016164153,
+          "pays": false
+        },
+        {
+          "lower_fleet": 14042,
+          "upper_fleet": 16002,
+          "people_added_per_satellite": 758.841688874284,
+          "revenue_per_satellite_year_musd": 0.13659150399737113,
+          "pays": false
+        },
+        {
+          "lower_fleet": 16002,
+          "upper_fleet": 17956,
+          "people_added_per_satellite": 508.5760272067448,
+          "revenue_per_satellite_year_musd": 0.09154368489721407,
+          "pays": false
+        },
+        {
+          "lower_fleet": 17956,
+          "upper_fleet": 20022,
+          "people_added_per_satellite": 346.35670486584104,
+          "revenue_per_satellite_year_musd": 0.06234420687585139,
+          "pays": false
+        },
+        {
+          "lower_fleet": 20022,
+          "upper_fleet": 22052,
+          "people_added_per_satellite": 172.63657635574785,
+          "revenue_per_satellite_year_musd": 0.031074583744034615,
+          "pays": false
+        },
+        {
+          "lower_fleet": 22052,
+          "upper_fleet": 24025,
+          "people_added_per_satellite": 81.46019576228608,
+          "revenue_per_satellite_year_musd": 0.014662835237211493,
+          "pays": false
+        },
+        {
+          "lower_fleet": 24025,
+          "upper_fleet": 25921,
+          "people_added_per_satellite": 94.87442976195082,
+          "revenue_per_satellite_year_musd": 0.01707739735715115,
+          "pays": false
+        },
+        {
+          "lower_fleet": 25921,
+          "upper_fleet": 28056,
+          "people_added_per_satellite": 43.62230183012801,
+          "revenue_per_satellite_year_musd": 0.007852014329423042,
+          "pays": false
+        },
+        {
+          "lower_fleet": 28056,
+          "upper_fleet": 29929,
+          "people_added_per_satellite": 56.85269265378056,
+          "revenue_per_satellite_year_musd": 0.010233484677680501,
+          "pays": false
+        },
+        {
+          "lower_fleet": 29929,
+          "upper_fleet": 34040,
+          "people_added_per_satellite": 34.011810551399996,
+          "revenue_per_satellite_year_musd": 0.006122125899252,
+          "pays": false
+        },
+        {
+          "lower_fleet": 34040,
+          "upper_fleet": 40000,
+          "people_added_per_satellite": 35.2220715039516,
+          "revenue_per_satellite_year_musd": 0.006339972870711287,
+          "pays": false
+        }
+      ]
+    }
+  ],
+  "years": [
+    {
+      "year": 2026,
+      "comms_launches_flown": 0,
+      "living_fleet": 0,
+      "annual_cost_musd": 0.0,
+      "minimal_packet_iot_revenue_musd": 0.0,
+      "data_iot_revenue_musd": 0.0,
+      "classes": [
+        {
+          "device_class": "small_terminal_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        },
+        {
+          "device_class": "mounted_terminal_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        },
+        {
+          "device_class": "phone_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        }
+      ]
     },
-    "government": {
-      "mix_pct": 0.195,
-      "price_usd_per_month": 74.0,
-      "count": 121680,
-      "annual_revenue_musd": 108.05184
+    {
+      "year": 2027,
+      "comms_launches_flown": 2,
+      "living_fleet": 32,
+      "annual_cost_musd": 11.6,
+      "minimal_packet_iot_revenue_musd": 0.0,
+      "data_iot_revenue_musd": 0.0,
+      "classes": [
+        {
+          "device_class": "small_terminal_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        },
+        {
+          "device_class": "mounted_terminal_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        },
+        {
+          "device_class": "phone_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        }
+      ]
     },
-    "total_connections": 62400000,
-    "arpu_revenue_total_musd": 8250.80256,
-    "arpu_margin_vs_steady_state_cost_pct": 98.24259520276291,
-    "stated_assumptions": [
-      "Full sell-through on capacity: the four-bucket case assumes every serveable billable-connection slot the built fleet can carry is sold, so revenue rides the built fleet's people capacity (fleet_target x density), above the served target, with no penetration or utilization haircut. Clearly optimistic, stated, investor-owned.",
-      "Mix posture (stated honestly): the people-and-government share (17.2 percent of the billable-connection pool) is loosely anchored on the FY2025 book's like-for-like people-plus-government share (about 21.2 percent, COMM-617/618); government is deliberately de-anchored from the book's 4.8 percent to 0.195 percent so the baseline government line reproduces today's one fixed EMSS contract (COMM-619) rather than scaling a share; IoT is the residual that closes the mix to 100. The mix is held constant as the fleet grows (v1); a time-varying mix schedule is the documented v2 extension.",
-      "Built-fleet convention: the revenue case and its margin's cost basis are both computed at the built fleet (fleet_target), so on a scenario that does not complete its build inside the horizon (the trajectory summary's build_completes_in_horizon is false) the case describes the completed fleet, not the final horizon year's smaller actual fleet.",
-      "Margin definition: the published ARPU margin measures revenue against the built fleet's full build, launch, and replacement cost, annualized over the satellite life (built_fleet_annual_cost_musd). Operations cost is the explicit zero pending research and corporate overhead is never included, so it is an operating-style margin (the data-center model's convention), not a gross margin and not a net margin."
+    {
+      "year": 2028,
+      "comms_launches_flown": 3,
+      "living_fleet": 80,
+      "annual_cost_musd": 29.0,
+      "minimal_packet_iot_revenue_musd": 0.0,
+      "data_iot_revenue_musd": 0.0,
+      "classes": [
+        {
+          "device_class": "small_terminal_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        },
+        {
+          "device_class": "mounted_terminal_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        },
+        {
+          "device_class": "phone_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        }
+      ]
+    },
+    {
+      "year": 2029,
+      "comms_launches_flown": 5,
+      "living_fleet": 160,
+      "annual_cost_musd": 58.0,
+      "minimal_packet_iot_revenue_musd": 0.0,
+      "data_iot_revenue_musd": 0.0,
+      "classes": [
+        {
+          "device_class": "small_terminal_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        },
+        {
+          "device_class": "mounted_terminal_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        },
+        {
+          "device_class": "phone_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        }
+      ]
+    },
+    {
+      "year": 2030,
+      "comms_launches_flown": 9,
+      "living_fleet": 304,
+      "annual_cost_musd": 110.19999999999999,
+      "minimal_packet_iot_revenue_musd": 0.0,
+      "data_iot_revenue_musd": 0.0,
+      "classes": [
+        {
+          "device_class": "small_terminal_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        },
+        {
+          "device_class": "mounted_terminal_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        },
+        {
+          "device_class": "phone_class",
+          "people_served": 0,
+          "revenue_musd": 0.0,
+          "own_margin_pct": null
+        }
+      ]
+    },
+    {
+      "year": 2031,
+      "comms_launches_flown": 14,
+      "living_fleet": 528,
+      "annual_cost_musd": 191.4,
+      "minimal_packet_iot_revenue_musd": 2480.17536,
+      "data_iot_revenue_musd": 2480.17536,
+      "classes": [
+        {
+          "device_class": "small_terminal_class",
+          "people_served": 4139229,
+          "revenue_musd": 745.06122,
+          "own_margin_pct": 74.31083582634996
+        },
+        {
+          "device_class": "mounted_terminal_class",
+          "people_served": 526557,
+          "revenue_musd": 631.8684,
+          "own_margin_pct": 69.70888241918729
+        },
+        {
+          "device_class": "phone_class",
+          "people_served": 3560271,
+          "revenue_musd": 640.84878,
+          "own_margin_pct": 70.13335969836754
+        }
+      ]
+    },
+    {
+      "year": 2032,
+      "comms_launches_flown": 22,
+      "living_fleet": 848,
+      "annual_cost_musd": 307.4,
+      "minimal_packet_iot_revenue_musd": 2480.17536,
+      "data_iot_revenue_musd": 2480.17536,
+      "classes": [
+        {
+          "device_class": "small_terminal_class",
+          "people_served": 6519755,
+          "revenue_musd": 1173.5559,
+          "own_margin_pct": 73.80610501809075
+        },
+        {
+          "device_class": "mounted_terminal_class",
+          "people_served": 836317,
+          "revenue_musd": 1003.5804,
+          "own_margin_pct": 69.36966883769352
+        },
+        {
+          "device_class": "phone_class",
+          "people_served": 5578305,
+          "revenue_musd": 1004.0949,
+          "own_margin_pct": 69.38536387347452
+        }
+      ]
+    },
+    {
+      "year": 2033,
+      "comms_launches_flown": 35,
+      "living_fleet": 1360,
+      "annual_cost_musd": 493.0,
+      "minimal_packet_iot_revenue_musd": 2480.17536,
+      "data_iot_revenue_musd": 2480.17536,
+      "classes": [
+        {
+          "device_class": "small_terminal_class",
+          "people_served": 9941462,
+          "revenue_musd": 1789.46316,
+          "own_margin_pct": 72.44983797263532
+        },
+        {
+          "device_class": "mounted_terminal_class",
+          "people_served": 1289233,
+          "revenue_musd": 1547.0796,
+          "own_margin_pct": 68.13350780399405
+        },
+        {
+          "device_class": "phone_class",
+          "people_served": 8470209,
+          "revenue_musd": 1524.63762,
+          "own_margin_pct": 67.66444737209095
+        }
+      ]
+    },
+    {
+      "year": 2034,
+      "comms_launches_flown": 51,
+      "living_fleet": 2096,
+      "annual_cost_musd": 759.8,
+      "minimal_packet_iot_revenue_musd": 2480.17536,
+      "data_iot_revenue_musd": 2480.17536,
+      "classes": [
+        {
+          "device_class": "small_terminal_class",
+          "people_served": 14389815,
+          "revenue_musd": 2590.1667,
+          "own_margin_pct": 70.66598068765228
+        },
+        {
+          "device_class": "mounted_terminal_class",
+          "people_served": 1921616,
+          "revenue_musd": 2305.9392,
+          "own_margin_pct": 67.05030210683786
+        },
+        {
+          "device_class": "phone_class",
+          "people_served": 12163123,
+          "revenue_musd": 2189.36214,
+          "own_margin_pct": 65.29582812645148
+        }
+      ]
+    },
+    {
+      "year": 2035,
+      "comms_launches_flown": 70,
+      "living_fleet": 3072,
+      "annual_cost_musd": 1113.6,
+      "minimal_packet_iot_revenue_musd": 2480.17536,
+      "data_iot_revenue_musd": 2480.17536,
+      "classes": [
+        {
+          "device_class": "small_terminal_class",
+          "people_served": 19400399,
+          "revenue_musd": 3492.07182,
+          "own_margin_pct": 68.1106215049151
+        },
+        {
+          "device_class": "mounted_terminal_class",
+          "people_served": 2676447,
+          "revenue_musd": 3211.7364,
+          "own_margin_pct": 65.3271669493175
+        },
+        {
+          "device_class": "phone_class",
+          "people_served": 16368138,
+          "revenue_musd": 2946.26484,
+          "own_margin_pct": 62.20299054989232
+        }
+      ]
+    },
+    {
+      "year": 2036,
+      "comms_launches_flown": 90,
+      "living_fleet": 4288,
+      "annual_cost_musd": 1554.4,
+      "minimal_packet_iot_revenue_musd": 2480.17536,
+      "data_iot_revenue_musd": 2480.17536,
+      "classes": [
+        {
+          "device_class": "small_terminal_class",
+          "people_served": 24607046,
+          "revenue_musd": 4429.26828,
+          "own_margin_pct": 64.9061673003921
+        },
+        {
+          "device_class": "mounted_terminal_class",
+          "people_served": 3527090,
+          "revenue_musd": 4232.508,
+          "own_margin_pct": 63.27472978196379
+        },
+        {
+          "device_class": "phone_class",
+          "people_served": 20823193,
+          "revenue_musd": 3748.17474,
+          "own_margin_pct": 58.52914797670292
+        }
+      ]
+    }
+  ],
+  "fixed_books": {
+    "minimal_packet_iot_devices": 51670320,
+    "minimal_packet_iot_price_usd_per_month": 4.0,
+    "minimal_packet_iot_annual_revenue_musd": 2480.17536,
+    "data_iot_devices": 25835160,
+    "data_iot_price_usd_per_month": 8.0,
+    "data_iot_annual_revenue_musd": 2480.17536,
+    "basis": "Minimal-packet IoT's count is the capable count: today's model's Sheet A IoT count at the 340-satellite coverage floor, held as a stated assumption (ADR 007), not Iridium's own IoT book (1,998,000 devices, COMM-617). Data IoT's count is half of it at double the price, in proportion. Each line is its own revenue line, never inside a class's margin; neither moves with the fleet, a class, the downlink share, the panel or satellites per launch; both are sold in full from the first year the living fleet reaches the coverage floor, and not before. Government is left out of revenue."
+  },
+  "saturation": {
+    "curve_path": "communications/models/iridium/saturation_curve.json",
+    "curve_schema_version": "saturation-v1",
+    "curve_version_stamp": "2026-10-06",
+    "input_hash": "17e490d20af3cf1630fb9edbf452bfd5f4539f25aafb7c9e8a865160fb6e1fd4",
+    "downlink_share": 0.67,
+    "panel_factor": 0.616,
+    "readings": [
+      {
+        "label": "the coverage floor",
+        "fleet": 340,
+        "fleet_annual_cost_musd": 123.25,
+        "classes": [
+          {
+            "device_class": "small_terminal_class",
+            "useful_beams": 12751.939391583674,
+            "share_of_maximum_use": 0.030241572555208925,
+            "ocean_factor": 0.4059058884512246,
+            "people": 2728891,
+            "revenue_musd": 491.20038,
+            "own_margin_pct": 74.90840703339848
+          },
+          {
+            "device_class": "mounted_terminal_class",
+            "useful_beams": 12977.65434577475,
+            "share_of_maximum_use": 0.010838490520744773,
+            "ocean_factor": 0.4130906017880937,
+            "people": 345637,
+            "revenue_musd": 414.7644,
+            "own_margin_pct": 70.28433491398974
+          },
+          {
+            "device_class": "phone_class",
+            "useful_beams": 12611.888874257691,
+            "share_of_maximum_use": 0.05374464094859819,
+            "ocean_factor": 0.4014479524528167,
+            "people": 2343457,
+            "revenue_musd": 421.82226,
+            "own_margin_pct": 70.78153248716652
+          }
+        ]
+      },
+      {
+        "label": "the retired cap, kept for comparison",
+        "fleet": 2000,
+        "fleet_annual_cost_musd": 725.0,
+        "classes": [
+          {
+            "device_class": "small_terminal_class",
+            "useful_beams": 65670.9575039366,
+            "share_of_maximum_use": 0.155740469362339,
+            "ocean_factor": 0.3553623241555012,
+            "people": 13870568,
+            "revenue_musd": 2496.70224,
+            "own_margin_pct": 70.96169545632321
+          },
+          {
+            "device_class": "mounted_terminal_class",
+            "useful_beams": 71542.50761941611,
+            "share_of_maximum_use": 0.05974984153556303,
+            "ocean_factor": 0.3871347814903472,
+            "people": 1845010,
+            "revenue_musd": 2214.012,
+            "own_margin_pct": 67.25401669006311
+          },
+          {
+            "device_class": "phone_class",
+            "useful_beams": 63113.15527604738,
+            "share_of_maximum_use": 0.2689520898307104,
+            "ocean_factor": 0.3415214030089146,
+            "people": 11727266,
+            "revenue_musd": 2110.90788,
+            "own_margin_pct": 65.6545883944495
+          }
+        ]
+      },
+      {
+        "label": "the horizon-end full-cadence reach",
+        "fleet": 4288,
+        "fleet_annual_cost_musd": 1554.4,
+        "classes": [
+          {
+            "device_class": "small_terminal_class",
+            "useful_beams": 117825.72038141267,
+            "share_of_maximum_use": 0.2794269140061941,
+            "ocean_factor": 0.2973810946823632,
+            "people": 24607046,
+            "revenue_musd": 4429.26828,
+            "own_margin_pct": 64.9061673003921
+          },
+          {
+            "device_class": "mounted_terminal_class",
+            "useful_beams": 143072.5405058388,
+            "share_of_maximum_use": 0.11948926460321996,
+            "ocean_factor": 0.36110170662979413,
+            "people": 3527090,
+            "revenue_musd": 4232.508,
+            "own_margin_pct": 63.27472978196379
+          },
+          {
+            "device_class": "phone_class",
+            "useful_beams": 112065.11747154818,
+            "share_of_maximum_use": 0.47755729228349464,
+            "ocean_factor": 0.282841871889407,
+            "people": 20823193,
+            "revenue_musd": 3748.17474,
+            "own_margin_pct": 58.52914797670292
+          }
+        ]
+      },
+      {
+        "label": "the steady state, beyond the 10-year horizon",
+        "fleet": 7200,
+        "fleet_annual_cost_musd": 2610.0,
+        "classes": [
+          {
+            "device_class": "small_terminal_class",
+            "useful_beams": 163291.16604798808,
+            "share_of_maximum_use": 0.3872494601820424,
+            "ocean_factor": 0.2454472794131617,
+            "people": 33755488,
+            "revenue_musd": 6075.98784,
+            "own_margin_pct": 57.04402199725271
+          },
+          {
+            "device_class": "mounted_terminal_class",
+            "useful_beams": 220837.6317573933,
+            "share_of_maximum_use": 0.18443599395182847,
+            "ocean_factor": 0.331946897182229,
+            "people": 5197846,
+            "revenue_musd": 6237.4152,
+            "own_margin_pct": 58.155743744620366
+          },
+          {
+            "device_class": "phone_class",
+            "useful_beams": 154039.0015456225,
+            "share_of_maximum_use": 0.6564259257824545,
+            "ocean_factor": 0.23154010573836925,
+            "people": 28622500,
+            "revenue_musd": 5152.05,
+            "own_margin_pct": 49.340553760153725
+          }
+        ]
+      }
+    ],
+    "band_saturation_numbers": {
+      "taper": 13810,
+      "taper_and_spacing": 10223,
+      "density_10_per_km2": 19751,
+      "density_100_per_km2": 17814,
+      "grid_0p5_deg": 21613,
+      "beams_48": null
+    },
+    "iot_check": {
+      "minimal_packet_iot": [
+        {
+          "fleet": 340,
+          "devices_per_useful_beam": 4096.953320407464,
+          "uplink_bits_share": 0.0036077807017315154,
+          "uplink_bits_share_with_mac": 0.018038903508657576,
+          "access_attempts_per_second_per_beam": 2.2760851780041467,
+          "uplink_tone_share_low": 0.012932302147750832,
+          "uplink_tone_share_high": 0.022631528758563956
+        },
+        {
+          "fleet": 2000,
+          "devices_per_useful_beam": 818.6933417288653,
+          "uplink_bits_share": 0.0007209420776685167,
+          "uplink_bits_share_with_mac": 0.0036047103883425835,
+          "access_attempts_per_second_per_beam": 0.454829634293814,
+          "uplink_tone_share_low": 0.002584259285760307,
+          "uplink_tone_share_high": 0.004522453750080538
+        },
+        {
+          "fleet": 4288,
+          "devices_per_useful_beam": 461.07407162731437,
+          "uplink_bits_share": 0.0004060222334972466,
+          "uplink_bits_share_with_mac": 0.002030111167486233,
+          "access_attempts_per_second_per_beam": 0.25615226201517466,
+          "uplink_tone_share_low": 0.0014554105796316741,
+          "uplink_tone_share_high": 0.0025469685143554295
+        },
+        {
+          "fleet": 7200,
+          "devices_per_useful_beam": 335.4366068433425,
+          "uplink_bits_share": 0.0002953857713720188,
+          "uplink_bits_share_with_mac": 0.001476928856860094,
+          "access_attempts_per_second_per_beam": 0.1863536704685236,
+          "uplink_tone_share_low": 0.0010588276731166113,
+          "uplink_tone_share_high": 0.0018529484279540698
+        }
+      ],
+      "data_iot": [
+        {
+          "fleet": 340,
+          "devices_per_useful_beam": 2048.476660203732,
+          "uplink_bits_share": 0.046016889146595116,
+          "uplink_bits_share_with_mac": 0.23008444573297557,
+          "access_attempts_per_second_per_beam": 1.2328794714189129,
+          "uplink_tone_share_low": null,
+          "uplink_tone_share_high": null
+        },
+        {
+          "fleet": 2000,
+          "devices_per_useful_beam": 409.34667086443267,
+          "uplink_bits_share": 0.00919554552006608,
+          "uplink_bits_share_with_mac": 0.0459777276003304,
+          "access_attempts_per_second_per_beam": 0.2463660519091493,
+          "uplink_tone_share_low": null,
+          "uplink_tone_share_high": null
+        },
+        {
+          "fleet": 4288,
+          "devices_per_useful_beam": 230.53703581365718,
+          "uplink_bits_share": 0.005178773782156057,
+          "uplink_bits_share_with_mac": 0.025893868910780285,
+          "access_attempts_per_second_per_beam": 0.13874914192488627,
+          "uplink_tone_share_low": null,
+          "uplink_tone_share_high": null
+        },
+        {
+          "fleet": 7200,
+          "devices_per_useful_beam": 167.71830342167124,
+          "uplink_bits_share": 0.00376761655446075,
+          "uplink_bits_share_with_mac": 0.018838082772303748,
+          "access_attempts_per_second_per_beam": 0.1009415715037836,
+          "uplink_tone_share_low": null,
+          "uplink_tone_share_high": null
+        }
+      ]
+    },
+    "limits": [
+      "Fluid (fractional) beams, idealized 3 dB footprints and one circular shell.",
+      "Residential (night-time) population, every place at its busy hour at once.",
+      "No terrain or building blockage, and no interference from other systems.",
+      "Take-up 1 is the maximal-demand bound: the capacity found is assumed used. The fluid model credits a beam hanging over a coast with its land share only (the coastal under-credit).",
+      "Computed with the band in full-time use (d = 1): the engine scales people and capacity by the downlink share d, and so ignores how d relaxes each cell's people cap inside the curve (ADR 008).",
+      "No interference trim for the directional classes: each terminal's own pattern suppresses the far-sidelobe leak.",
+      "The interference trim is a sampled mean: each row draws its victims afresh, so a step between two rows can be the draw's noise; the trim is read where it levels off, never row to row.",
+      "The directional terminals' pattern floor (-20 dB) is an estimate, optimistic for the small terminal.",
+      "Computed at the 25 m^2 reference panel. The engine scales the curve linearly by the scenario's panel over it: below it the directional classes carry more than the rule gives, because their people caps do not shrink with the panel; the rule is exact in beams for the phone class; and each beam's rate is held at its reference-panel value, so the link effect of another array size is not modeled."
     ]
   },
   "assumptions": [
-    "The Iridium model's phone-class tier assumes phone-form-factor devices with in-chipset support for Iridium's 1616 to 1626.5 MHz L-band (0 dBi, no external antenna). A literally-unmodified 2026 phone receives nothing on this band: no phone has an L-band MSS radio and the band is not a deployed 3GPP NTN band (COMM-668 / COMM-669 / COMM-670). Today's real in-chipset path on this band is Project Stardust (NB-IoT NTN): messaging and IoT, kbps-class, no voice (COMM-661 to COMM-676). The phone-class data-grade tier (active rate ~1 Mbps) is therefore a forward assumption: a future where standard chipsets include the band grown up from the Stardust path, 0 dBi, no external antenna, at the cost of the low phone-class SE tier (a knowingly-taken ~4x capacity haircut versus a gain terminal). Boosted-antenna devices are purpose-built (our hardware, no chipset assumption). The Iridium model is the MSS lane and never claims to reach an unmodified handset; the unmodified-phone lane stays on cellular spectrum (the High-Bandwidth Cellular Pure Play model).",
+    "The Iridium model's phone-class tier assumes phone-form-factor devices with in-chipset support for Iridium's 1616 to 1626.5 MHz L-band (0 dBi, no external antenna). A literally-unmodified 2026 phone receives nothing on this band: no phone has an L-band MSS radio and the band is not a deployed 3GPP NTN band (COMM-668 / COMM-669 / COMM-670). Today's real in-chipset path on this band is Project Stardust (NB-IoT NTN): messaging and IoT, kbps-class, no voice (COMM-661 to COMM-676). The phone class's data-grade service (its own usage, a named constant) is therefore a forward assumption: a future where standard chipsets include the band grown up from the Stardust path, 0 dBi, no external antenna, at the cost of the low phone-class SE tier (a knowingly-taken ~4x capacity haircut versus a gain terminal). Boosted-antenna devices are purpose-built (our hardware, no chipset assumption). The Iridium model is the MSS lane and never claims to reach an unmodified handset; the unmodified-phone lane stays on cellular spectrum (the High-Bandwidth Cellular Pure Play model).",
     "Operations cost is assumed zero (0.0 USD millions per year): an explicit investor-instructed assumption, a fixed operations line to research and add later, stated here rather than silently omitted.",
-    "Spectral efficiency is estimate-tier and investor-owned: the phone-class band is 0.5 to 0.8, the small-terminal-class band 1.5 to 2.5, the large-terminal-class band 2.0 to 3.0 bps/Hz (class centrals 0.65 / 2.0 / 2.5).",
-    "The reuse calibration (0.15 Gbps per MHz per unit spectral efficiency) is calibrated at the 25.0 m^2 reference aperture; per-satellite capacity scales linearly with aperture area, which is conservative (it ignores the additional per-link SNR lift a larger aperture also gives).",
-    "The busy-hour concurrency pair (peak 0.025, off-peak 0.005) and the per-subscriber active rate (1.0 Mbps) are estimate-tier, investor-owned values.",
-    "The prices-today ARPU revenue case is PUBLISHED for the Iridium model as the four-bucket case (standard personal, premium terminal, IoT devices, government): an investor-set price-and-mix sheet dated 2026-07-09. It is the Iridium model's only published revenue case.",
-    "Full sell-through on capacity: the four-bucket case assumes every serveable billable-connection slot the built fleet can carry is sold, so revenue rides the built fleet's people capacity (fleet_target x density), above the served target, with no penetration or utilization haircut. Clearly optimistic, stated, investor-owned.",
-    "Mix posture (stated honestly): the people-and-government share (17.2 percent of the billable-connection pool) is loosely anchored on the FY2025 book's like-for-like people-plus-government share (about 21.2 percent, COMM-617/618); government is deliberately de-anchored from the book's 4.8 percent to 0.195 percent so the baseline government line reproduces today's one fixed EMSS contract (COMM-619) rather than scaling a share; IoT is the residual that closes the mix to 100. The mix is held constant as the fleet grows (v1); a time-varying mix schedule is the documented v2 extension.",
-    "Built-fleet convention: the revenue case and its margin's cost basis are both computed at the built fleet (fleet_target), so on a scenario that does not complete its build inside the horizon (the trajectory summary's build_completes_in_horizon is false) the case describes the completed fleet, not the final horizon year's smaller actual fleet.",
-    "Margin definition: the published ARPU margin measures revenue against the built fleet's full build, launch, and replacement cost, annualized over the satellite life (built_fleet_annual_cost_musd). Operations cost is the explicit zero pending research and corporate overhead is never included, so it is an operating-style margin (the data-center model's convention), not a gross margin and not a net margin.",
-    "IoT count supersession (one IoT truth): with the ARPU case on, the published IoT device count derives from the revenue mix (the IoT bucket count), and the former fixed iot_devices passthrough dial is superseded (reported only on the no-ARPU path).",
+    "People come from the promoted saturation curve (saturation-v1), computed once with the band in full-time use at the 25 m^2 reference panel and the held 8 MHz: each class's people at a fleet are the curve's capacity there, times the downlink share d, times the panel factor, over the class's busy-hour load per person (its rate while active times its busy-hour share). Beams over oceans and empty land carry no one.",
+    "The downlink share d is 0.67, the time-division duplex band's downlink time share (ADR 008): every people and capacity figure but the satellite's peak scales with it, and the uplink holds the rest of the frame.",
+    "The panel is 15.4 m^2, applied linearly on the curve: a panel factor of 0.616 on people, useful beams, capacity and maximum use, never on the saturation numbers, the ocean factor or satellites per launch. Above the reference panel the rule is conservative (it ignores the per-link SNR lift a larger panel also gives); below it the directional classes carry more than the rule gives, because their people caps do not shrink with the panel, the rule is exact in beams for the phone class, and each beam's rate is held at its reference-panel value (the link effect of another panel is not modeled).",
+    "The fleet is every comms launch the cadence share allows (100 percent of the Neutron cadence) times 16 satellites per launch, each cohort living 5 years: there is no fleet target and no cap, and no saturation number sizes, caps, stops or slows the build.",
+    "Satellites per launch is a direct scenario setting (bounds 1 to 16). The Iridium scenario's 16 assumes the Neutron block upgrade from the first launch, for the stack kept in the fairing's cylinder at calculation C's pitch on a rod-held base (COMM-713); without the upgrade it is 15, the mass-bound count today (COMM-712).",
+    "Every seat is sold: each year each device class serves every person its living fleet carries, and each class's column is the whole fleet sold to that class alone, so revenue rises with the fleet.",
+    "Each class's price is held flat: the small terminal $15, the mounted terminal $100 and the phone class $15 a month (its floor). A lower price or a smaller market is a division in the conclusions, never in the model: a price haircut divides revenue only, a market haircut people and revenue, and every margin is re-derived against the same fleet cost, never divided or averaged.",
+    "Each class's own margin is its own revenue against the whole fleet's annualized build and launch cost (operations zero, above), null in a year with no revenue; the IoT lines are never inside it.",
+    "Each class's usage is the investor's (2026-10-04): the small terminal 2 Mbps while active, 2.5 percent of users at the busy hour and 0.5 percent off-peak; the mounted terminal 5 Mbps, 10 and 2 percent; the phone class 0.75 Mbps, 2.5 and 0.5 percent.",
+    "Spectral efficiency is estimate-tier: the small terminal's band 1.5 to 2.5, the mounted terminal's 2 to 3 and the phone class's 0.5 to 0.8 bps/Hz, each class read at its central value (2, 2.5 and 0.65).",
+    "IoT is two fixed lines, each its own revenue line and never inside a class's margin: minimal-packet IoT, 51,670,320 devices at $4 a month (48 messages of 340 bytes a day), and data IoT, 25,835,160 devices at $8 (4 bursts of 100 KB a day beside the messages). Their counts are fixed (ADR 007): they never move with the fleet, a class, d, the panel or satellites per launch.",
+    "The coverage floor (340 satellites) gates every sale: nothing is sold, by a class or an IoT line, in a year whose living fleet is below it, and from the first year at it every class and both IoT lines are sold in full (a step with no phase-in).",
+    "Government is left out of revenue: the model carries no government count, price or line.",
+    "The readings: the coverage floor (340); 2,000 satellites, the retired cap, kept for comparison; the horizon-end full-cadence reach (the final year's living fleet, priced at the final year's annualized cost); and the steady state beyond the 10-year horizon (the final year's comms launches times satellites per launch times the life). The coverage floor, the retired cap and the steady state are priced at the final year's cost per satellite-year; a reading below the coverage floor sells nothing.",
+    "The IoT check spreads each line's devices over the phone class's useful beams (IoT devices are low gain, so their reuse follows the phone rule) and reads its daily volume against a beam's uplink (the frame's share 1 - d), with and without a 20 percent MAC efficiency; its access attempts a second a beam, one per message or burst, against a random-access window of 57 to 1,650 devices at 1 window a second (COMM-654); and, for minimal-packet IoT, its messages' channel time on 3.75 kHz tones at 4 to 7 s a message (COMM-714, COMM-719).",
+    "Each class's saturation number is a spectrum bound reported beside the launch cadence, never a build target or a cap; a fleet past a class's last computed row is refused, never extrapolated or clamped. The curve's stated limits are carried in saturation.limits.",
     "The Iridium model is the MSS lane (owned L-band, purpose-built or in-chipset devices), never the cellular direct-to-cell unmodified-phone lane (the High-Bandwidth Cellular Pure Play model)."
   ]
 }
