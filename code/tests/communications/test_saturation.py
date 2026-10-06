@@ -1180,26 +1180,38 @@ def promote_coarse(scenario: Path, output: Path) -> Path:
         return sat.promote_saturation_curve(scenario, output, version_stamp=STAMP)
 
 
-def curves_equal_but_measurement(first: Path, second: Path) -> bool:
-    """Whether two promoted curves are byte-identical once the second's run measurement is the
-    first's (the plan's finding F2: a run's measured wall time and peak memory differ run to run).
-
-    Both files are parsed as :class:`SaturationCurve`; the first's ``run_measurement`` is copied
-    into the second (``model_copy``), the second is re-rendered as the promotion renders a curve
-    (``render_artifact_json`` and the file's one closing newline), and its bytes are compared with
-    the first file's. Acceptance runs this same helper as a script.
-    """
-    one = SaturationCurve.model_validate_json(first.read_text(encoding="utf-8"))
-    two = SaturationCurve.model_validate_json(second.read_text(encoding="utf-8"))
-    measured_as_one = two.model_copy(
+def rendered_with_measurement_of(curve: SaturationCurve, source: SaturationCurve) -> bytes:
+    """A curve's bytes as the promotion writes them (``render_artifact_json`` and the one closing
+    newline), with ``source``'s run measurement copied in (``model_copy``)."""
+    measured = curve.model_copy(
         update={
-            "provenance": two.provenance.model_copy(
-                update={"run_measurement": one.provenance.run_measurement}
+            "provenance": curve.provenance.model_copy(
+                update={"run_measurement": source.provenance.run_measurement}
             )
         }
     )
-    rendered = (render_artifact_json(measured_as_one) + ARTIFACT_FILE_END).encode("utf-8")
-    return rendered == first.read_bytes()
+    return (render_artifact_json(measured) + ARTIFACT_FILE_END).encode("utf-8")
+
+
+def curves_equal_but_measurement(first: Path, second: Path) -> bool:
+    """Whether two promoted curves are byte-identical but for their run measurements (the plan's
+    finding F2: a run's measured wall time and peak memory differ run to run).
+
+    Both files are parsed as :class:`SaturationCurve`, and the comparison runs both ways: the
+    second re-rendered with the first's measurement must be the first file's bytes, and the
+    first re-rendered with the second's measurement the second file's bytes. One way alone
+    compares only the second file's values, so a second file in another byte form (compact,
+    without its closing newline, its keys in another order) would pass; both ways, each file
+    must be the promotion's own rendering. Acceptance runs this same helper as a script.
+    """
+    one, two = (
+        SaturationCurve.model_validate_json(path.read_text(encoding="utf-8"))
+        for path in (first, second)
+    )
+    return (
+        rendered_with_measurement_of(two, one) == first.read_bytes()
+        and rendered_with_measurement_of(one, two) == second.read_bytes()
+    )
 
 
 @pytest.fixture(scope="module")
@@ -1545,6 +1557,49 @@ def test_a_second_promotion_at_the_coarse_setting_is_byte_identical(
         measured = load_saturation_curve(path).provenance.run_measurement
         assert measured.wall_time_s > 0
         assert measured.peak_memory_mb > 0
+
+
+def test_the_byte_identity_helper_refuses_another_byte_form(
+    coarse_curve_file: Path, tmp_path: Path
+) -> None:
+    """Objective: ``curves_equal_but_measurement`` passes two promotions that differ only in their
+    run measurements and fails any other difference, in a value or in the bytes' form.
+
+    Sample: the coarse promoted curve against five second files written from it: its run
+    measurement changed; one row value changed by 1e-12 relative; the same values in compact
+    JSON, without the closing newline, and with a key moved to the front.
+
+    Expected outcome: equal for the measurement alone, in either order; not equal for each of the
+    four others.
+    """
+    text = coarse_curve_file.read_text(encoding="utf-8")
+    curve = SaturationCurve.model_validate_json(text)
+    remeasured = curve.model_copy(
+        update={
+            "provenance": curve.provenance.model_copy(
+                update={"run_measurement": RunMeasurement(wall_time_s=1.0, peak_memory_mb=2.0)}
+            )
+        }
+    )
+    canonical = render_artifact_json(remeasured) + ARTIFACT_FILE_END
+    data = json.loads(canonical)
+    changed = json.loads(text)
+    changed["classes"][2]["rows"][1]["useful_beams"] *= 1 + 1e-12
+    seconds = {
+        "only the measurement": (canonical, True),
+        "one value": (json.dumps(changed, indent=2) + ARTIFACT_FILE_END, False),
+        "compact": (json.dumps(data, separators=(",", ":")), False),
+        "no closing newline": (canonical.removesuffix(ARTIFACT_FILE_END), False),
+        "a key moved": (
+            json.dumps({"version_stamp": data["version_stamp"], **data}, indent=2) + "\n",
+            False,
+        ),
+    }
+    for label, (second_text, equal) in seconds.items():
+        second = tmp_path / f"{label.replace(' ', '_')}.json"
+        second.write_text(second_text, encoding="utf-8")
+        assert curves_equal_but_measurement(coarse_curve_file, second) is equal, label
+        assert curves_equal_but_measurement(second, coarse_curve_file) is equal, label
 
 
 # ---------------------------------------------------------------------------
