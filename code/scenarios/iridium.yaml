@@ -167,6 +167,14 @@ iridium:
   # The Iridium-model scenario label's single home.
   scenario_name: "Iridium L-band max-outcome (phone-class baseline)"
 
+  # The saturation block (ADRs 005 and 008): the TDD downlink time share d, and the path of
+  # the promoted saturation curve (repository-relative; an absolute path is allowed), which
+  # `python -m communications.saturation` computes with the band in full-time use (d = 1).
+  # 0.67 is Certus 700's 2 : 1 down-to-up rate split (COMM-620).
+  saturation:
+    downlink_share: 0.67   # TDD downlink time share (ADR 008); 0.5 is the symmetric frame, 0.75 an estimated alternative
+    curve_path: communications/models/iridium/saturation_curve.json   # the promoted curve, repo-relative
+
   # ===========================================================================
   # The four-bucket ARPU revenue case (Sheet A, investor-set 2026-07-09)
   # ===========================================================================

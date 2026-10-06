@@ -1,0 +1,3469 @@
+{
+  "schema_version": "saturation-v1",
+  "version_stamp": "2026-10-06",
+  "parameters": {
+    "spectrum_mhz": 8.0,
+    "se_anchor_bps_per_hz": 0.65,
+    "sidelobe_floor_db": -20.0,
+    "classes": [
+      {
+        "device_class": "small_terminal_class",
+        "spectral_efficiency_bps_per_hz": 2.0,
+        "active_rate_mbps": 2.0,
+        "concurrency_peak": 0.025,
+        "directivity_dbi": 10.0,
+        "sector_wedges_per_ring": [
+          1,
+          2
+        ]
+      },
+      {
+        "device_class": "mounted_terminal_class",
+        "spectral_efficiency_bps_per_hz": 2.5,
+        "active_rate_mbps": 5.0,
+        "concurrency_peak": 0.1,
+        "directivity_dbi": 15.0,
+        "sector_wedges_per_ring": [
+          1,
+          3,
+          5
+        ]
+      },
+      {
+        "device_class": "phone_class",
+        "spectral_efficiency_bps_per_hz": 0.65,
+        "active_rate_mbps": 0.75,
+        "concurrency_peak": 0.025,
+        "directivity_dbi": 0.0,
+        "sector_wedges_per_ring": []
+      }
+    ],
+    "shell": {
+      "altitude_km": 450.0,
+      "inclination_deg": 53.0,
+      "elevation_mask_deg": 25.0,
+      "carrier_hz": 1621000000.0,
+      "beamwidth_factor": 0.886,
+      "reuse_calibration_gbps_per_mhz_per_se": 0.15,
+      "reference_aperture_m2": 25.0
+    },
+    "demand": {
+      "grid_path": "communications/data/ghs_pop_e2030_0p25deg.npz",
+      "grid_sha256": "33a42880010757c1eb5c19ef6e092111753866b670d9bc38fa9e802aa8d12e25",
+      "density_threshold_per_km2": 1.0,
+      "take_up": 1.0
+    },
+    "sweep": {
+      "fleets": [
+        340,
+        500,
+        750,
+        1000,
+        1500,
+        2000,
+        3000,
+        4000,
+        5400,
+        6000,
+        8000,
+        10000,
+        12000,
+        14000,
+        16000,
+        18000,
+        20000,
+        22000,
+        24000,
+        26000,
+        28000,
+        30000,
+        34000,
+        40000
+      ],
+      "mounted_terminal_extension": [
+        48000,
+        64000
+      ],
+      "snapshots_phone_central": 4,
+      "snapshots_directional": 2,
+      "snapshots_bands": 2,
+      "snapshots_trim": 1,
+      "seed": 20260928,
+      "footprint_bands": 40,
+      "passes": 4,
+      "stall_floor": 0.98
+    },
+    "trim": {
+      "victims": 3000,
+      "seed": 11,
+      "floors_dbi": [
+        -0.4,
+        -2.0,
+        -8.0
+      ],
+      "scan_exponent": 1.3
+    },
+    "bands": [
+      {
+        "name": "taper",
+        "beamwidth_factor": 1.0934,
+        "spacing_area_factor": 1.0,
+        "density_threshold_per_km2": 1.0,
+        "grid_aggregation": 1,
+        "beams_per_satellite": null
+      },
+      {
+        "name": "taper_and_spacing",
+        "beamwidth_factor": 1.0934,
+        "spacing_area_factor": 1.5,
+        "density_threshold_per_km2": 1.0,
+        "grid_aggregation": 1,
+        "beams_per_satellite": null
+      },
+      {
+        "name": "density_10_per_km2",
+        "beamwidth_factor": 0.886,
+        "spacing_area_factor": 1.0,
+        "density_threshold_per_km2": 10.0,
+        "grid_aggregation": 1,
+        "beams_per_satellite": null
+      },
+      {
+        "name": "density_100_per_km2",
+        "beamwidth_factor": 0.886,
+        "spacing_area_factor": 1.0,
+        "density_threshold_per_km2": 100.0,
+        "grid_aggregation": 1,
+        "beams_per_satellite": null
+      },
+      {
+        "name": "grid_0p5_deg",
+        "beamwidth_factor": 0.886,
+        "spacing_area_factor": 1.0,
+        "density_threshold_per_km2": 1.0,
+        "grid_aggregation": 2,
+        "beams_per_satellite": null
+      },
+      {
+        "name": "beams_48",
+        "beamwidth_factor": 0.886,
+        "spacing_area_factor": 1.0,
+        "density_threshold_per_km2": 1.0,
+        "grid_aggregation": 1,
+        "beams_per_satellite": 48
+      }
+    ]
+  },
+  "input_hash": "6ae5fc78bdd590eab06a25ea94e7f781e972f0c263324aed79d3d14a79352963",
+  "provenance": {
+    "grid_file_name": "ghs_pop_e2030_0p25deg.npz",
+    "grid_sha256": "33a42880010757c1eb5c19ef6e092111753866b670d9bc38fa9e802aa8d12e25",
+    "citations": [
+      "Schiavina, Freire, Carioli, MacManus (2023), GHS-POP R2023A, doi:10.2905/2FF68A52-5B5B-4A22-8F40-C41DA8332CFE",
+      "Pesaresi et al. (2024), Advances on the Global Human Settlement Layer by joint assessment of Earth Observation and population survey data, International Journal of Digital Earth 17(1), doi:10.1080/17538947.2024.2390454"
+    ],
+    "licence": "CC BY 4.0",
+    "method": "Smallest footprint first, per snapshot: the satellite-cell pairs in view are filled in 40 geometric footprint bands from the smallest, 4 proportional passes in each, every band committed before the next; per satellite at most its beams, per cell one co-channel layer (its area) and the class's people cap, per pair one layer: the phone class's allocation, and each directional class's first layer at its own people cap. A directional class then stacks layers under sky sectors: its terminal's sky above the mask split into sectors of equal solid angle, ring by ring from the zenith; a second banded fill on the same band edges over (cell, sector) keys, a key's area the cell's less its first layer's from that sector, a pair's cap one layer less its first-layer beams; before each band its candidates are taken by (cell, footprint, satellite), and one is admitted only at least one terminal beamwidth, sqrt(4 pi / (1.133 x D)), from every satellite serving its cell in another sector and from every candidate of its cell admitted earlier in the band in another sector (a satellite serves a cell when its layer covers at least 1 / SINR_1 of it). Each served sub-pair is priced by the full sum of its cell's other layers in other sectors (first layers not against each other), each weighted by its share of the cell at the terminal's Gaussian main lobe floored at -20 dB: SE = 0.65 x log2(1 + SINR), the single-layer SINR_1 = 2^(central SE / that anchor) - 1; a cell keeps its stacked layers only when they do not lower its capacity, the dropped beams spent. Each directional row reports its kept stacked share (the share of L in the kept stacked sub-pairs, in cells their first layer covers, that the full sum prices against a layer of another sector), their beam-weighted median separation from the nearest such layer and their beam-weighted mean full-sum interference in dB, none of them measured against the cell's main satellite alone. A circular Walker Delta shell at 450 km and 53 degrees (P = round(sqrt(N)) planes of S = round(N / P), the realized N = P x S, phasing F = 1) with a 25 degree mask; a square 25 m^2 aperture at 1.621 GHz, half-power beamwidth 0.886 wavelengths over its side, the beams per satellite derived from the capacity calibration and the panel. Each fleet's row averages its snapshots, drawn once over a sidereal day from seed 20260928. Maximum use in closed form (every cell served by the best satellite the shell can ever offer it; for a directional class one layer per sky sector, each at the best its ring allows, whether its azimuth is reachable ignored); the markers on the elasticity of capacity at the geometric midpoints of the rows, interpolated in ln N. The phone class's central rows carry the interference trim, priced on the first 1 snapshot(s) of each row: power control gives every beam equal flux at its target, so a beam's power goes as its slant range squared over g, g = cos^1.3 of its scan angle; a victim cell's aggregate far-sidelobe interference over its own signal is x = gamma / G0 x the sum, over every lit satellite above the victim's horizon, of the satellite's summed beam powers x g toward the victim / the slant range squared, G0 the panel's broadside directivity (4 pi x its area / the wavelength squared); 3,000 served cells are the victims, drawn without replacement in proportion to their beams, a fresh draw from seed 11 at each row; the trim is 1 - the victims' mean of log2(1 + 1 / (1 + x)), at each floor gamma of -0.4, -2, -8 dBi. Each band point of the phone class is its central curve but for one changed input, at 2 snapshot(s) a row over the same fleets, with its own rows and markers: the beam's half-power width (the taper), the ground a co-channel beam occupies over its 3 dB footprint (wider co-channel spacing, scaling the area per beam in the fill, the bounds and maximum use alike), the demand threshold, the grid (the shipped cells summed k x k), or the beams per satellite.",
+    "checks_passed": [
+      "bounds: at every snapshot of every class and band point, useful beams at most min(ceiling, supply) and the ceiling at most maximum use (for a directional class, the sector-rule ceiling and its maximum use), within 1e-09 relative",
+      "stall floor: from 20,000 satellites up, the phone class's central useful beams at least 0.98 x min(ceiling, supply), at every snapshot and in the snapshot means",
+      "capacity per satellite never rises between consecutive rows of any class or band point by more than 0.02 relative to the earlier row (the snapshots' noise)"
+    ],
+    "run_measurement": {
+      "wall_time_s": 1564.1681765709072,
+      "peak_memory_mb": 11944.992768
+    }
+  },
+  "classes": [
+    {
+      "device_class": "small_terminal_class",
+      "rows": [
+        {
+          "fleet": 342,
+          "requested_fleet": 340,
+          "useful_beams": 20824.777641785673,
+          "useful_beams_spread": 29.493284507239878,
+          "capacity_gbps": 332.56633413758516,
+          "ocean_factor": 0.4059410846351983,
+          "ceiling_beams": 119356.73498670929,
+          "supply_beams": 21397.623531186662,
+          "directional": {
+            "kept_stacked_share": 0.006597061802591401,
+            "median_separation_deg": 74.381634497682,
+            "mean_full_sum_interference_db": -16.467713779168342
+          },
+          "trim": null
+        },
+        {
+          "fleet": 506,
+          "requested_fleet": 500,
+          "useful_beams": 30167.496052575043,
+          "useful_beams_spread": 237.87671542198586,
+          "capacity_gbps": 481.04389617771426,
+          "ocean_factor": 0.3974637161077081,
+          "ceiling_beams": 168276.31857264915,
+          "supply_beams": 31302.044419583704,
+          "directional": {
+            "kept_stacked_share": 0.013926216773981707,
+            "median_separation_deg": 75.04505380362615,
+            "mean_full_sum_interference_db": -16.809950116775905
+          },
+          "trim": null
+        },
+        {
+          "fleet": 756,
+          "requested_fleet": 750,
+          "useful_beams": 44732.8846006089,
+          "useful_beams_spread": 38.088788387896784,
+          "capacity_gbps": 712.4284761469476,
+          "ocean_factor": 0.39446988183958465,
+          "ceiling_beams": 238909.1643346332,
+          "supply_beams": 47590.947727894825,
+          "directional": {
+            "kept_stacked_share": 0.01937063984497667,
+            "median_separation_deg": 78.08000151533673,
+            "mean_full_sum_interference_db": -17.20051068608063
+          },
+          "trim": null
+        },
+        {
+          "fleet": 992,
+          "requested_fleet": 1000,
+          "useful_beams": 57153.01792422966,
+          "useful_beams_spread": 164.3178190949402,
+          "capacity_gbps": 909.4010193546967,
+          "ocean_factor": 0.3840928623940165,
+          "ceiling_beams": 283510.4195590806,
+          "supply_beams": 61747.53867287953,
+          "directional": {
+            "kept_stacked_share": 0.020317817697358825,
+            "median_separation_deg": 75.52162861834039,
+            "mean_full_sum_interference_db": -16.442561361780182
+          },
+          "trim": null
+        },
+        {
+          "fleet": 1482,
+          "requested_fleet": 1500,
+          "useful_beams": 82053.94727470292,
+          "useful_beams_spread": 21.085943979851436,
+          "capacity_gbps": 1299.830629878664,
+          "ocean_factor": 0.3691135729856182,
+          "ceiling_beams": 351516.78239585785,
+          "supply_beams": 91978.20533653666,
+          "directional": {
+            "kept_stacked_share": 0.030298536359681744,
+            "median_separation_deg": 72.31427171563044,
+            "mean_full_sum_interference_db": -15.845631207905893
+          },
+          "trim": null
+        },
+        {
+          "fleet": 1980,
+          "requested_fleet": 2000,
+          "useful_beams": 105638.03283646285,
+          "useful_beams_spread": 145.53441338959965,
+          "capacity_gbps": 1666.3133534841077,
+          "ocean_factor": 0.35568361224398265,
+          "ceiling_beams": 416149.7579817299,
+          "supply_beams": 123903.14671288591,
+          "directional": {
+            "kept_stacked_share": 0.039150007627896555,
+            "median_separation_deg": 69.78402193135915,
+            "mean_full_sum_interference_db": -15.39081100415412
+          },
+          "trim": null
+        },
+        {
+          "fleet": 3025,
+          "requested_fleet": 3000,
+          "useful_beams": 148297.34822924843,
+          "useful_beams_spread": 150.15352684912796,
+          "capacity_gbps": 2321.78204490403,
+          "ocean_factor": 0.32682611179999654,
+          "ceiling_beams": 482869.0269386972,
+          "supply_beams": 189210.20097983332,
+          "directional": {
+            "kept_stacked_share": 0.05061159833261211,
+            "median_separation_deg": 66.06099234849157,
+            "mean_full_sum_interference_db": -14.377001166192166
+          },
+          "trim": null
+        },
+        {
+          "fleet": 3969,
+          "requested_fleet": 4000,
+          "useful_beams": 180739.73147935994,
+          "useful_beams_spread": 208.26603268514737,
+          "capacity_gbps": 2824.9860949196336,
+          "ocean_factor": 0.3035856747784663,
+          "ceiling_beams": 527867.5536885513,
+          "supply_beams": 247872.52014818328,
+          "directional": {
+            "kept_stacked_share": 0.04871037801637852,
+            "median_separation_deg": 64.6786456557485,
+            "mean_full_sum_interference_db": -14.00668976597747
+          },
+          "trim": null
+        },
+        {
+          "fleet": 5402,
+          "requested_fleet": 5400,
+          "useful_beams": 222900.60183081997,
+          "useful_beams_spread": 98.42804842496116,
+          "capacity_gbps": 3472.014665665104,
+          "ocean_factor": 0.2750840452064914,
+          "ceiling_beams": 558519.2449674993,
+          "supply_beams": 337731.7028251261,
+          "directional": {
+            "kept_stacked_share": 0.05098959873652441,
+            "median_separation_deg": 63.54044620566644,
+            "mean_full_sum_interference_db": -13.74747206831308
+          },
+          "trim": null
+        },
+        {
+          "fleet": 6006,
+          "requested_fleet": 6000,
+          "useful_beams": 237739.84620941727,
+          "useful_beams_spread": 48.43560659400828,
+          "capacity_gbps": 3699.229824808366,
+          "ocean_factor": 0.26389149318394634,
+          "ceiling_beams": 569496.2864418274,
+          "supply_beams": 375618.3343844255,
+          "directional": {
+            "kept_stacked_share": 0.050980319288416884,
+            "median_separation_deg": 63.59156519401193,
+            "mean_full_sum_interference_db": -13.782363460530592
+          },
+          "trim": null
+        },
+        {
+          "fleet": 8010,
+          "requested_fleet": 8000,
+          "useful_beams": 278762.4714649003,
+          "useful_beams_spread": 81.93793894458213,
+          "capacity_gbps": 4307.498136286778,
+          "ocean_factor": 0.2320120444984605,
+          "ceiling_beams": 592615.761947017,
+          "supply_beams": 500761.9429805159,
+          "directional": {
+            "kept_stacked_share": 0.0567234148506002,
+            "median_separation_deg": 63.25703589384412,
+            "mean_full_sum_interference_db": -13.542046231930241
+          },
+          "trim": null
+        },
+        {
+          "fleet": 10000,
+          "requested_fleet": 10000,
+          "useful_beams": 309113.8616492334,
+          "useful_beams_spread": 233.6479807321739,
+          "capacity_gbps": 4753.866472976295,
+          "ocean_factor": 0.20607590776615559,
+          "ceiling_beams": 607403.6855079413,
+          "supply_beams": 624921.5968719495,
+          "directional": {
+            "kept_stacked_share": 0.05947129887882009,
+            "median_separation_deg": 62.34747267747779,
+            "mean_full_sum_interference_db": -13.074868769659215
+          },
+          "trim": null
+        },
+        {
+          "fleet": 11990,
+          "requested_fleet": 12000,
+          "useful_beams": 331147.4220055211,
+          "useful_beams_spread": 103.54200778197264,
+          "capacity_gbps": 5087.206712158793,
+          "ocean_factor": 0.1841242268587829,
+          "ceiling_beams": 619006.3998717953,
+          "supply_beams": 749372.7922311295,
+          "directional": {
+            "kept_stacked_share": 0.05708966870781494,
+            "median_separation_deg": 61.912623090232096,
+            "mean_full_sum_interference_db": -12.732032429038597
+          },
+          "trim": null
+        },
+        {
+          "fleet": 14042,
+          "requested_fleet": 14000,
+          "useful_beams": 348990.23459594476,
+          "useful_beams_spread": 192.01577920970158,
+          "capacity_gbps": 5345.9460356551335,
+          "ocean_factor": 0.1656887597189122,
+          "ceiling_beams": 626525.2740689352,
+          "supply_beams": 877309.1966386742,
+          "directional": {
+            "kept_stacked_share": 0.057186362441472245,
+            "median_separation_deg": 61.60316180062625,
+            "mean_full_sum_interference_db": -12.280107019753375
+          },
+          "trim": null
+        },
+        {
+          "fleet": 16002,
+          "requested_fleet": 16000,
+          "useful_beams": 359243.3863252768,
+          "useful_beams_spread": 94.00808239719481,
+          "capacity_gbps": 5527.742411520687,
+          "ocean_factor": 0.1496660360476927,
+          "ceiling_beams": 633236.7979573667,
+          "supply_beams": 1000187.5965138717,
+          "directional": {
+            "kept_stacked_share": 0.04932423598037198,
+            "median_separation_deg": 61.59320737291417,
+            "mean_full_sum_interference_db": -12.14164244188354
+          },
+          "trim": null
+        },
+        {
+          "fleet": 17956,
+          "requested_fleet": 18000,
+          "useful_beams": 367773.10630077706,
+          "useful_beams_spread": 120.82730820350116,
+          "capacity_gbps": 5650.537857206135,
+          "ocean_factor": 0.13654604080373398,
+          "ceiling_beams": 637742.9395539223,
+          "supply_beams": 1122533.2081212713,
+          "directional": {
+            "kept_stacked_share": 0.04896939963184214,
+            "median_separation_deg": 61.71454575865838,
+            "mean_full_sum_interference_db": -12.027911934133376
+          },
+          "trim": null
+        },
+        {
+          "fleet": 20022,
+          "requested_fleet": 20000,
+          "useful_beams": 371996.03527728585,
+          "useful_beams_spread": 397.03226635811734,
+          "capacity_gbps": 5733.135670481014,
+          "ocean_factor": 0.12386242975303362,
+          "ceiling_beams": 641597.1986153319,
+          "supply_beams": 1251405.4064876311,
+          "directional": {
+            "kept_stacked_share": 0.04401730866432006,
+            "median_separation_deg": 61.589002168013046,
+            "mean_full_sum_interference_db": -11.916875450090252
+          },
+          "trim": null
+        },
+        {
+          "fleet": 22052,
+          "requested_fleet": 22000,
+          "useful_beams": 373697.64278552984,
+          "useful_beams_spread": 92.30181477504084,
+          "capacity_gbps": 5769.615613900243,
+          "ocean_factor": 0.11297467887584794,
+          "ceiling_beams": 645124.4017484427,
+          "supply_beams": 1378221.9719869462,
+          "directional": {
+            "kept_stacked_share": 0.0411339464094858,
+            "median_separation_deg": 61.71674059860285,
+            "mean_full_sum_interference_db": -11.83908194952004
+          },
+          "trim": null
+        },
+        {
+          "fleet": 24025,
+          "requested_fleet": 24000,
+          "useful_beams": 373117.2365194355,
+          "useful_beams_spread": 130.46931315679103,
+          "capacity_gbps": 5781.503631301901,
+          "ocean_factor": 0.10353582699117182,
+          "ceiling_beams": 648290.8158561238,
+          "supply_beams": 1501609.8413109984,
+          "directional": {
+            "kept_stacked_share": 0.036576559782076634,
+            "median_separation_deg": 61.86563215496827,
+            "mean_full_sum_interference_db": -11.851088974018847
+          },
+          "trim": null
+        },
+        {
+          "fleet": 25921,
+          "requested_fleet": 26000,
+          "useful_beams": 372573.93324913393,
+          "useful_beams_spread": 155.90270724182483,
+          "capacity_gbps": 5799.2803443996,
+          "ocean_factor": 0.09582293204972389,
+          "ceiling_beams": 651421.0237528379,
+          "supply_beams": 1620247.4703329431,
+          "directional": {
+            "kept_stacked_share": 0.030981022031569987,
+            "median_separation_deg": 61.78213285612367,
+            "mean_full_sum_interference_db": -11.658661232589298
+          },
+          "trim": null
+        },
+        {
+          "fleet": 28056,
+          "requested_fleet": 28000,
+          "useful_beams": 371340.4429931056,
+          "useful_beams_spread": 255.75597393146018,
+          "capacity_gbps": 5800.668469568905,
+          "ocean_factor": 0.08823791535811844,
+          "ceiling_beams": 653388.1777270876,
+          "supply_beams": 1753810.6486817584,
+          "directional": {
+            "kept_stacked_share": 0.026544043205118516,
+            "median_separation_deg": 61.5381774503714,
+            "mean_full_sum_interference_db": -11.616667125494043
+          },
+          "trim": null
+        },
+        {
+          "fleet": 29929,
+          "requested_fleet": 30000,
+          "useful_beams": 370398.20527950535,
+          "useful_beams_spread": 214.42102529125987,
+          "capacity_gbps": 5809.7378582639085,
+          "ocean_factor": 0.08250597642854875,
+          "ceiling_beams": 655445.7382275714,
+          "supply_beams": 1870877.2286929796,
+          "directional": {
+            "kept_stacked_share": 0.021703216475701656,
+            "median_separation_deg": 61.443974666931766,
+            "mean_full_sum_interference_db": -11.547812345615078
+          },
+          "trim": null
+        },
+        {
+          "fleet": 34040,
+          "requested_fleet": 34000,
+          "useful_beams": 369005.0804849425,
+          "useful_beams_spread": 107.8830148721463,
+          "capacity_gbps": 5816.894421227993,
+          "ocean_factor": 0.0722689150969335,
+          "ceiling_beams": 657960.5862565562,
+          "supply_beams": 2127739.082804855,
+          "directional": {
+            "kept_stacked_share": 0.015661769241542715,
+            "median_separation_deg": 61.418764755864686,
+            "mean_full_sum_interference_db": -11.2344622919973
+          },
+          "trim": null
+        },
+        {
+          "fleet": 40000,
+          "requested_fleet": 40000,
+          "useful_beams": 368117.49561211735,
+          "useful_beams_spread": 8.128892777021974,
+          "capacity_gbps": 5834.4080145785465,
+          "ocean_factor": 0.06135291593535289,
+          "ceiling_beams": 661318.7439167283,
+          "supply_beams": 2500248.1674048062,
+          "directional": {
+            "kept_stacked_share": 0.009876551191026754,
+            "median_separation_deg": 61.590375709761275,
+            "mean_full_sum_interference_db": -11.24978316661009
+          },
+          "trim": null
+        }
+      ],
+      "markers": {
+        "maximum_use_beams": 684527.9051947582,
+        "saturation_number": 19944,
+        "saturation_not_reached_by": null,
+        "elasticity_under_0p25_fleet": 15159,
+        "fleet_at_90pct_of_maximum_use": null
+      }
+    },
+    {
+      "device_class": "mounted_terminal_class",
+      "rows": [
+        {
+          "fleet": 342,
+          "requested_fleet": 340,
+          "useful_beams": 21192.168971432064,
+          "useful_beams_spread": 27.67533747250127,
+          "capacity_gbps": 421.2299919005206,
+          "ocean_factor": 0.4131027089947771,
+          "ceiling_beams": 130413.05619367817,
+          "supply_beams": 21402.962927323642,
+          "directional": {
+            "kept_stacked_share": 0.02319811007441496,
+            "median_separation_deg": 58.29212937856576,
+            "mean_full_sum_interference_db": -18.227471938788725
+          },
+          "trim": null
+        },
+        {
+          "fleet": 506,
+          "requested_fleet": 500,
+          "useful_beams": 30815.4749807428,
+          "useful_beams_spread": 196.34471083136486,
+          "capacity_gbps": 611.4248637626794,
+          "ocean_factor": 0.40600098788857447,
+          "ceiling_beams": 193768.761203904,
+          "supply_beams": 31310.645721298853,
+          "directional": {
+            "kept_stacked_share": 0.03403884354541345,
+            "median_separation_deg": 58.95516124105998,
+            "mean_full_sum_interference_db": -17.99890822527641
+          },
+          "trim": null
+        },
+        {
+          "fleet": 756,
+          "requested_fleet": 750,
+          "useful_beams": 46278.453414647185,
+          "useful_beams_spread": 96.18436081894833,
+          "capacity_gbps": 912.4335689236598,
+          "ocean_factor": 0.40809923646073354,
+          "ceiling_beams": 286867.4998674253,
+          "supply_beams": 47610.72302101798,
+          "directional": {
+            "kept_stacked_share": 0.051114332833498664,
+            "median_separation_deg": 54.488216190803136,
+            "mean_full_sum_interference_db": -16.662829646196663
+          },
+          "trim": null
+        },
+        {
+          "fleet": 992,
+          "requested_fleet": 1000,
+          "useful_beams": 59477.58815445841,
+          "useful_beams_spread": 274.2283816989511,
+          "capacity_gbps": 1169.0777131429345,
+          "ocean_factor": 0.3997149741563065,
+          "ceiling_beams": 362192.35540352575,
+          "supply_beams": 61769.28155152527,
+          "directional": {
+            "kept_stacked_share": 0.05735718862050048,
+            "median_separation_deg": 52.42333378087602,
+            "mean_full_sum_interference_db": -15.842584241509085
+          },
+          "trim": null
+        },
+        {
+          "fleet": 1482,
+          "requested_fleet": 1500,
+          "useful_beams": 86618.83725320817,
+          "useful_beams_spread": 196.7003154186241,
+          "capacity_gbps": 1689.8074138085701,
+          "ocean_factor": 0.3896483907026908,
+          "ceiling_beams": 503300.6636962288,
+          "supply_beams": 92020.37584163749,
+          "directional": {
+            "kept_stacked_share": 0.07888285808934817,
+            "median_separation_deg": 49.96902169889766,
+            "mean_full_sum_interference_db": -15.571686430119804
+          },
+          "trim": null
+        },
+        {
+          "fleet": 1980,
+          "requested_fleet": 2000,
+          "useful_beams": 114985.91925389337,
+          "useful_beams_spread": 644.2134061200486,
+          "capacity_gbps": 2215.029426473192,
+          "ocean_factor": 0.3871579772858363,
+          "ceiling_beams": 641609.5420631286,
+          "supply_beams": 123953.70586064052,
+          "directional": {
+            "kept_stacked_share": 0.11391770869869268,
+            "median_separation_deg": 46.90480595788779,
+            "mean_full_sum_interference_db": -15.04096516106429
+          },
+          "trim": null
+        },
+        {
+          "fleet": 3025,
+          "requested_fleet": 3000,
+          "useful_beams": 169772.12221850088,
+          "useful_beams_spread": 168.2874935948348,
+          "capacity_gbps": 3198.0509242101916,
+          "ocean_factor": 0.3741534373961452,
+          "ceiling_beams": 830643.8786391411,
+          "supply_beams": 189287.88438127583,
+          "directional": {
+            "kept_stacked_share": 0.16552909551624095,
+            "median_separation_deg": 42.24202874190601,
+            "mean_full_sum_interference_db": -13.924746278416883
+          },
+          "trim": null
+        },
+        {
+          "fleet": 3969,
+          "requested_fleet": 4000,
+          "useful_beams": 216698.0496953845,
+          "useful_beams_spread": 215.05194531631423,
+          "capacity_gbps": 4016.101143827923,
+          "ocean_factor": 0.3639842944408911,
+          "ceiling_beams": 1006473.8745680817,
+          "supply_beams": 247972.5316037315,
+          "directional": {
+            "kept_stacked_share": 0.2006547924384139,
+            "median_separation_deg": 40.535600988811815,
+            "mean_full_sum_interference_db": -13.295026075072661
+          },
+          "trim": null
+        },
+        {
+          "fleet": 5402,
+          "requested_fleet": 5400,
+          "useful_beams": 282397.36363606714,
+          "useful_beams_spread": 16.0225173147046,
+          "capacity_gbps": 5105.782562084107,
+          "ocean_factor": 0.34850964289283864,
+          "ceiling_beams": 1168358.2333838507,
+          "supply_beams": 337870.4387018923,
+          "directional": {
+            "kept_stacked_share": 0.24431934475961936,
+            "median_separation_deg": 38.5886910290327,
+            "mean_full_sum_interference_db": -12.520750601851717
+          },
+          "trim": null
+        },
+        {
+          "fleet": 6006,
+          "requested_fleet": 6000,
+          "useful_beams": 308442.78988507285,
+          "useful_beams_spread": 21.60850085353013,
+          "capacity_gbps": 5527.578932373839,
+          "ocean_factor": 0.34237183914427,
+          "ceiling_beams": 1234555.1094971732,
+          "supply_beams": 375773.2252204897,
+          "directional": {
+            "kept_stacked_share": 0.2614715494549517,
+            "median_separation_deg": 38.26524859489496,
+            "mean_full_sum_interference_db": -12.342187966044296
+          },
+          "trim": null
+        },
+        {
+          "fleet": 8010,
+          "requested_fleet": 8000,
+          "useful_beams": 387235.3495185572,
+          "useful_beams_spread": 52.3330298923247,
+          "capacity_gbps": 6757.351692384489,
+          "ocean_factor": 0.32229325802626485,
+          "ceiling_beams": 1374620.0420590588,
+          "supply_beams": 500964.2523285797,
+          "directional": {
+            "kept_stacked_share": 0.3131985043941248,
+            "median_separation_deg": 37.4771202177628,
+            "mean_full_sum_interference_db": -12.01079144858906
+          },
+          "trim": null
+        },
+        {
+          "fleet": 10000,
+          "requested_fleet": 10000,
+          "useful_beams": 458444.89314749435,
+          "useful_beams_spread": 287.4963010590873,
+          "capacity_gbps": 7785.900453013702,
+          "ocean_factor": 0.30562992876499623,
+          "ceiling_beams": 1466735.0071242687,
+          "supply_beams": 625176.4592854574,
+          "directional": {
+            "kept_stacked_share": 0.3576862930263266,
+            "median_separation_deg": 36.82825408804805,
+            "mean_full_sum_interference_db": -11.639443578478097
+          },
+          "trim": null
+        },
+        {
+          "fleet": 11990,
+          "requested_fleet": 12000,
+          "useful_beams": 522438.7502506763,
+          "useful_beams_spread": 202.48400999014848,
+          "capacity_gbps": 8657.706188248707,
+          "ocean_factor": 0.29048582165731235,
+          "ceiling_beams": 1538658.4954205272,
+          "supply_beams": 749679.4359752864,
+          "directional": {
+            "kept_stacked_share": 0.39396957309167024,
+            "median_separation_deg": 36.520421436530214,
+            "mean_full_sum_interference_db": -11.32956181043754
+          },
+          "trim": null
+        },
+        {
+          "fleet": 14042,
+          "requested_fleet": 14000,
+          "useful_beams": 583031.8145255044,
+          "useful_beams_spread": 55.91866490984103,
+          "capacity_gbps": 9414.92888165596,
+          "ocean_factor": 0.27680378603499234,
+          "ceiling_beams": 1584986.3999347049,
+          "supply_beams": 877659.6576909414,
+          "directional": {
+            "kept_stacked_share": 0.42717735371439397,
+            "median_separation_deg": 36.13324917642137,
+            "mean_full_sum_interference_db": -10.957509153324215
+          },
+          "trim": null
+        },
+        {
+          "fleet": 16002,
+          "requested_fleet": 16000,
+          "useful_beams": 633599.3227979082,
+          "useful_beams_spread": 188.90949131106026,
+          "capacity_gbps": 10040.724952502958,
+          "ocean_factor": 0.2639667219922127,
+          "ceiling_beams": 1617821.2019686294,
+          "supply_beams": 1000591.8016118472,
+          "directional": {
+            "kept_stacked_share": 0.45247520301565314,
+            "median_separation_deg": 35.98749771506303,
+            "mean_full_sum_interference_db": -10.75533199886429
+          },
+          "trim": null
+        },
+        {
+          "fleet": 17956,
+          "requested_fleet": 18000,
+          "useful_beams": 679657.126148104,
+          "useful_beams_spread": 174.69866838073358,
+          "capacity_gbps": 10598.119129284896,
+          "ocean_factor": 0.25234169679516744,
+          "ceiling_beams": 1644513.7283715995,
+          "supply_beams": 1122981.1196674046,
+          "directional": {
+            "kept_stacked_share": 0.47691472364413456,
+            "median_separation_deg": 35.828628417524016,
+            "mean_full_sum_interference_db": -10.61545253426922
+          },
+          "trim": null
+        },
+        {
+          "fleet": 20022,
+          "requested_fleet": 20000,
+          "useful_beams": 724947.657570912,
+          "useful_beams_spread": 311.197214723099,
+          "capacity_gbps": 11124.867340075623,
+          "ocean_factor": 0.2413836971234682,
+          "ceiling_beams": 1668512.7931093974,
+          "supply_beams": 1251905.445655121,
+          "directional": {
+            "kept_stacked_share": 0.500975363756919,
+            "median_separation_deg": 35.7273679104799,
+            "mean_full_sum_interference_db": -10.477667266617225
+          },
+          "trim": null
+        },
+        {
+          "fleet": 22052,
+          "requested_fleet": 22000,
+          "useful_beams": 761804.8031441708,
+          "useful_beams_spread": 1102.0828719208948,
+          "capacity_gbps": 11587.347234225968,
+          "ocean_factor": 0.2303055816990661,
+          "ceiling_beams": 1688507.5059516423,
+          "supply_beams": 1378788.9264380026,
+          "directional": {
+            "kept_stacked_share": 0.5213947733740731,
+            "median_separation_deg": 35.60409840171172,
+            "mean_full_sum_interference_db": -10.456922208833959
+          },
+          "trim": null
+        },
+        {
+          "fleet": 24025,
+          "requested_fleet": 24000,
+          "useful_beams": 792392.5934523799,
+          "useful_beams_spread": 162.5754855342675,
+          "capacity_gbps": 12073.563387341852,
+          "ocean_factor": 0.2198800120575456,
+          "ceiling_beams": 1705296.1533044565,
+          "supply_beams": 1502205.4876541267,
+          "directional": {
+            "kept_stacked_share": 0.5382875105745945,
+            "median_separation_deg": 36.12160591820094,
+            "mean_full_sum_interference_db": -10.648868628289021
+          },
+          "trim": null
+        },
+        {
+          "fleet": 25921,
+          "requested_fleet": 26000,
+          "useful_beams": 829538.7499104046,
+          "useful_beams_spread": 76.43728458404075,
+          "capacity_gbps": 12421.837696400102,
+          "ocean_factor": 0.21335050085783844,
+          "ceiling_beams": 1719457.0272695203,
+          "supply_beams": 1620907.9620594871,
+          "directional": {
+            "kept_stacked_share": 0.5569439646485774,
+            "median_separation_deg": 35.961945683375816,
+            "mean_full_sum_interference_db": -10.415752515283362
+          },
+          "trim": null
+        },
+        {
+          "fleet": 28056,
+          "requested_fleet": 28000,
+          "useful_beams": 862181.1179484467,
+          "useful_beams_spread": 783.4079435032327,
+          "capacity_gbps": 12786.51971606306,
+          "ocean_factor": 0.20487147560793809,
+          "ceiling_beams": 1729738.0715118805,
+          "supply_beams": 1754516.9661342609,
+          "directional": {
+            "kept_stacked_share": 0.5731495650239802,
+            "median_separation_deg": 35.952834141825946,
+            "mean_full_sum_interference_db": -10.341094479567339
+          },
+          "trim": null
+        },
+        {
+          "fleet": 29929,
+          "requested_fleet": 30000,
+          "useful_beams": 892847.1388297805,
+          "useful_beams_spread": 290.52704494516365,
+          "capacity_gbps": 13027.7981348733,
+          "ocean_factor": 0.19888116070918518,
+          "ceiling_beams": 1742116.5458973055,
+          "supply_beams": 1871639.2048445311,
+          "directional": {
+            "kept_stacked_share": 0.5867700162090442,
+            "median_separation_deg": 35.74686537136069,
+            "mean_full_sum_interference_db": -10.116336993282541
+          },
+          "trim": null
+        },
+        {
+          "fleet": 34040,
+          "requested_fleet": 34000,
+          "useful_beams": 944318.7392446585,
+          "useful_beams_spread": 66.82172415335663,
+          "capacity_gbps": 13423.743810265056,
+          "ocean_factor": 0.18494295715719908,
+          "ceiling_beams": 1760305.0348045484,
+          "supply_beams": 2128601.3419237845,
+          "directional": {
+            "kept_stacked_share": 0.6083049913719577,
+            "median_separation_deg": 35.52561481662368,
+            "mean_full_sum_interference_db": -9.82117553423014
+          },
+          "trim": null
+        },
+        {
+          "fleet": 40000,
+          "requested_fleet": 40000,
+          "useful_beams": 1003703.560939835,
+          "useful_beams_spread": 865.7873680319171,
+          "capacity_gbps": 13840.529615585354,
+          "ocean_factor": 0.16728392682330584,
+          "ceiling_beams": 1781613.8417935357,
+          "supply_beams": 2501253.437366274,
+          "directional": {
+            "kept_stacked_share": 0.6301350580256937,
+            "median_separation_deg": 35.23575216356859,
+            "mean_full_sum_interference_db": -9.457426887085182
+          },
+          "trim": null
+        },
+        {
+          "fleet": 47961,
+          "requested_fleet": 48000,
+          "useful_beams": 1060872.720253799,
+          "useful_beams_spread": 870.9011612966424,
+          "capacity_gbps": 14235.333210712299,
+          "ocean_factor": 0.1474632472569795,
+          "ceiling_beams": 1802117.3190028002,
+          "supply_beams": 2999035.7585389516,
+          "directional": {
+            "kept_stacked_share": 0.64920032054037,
+            "median_separation_deg": 34.99076692218017,
+            "mean_full_sum_interference_db": -9.125016658087596
+          },
+          "trim": null
+        },
+        {
+          "fleet": 64009,
+          "requested_fleet": 64000,
+          "useful_beams": 1078323.504630845,
+          "useful_beams_spread": 488.1299029792426,
+          "capacity_gbps": 14392.067879469776,
+          "ocean_factor": 0.11230957153221631,
+          "ceiling_beams": 1829314.9877953748,
+          "supply_beams": 4002483.0237808833,
+          "directional": {
+            "kept_stacked_share": 0.6542892393556828,
+            "median_separation_deg": 34.887212347215005,
+            "mean_full_sum_interference_db": -8.997725683084568
+          },
+          "trim": null
+        }
+      ],
+      "markers": {
+        "maximum_use_beams": 1943778.1165993125,
+        "saturation_number": 48912,
+        "saturation_not_reached_by": null,
+        "elasticity_under_0p25_fleet": 30985,
+        "fleet_at_90pct_of_maximum_use": null
+      }
+    },
+    {
+      "device_class": "phone_class",
+      "rows": [
+        {
+          "fleet": 342,
+          "requested_fleet": 340,
+          "useful_beams": 20594.067865338053,
+          "useful_beams_spread": 332.6767083719468,
+          "capacity_gbps": 107.08915289975788,
+          "ocean_factor": 0.4014438180377788,
+          "ceiling_beams": 101603.40493709012,
+          "supply_beams": 21319.91972557949,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.017985540528301147
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.012521514195641736
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.003179072785696957
+            }
+          ]
+        },
+        {
+          "fleet": 506,
+          "requested_fleet": 500,
+          "useful_beams": 29853.56990029745,
+          "useful_beams_spread": 159.17869060342517,
+          "capacity_gbps": 155.23856348154675,
+          "ocean_factor": 0.39332766667058566,
+          "ceiling_beams": 134065.94345910032,
+          "supply_beams": 31388.884252154374,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.02198887341960476
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.015331575068092684
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.003902572546546579
+            }
+          ]
+        },
+        {
+          "fleet": 756,
+          "requested_fleet": 750,
+          "useful_beams": 43960.31096603119,
+          "useful_beams_spread": 91.07625995640534,
+          "capacity_gbps": 228.5936170233622,
+          "ocean_factor": 0.3876570631925149,
+          "ceiling_beams": 174003.49936880873,
+          "supply_beams": 47503.090397167914,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.026879808405018246
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.01877221189822942
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.004791801624673964
+            }
+          ]
+        },
+        {
+          "fleet": 992,
+          "requested_fleet": 1000,
+          "useful_beams": 56101.27718796429,
+          "useful_beams_spread": 209.55023539212874,
+          "capacity_gbps": 291.7266413774143,
+          "ocean_factor": 0.37702471228470624,
+          "ceiling_beams": 196650.20015749478,
+          "supply_beams": 61791.43104223018,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.03336923218875287
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.023359409730369873
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.00598735144565099
+            }
+          ]
+        },
+        {
+          "fleet": 1482,
+          "requested_fleet": 1500,
+          "useful_beams": 79782.18912290614,
+          "useful_beams_spread": 121.22418289287535,
+          "capacity_gbps": 414.86738343911196,
+          "ocean_factor": 0.35889423806975324,
+          "ceiling_beams": 227346.20437449164,
+          "supply_beams": 92221.08109650618,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.045634663854801416
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.032102003893194064
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.008299769846725646
+            }
+          ]
+        },
+        {
+          "fleet": 1980,
+          "requested_fleet": 2000,
+          "useful_beams": 101640.26644342935,
+          "useful_beams_spread": 156.38534101012812,
+          "capacity_gbps": 528.5293855058326,
+          "ocean_factor": 0.342223119338146,
+          "ceiling_beams": 255155.56315002422,
+          "supply_beams": 123672.96171486384,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.056200731314733576
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.03968137913869685
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.010327726966442241
+            }
+          ]
+        },
+        {
+          "fleet": 3025,
+          "requested_fleet": 3000,
+          "useful_beams": 141342.88011223654,
+          "useful_beams_spread": 202.40118652908515,
+          "capacity_gbps": 734.98297658363,
+          "ocean_factor": 0.3114994603024497,
+          "ceiling_beams": 282824.36470219365,
+          "supply_beams": 189079.9451492486,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.07572433230240005
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.053843630902809636
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.014195067278571782
+            }
+          ]
+        },
+        {
+          "fleet": 3969,
+          "requested_fleet": 4000,
+          "useful_beams": 172645.450898983,
+          "useful_beams_spread": 450.25157854046904,
+          "capacity_gbps": 897.7563446747115,
+          "ocean_factor": 0.2899898394204804,
+          "ceiling_beams": 303876.32016729086,
+          "supply_beams": 248038.51950444406,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.08905428959053929
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.06364071637155966
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.016936797174482043
+            }
+          ]
+        },
+        {
+          "fleet": 5402,
+          "requested_fleet": 5400,
+          "useful_beams": 212273.92012001103,
+          "useful_beams_spread": 217.45111806324323,
+          "capacity_gbps": 1103.824384624057,
+          "ocean_factor": 0.2619695422929915,
+          "ceiling_beams": 319413.3191612436,
+          "supply_beams": 337685.07557835884,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.10908871423906319
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.07853146735199956
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.021196921994998785
+            }
+          ]
+        },
+        {
+          "fleet": 6006,
+          "requested_fleet": 6000,
+          "useful_beams": 226850.4655160989,
+          "useful_beams_spread": 266.88737616026725,
+          "capacity_gbps": 1179.6224206837142,
+          "ocean_factor": 0.2518042685271383,
+          "ceiling_beams": 325838.2676500077,
+          "supply_beams": 375539.08510004287,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.11623015272101855
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.08395467853663408
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.022816720612660046
+            }
+          ]
+        },
+        {
+          "fleet": 8010,
+          "requested_fleet": 8000,
+          "useful_beams": 264285.91098807304,
+          "useful_beams_spread": 139.65318867707091,
+          "capacity_gbps": 1374.2867371379798,
+          "ocean_factor": 0.21996330502544573,
+          "ceiling_beams": 337766.72268350446,
+          "supply_beams": 500746.4459518553,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.13003950783105922
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.09432188492245841
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.025836687514188883
+            }
+          ]
+        },
+        {
+          "fleet": 10000,
+          "requested_fleet": 10000,
+          "useful_beams": 292313.46760646655,
+          "useful_beams_spread": 120.768766675285,
+          "capacity_gbps": 1520.0300315536263,
+          "ocean_factor": 0.1948756450709777,
+          "ceiling_beams": 345437.4748183512,
+          "supply_beams": 624989.028599708,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.1389814049890289
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.1010577145672581
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.027810105828539267
+            }
+          ]
+        },
+        {
+          "fleet": 11990,
+          "requested_fleet": 12000,
+          "useful_beams": 314141.88044355146,
+          "useful_beams_spread": 373.40568741124196,
+          "capacity_gbps": 1633.5377783064678,
+          "ocean_factor": 0.17466882426663968,
+          "ceiling_beams": 350696.4959009544,
+          "supply_beams": 749610.7422303807,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.14866555661848757
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.10843294259993719
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.03001730507397926
+            }
+          ]
+        },
+        {
+          "fleet": 14042,
+          "requested_fleet": 14000,
+          "useful_beams": 331085.6386912551,
+          "useful_beams_spread": 129.96237524122162,
+          "capacity_gbps": 1721.6453211945268,
+          "ocean_factor": 0.15718826315874052,
+          "ceiling_beams": 354312.5179763207,
+          "supply_beams": 877663.8436323153,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.15525360895563733
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.11350560326561931
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.03156875022268746
+            }
+          ]
+        },
+        {
+          "fleet": 16002,
+          "requested_fleet": 16000,
+          "useful_beams": 343896.0155302973,
+          "useful_beams_spread": 153.4406066855565,
+          "capacity_gbps": 1788.259280757546,
+          "ocean_factor": 0.14327209745877487,
+          "ceiling_beams": 357761.1554196914,
+          "supply_beams": 1000437.4899579318,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.15982320176620168
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.11705913266440526
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.032678104557272936
+            }
+          ]
+        },
+        {
+          "fleet": 17956,
+          "requested_fleet": 18000,
+          "useful_beams": 352294.5011462744,
+          "useful_beams_spread": 186.1752544118451,
+          "capacity_gbps": 1831.9314059606268,
+          "ocean_factor": 0.13079917618856254,
+          "ceiling_beams": 359883.65606065746,
+          "supply_beams": 1122804.7555329595,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.16298599401333014
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.11953734142488404
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.03346205283759385
+            }
+          ]
+        },
+        {
+          "fleet": 20022,
+          "requested_fleet": 20000,
+          "useful_beams": 358217.57124773785,
+          "useful_beams_spread": 241.50083366151293,
+          "capacity_gbps": 1862.7313704882367,
+          "ocean_factor": 0.11927465496212095,
+          "ceiling_beams": 361975.0290112662,
+          "supply_beams": 1251674.838632971,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.16402056623295191
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.12037200225569833
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.03373957748354228
+            }
+          ]
+        },
+        {
+          "fleet": 22052,
+          "requested_fleet": 22000,
+          "useful_beams": 360945.3410999016,
+          "useful_beams_spread": 153.23106497475032,
+          "capacity_gbps": 1876.9157737194882,
+          "ocean_factor": 0.1091194573734511,
+          "ceiling_beams": 363522.34456984274,
+          "supply_beams": 1378631.2103909065,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.16472030620784517
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.12087819310034786
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.03387634290624242
+            }
+          ]
+        },
+        {
+          "fleet": 24025,
+          "requested_fleet": 24000,
+          "useful_beams": 362079.15395243716,
+          "useful_beams_spread": 41.35962742813719,
+          "capacity_gbps": 1882.811600552673,
+          "ocean_factor": 0.10047288351090868,
+          "ceiling_beams": 364724.4470120771,
+          "supply_beams": 1501981.3677626068,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.16487967011673998
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.12103063453216423
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.03394005477311102
+            }
+          ]
+        },
+        {
+          "fleet": 25921,
+          "requested_fleet": 26000,
+          "useful_beams": 363690.51953877456,
+          "useful_beams_spread": 56.32544732226221,
+          "capacity_gbps": 1891.190701601628,
+          "ocean_factor": 0.09353819156636821,
+          "ceiling_beams": 366294.0795973869,
+          "supply_beams": 1620667.6957093189,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.16452455625226248
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.12073542825429728
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.033836934842633726
+            }
+          ]
+        },
+        {
+          "fleet": 28056,
+          "requested_fleet": 28000,
+          "useful_beams": 364279.987741951,
+          "useful_beams_spread": 103.35147271010577,
+          "capacity_gbps": 1894.2559362581455,
+          "ocean_factor": 0.08656020999476072,
+          "ceiling_beams": 367128.1070766644,
+          "supply_beams": 1754201.2797246126,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.16608556568052035
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.12192712652283744
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.0341968560997008
+            }
+          ]
+        },
+        {
+          "fleet": 29929,
+          "requested_fleet": 30000,
+          "useful_beams": 365014.8868903121,
+          "useful_beams_spread": 87.36984151247454,
+          "capacity_gbps": 1898.0774118296224,
+          "ocean_factor": 0.08130684550999857,
+          "ceiling_beams": 368062.97911155137,
+          "supply_beams": 1871285.9904923472,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.16510040659880454
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.12118592998038125
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.03397835088693257
+            }
+          ]
+        },
+        {
+          "fleet": 34040,
+          "requested_fleet": 34000,
+          "useful_beams": 365954.77531019715,
+          "useful_beams_spread": 51.77053525184477,
+          "capacity_gbps": 1902.9648316130251,
+          "ocean_factor": 0.07167151886216161,
+          "ceiling_beams": 369321.42918454146,
+          "supply_beams": 2128142.6760619124,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.1660516921779811
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.12190824939848699
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.03419411304971165
+            }
+          ]
+        },
+        {
+          "fleet": 40000,
+          "requested_fleet": 40000,
+          "useful_beams": 367237.5786986487,
+          "useful_beams_spread": 30.60878547204876,
+          "capacity_gbps": 1909.6354092329736,
+          "ocean_factor": 0.06120626311644145,
+          "ceiling_beams": 371182.49841834966,
+          "supply_beams": 2500823.544608948,
+          "directional": null,
+          "trim": [
+            {
+              "floor_dbi": -0.4,
+              "trim": 0.16448952053009636
+            },
+            {
+              "floor_dbi": -2.0,
+              "trim": 0.12072804746407972
+            },
+            {
+              "floor_dbi": -8.0,
+              "trim": 0.03384607561684905
+            }
+          ]
+        }
+      ],
+      "markers": {
+        "maximum_use_beams": 380946.7365253218,
+        "saturation_number": 20400,
+        "saturation_not_reached_by": null,
+        "elasticity_under_0p25_fleet": 15940,
+        "fleet_at_90pct_of_maximum_use": 15835
+      }
+    }
+  ],
+  "bands": [
+    {
+      "point": {
+        "name": "taper",
+        "beamwidth_factor": 1.0934,
+        "spacing_area_factor": 1.0,
+        "density_threshold_per_km2": 1.0,
+        "grid_aggregation": 1,
+        "beams_per_satellite": null
+      },
+      "rows": [
+        {
+          "fleet": 342,
+          "requested_fleet": 340,
+          "useful_beams": 19359.42132037571,
+          "useful_beams_spread": 90.56001725991337,
+          "capacity_gbps": 100.66899086595369,
+          "ocean_factor": 0.37737663392545245,
+          "ceiling_beams": 67036.2634768078,
+          "supply_beams": 20208.539970941718,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 506,
+          "requested_fleet": 500,
+          "useful_beams": 27828.001193182867,
+          "useful_beams_spread": 262.0614147297456,
+          "capacity_gbps": 144.7056062045509,
+          "ocean_factor": 0.366640331925993,
+          "ceiling_beams": 88259.3641046017,
+          "supply_beams": 29718.37766339267,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 756,
+          "requested_fleet": 750,
+          "useful_beams": 41079.948784581706,
+          "useful_beams_spread": 50.40298627239463,
+          "capacity_gbps": 213.61573367982487,
+          "ocean_factor": 0.362257043955747,
+          "ceiling_beams": 113558.8777898236,
+          "supply_beams": 44757.86290859463,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 992,
+          "requested_fleet": 1000,
+          "useful_beams": 51855.53516504327,
+          "useful_beams_spread": 126.72544624950751,
+          "capacity_gbps": 269.6487828582251,
+          "ocean_factor": 0.34849149976507576,
+          "ceiling_beams": 129125.30182748174,
+          "supply_beams": 58515.9621548652,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 1482,
+          "requested_fleet": 1500,
+          "useful_beams": 72491.03552870595,
+          "useful_beams_spread": 128.8525943078712,
+          "capacity_gbps": 376.953384749271,
+          "ocean_factor": 0.32609552644492107,
+          "ceiling_beams": 150971.35663129107,
+          "supply_beams": 87111.33520510118,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 1980,
+          "requested_fleet": 2000,
+          "useful_beams": 90729.92886119673,
+          "useful_beams_spread": 344.2443632784343,
+          "capacity_gbps": 471.795630078223,
+          "ocean_factor": 0.30548797596362537,
+          "ceiling_beams": 168499.37742347483,
+          "supply_beams": 116954.46267802926,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 3025,
+          "requested_fleet": 3000,
+          "useful_beams": 122576.70514339404,
+          "useful_beams_spread": 129.2622374956045,
+          "capacity_gbps": 637.398866745649,
+          "ocean_factor": 0.27014149893860945,
+          "ceiling_beams": 186514.77077280817,
+          "supply_beams": 178532.76147599396,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 3969,
+          "requested_fleet": 4000,
+          "useful_beams": 146832.21277777612,
+          "useful_beams_spread": 151.71904340364563,
+          "capacity_gbps": 763.5275064444359,
+          "ocean_factor": 0.24663175069753274,
+          "ceiling_beams": 200720.00243322153,
+          "supply_beams": 234229.1673498179,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 5402,
+          "requested_fleet": 5400,
+          "useful_beams": 173312.9305196224,
+          "useful_beams_spread": 25.1432833331055,
+          "capacity_gbps": 901.2272387020365,
+          "ocean_factor": 0.21388736334644257,
+          "ceiling_beams": 211310.34530078026,
+          "supply_beams": 318537.4398472906,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 6006,
+          "requested_fleet": 6000,
+          "useful_beams": 182286.88682031457,
+          "useful_beams_spread": 152.1868921743735,
+          "capacity_gbps": 947.8918114656358,
+          "ocean_factor": 0.20233864670919588,
+          "ceiling_beams": 215522.37367564678,
+          "supply_beams": 354621.83735920023,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 8010,
+          "requested_fleet": 8000,
+          "useful_beams": 205018.76462256192,
+          "useful_beams_spread": 58.54760967733455,
+          "capacity_gbps": 1066.0975760373221,
+          "ocean_factor": 0.17063567592389672,
+          "ceiling_beams": 223665.41272081155,
+          "supply_beams": 472816.81567428954,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 10000,
+          "requested_fleet": 10000,
+          "useful_beams": 220473.5029978446,
+          "useful_beams_spread": 71.40859402323258,
+          "capacity_gbps": 1146.4622155887919,
+          "ocean_factor": 0.1469823353318964,
+          "ceiling_beams": 228802.65027982002,
+          "supply_beams": 590267.2211658659,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 11990,
+          "requested_fleet": 12000,
+          "useful_beams": 229705.18627379346,
+          "useful_beams_spread": 97.68362434611481,
+          "capacity_gbps": 1194.466968623726,
+          "ocean_factor": 0.1277204260627153,
+          "ceiling_beams": 232558.32968565874,
+          "supply_beams": 707827.4639691224,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 14042,
+          "requested_fleet": 14000,
+          "useful_beams": 233703.88221247846,
+          "useful_beams_spread": 10.196102584770415,
+          "capacity_gbps": 1215.260187504888,
+          "ocean_factor": 0.11095469886173787,
+          "ceiling_beams": 234834.54773205088,
+          "supply_beams": 829164.2675953268,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 16002,
+          "requested_fleet": 16000,
+          "useful_beams": 236018.6135382936,
+          "useful_beams_spread": 119.22987246426055,
+          "capacity_gbps": 1227.2967903991266,
+          "ocean_factor": 0.09832879787455469,
+          "ceiling_beams": 237181.8146704858,
+          "supply_beams": 944679.2093649062,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 17956,
+          "requested_fleet": 18000,
+          "useful_beams": 237383.33441024035,
+          "useful_beams_spread": 86.47227013455995,
+          "capacity_gbps": 1234.3933389332499,
+          "ocean_factor": 0.08813519507323099,
+          "ceiling_beams": 238685.35474669142,
+          "supply_beams": 1060069.1058319495,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 20022,
+          "requested_fleet": 20000,
+          "useful_beams": 238679.85997764062,
+          "useful_beams_spread": 110.1282720668969,
+          "capacity_gbps": 1241.135271883731,
+          "ocean_factor": 0.07947253353898732,
+          "ceiling_beams": 240116.36013973202,
+          "supply_beams": 1181839.7907402858,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 22052,
+          "requested_fleet": 22000,
+          "useful_beams": 239595.5533439939,
+          "useful_beams_spread": 117.49309922884277,
+          "capacity_gbps": 1245.8968773887686,
+          "ocean_factor": 0.07243350666424629,
+          "ceiling_beams": 241183.95359310863,
+          "supply_beams": 1301768.0662960229,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 24025,
+          "requested_fleet": 24000,
+          "useful_beams": 240281.1720990082,
+          "useful_beams_spread": 8.668945439683739,
+          "capacity_gbps": 1249.4620949148425,
+          "ocean_factor": 0.06667531657273901,
+          "ceiling_beams": 242061.29593961104,
+          "supply_beams": 1418195.1946527704,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 25921,
+          "requested_fleet": 26000,
+          "useful_beams": 241340.4856295403,
+          "useful_beams_spread": 36.87386725837132,
+          "capacity_gbps": 1254.9705252736094,
+          "ocean_factor": 0.062070775466363255,
+          "ceiling_beams": 243131.73898066158,
+          "supply_beams": 1530027.529758912,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 28056,
+          "requested_fleet": 28000,
+          "useful_beams": 241639.373198962,
+          "useful_beams_spread": 26.13465668047138,
+          "capacity_gbps": 1256.5247406346025,
+          "ocean_factor": 0.05741834740019058,
+          "ceiling_beams": 243615.83063546906,
+          "supply_beams": 1656035.443595267,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 29929,
+          "requested_fleet": 30000,
+          "useful_beams": 242244.780560978,
+          "useful_beams_spread": 56.919082780441386,
+          "capacity_gbps": 1259.6728589170857,
+          "ocean_factor": 0.053959878503787403,
+          "ceiling_beams": 244364.49397847982,
+          "supply_beams": 1766575.4979617482,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 34040,
+          "requested_fleet": 34000,
+          "useful_beams": 242857.2720495805,
+          "useful_beams_spread": 5.564858407509746,
+          "capacity_gbps": 1262.8578146578184,
+          "ocean_factor": 0.04756311634343527,
+          "ceiling_beams": 245207.81464835347,
+          "supply_beams": 2009304.070588133,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 40000,
+          "requested_fleet": 40000,
+          "useful_beams": 243742.63517211727,
+          "useful_beams_spread": 18.40319969652046,
+          "capacity_gbps": 1267.4617028950097,
+          "ocean_factor": 0.04062377252868621,
+          "ceiling_beams": 246489.67546741228,
+          "supply_beams": 2361168.312904478,
+          "directional": null,
+          "trim": null
+        }
+      ],
+      "markers": {
+        "maximum_use_beams": 253261.3007391356,
+        "saturation_number": 13498,
+        "saturation_not_reached_by": null,
+        "elasticity_under_0p25_fleet": 10440,
+        "fleet_at_90pct_of_maximum_use": 11587
+      }
+    },
+    {
+      "point": {
+        "name": "taper_and_spacing",
+        "beamwidth_factor": 1.0934,
+        "spacing_area_factor": 1.5,
+        "density_threshold_per_km2": 1.0,
+        "grid_aggregation": 1,
+        "beams_per_satellite": null
+      },
+      "rows": [
+        {
+          "fleet": 342,
+          "requested_fleet": 340,
+          "useful_beams": 17932.161617340666,
+          "useful_beams_spread": 48.36725759446017,
+          "capacity_gbps": 93.24724041017147,
+          "ocean_factor": 0.34955480735556854,
+          "ceiling_beams": 44690.98611785599,
+          "supply_beams": 18855.020003747813,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 506,
+          "requested_fleet": 500,
+          "useful_beams": 25529.709564982804,
+          "useful_beams_spread": 55.964757117029876,
+          "capacity_gbps": 132.7544897379106,
+          "ocean_factor": 0.3363598098153202,
+          "ceiling_beams": 58840.11452075278,
+          "supply_beams": 27826.786093474242,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 756,
+          "requested_fleet": 750,
+          "useful_beams": 37218.302111639554,
+          "useful_beams_spread": 192.61787208146052,
+          "capacity_gbps": 193.53517098052566,
+          "ocean_factor": 0.3282037223248638,
+          "ceiling_beams": 75706.39089322949,
+          "supply_beams": 42046.29758308061,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 992,
+          "requested_fleet": 1000,
+          "useful_beams": 46410.98217535032,
+          "useful_beams_spread": 125.29561364626352,
+          "capacity_gbps": 241.33710731182168,
+          "ocean_factor": 0.31190176193111774,
+          "ceiling_beams": 86084.23770846828,
+          "supply_beams": 54896.10179799017,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 1482,
+          "requested_fleet": 1500,
+          "useful_beams": 63925.33066395282,
+          "useful_beams_spread": 81.12278243650144,
+          "capacity_gbps": 332.4117194525547,
+          "ocean_factor": 0.2875633408185012,
+          "ceiling_beams": 100648.48339131486,
+          "supply_beams": 82079.4456483052,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 1980,
+          "requested_fleet": 2000,
+          "useful_beams": 78449.26698576365,
+          "useful_beams_spread": 253.63857441963773,
+          "capacity_gbps": 407.936188325971,
+          "ocean_factor": 0.2641389460800123,
+          "ceiling_beams": 112334.27565244836,
+          "supply_beams": 109667.91208952863,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 3025,
+          "requested_fleet": 3000,
+          "useful_beams": 101377.47957764081,
+          "useful_beams_spread": 21.246473990860977,
+          "capacity_gbps": 527.1628938037322,
+          "ocean_factor": 0.22342144259535165,
+          "ceiling_beams": 124345.33395057818,
+          "supply_beams": 167586.82884071587,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 3969,
+          "requested_fleet": 4000,
+          "useful_beams": 116975.4911482631,
+          "useful_beams_spread": 279.5899156181913,
+          "capacity_gbps": 608.2725539709681,
+          "ocean_factor": 0.19648188653441354,
+          "ceiling_beams": 133816.142160066,
+          "supply_beams": 220066.20430110273,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 5402,
+          "requested_fleet": 5400,
+          "useful_beams": 132683.8584032929,
+          "useful_beams_spread": 38.629844919545576,
+          "capacity_gbps": 689.956063697123,
+          "ocean_factor": 0.16374658571306047,
+          "ceiling_beams": 140877.1467179328,
+          "supply_beams": 299267.0993214798,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 6006,
+          "requested_fleet": 6000,
+          "useful_beams": 137978.86474912238,
+          "useful_beams_spread": 114.57473811635282,
+          "capacity_gbps": 717.4900966954364,
+          "ocean_factor": 0.15315669302821888,
+          "ceiling_beams": 143685.7147945047,
+          "supply_beams": 332878.3152921037,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 8010,
+          "requested_fleet": 8000,
+          "useful_beams": 148174.40436587072,
+          "useful_beams_spread": 69.91829789913027,
+          "capacity_gbps": 770.5069027025278,
+          "ocean_factor": 0.12332451466156531,
+          "ceiling_beams": 149115.36359217396,
+          "supply_beams": 443975.08028621314,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 10000,
+          "requested_fleet": 10000,
+          "useful_beams": 152085.30957118547,
+          "useful_beams_spread": 107.89240895435796,
+          "capacity_gbps": 790.8436097701644,
+          "ocean_factor": 0.10139020638079031,
+          "ceiling_beams": 152541.345844334,
+          "supply_beams": 554476.0660729222,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 11990,
+          "requested_fleet": 12000,
+          "useful_beams": 154489.3638470079,
+          "useful_beams_spread": 46.63239694558433,
+          "capacity_gbps": 803.3446920044411,
+          "ocean_factor": 0.0858990068651698,
+          "ceiling_beams": 155045.5925550742,
+          "supply_beams": 664712.6586583063,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 14042,
+          "requested_fleet": 14000,
+          "useful_beams": 155884.2098641277,
+          "useful_beams_spread": 9.890685856109485,
+          "capacity_gbps": 810.597891293464,
+          "ocean_factor": 0.07400855047435205,
+          "ceiling_beams": 156564.5275286184,
+          "supply_beams": 778631.5038603556,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 16002,
+          "requested_fleet": 16000,
+          "useful_beams": 157354.48216940195,
+          "useful_beams_spread": 79.9904927040916,
+          "capacity_gbps": 818.2433072808901,
+          "ocean_factor": 0.06555617304895303,
+          "ceiling_beams": 158129.86379977345,
+          "supply_beams": 886985.9694682797,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 17956,
+          "requested_fleet": 18000,
+          "useful_beams": 158262.47535502087,
+          "useful_beams_spread": 57.497165402630344,
+          "capacity_gbps": 822.9648718461085,
+          "ocean_factor": 0.05875936561781424,
+          "ceiling_beams": 159133.05368811428,
+          "supply_beams": 995265.0025061021,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 20022,
+          "requested_fleet": 20000,
+          "useful_beams": 159127.90787030905,
+          "useful_beams_spread": 73.02885607490316,
+          "capacity_gbps": 827.4651209256072,
+          "ocean_factor": 0.05298435316828457,
+          "ceiling_beams": 160088.60468642664,
+          "supply_beams": 1110097.6390186902,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 22052,
+          "requested_fleet": 22000,
+          "useful_beams": 159737.69341559953,
+          "useful_beams_spread": 77.98419922003814,
+          "capacity_gbps": 830.6360057611175,
+          "ocean_factor": 0.048291218760384405,
+          "ceiling_beams": 160800.22072180247,
+          "supply_beams": 1222466.269826284,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 24025,
+          "requested_fleet": 24000,
+          "useful_beams": 160196.22152410896,
+          "useful_beams_spread": 6.453807945988956,
+          "capacity_gbps": 833.0203519253666,
+          "ocean_factor": 0.04445264558421338,
+          "ceiling_beams": 161387.16535564506,
+          "supply_beams": 1331916.212880822,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 25921,
+          "requested_fleet": 26000,
+          "useful_beams": 160902.54995836844,
+          "useful_beams_spread": 24.52084367047064,
+          "capacity_gbps": 836.6932597835159,
+          "ocean_factor": 0.041382804150654796,
+          "ceiling_beams": 162100.7913950702,
+          "supply_beams": 1436989.6782031965,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 28056,
+          "requested_fleet": 28000,
+          "useful_beams": 161101.6026625509,
+          "useful_beams_spread": 17.573163551161997,
+          "capacity_gbps": 837.7283338452646,
+          "ocean_factor": 0.03828096251842764,
+          "ceiling_beams": 162423.83046905696,
+          "supply_beams": 1555393.7664110814,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 29929,
+          "requested_fleet": 30000,
+          "useful_beams": 161506.03967723585,
+          "useful_beams_spread": 37.598749037773814,
+          "capacity_gbps": 839.8314063216264,
+          "ocean_factor": 0.035975372754905685,
+          "ceiling_beams": 162925.01586955762,
+          "supply_beams": 1659313.5934606232,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 34040,
+          "requested_fleet": 34000,
+          "useful_beams": 161914.11684904448,
+          "useful_beams_spread": 4.1592795649776235,
+          "capacity_gbps": 841.9534076150313,
+          "ocean_factor": 0.03171055950823433,
+          "ceiling_beams": 163487.73000560343,
+          "supply_beams": 1887056.233990731,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 40000,
+          "requested_fleet": 40000,
+          "useful_beams": 162504.85025512113,
+          "useful_beams_spread": 12.060715579704265,
+          "capacity_gbps": 845.0252213266298,
+          "ocean_factor": 0.027084141709186854,
+          "ceiling_beams": 164344.07060037885,
+          "supply_beams": 2217470.1630493887,
+          "directional": null,
+          "trim": null
+        }
+      ],
+      "markers": {
+        "maximum_use_beams": 168882.15956754866,
+        "saturation_number": 10023,
+        "saturation_not_reached_by": null,
+        "elasticity_under_0p25_fleet": 6909,
+        "fleet_at_90pct_of_maximum_use": 9949
+      }
+    },
+    {
+      "point": {
+        "name": "density_10_per_km2",
+        "beamwidth_factor": 0.886,
+        "spacing_area_factor": 1.0,
+        "density_threshold_per_km2": 10.0,
+        "grid_aggregation": 1,
+        "beams_per_satellite": null
+      },
+      "rows": [
+        {
+          "fleet": 342,
+          "requested_fleet": 340,
+          "useful_beams": 17473.660121795205,
+          "useful_beams_spread": 240.57720298191998,
+          "capacity_gbps": 90.86303263333507,
+          "ocean_factor": 0.3406171563702769,
+          "ceiling_beams": 65849.98090124872,
+          "supply_beams": 18640.089636221677,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 506,
+          "requested_fleet": 500,
+          "useful_beams": 24942.635389379087,
+          "useful_beams_spread": 122.55808337726376,
+          "capacity_gbps": 129.7017040247713,
+          "ocean_factor": 0.32862497219208286,
+          "ceiling_beams": 86916.69061315557,
+          "supply_beams": 27419.70683844026,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 756,
+          "requested_fleet": 750,
+          "useful_beams": 36315.60007869455,
+          "useful_beams_spread": 174.2014995467216,
+          "capacity_gbps": 188.8411204092117,
+          "ocean_factor": 0.3202433869373417,
+          "ceiling_beams": 111470.27129328906,
+          "supply_beams": 41237.14904631451,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 992,
+          "requested_fleet": 1000,
+          "useful_beams": 45694.555814447725,
+          "useful_beams_spread": 95.28112045361195,
+          "capacity_gbps": 237.61169023512818,
+          "ocean_factor": 0.307087068645482,
+          "ceiling_beams": 127471.37541322589,
+          "supply_beams": 53933.24455200633,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 1482,
+          "requested_fleet": 1500,
+          "useful_beams": 63453.09303636836,
+          "useful_beams_spread": 28.706162696715182,
+          "capacity_gbps": 329.9560837891155,
+          "ocean_factor": 0.2854390150084047,
+          "ceiling_beams": 150003.07363608625,
+          "supply_beams": 80364.66413253493,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 1980,
+          "requested_fleet": 2000,
+          "useful_beams": 79257.97105671652,
+          "useful_beams_spread": 344.95152502726705,
+          "capacity_gbps": 412.14144949492595,
+          "ocean_factor": 0.26686185540981994,
+          "ceiling_beams": 167243.20867047677,
+          "supply_beams": 107653.5041132792,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 3025,
+          "requested_fleet": 3000,
+          "useful_beams": 107163.21601325434,
+          "useful_beams_spread": 49.88474466163461,
+          "capacity_gbps": 557.2487232689225,
+          "ocean_factor": 0.23617237688871479,
+          "ceiling_beams": 185247.11105570427,
+          "supply_beams": 164777.3180119992,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 3969,
+          "requested_fleet": 4000,
+          "useful_beams": 129167.92537766884,
+          "useful_beams_spread": 98.28551583515218,
+          "capacity_gbps": 671.673211963878,
+          "ocean_factor": 0.21696132590521347,
+          "ceiling_beams": 199678.69876385276,
+          "supply_beams": 216070.9724716256,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 5402,
+          "requested_fleet": 5400,
+          "useful_beams": 154833.98927770034,
+          "useful_beams_spread": 68.19832106441027,
+          "capacity_gbps": 805.1367442440419,
+          "ocean_factor": 0.19108230195939818,
+          "ceiling_beams": 210457.97858277435,
+          "supply_beams": 293883.12069733423,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 6006,
+          "requested_fleet": 6000,
+          "useful_beams": 163502.62833433348,
+          "useful_beams_spread": 69.17603604220494,
+          "capacity_gbps": 850.213667338534,
+          "ocean_factor": 0.1814880989392091,
+          "ceiling_beams": 214644.59604065446,
+          "supply_beams": 327305.214316931,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 8010,
+          "requested_fleet": 8000,
+          "useful_beams": 187179.49689923384,
+          "useful_beams_spread": 227.1639724770357,
+          "capacity_gbps": 973.3333838760161,
+          "ocean_factor": 0.15578817885912097,
+          "ceiling_beams": 222992.0487635906,
+          "supply_beams": 436197.28278045007,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 10000,
+          "requested_fleet": 10000,
+          "useful_beams": 203538.42471720272,
+          "useful_beams_spread": 2.148069372502505,
+          "capacity_gbps": 1058.399808529454,
+          "ocean_factor": 0.1356922831448018,
+          "ceiling_beams": 228087.82851823646,
+          "supply_beams": 544467.0141205413,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 11990,
+          "requested_fleet": 12000,
+          "useful_beams": 215480.75958714038,
+          "useful_beams_spread": 149.25700668280479,
+          "capacity_gbps": 1120.4999498531301,
+          "ocean_factor": 0.11981137591723123,
+          "ceiling_beams": 231898.0386269475,
+          "supply_beams": 652799.8392647482,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 14042,
+          "requested_fleet": 14000,
+          "useful_beams": 223892.63168602512,
+          "useful_beams_spread": 10.074197005407768,
+          "capacity_gbps": 1164.2416847673308,
+          "ocean_factor": 0.10629664895125344,
+          "ceiling_beams": 234086.2678971229,
+          "supply_beams": 764635.7168490097,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 16002,
+          "requested_fleet": 16000,
+          "useful_beams": 230428.31047890364,
+          "useful_beams_spread": 140.23774586079526,
+          "capacity_gbps": 1198.227214490299,
+          "ocean_factor": 0.09599979605836922,
+          "ceiling_beams": 236539.6567776905,
+          "supply_beams": 871197.6317936046,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 17956,
+          "requested_fleet": 18000,
+          "useful_beams": 234663.40568667685,
+          "useful_beams_spread": 119.55972825743083,
+          "capacity_gbps": 1220.2497095707197,
+          "ocean_factor": 0.08712534554343092,
+          "ceiling_beams": 238123.4479098501,
+          "supply_beams": 977810.0873252375,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 20022,
+          "requested_fleet": 20000,
+          "useful_beams": 237603.00566821895,
+          "useful_beams_spread": 143.8982709282718,
+          "capacity_gbps": 1235.5356294747387,
+          "ocean_factor": 0.07911397651523955,
+          "ceiling_beams": 239505.40137152007,
+          "supply_beams": 1089994.9564766448,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 22052,
+          "requested_fleet": 22000,
+          "useful_beams": 238962.43025696307,
+          "useful_beams_spread": 140.04729897958168,
+          "capacity_gbps": 1242.6046373362078,
+          "ocean_factor": 0.07224210359059287,
+          "ceiling_beams": 240613.46106532565,
+          "supply_beams": 1200760.9520193508,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 24025,
+          "requested_fleet": 24000,
+          "useful_beams": 239719.40741586263,
+          "useful_beams_spread": 16.48405478463974,
+          "capacity_gbps": 1246.5409185624858,
+          "ocean_factor": 0.06651943320592789,
+          "ceiling_beams": 241487.44088677334,
+          "supply_beams": 1308086.4674445018,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 25921,
+          "requested_fleet": 26000,
+          "useful_beams": 240824.23067902055,
+          "useful_beams_spread": 31.010628072486725,
+          "capacity_gbps": 1252.2859995309068,
+          "ocean_factor": 0.06193799896583736,
+          "ceiling_beams": 242563.51413879803,
+          "supply_beams": 1411444.9567712941,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 28056,
+          "requested_fleet": 28000,
+          "useful_beams": 241097.4667253951,
+          "useful_beams_spread": 60.55456237142789,
+          "capacity_gbps": 1253.7068269720546,
+          "ocean_factor": 0.057289579584971745,
+          "ceiling_beams": 243030.50472262505,
+          "supply_beams": 1527566.8047904219,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 29929,
+          "requested_fleet": 30000,
+          "useful_beams": 241731.90054191794,
+          "useful_beams_spread": 99.78552112578473,
+          "capacity_gbps": 1257.0058828179735,
+          "ocean_factor": 0.05384563478942785,
+          "ceiling_beams": 243796.7189540887,
+          "supply_beams": 1629599.1877897743,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 34040,
+          "requested_fleet": 34000,
+          "useful_beams": 242388.8999579344,
+          "useful_beams_spread": 0.13574221706949174,
+          "capacity_gbps": 1260.422279781259,
+          "ocean_factor": 0.04747138659575684,
+          "ceiling_beams": 244673.1608380446,
+          "supply_beams": 1853586.1198982946,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 40000,
+          "requested_fleet": 40000,
+          "useful_beams": 243262.81388368557,
+          "useful_beams_spread": 35.35952051990898,
+          "capacity_gbps": 1264.966632195165,
+          "ocean_factor": 0.040543802313947594,
+          "ceiling_beams": 245963.2567557042,
+          "supply_beams": 2177986.4342679526,
+          "directional": null,
+          "trim": null
+        }
+      ],
+      "markers": {
+        "maximum_use_beams": 252829.7231940112,
+        "saturation_number": 19472,
+        "saturation_not_reached_by": null,
+        "elasticity_under_0p25_fleet": 12744,
+        "fleet_at_90pct_of_maximum_use": 15113
+      }
+    },
+    {
+      "point": {
+        "name": "density_100_per_km2",
+        "beamwidth_factor": 0.886,
+        "spacing_area_factor": 1.0,
+        "density_threshold_per_km2": 100.0,
+        "grid_aggregation": 1,
+        "beams_per_satellite": null
+      },
+      "rows": [
+        {
+          "fleet": 342,
+          "requested_fleet": 340,
+          "useful_beams": 10670.472155291027,
+          "useful_beams_spread": 434.633127750275,
+          "capacity_gbps": 55.48645520751333,
+          "ocean_factor": 0.20800140653588747,
+          "ceiling_beams": 22666.10051979794,
+          "supply_beams": 11714.068037567755,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 506,
+          "requested_fleet": 500,
+          "useful_beams": 15012.501606799022,
+          "useful_beams_spread": 38.69236329057003,
+          "capacity_gbps": 78.06500835535492,
+          "ocean_factor": 0.19779317005005298,
+          "ceiling_beams": 30630.510851637235,
+          "supply_beams": 17442.231835392286,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 756,
+          "requested_fleet": 750,
+          "useful_beams": 21124.34835675166,
+          "useful_beams_spread": 2.7093183134165884,
+          "capacity_gbps": 109.84661145510864,
+          "ocean_factor": 0.18628173154101993,
+          "ceiling_beams": 39478.64050564762,
+          "supply_beams": 26455.04471473965,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 992,
+          "requested_fleet": 1000,
+          "useful_beams": 25831.257597178592,
+          "useful_beams_spread": 45.14974052972866,
+          "capacity_gbps": 134.32253950532868,
+          "ocean_factor": 0.17359716127136152,
+          "ceiling_beams": 45852.62439808656,
+          "supply_beams": 34571.39486351868,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 1482,
+          "requested_fleet": 1500,
+          "useful_beams": 33681.40258278737,
+          "useful_beams_spread": 33.57420231571814,
+          "capacity_gbps": 175.14329343049428,
+          "ocean_factor": 0.1515132819738523,
+          "ceiling_beams": 54518.358306151975,
+          "supply_beams": 51798.578555477776,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 1980,
+          "requested_fleet": 2000,
+          "useful_beams": 40780.1024400099,
+          "useful_beams_spread": 159.74633150300724,
+          "capacity_gbps": 212.0565326880515,
+          "ocean_factor": 0.13730674222225556,
+          "ceiling_beams": 60833.735625670335,
+          "supply_beams": 69303.5505563638,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 3025,
+          "requested_fleet": 3000,
+          "useful_beams": 50025.27550863079,
+          "useful_beams_spread": 103.00916846453401,
+          "capacity_gbps": 260.13143264488014,
+          "ocean_factor": 0.11024854106585298,
+          "ceiling_beams": 66936.8544943961,
+          "supply_beams": 105628.46318277212,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 3969,
+          "requested_fleet": 4000,
+          "useful_beams": 57044.501603018565,
+          "useful_beams_spread": 212.75874716588078,
+          "capacity_gbps": 296.6314083356965,
+          "ocean_factor": 0.09581674914423208,
+          "ceiling_beams": 72261.05259913174,
+          "supply_beams": 138850.8500509436,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 5402,
+          "requested_fleet": 5400,
+          "useful_beams": 63909.01253308542,
+          "useful_beams_spread": 25.11969229195165,
+          "capacity_gbps": 332.3268651720442,
+          "ocean_factor": 0.07887080406403237,
+          "ceiling_beams": 76547.85814049994,
+          "supply_beams": 189044.64465617045,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 6006,
+          "requested_fleet": 6000,
+          "useful_beams": 66518.11568011704,
+          "useful_beams_spread": 155.70870067202486,
+          "capacity_gbps": 345.89420153660865,
+          "ocean_factor": 0.07383518224011217,
+          "ceiling_beams": 77834.7610721998,
+          "supply_beams": 210185.41785626695,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 8010,
+          "requested_fleet": 8000,
+          "useful_beams": 72737.19949991404,
+          "useful_beams_spread": 18.410784068903013,
+          "capacity_gbps": 378.23343739955305,
+          "ocean_factor": 0.06053865959210491,
+          "ceiling_beams": 81025.18976781477,
+          "supply_beams": 280182.3516262998,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 10000,
+          "requested_fleet": 10000,
+          "useful_beams": 77366.94329854111,
+          "useful_beams_spread": 112.27969924708304,
+          "capacity_gbps": 402.3081051524138,
+          "ocean_factor": 0.05157796219902741,
+          "ceiling_beams": 82921.68228488622,
+          "supply_beams": 349996.05310319766,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 11990,
+          "requested_fleet": 12000,
+          "useful_beams": 80736.43305895373,
+          "useful_beams_spread": 89.33568447601283,
+          "capacity_gbps": 419.82945190655937,
+          "ocean_factor": 0.04489098307420279,
+          "ceiling_beams": 84271.73448213979,
+          "supply_beams": 419518.3852846248,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 14042,
+          "requested_fleet": 14000,
+          "useful_beams": 82992.4500857949,
+          "useful_beams_spread": 24.63323110465717,
+          "capacity_gbps": 431.56074044613354,
+          "ocean_factor": 0.03940200830166401,
+          "ceiling_beams": 85136.15826088104,
+          "supply_beams": 491294.5260013213,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 16002,
+          "requested_fleet": 16000,
+          "useful_beams": 84723.23620045464,
+          "useful_beams_spread": 21.05454842447216,
+          "capacity_gbps": 440.5608282423642,
+          "ocean_factor": 0.03529693629981862,
+          "ceiling_beams": 85940.06402770648,
+          "supply_beams": 559814.1425439264,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 17956,
+          "requested_fleet": 18000,
+          "useful_beams": 85772.96862607326,
+          "useful_beams_spread": 76.41434213366301,
+          "capacity_gbps": 446.0194368555809,
+          "ocean_factor": 0.03184561098465629,
+          "ceiling_beams": 86505.5010578032,
+          "supply_beams": 628306.764330238,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 20022,
+          "requested_fleet": 20000,
+          "useful_beams": 86514.22275716608,
+          "useful_beams_spread": 91.49446373321553,
+          "capacity_gbps": 449.8739583372636,
+          "ocean_factor": 0.02880638722643961,
+          "ceiling_beams": 87057.92941406129,
+          "supply_beams": 700626.5846219924,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 22052,
+          "requested_fleet": 22000,
+          "useful_beams": 86953.89911197225,
+          "useful_beams_spread": 73.77336654859391,
+          "capacity_gbps": 452.1602753822557,
+          "ocean_factor": 0.02628753223047713,
+          "ceiling_beams": 87505.77812079815,
+          "supply_beams": 771602.334014964,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 24025,
+          "requested_fleet": 24000,
+          "useful_beams": 87264.83471241145,
+          "useful_beams_spread": 10.85568976704235,
+          "capacity_gbps": 453.7771405045396,
+          "ocean_factor": 0.02421500789799832,
+          "ceiling_beams": 87864.17479647655,
+          "supply_beams": 840752.4233683973,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 25921,
+          "requested_fleet": 26000,
+          "useful_beams": 87631.36134068626,
+          "useful_beams_spread": 9.222378014295828,
+          "capacity_gbps": 455.68307897156853,
+          "ocean_factor": 0.022538060862025967,
+          "ceiling_beams": 88237.03361269942,
+          "supply_beams": 907038.4907529645,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 28056,
+          "requested_fleet": 28000,
+          "useful_beams": 87707.4917089557,
+          "useful_beams_spread": 84.58554697018553,
+          "capacity_gbps": 456.0789568865697,
+          "ocean_factor": 0.020841054013153622,
+          "ceiling_beams": 88381.78880699197,
+          "supply_beams": 981691.2478012992,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 29929,
+          "requested_fleet": 30000,
+          "useful_beams": 87929.47998473782,
+          "useful_beams_spread": 81.40476759384183,
+          "capacity_gbps": 457.2332959206367,
+          "ocean_factor": 0.01958623853892831,
+          "ceiling_beams": 88654.79486031877,
+          "supply_beams": 1047321.4626101762,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 34040,
+          "requested_fleet": 34000,
+          "useful_beams": 88206.33522974818,
+          "useful_beams_spread": 1.47134587263281,
+          "capacity_gbps": 458.67294319469056,
+          "ocean_factor": 0.017275036276879784,
+          "ceiling_beams": 88997.4451689714,
+          "supply_beams": 1191102.3392979028,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 40000,
+          "requested_fleet": 40000,
+          "useful_beams": 88529.94562723927,
+          "useful_beams_spread": 31.291479746359983,
+          "capacity_gbps": 460.35571726164426,
+          "ocean_factor": 0.014754990937873212,
+          "ceiling_beams": 89479.32221740304,
+          "supply_beams": 1399671.3463272613,
+          "directional": null,
+          "trim": null
+        }
+      ],
+      "markers": {
+        "maximum_use_beams": 92020.43406589914,
+        "saturation_number": 17426,
+        "saturation_not_reached_by": null,
+        "elasticity_under_0p25_fleet": 10204,
+        "fleet_at_90pct_of_maximum_use": 13874
+      }
+    },
+    {
+      "point": {
+        "name": "grid_0p5_deg",
+        "beamwidth_factor": 0.886,
+        "spacing_area_factor": 1.0,
+        "density_threshold_per_km2": 1.0,
+        "grid_aggregation": 2,
+        "beams_per_satellite": null
+      },
+      "rows": [
+        {
+          "fleet": 342,
+          "requested_fleet": 340,
+          "useful_beams": 21566.524289983718,
+          "useful_beams_spread": 35.27507678130678,
+          "capacity_gbps": 112.14592630791532,
+          "ocean_factor": 0.4204000836254136,
+          "ceiling_beams": 119742.30377239481,
+          "supply_beams": 22258.24811712525,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 506,
+          "requested_fleet": 500,
+          "useful_beams": 31186.431260166995,
+          "useful_beams_spread": 38.30426403607271,
+          "capacity_gbps": 162.16944255286836,
+          "ocean_factor": 0.41088842240009216,
+          "ceiling_beams": 157022.79778170653,
+          "supply_beams": 32655.75254986941,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 756,
+          "requested_fleet": 750,
+          "useful_beams": 46254.723679371134,
+          "useful_beams_spread": 74.16683521341838,
+          "capacity_gbps": 240.5245631327299,
+          "ocean_factor": 0.40788997953590067,
+          "ceiling_beams": 202496.58898903994,
+          "supply_beams": 49755.458006004286,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 992,
+          "requested_fleet": 1000,
+          "useful_beams": 58729.01022725494,
+          "useful_beams_spread": 78.59891971851539,
+          "capacity_gbps": 305.39085318172573,
+          "ocean_factor": 0.39468420851649827,
+          "ceiling_beams": 230016.7861726366,
+          "supply_beams": 64504.400058874766,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 1482,
+          "requested_fleet": 1500,
+          "useful_beams": 84248.3531867037,
+          "useful_beams_spread": 57.1291915963302,
+          "capacity_gbps": 438.0914365708592,
+          "ocean_factor": 0.3789849446095533,
+          "ceiling_beams": 268126.4154157699,
+          "supply_beams": 96011.76524016564,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 1980,
+          "requested_fleet": 2000,
+          "useful_beams": 108985.85016527191,
+          "useful_beams_spread": 245.47151954780566,
+          "capacity_gbps": 566.726420859414,
+          "ocean_factor": 0.366955724462195,
+          "ceiling_beams": 299587.4211749017,
+          "supply_beams": 129301.10910031837,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 3025,
+          "requested_fleet": 3000,
+          "useful_beams": 154002.35299029778,
+          "useful_beams_spread": 435.5814950109343,
+          "capacity_gbps": 800.8122355495484,
+          "ocean_factor": 0.3393991250474882,
+          "ceiling_beams": 331296.11161440995,
+          "supply_beams": 197666.1794219126,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 3969,
+          "requested_fleet": 4000,
+          "useful_beams": 189165.1437728284,
+          "useful_beams_spread": 400.1626251790731,
+          "capacity_gbps": 983.6587476187076,
+          "ocean_factor": 0.317737706849464,
+          "ceiling_beams": 356150.05748035014,
+          "supply_beams": 258831.93030837725,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 5402,
+          "requested_fleet": 5400,
+          "useful_beams": 234964.52637460845,
+          "useful_beams_spread": 113.93213459929393,
+          "capacity_gbps": 1221.8155371479638,
+          "ocean_factor": 0.2899722650556688,
+          "ceiling_beams": 374664.6225106395,
+          "supply_beams": 353109.8539048755,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 6006,
+          "requested_fleet": 6000,
+          "useful_beams": 251989.23180251033,
+          "useful_beams_spread": 30.895959986009984,
+          "capacity_gbps": 1310.3440053730537,
+          "ocean_factor": 0.27970832700911347,
+          "ceiling_beams": 381939.2212311938,
+          "supply_beams": 392047.63958334265,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 8010,
+          "requested_fleet": 8000,
+          "useful_beams": 298105.47253421345,
+          "useful_beams_spread": 139.25695501608425,
+          "capacity_gbps": 1550.1484571779097,
+          "ocean_factor": 0.24811108825153014,
+          "ceiling_beams": 395943.25868890586,
+          "supply_beams": 522939.8389023171,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 10000,
+          "requested_fleet": 10000,
+          "useful_beams": 333156.37908875814,
+          "useful_beams_spread": 140.29898096591933,
+          "capacity_gbps": 1732.4131712615424,
+          "ocean_factor": 0.22210425272583875,
+          "ceiling_beams": 404882.5289065798,
+          "supply_beams": 652869.5253966779,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 11990,
+          "requested_fleet": 12000,
+          "useful_beams": 360031.8645509413,
+          "useful_beams_spread": 408.18964069194044,
+          "capacity_gbps": 1872.1656956648949,
+          "ocean_factor": 0.20018452296410413,
+          "ceiling_beams": 411390.77838567505,
+          "supply_beams": 782544.0406689178,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 14042,
+          "requested_fleet": 14000,
+          "useful_beams": 381391.582433525,
+          "useful_beams_spread": 79.21648942443426,
+          "capacity_gbps": 1983.2362286543298,
+          "ocean_factor": 0.1810718237827114,
+          "ceiling_beams": 415228.5114326682,
+          "supply_beams": 916409.1490125159,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 16002,
+          "requested_fleet": 16000,
+          "useful_beams": 397688.3018094526,
+          "useful_beams_spread": 77.5819175071083,
+          "capacity_gbps": 2067.9791694091537,
+          "ocean_factor": 0.16568274874367894,
+          "ceiling_beams": 419247.64742842875,
+          "supply_beams": 1044633.7284375832,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 17956,
+          "requested_fleet": 18000,
+          "useful_beams": 409309.90420276823,
+          "useful_beams_spread": 229.8004884867114,
+          "capacity_gbps": 2128.411501854395,
+          "ocean_factor": 0.15196773750752515,
+          "ceiling_beams": 421729.08844944707,
+          "supply_beams": 1172262.014925127,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 20022,
+          "requested_fleet": 20000,
+          "useful_beams": 418265.01766082586,
+          "useful_beams_spread": 151.6896632327407,
+          "capacity_gbps": 2174.9780918362944,
+          "ocean_factor": 0.1392684772286571,
+          "ceiling_beams": 424277.7657575592,
+          "supply_beams": 1306979.4549956983,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 22052,
+          "requested_fleet": 22000,
+          "useful_beams": 422614.43626077333,
+          "useful_beams_spread": 260.34627081884537,
+          "capacity_gbps": 2197.595068556021,
+          "ocean_factor": 0.12776299542317351,
+          "ceiling_beams": 426046.38074751874,
+          "supply_beams": 1439307.914973124,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 24025,
+          "requested_fleet": 24000,
+          "useful_beams": 424356.1957075923,
+          "useful_beams_spread": 64.47225525250542,
+          "capacity_gbps": 2206.65221767948,
+          "ocean_factor": 0.11775406055014702,
+          "ceiling_beams": 427544.8917493707,
+          "supply_beams": 1568323.7704942846,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 25921,
+          "requested_fleet": 26000,
+          "useful_beams": 426229.8891519237,
+          "useful_beams_spread": 94.6658560676442,
+          "capacity_gbps": 2216.3954235900037,
+          "ocean_factor": 0.10962279982817631,
+          "ceiling_beams": 429341.66853802616,
+          "supply_beams": 1692106.0344414753,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 28056,
+          "requested_fleet": 28000,
+          "useful_beams": 426788.5500803011,
+          "useful_beams_spread": 78.2645115184132,
+          "capacity_gbps": 2219.300460417566,
+          "ocean_factor": 0.10141349445877319,
+          "ceiling_beams": 430202.38049059524,
+          "supply_beams": 1831440.5635422203,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 29929,
+          "requested_fleet": 30000,
+          "useful_beams": 427889.14256556734,
+          "useful_beams_spread": 130.35323892865563,
+          "capacity_gbps": 2225.02354134095,
+          "ocean_factor": 0.09531204797255,
+          "ceiling_beams": 431471.67718753894,
+          "supply_beams": 1953935.091308129,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 34040,
+          "requested_fleet": 34000,
+          "useful_beams": 428869.0376022373,
+          "useful_beams_spread": 29.87097293426632,
+          "capacity_gbps": 2230.118995531634,
+          "ocean_factor": 0.08399315268355607,
+          "ceiling_beams": 432848.86229502957,
+          "supply_beams": 2222214.1290555745,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 40000,
+          "requested_fleet": 40000,
+          "useful_beams": 430392.64127968333,
+          "useful_beams_spread": 3.5837278598628473,
+          "capacity_gbps": 2238.0417346543536,
+          "ocean_factor": 0.07173210687994722,
+          "ceiling_beams": 435052.8211829251,
+          "supply_beams": 2611303.104424271,
+          "directional": null,
+          "trim": null
+        }
+      ],
+      "markers": {
+        "maximum_use_beams": 446507.1621288899,
+        "saturation_number": 21244,
+        "saturation_not_reached_by": null,
+        "elasticity_under_0p25_fleet": 16951,
+        "fleet_at_90pct_of_maximum_use": 16683
+      }
+    },
+    {
+      "point": {
+        "name": "beams_48",
+        "beamwidth_factor": 0.886,
+        "spacing_area_factor": 1.0,
+        "density_threshold_per_km2": 1.0,
+        "grid_aggregation": 1,
+        "beams_per_satellite": 48
+      },
+      "rows": [
+        {
+          "fleet": 342,
+          "requested_fleet": 340,
+          "useful_beams": 7467.67553811845,
+          "useful_beams_spread": 8.683008406511817,
+          "capacity_gbps": 38.83191279821594,
+          "ocean_factor": 0.45490226231228376,
+          "ceiling_beams": 101924.18140796741,
+          "supply_beams": 7636.675401787763,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 506,
+          "requested_fleet": 500,
+          "useful_beams": 10882.130283086517,
+          "useful_beams_spread": 101.62513830525768,
+          "capacity_gbps": 56.5870774720499,
+          "ocean_factor": 0.4480455485460523,
+          "ceiling_beams": 134124.90223559947,
+          "supply_beams": 11337.903194541772,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 756,
+          "requested_fleet": 750,
+          "useful_beams": 16358.955369877105,
+          "useful_beams_spread": 101.0488347741857,
+          "capacity_gbps": 85.06656792336094,
+          "ocean_factor": 0.45080895529864157,
+          "ceiling_beams": 172536.92843756726,
+          "supply_beams": 17245.223158150904,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 992,
+          "requested_fleet": 1000,
+          "useful_beams": 20807.335355644504,
+          "useful_beams_spread": 101.36767264341324,
+          "capacity_gbps": 108.19814384935142,
+          "ocean_factor": 0.4369820093171309,
+          "ceiling_beams": 196118.01811048394,
+          "supply_beams": 22574.568099709362,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 1482,
+          "requested_fleet": 1500,
+          "useful_beams": 30027.88284657374,
+          "useful_beams_spread": 28.616335038725083,
+          "capacity_gbps": 156.14499080218343,
+          "ocean_factor": 0.4221193607536794,
+          "ceiling_beams": 229134.35307124024,
+          "supply_beams": 33384.795884600324,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 1980,
+          "requested_fleet": 2000,
+          "useful_beams": 39364.7580561754,
+          "useful_beams_spread": 80.44062498772837,
+          "capacity_gbps": 204.6967418921121,
+          "ocean_factor": 0.4141914778637984,
+          "ceiling_beams": 255625.82478810038,
+          "supply_beams": 44822.99752690874,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 3025,
+          "requested_fleet": 3000,
+          "useful_beams": 57388.10849840232,
+          "useful_beams_spread": 14.376168134498585,
+          "capacity_gbps": 298.4181641916921,
+          "ocean_factor": 0.39523490701379005,
+          "ceiling_beams": 282676.5701218486,
+          "supply_beams": 68857.76068634514,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 3969,
+          "requested_fleet": 4000,
+          "useful_beams": 72782.88058356306,
+          "useful_beams_spread": 66.42559420383623,
+          "capacity_gbps": 378.470979034528,
+          "ocean_factor": 0.38203829986333177,
+          "ceiling_beams": 303971.6523602315,
+          "supply_beams": 90172.63274521692,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 5402,
+          "requested_fleet": 5400,
+          "useful_beams": 94157.50611258397,
+          "useful_beams_spread": 32.753040542884264,
+          "capacity_gbps": 489.6190317854367,
+          "ocean_factor": 0.36312749179541515,
+          "ceiling_beams": 319757.90337168064,
+          "supply_beams": 122601.12669933331,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 6006,
+          "requested_fleet": 6000,
+          "useful_beams": 102828.38274648364,
+          "useful_beams_spread": 30.25150276574277,
+          "capacity_gbps": 534.7075902817149,
+          "ocean_factor": 0.35668630933817447,
+          "ceiling_beams": 325953.6955302626,
+          "supply_beams": 136339.2606193424,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 8010,
+          "requested_fleet": 8000,
+          "useful_beams": 128886.53424901882,
+          "useful_beams_spread": 8.286995625065174,
+          "capacity_gbps": 670.2099780948979,
+          "ocean_factor": 0.33522298753906266,
+          "ceiling_beams": 337983.93138240615,
+          "supply_beams": 181789.29958449892,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 10000,
+          "requested_fleet": 10000,
+          "useful_beams": 152149.45800819888,
+          "useful_beams_spread": 144.7506401934952,
+          "capacity_gbps": 791.1771816426342,
+          "ocean_factor": 0.316978037517081,
+          "ceiling_beams": 345487.1873144363,
+          "supply_beams": 227003.1460291007,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 11990,
+          "requested_fleet": 12000,
+          "useful_beams": 173173.24999912255,
+          "useful_beams_spread": 86.18606489509693,
+          "capacity_gbps": 900.5008999954373,
+          "ocean_factor": 0.30089875243105807,
+          "ceiling_beams": 350997.3630204182,
+          "supply_beams": 272213.54232334427,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 14042,
+          "requested_fleet": 14000,
+          "useful_beams": 192965.06653474018,
+          "useful_beams_spread": 16.81092561900732,
+          "capacity_gbps": 1003.418345980649,
+          "ocean_factor": 0.286291522062889,
+          "ceiling_beams": 354276.526192939,
+          "supply_beams": 318891.8853182574,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 16002,
+          "requested_fleet": 16000,
+          "useful_beams": 210259.08963677697,
+          "useful_beams_spread": 27.8832983354514,
+          "capacity_gbps": 1093.3472661112403,
+          "ocean_factor": 0.27374063871804694,
+          "ceiling_beams": 357725.6124935439,
+          "supply_beams": 363268.4983234849,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 17956,
+          "requested_fleet": 18000,
+          "useful_beams": 225963.66565135846,
+          "useful_beams_spread": 9.765649290755391,
+          "capacity_gbps": 1175.011061387064,
+          "ocean_factor": 0.26217288748811735,
+          "ceiling_beams": 359910.267928508,
+          "supply_beams": 407626.6528530665,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 20022,
+          "requested_fleet": 20000,
+          "useful_beams": 240670.23199290835,
+          "useful_beams_spread": 46.3363100609713,
+          "capacity_gbps": 1251.4852063631233,
+          "ocean_factor": 0.25042269336324663,
+          "ceiling_beams": 361956.8171416926,
+          "supply_beams": 454514.7987929602,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 22052,
+          "requested_fleet": 22000,
+          "useful_beams": 253511.12283586868,
+          "useful_beams_spread": 100.76924492632679,
+          "capacity_gbps": 1318.257838746517,
+          "ocean_factor": 0.23950125728946417,
+          "ceiling_beams": 363536.6636881838,
+          "supply_beams": 500653.86126664036,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 24025,
+          "requested_fleet": 24000,
+          "useful_beams": 264730.1953943327,
+          "useful_beams_spread": 63.40599631489022,
+          "capacity_gbps": 1376.5970160505299,
+          "ocean_factor": 0.2295613903870384,
+          "ceiling_beams": 364777.07985646644,
+          "supply_beams": 545391.6299274717,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 25921,
+          "requested_fleet": 26000,
+          "useful_beams": 274826.40177760174,
+          "useful_beams_spread": 38.17239931912627,
+          "capacity_gbps": 1429.0972892435293,
+          "ocean_factor": 0.22088461236192158,
+          "ceiling_beams": 366328.85044932994,
+          "supply_beams": 588394.7125726992,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 28056,
+          "requested_fleet": 28000,
+          "useful_beams": 284886.9620842715,
+          "useful_beams_spread": 35.09969672749867,
+          "capacity_gbps": 1481.412202838212,
+          "ocean_factor": 0.21154637309033086,
+          "ceiling_beams": 367032.883186255,
+          "supply_beams": 636920.6446671614,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 29929,
+          "requested_fleet": 30000,
+          "useful_beams": 293178.42178541113,
+          "useful_beams_spread": 33.28508645138936,
+          "capacity_gbps": 1524.527793284138,
+          "ocean_factor": 0.20407911347509322,
+          "ceiling_beams": 368115.56059698004,
+          "supply_beams": 679419.5066049534,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 34040,
+          "requested_fleet": 34000,
+          "useful_beams": 308898.37784979655,
+          "useful_beams_spread": 54.30090630441555,
+          "capacity_gbps": 1606.2715648189424,
+          "ocean_factor": 0.18905355087751943,
+          "ceiling_beams": 369334.21031216846,
+          "supply_beams": 772755.7297036434,
+          "directional": null,
+          "trim": null
+        },
+        {
+          "fleet": 40000,
+          "requested_fleet": 40000,
+          "useful_beams": 327633.0693517752,
+          "useful_beams_spread": 109.4085601195402,
+          "capacity_gbps": 1703.691960629231,
+          "ocean_factor": 0.17064222362071627,
+          "ceiling_beams": 371185.8673736718,
+          "supply_beams": 908074.931978084,
+          "directional": null,
+          "trim": null
+        }
+      ],
+      "markers": {
+        "maximum_use_beams": 380946.7365253218,
+        "saturation_number": null,
+        "saturation_not_reached_by": 40000,
+        "elasticity_under_0p25_fleet": null,
+        "fleet_at_90pct_of_maximum_use": null
+      }
+    }
+  ],
+  "limits": [
+    "Fluid (fractional) beams, idealized 3 dB footprints and one circular shell.",
+    "Residential (night-time) population, every place at its busy hour at once.",
+    "No terrain or building blockage, and no interference from other systems.",
+    "Take-up 1 is the maximal-demand bound: the capacity found is assumed used. The fluid model credits a beam hanging over a coast with its land share only (the coastal under-credit).",
+    "Computed with the band in full-time use (d = 1): the engine scales people and capacity by the downlink share d, and so ignores how d relaxes each cell's people cap inside the curve (ADR 008).",
+    "No interference trim for the directional classes: each terminal's own pattern suppresses the far-sidelobe leak.",
+    "The directional terminals' pattern floor (-20 dB) is an estimate, optimistic for the small terminal.",
+    "Computed at the 25 m^2 reference panel. The engine scales the curve linearly by the scenario's panel over it: below it the directional classes carry more than the rule gives, because their people caps do not shrink with the panel; the rule is exact in beams for the phone class; and each beam's rate is held at its reference-panel value, so the link effect of another array size is not modeled."
+  ]
+}

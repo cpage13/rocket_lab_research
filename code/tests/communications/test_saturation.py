@@ -20,7 +20,15 @@ specification, each naming what it exercises and what counts as success:
   sector-rule ceiling and the first layer at each class's own people cap;
 * the sky sectors (rule D1), the pairs' sky geometry, the pair search's chunk budget, and the
   vectorized admission against the rule taken candidate by candidate;
-* the real grid at a coarse, fast setting, every class frozen at 1e-4 relative;
+* the interference trim against its closed form (the horizon rule included), and each band
+  point's one changed input (the beam, B, the demand threshold, the 2 x 2 grid);
+* the real grid at a coarse, fast setting, every class and band point frozen at 1e-4
+  relative, the phone class's trim with them;
+* the committed curve against the code (the drift tests): every class's check rows and each
+  band point's first row rebuilt through the drift seams, and every class's and band point's
+  maximum use through the curve's own plans, at 1e-4, and its markers, limits and texts
+  re-derived exactly; the coarse promotion, byte-identical but for its measurement; the curve
+  loader's refusals and the saturation command's;
 * numpy confinement (a subprocess), the people-per-beam arithmetic, the class constants,
   the checks' refusals, the grid loader's refusals and the contract's validators.
 
@@ -29,30 +37,48 @@ capacity per satellite never rising), so each is shaped for it: its capacity per
 falls between its rows for a physical reason (a people cap or the tiling binding), never by
 the noise of one snapshot. The worlds' grids come from ``synthetic_population_grid`` and
 their inputs from ``synthetic_saturation_inputs`` (``conftest.py``), without the mounted
-terminal's extension (``small_sweep``).
+terminal's extension and with the band points at the central values (``small_sweep``,
+``central_bands``), so each band point's curve repeats the central one there.
 """
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import hashlib
+import json
+import logging
 import math
 import os
+import pickle
+import stat
 import subprocess
 import sys
 import tracemalloc
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures.process import BrokenProcessPool
+from enum import StrEnum
 from itertools import combinations, pairwise
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, assert_never
 
 import numpy as np
 import pytest
+from pydantic import ValidationError
 
 from common.cadence import round_half_up
-from common.file_io import ModelFileError
+from common.cli import EXIT_ERROR, EXIT_USAGE, describe_failure
+from common.file_io import (
+    ARTIFACT_FILE_END,
+    ModelFileError,
+    PendingWrite,
+    SourceCheckout,
+    render_artifact_json,
+    write_files_with_rollback,
+)
 from communications import saturation as sat
-from communications.config import IridiumDials
+from communications import saturation_curve
+from communications.config import CommsConfig, IridiumDials, load_comms_config
 from communications.constants import (
     CLASS_SE_CENTRAL,
     CLASS_USAGE,
@@ -60,6 +86,7 @@ from communications.constants import (
     POPULATION_GRID_SHA256,
     DeviceClass,
 )
+from communications.iridium import NotAnIridiumConfigError, iridium_dials_of
 from communications.saturation import (
     PopulationGrid,
     PopulationGridError,
@@ -71,6 +98,7 @@ from communications.saturation_curve import (
     SATURATION_CURVE_SCHEMA_VERSION,
     BandCurve,
     BandName,
+    BandPoint,
     ClassCurve,
     ClassInputs,
     ClassMarkers,
@@ -79,10 +107,15 @@ from communications.saturation_curve import (
     DirectionalDiagnostics,
     RunMeasurement,
     SaturationCurve,
+    SaturationCurveError,
     SaturationInputs,
     ShellInputs,
     SweepInputs,
+    TrimAtFloor,
+    TrimInputs,
+    check_curve_complete,
     curve_input_hash,
+    load_saturation_curve,
     saturation_inputs_for,
     walker_shape,
 )
@@ -182,9 +215,35 @@ def log_log_fleet(rows: tuple[CurveRow, ...], target: float) -> float | None:
     return None
 
 
+def central_bands(inputs: SaturationInputs) -> SaturationInputs:
+    """The inputs with every band point at the central values (each keeps its name) and the
+    bands at the phone class's central snapshots, so on a synthetic world each band point's
+    curve repeats the central one.
+
+    The synthetic worlds are shaped for the central curve's checks; the band points' own
+    inputs (a 10 or 100 per km^2 threshold, 48 beams) would empty a synthetic world's demand
+    or flatten its curve before the markers can place a crossing. The band points' changed
+    inputs are tested at the seam and on the real grid.
+    """
+    points = [
+        BandPoint(
+            name=point.name,
+            beamwidth_factor=inputs.shell.beamwidth_factor,
+            spacing_area_factor=1.0,
+            density_threshold_per_km2=inputs.demand.density_threshold_per_km2,
+            grid_aggregation=1,
+            beams_per_satellite=None,
+        ).model_dump()
+        for point in inputs.bands
+    ]
+    sweep = {**inputs.sweep.model_dump(), "snapshots_bands": inputs.sweep.snapshots_phone_central}
+    return SaturationInputs.model_validate({**inputs.model_dump(), "bands": points, "sweep": sweep})
+
+
 def small_sweep(inputs: SaturationInputs, snapshots_directional: int = 1) -> SaturationInputs:
-    """The inputs with no mounted-terminal extension and the directional classes at the given
-    snapshots, so a synthetic world's curve stays small and fast."""
+    """The inputs with no mounted-terminal extension, the directional classes at the given
+    snapshots and the band points at the central values (:func:`central_bands`), so a
+    synthetic world's curve stays small and fast."""
     sweep = SweepInputs.model_validate(
         {
             **inputs.sweep.model_dump(),
@@ -192,7 +251,7 @@ def small_sweep(inputs: SaturationInputs, snapshots_directional: int = 1) -> Sat
             "snapshots_directional": snapshots_directional,
         }
     )
-    return inputs.model_copy(update={"sweep": sweep})
+    return central_bands(inputs.model_copy(update={"sweep": sweep}))
 
 
 def phone_curve(curve: SaturationCurve) -> ClassCurve:
@@ -651,6 +710,146 @@ def test_one_satellite_adds_at_most_one_layer_to_a_cell(
     assert np.all(layer <= 1 + 1e-9)
 
 
+TRIM_CASE_CENTRES_DEG = ((0.125, 0.125), (0.125, 22.125))
+"""Two 0.25 degree cells on the equator, 22 degrees of longitude apart: each lies beyond the
+other cell's overhead satellite's horizon (a 450 km shell's horizon stands 20.9 degrees away)."""
+
+
+def two_cells_people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+    """People in the two trim-case cells only (far above any people cap)."""
+    inside = np.zeros(lat.shape, dtype=bool)
+    for centre_lat, centre_lon in TRIM_CASE_CENTRES_DEG:
+        inside |= (np.abs(lat - centre_lat) < 0.125) & (np.abs(lon - centre_lon) < 0.125)
+    return np.where(inside, DENSE_PEOPLE_PER_CELL, 0.0)
+
+
+def test_the_trim_is_its_closed_form_and_drops_satellites_below_the_horizon(
+    synthetic_population_grid: GridBuilder,
+) -> None:
+    """Objective: the interference trim (stage 12) prices each victim's aggregate leak by power
+    control and counts only the lit satellites above the victim's horizon.
+
+    Sample: the two trim-case cells, each under a satellite placed exactly over its centre, the
+    phone allocation (each cell's area binds: about 4.5 beams each), the default trim settings
+    (both cells are the victims, since 2 is under 3,000). Each satellite stands below the other
+    cell's horizon yet is scanned under 90 degrees toward it, so it would leak into it but for
+    the horizon rule.
+
+    Expected outcome: a victim's own satellite overhead gives W = b x h^2 and reaches it as W /
+    h^2, so x = gamma / G0 x b exactly, G0 = 4 pi x 25 / (2.998e8 / 1.621e9)^2 (39.6 dBi); the
+    trim at each floor is 1 - log2(1 + 1 / (1 + x)) within 1e-9 relative. The satellite below
+    the horizon would have added over 0.5 percent to x.
+    """
+    grid = synthetic_population_grid(0.25, two_cells_people)
+    cells = sat._demand_cells(grid, 1.0)
+    assert cells.count == 2
+    over = list(zip(np.degrees(cells.lat_rad).tolist(), np.degrees(cells.lon_rad).tolist()))
+    satellites = satellites_at(over)
+    allocation = sat._allocate(satellites, cells, seam_limits(150.0))
+    assert allocation.satellite.tolist() == [0, 1] == allocation.cell.tolist()
+    beams = allocation.beams[0]
+    assert beams == pytest.approx(allocation.beams[1], rel=1e-12)
+    assert 4.0 < beams < 5.0
+    inputs = SaturationInputs()
+    shell = inputs.shell
+    orbit_km = EARTH_RADIUS_KM + shell.altitude_km
+    satellite_km = orbit_km * cells.xyz[1]
+    offset_km = satellite_km - EARTH_RADIUS_KM * cells.xyz[0]
+    distance_km = float(np.linalg.norm(offset_km))
+    assert float(offset_km @ cells.xyz[0]) / distance_km < 0
+    scan_cosine = float(offset_km @ cells.xyz[1]) / distance_km
+    assert scan_cosine > 0
+    leak = beams * shell.altitude_km**2 * scan_cosine**inputs.trim.scan_exponent / distance_km**2
+    assert leak / beams > 0.005
+    trims = sat._interference_trim(satellites, allocation, cells, shell, inputs.trim)
+    wavelength_m = SPEED_OF_LIGHT_M_S / shell.carrier_hz
+    directivity = 4 * math.pi * shell.reference_aperture_m2 / wavelength_m**2
+    assert 10 * math.log10(directivity) == pytest.approx(39.6, abs=0.05)
+    for floor_dbi, trim in zip(inputs.trim.floors_dbi, trims, strict=True):
+        extra = 10 ** (floor_dbi / 10) / directivity * beams
+        assert trim == pytest.approx(1 - math.log2(1 + 1 / (1 + extra)), rel=1e-9)
+
+
+BAND_CASE_PEOPLE = {
+    (0.375, 0.125): 3_000.0,
+    (0.375, 0.375): 30_000.0,
+    (0.125, 0.125): 100_000.0,
+    (0.125, 0.375): 300_000.0,
+    (0.125, 0.625): 15_000.0,
+}
+"""People in five 0.25 degree cells of about 773 km^2 each, by centre (latitude, longitude):
+the first four one 2 x 2 block of the 0.5 degree grid (densities about 3.9, 39, 129 and 388 per
+km^2), the fifth in the next 0.5 degree cell east (about 19 per km^2)."""
+
+
+def band_case_people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+    """People in the band case's five cells only."""
+    people = np.zeros(lat.shape)
+    for (centre_lat, centre_lon), count in BAND_CASE_PEOPLE.items():
+        people = np.where(
+            (np.abs(lat - centre_lat) < 0.125) & (np.abs(lon - centre_lon) < 0.125), count, people
+        )
+    return people
+
+
+def test_each_band_point_changes_its_one_input(synthetic_population_grid: GridBuilder) -> None:
+    """Objective: a band point's curve is the phone class's central curve but for its one
+    changed input, and the spaced point's area factor reaches the fill and maximum use alike
+    (both read the beam's footprint table).
+
+    Sample: the default inputs' six band points against the phone class's own limits; the band
+    case's five cells on a synthetic 0.25 degree grid, at the central threshold of 1 per km^2.
+
+    Expected outcome: the taper's footprint table is the central one times (1.0934 / 0.886)^2
+    (a footprint goes as the beamwidth squared) and the spaced point's the taper's times 1.5;
+    every other point keeps the central table; B is 48 for the 48-beam point and the central
+    150 for every other; every point keeps the phone class's people per beam and one layer (no
+    sky sectors). The points that keep the central threshold and grid reuse the central cells;
+    the 10 per km^2 point keeps the four cells at or above it and the 100 per km^2 point two;
+    the 0.5 degree grid sums the block into one cell of 433,000 people beside the 15,000 cell,
+    each with the 0.5 degree zone's area, half the rows and columns.
+    """
+    inputs = SaturationInputs()
+    phone = sat._class_limits(inputs, PHONE)
+    points = {point.name: point for point in inputs.bands}
+    taper_area = (1.0934 / 0.886) ** 2
+    scale = {
+        BandName.TAPER: taper_area,
+        BandName.TAPER_AND_SPACING: taper_area * 1.5,
+    }
+    for name, point in points.items():
+        band_limits = sat._band_limits(inputs, point)
+        np.testing.assert_allclose(
+            band_limits.beam.footprint_km2,
+            phone.beam.footprint_km2 * scale.get(name, 1.0),
+            rtol=1e-12,
+        )
+        assert band_limits.beams_per_satellite == (48.0 if name is BandName.BEAMS_48 else 150.0)
+        assert band_limits.people_per_beam == phone.people_per_beam
+        assert band_limits.directional is None
+    grid = synthetic_population_grid(0.25, band_case_people)
+    central = sat._demand_cells(grid, 1.0)
+    assert central.count == len(BAND_CASE_PEOPLE)
+    cells = {name: sat._band_cells(grid, point, central, 1.0) for name, point in points.items()}
+    for name in (BandName.TAPER, BandName.TAPER_AND_SPACING, BandName.BEAMS_48):
+        assert cells[name] is central
+    assert sorted(cells[BandName.DENSITY_10_PER_KM2].people.tolist()) == [
+        15_000.0,
+        30_000.0,
+        100_000.0,
+        300_000.0,
+    ]
+    assert sorted(cells[BandName.DENSITY_100_PER_KM2].people.tolist()) == [100_000.0, 300_000.0]
+    coarse = cells[BandName.GRID_0P5_DEG]
+    assert coarse.cell_deg == 0.5
+    assert coarse.index.shape == (360, 720)
+    assert coarse.people.tolist() == [433_000.0, 15_000.0]
+    zone = cell_area_km2(0.5, 0.5, 720)
+    assert coarse.area_km2 == pytest.approx([zone, zone], rel=1e-12)
+    assert np.degrees(coarse.lat_rad) == pytest.approx([0.25, 0.25])
+    assert np.degrees(coarse.lon_rad) == pytest.approx([0.25, 0.75])
+
+
 # ---------------------------------------------------------------------------
 # The real grid at a coarse, fast setting
 # ---------------------------------------------------------------------------
@@ -688,6 +887,14 @@ COARSE_REAL_ROWS = (
 ceiling, supply. They agree at float precision with the same snapshot of the saturation
 design's local prototype, which ``research/direct_communication/iridium_saturation_module.md``
 names."""
+
+COARSE_REAL_TRIMS = (
+    (0.017985540528301147, 0.012521514195641736, 0.003179072785696957),
+    (0.03336923218875287, 0.023359409730369873, 0.00598735144565099),
+    (0.056200731314733576, 0.03968137913869685, 0.010327726966442241),
+)
+"""The phone class's coarse interference trims as first computed (2026-10-06), frozen: at each
+row (342, 992 and 1,980), the trim at -0.4, -2 and -8 dBi, a fraction."""
 
 COARSE_REAL_MAXIMUM_USE = 380946.7365253218
 """The phone class's maximum use on the shipped grid at the investor's usage, beams."""
@@ -774,6 +981,198 @@ COARSE_DIRECTIONAL = {
 class's maximum use: fleet, L, capacity Gbps, U, the sector-rule ceiling, supply, the kept
 stacked share, the median separation (degrees) and the mean full-sum interference (dB)."""
 
+COARSE_BANDS = {
+    BandName.TAPER: (
+        253261.3007391356,
+        (
+            (
+                342,
+                19268.861303115795,
+                100.19807877620214,
+                0.37561133144475234,
+                67204.6866775107,
+                20183.576871614907,
+            ),
+            (
+                992,
+                51982.26061129278,
+                270.3077551787225,
+                0.34934314926944077,
+                129498.5403789101,
+                58497.21294412446,
+            ),
+            (
+                1980,
+                90385.6844979183,
+                470.0055593891752,
+                0.3043289040333949,
+                168586.02171164897,
+                117183.53473941982,
+            ),
+        ),
+    ),
+    BandName.TAPER_AND_SPACING: (
+        168882.15956754866,
+        (
+            (
+                342,
+                17883.794359746207,
+                92.99573067068027,
+                0.34861197582351283,
+                44803.29111163624,
+                18869.48870100613,
+            ),
+            (
+                992,
+                46285.68656170406,
+                240.68557012086112,
+                0.31105972151682837,
+                86332.9002698339,
+                54822.43062219184,
+            ),
+            (
+                1980,
+                78195.628411344,
+                406.61726773898886,
+                0.2632849441459394,
+                112391.94523636127,
+                109737.6448195993,
+            ),
+        ),
+    ),
+    BandName.DENSITY_10_PER_KM2: (
+        252829.7231940112,
+        (
+            (
+                342,
+                17233.082918813285,
+                89.61203117782908,
+                0.33592754227706206,
+                66755.526511821,
+                18421.37507649095,
+            ),
+            (
+                992,
+                45599.27469399411,
+                237.1162284087694,
+                0.30644673853490667,
+                127802.00237942414,
+                53892.43809956228,
+            ),
+            (
+                1980,
+                78913.01953168925,
+                410.34770156478413,
+                0.26570040246360016,
+                167231.5596078611,
+                107888.44036897024,
+            ),
+        ),
+    ),
+    BandName.DENSITY_100_PER_KM2: (
+        92020.43406589914,
+        (
+            (
+                342,
+                10235.839027540751,
+                53.2263629432119,
+                0.19952902587798735,
+                23577.929688830915,
+                11298.508971539646,
+            ),
+            (
+                992,
+                25876.40733770832,
+                134.55731815608326,
+                0.1739005869469645,
+                45897.65888676973,
+                34617.11517424151,
+            ),
+            (
+                1980,
+                40620.356108506894,
+                211.22585176423584,
+                0.1367688757862185,
+                60444.2866770497,
+                69302.28966736834,
+            ),
+        ),
+    ),
+    BandName.GRID_0P5_DEG: (
+        446507.1621288899,
+        (
+            (
+                342,
+                21601.799366765023,
+                112.32935670717812,
+                0.4210877069544839,
+                119629.71416586779,
+                22380.923093227226,
+            ),
+            (
+                992,
+                58807.60914697346,
+                305.799567564262,
+                0.3952124270629937,
+                230525.36179907064,
+                64696.68530694656,
+            ),
+            (
+                1980,
+                109231.32168481972,
+                568.0028727610626,
+                0.3677822278950159,
+                299752.75177026563,
+                129548.80947020264,
+            ),
+        ),
+    ),
+    BandName.BEAMS_48: (
+        380946.7365253218,
+        (
+            (
+                342,
+                7476.358546524962,
+                38.877064441929804,
+                0.4554311980095615,
+                102190.2125947176,
+                7624.037949061897,
+            ),
+            (
+                992,
+                20908.703028287917,
+                108.72525574709717,
+                0.4391108666895144,
+                196678.16776641438,
+                22576.75501265761,
+            ),
+            (
+                1980,
+                39445.19868116313,
+                205.11503314204828,
+                0.4150378649112282,
+                255760.63823593326,
+                44990.23618199112,
+            ),
+        ),
+    ),
+}
+"""The phone class's band points' coarse rows as first computed (2026-10-06), frozen, with each
+point's maximum use: fleet, L, capacity Gbps, U, ceiling, supply. The 48-beam point keeps the
+central maximum use and ceiling (neither depends on B); the two density points and the 0.5
+degree grid change the demand, the taper and the spacing the area per beam."""
+
+
+COARSE_SWEEP = SweepInputs(
+    fleets=COARSE_REAL_FLEETS,
+    mounted_terminal_extension=(),
+    snapshots_phone_central=1,
+    snapshots_directional=1,
+    snapshots_bands=1,
+)
+"""The coarse setting: fleets 340, 1,000 and 2,000, one snapshot for every class and band
+point, no mounted extension."""
+
 
 @pytest.fixture(scope="module")
 def real_grid(repo_dir: Path) -> PopulationGrid:
@@ -781,33 +1180,90 @@ def real_grid(repo_dir: Path) -> PopulationGrid:
     return load_population_grid(repo_dir / POPULATION_GRID_PATH, POPULATION_GRID_SHA256)
 
 
-def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) -> None:
+def coarse_inputs_for(iridium: IridiumDials) -> SaturationInputs:
+    """The coarse setting's inputs for a config's Iridium dials: what the saturation command
+    builds (``saturation_inputs_for``) with its sweep replaced by the coarse one, validated anew."""
+    return SaturationInputs.model_validate(
+        {**saturation_inputs_for(iridium).model_dump(), "sweep": COARSE_SWEEP}
+    )
+
+
+def promote_coarse(scenario: Path, output: Path) -> Path:
+    """Promote the curve at the coarse setting through the saturation command's own function
+    (its inputs builder patched to the coarse sweep), with the pinned stamp: computed and written
+    through ``write_files_with_rollback``, as the full promotion is."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(sat, "saturation_inputs_for", coarse_inputs_for)
+        return sat.promote_saturation_curve(scenario, output, version_stamp=STAMP)
+
+
+def rendered_with_measurement(curve: SaturationCurve, measurement: RunMeasurement) -> bytes:
+    """A curve's bytes as the promotion writes them (``render_artifact_json`` and
+    ``ARTIFACT_FILE_END``), with the given run measurement copied in (``model_copy``)."""
+    measured = curve.model_copy(
+        update={"provenance": curve.provenance.model_copy(update={"run_measurement": measurement})}
+    )
+    return (render_artifact_json(measured) + ARTIFACT_FILE_END).encode("utf-8")
+
+
+def curves_equal_but_measurement(first: Path, second: Path) -> bool:
+    """Whether two promoted curves are byte-identical but for their run measurements (the plan's
+    finding F2: a run's measured wall time and peak memory differ run to run).
+
+    Both files are parsed as :class:`SaturationCurve`, and the comparison runs both ways: the
+    second re-rendered with the first's measurement must be the first file's bytes, and the
+    first re-rendered with the second's measurement the second file's bytes. One way alone
+    compares only the second file's values, so a second file in another byte form (compact,
+    without its closing newline, its keys in another order) would pass; both ways, each file
+    must be the promotion's own rendering. Acceptance runs this same helper as a script.
+    """
+    one, two = (
+        SaturationCurve.model_validate_json(path.read_text(encoding="utf-8"))
+        for path in (first, second)
+    )
+    return (
+        rendered_with_measurement(two, one.provenance.run_measurement) == first.read_bytes()
+        and rendered_with_measurement(one, two.provenance.run_measurement) == second.read_bytes()
+    )
+
+
+@pytest.fixture(scope="module")
+def coarse_curve_file(tmp_path_factory: pytest.TempPathFactory, iridium_yaml: Path) -> Path:
+    """The shipped scenario's curve at the coarse setting, promoted once into a temporary
+    folder for the tests that read it."""
+    return promote_coarse(iridium_yaml, tmp_path_factory.mktemp("coarse") / "saturation_curve.json")
+
+
+@pytest.fixture(scope="module")
+def coarse_real_curve(coarse_curve_file: Path) -> SaturationCurve:
+    """The coarse promoted curve, read back through ``load_saturation_curve``."""
+    return load_saturation_curve(coarse_curve_file)
+
+
+def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: SaturationCurve) -> None:
     """Objective: the module's numbers on the shipped grid do not drift.
 
-    Sample: the default inputs (the investor's usage) at fleets 340, 1,000 and 2,000 and one
-    snapshot.
+    Sample: the shipped scenario's curve (the investor's usage) at fleets 340, 1,000 and 2,000
+    and one snapshot for every class and band point, promoted through the saturation command's
+    own function and read back with ``load_saturation_curve``.
 
-    Expected outcome: every class's rows (L, capacity, U, the ceiling, the supply, and for the
-    directional classes their stacking diagnostics) and maximum use within 1e-4 relative of
-    the frozen values; no 0.10 crossing by 1,980 and no other marker; the curve's envelope:
-    schema, stamp, the input hash of its parameters, the grid's name, digest, citations and
-    licence, the three checks passed, the run measured, the stated limits, and the three
-    classes (small terminal, mounted terminal, phone class) with no band yet.
+    Expected outcome: every class's rows (L, capacity, U, the ceiling, the supply, for the
+    directional classes their stacking diagnostics, and for the phone class its interference
+    trim at -0.4, -2 and -8 dBi) and maximum use within 1e-4 relative of the frozen values;
+    the six band points in their order, each the inputs' point, its rows (no trim, no
+    diagnostics) and maximum use within 1e-4 relative; no 0.10 crossing by 1,980 and no other
+    marker on any curve; the curve's envelope: schema, stamp, the input hash of its
+    parameters, the grid's name, digest, citations and licence, the three checks passed, the
+    run measured, the stated limits, and the three classes (small terminal, mounted terminal,
+    phone class).
     """
-    inputs = SaturationInputs(
-        sweep=SweepInputs(
-            fleets=COARSE_REAL_FLEETS,
-            mounted_terminal_extension=(),
-            snapshots_phone_central=1,
-            snapshots_directional=1,
-        )
-    )
-    curve = compute_saturation(inputs, real_grid, version_stamp=STAMP)
+    inputs = SaturationInputs(sweep=COARSE_SWEEP)
+    curve = coarse_real_curve
     rows = phone_curve(curve).rows
     assert [row.fleet for row in rows] == [frozen[0] for frozen in COARSE_REAL_ROWS]
     assert [row.requested_fleet for row in rows] == list(COARSE_REAL_FLEETS)
-    for row, (_, useful, capacity, ocean, ceiling, supply) in zip(
-        rows, COARSE_REAL_ROWS, strict=True
+    for row, (_, useful, capacity, ocean, ceiling, supply), trims in zip(
+        rows, COARSE_REAL_ROWS, COARSE_REAL_TRIMS, strict=True
     ):
         assert row.useful_beams == pytest.approx(useful, rel=1e-4)
         assert row.capacity_gbps == pytest.approx(capacity, rel=1e-4)
@@ -816,7 +1272,10 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
         assert row.supply_beams == pytest.approx(supply, rel=1e-4)
         assert row.useful_beams_spread == 0.0
         assert row.directional is None
-        assert row.trim is None
+        assert row.trim is not None
+        assert [entry.floor_dbi for entry in row.trim] == [-0.4, -2.0, -8.0]
+        for entry, trim in zip(row.trim, trims, strict=True):
+            assert entry.trim == pytest.approx(trim, rel=1e-4)
     markers = phone_curve(curve).markers
     assert markers.maximum_use_beams == pytest.approx(COARSE_REAL_MAXIMUM_USE, rel=1e-4)
     assert markers.saturation_number is None
@@ -839,7 +1298,25 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
     assert provenance.run_measurement.peak_memory_mb > 0
     assert len(curve.limits) == 8
     assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
-    assert curve.bands == ()
+    assert [band.point for band in curve.bands] == list(inputs.bands)
+    assert [band.point.name for band in curve.bands] == list(BandName)
+    for band in curve.bands:
+        maximum_use, frozen_rows = COARSE_BANDS[band.point.name]
+        assert band.markers.maximum_use_beams == pytest.approx(maximum_use, rel=1e-4)
+        assert band.markers.saturation_not_reached_by == 1_980
+        assert band.markers.elasticity_under_0p25_fleet is None
+        assert band.markers.fleet_at_90pct_of_maximum_use is None
+        for row, (fleet, useful, capacity, ocean, ceiling, supply) in zip(
+            band.rows, frozen_rows, strict=True
+        ):
+            assert (row.fleet, row.requested_fleet) == (fleet, walker_request_of(fleet))
+            assert row.useful_beams == pytest.approx(useful, rel=1e-4)
+            assert row.capacity_gbps == pytest.approx(capacity, rel=1e-4)
+            assert row.ocean_factor == pytest.approx(ocean, rel=1e-4)
+            assert row.ceiling_beams == pytest.approx(ceiling, rel=1e-4)
+            assert row.supply_beams == pytest.approx(supply, rel=1e-4)
+            assert row.directional is None
+            assert row.trim is None
     for device_class, (maximum_use, frozen_rows) in COARSE_DIRECTIONAL.items():
         directional = class_curve(curve, device_class)
         assert directional.markers.maximum_use_beams == pytest.approx(maximum_use, rel=1e-4)
@@ -869,12 +1346,283 @@ def walker_request_of(fleet: int) -> int:
 
 
 # ---------------------------------------------------------------------------
+# The drift test: the committed curve against the code
+# ---------------------------------------------------------------------------
+
+COMMITTED_CURVE = "communications/models/iridium/saturation_curve.json"
+"""The promoted saturation curve, repository-relative."""
+
+DRIFT_CHECK_ROWS = (
+    (DeviceClass.SMALL_TERMINAL_CLASS, 342),
+    (DeviceClass.MOUNTED_TERMINAL_CLASS, 342),
+    (DeviceClass.PHONE_CLASS, 342),
+    (DeviceClass.MOUNTED_TERMINAL_CLASS, 1_980),
+)
+"""The rows the drift test recomputes, by class and realized fleet: every class's first row and
+the mounted terminal's 1,980 row, where rules D3 and D4 act (about 11 percent of its beams
+stacked)."""
+
+
+def flat_values(value: object, path: str = "") -> dict[str, object]:
+    """A model dump's leaves by path, nested objects and lists flattened, so two rows compare
+    field by field."""
+    flat: dict[str, object] = {}
+    if isinstance(value, dict):
+        for key, item in value.items():
+            flat.update(flat_values(item, f"{path}.{key}" if path else str(key)))
+    elif isinstance(value, list | tuple):
+        for index, item in enumerate(value):
+            flat.update(flat_values(item, f"{path}[{index}]"))
+    else:
+        flat[path] = value
+    return flat
+
+
+def assert_rows_match(label: str, committed: CurveRow, recomputed: CurveRow, rel: float) -> None:
+    """Compare a committed row with its recomputation: the same fields, every value (the
+    diagnostics and the trim included) within ``rel`` relative (0: exactly), the curve and the
+    row named in the message."""
+    expected = flat_values(committed.model_dump())
+    assert flat_values(recomputed.model_dump()) == pytest.approx(expected, rel=rel, abs=0), label
+
+
+def drift_grid_and_cells(
+    parameters: SaturationInputs, repo_dir: Path
+) -> tuple[PopulationGrid, sat._DemandCells]:
+    """A curve's grid, loaded once through the command's own grid load (``_inputs_grid``), and
+    its central demand cells, which the curve's plans are built on, both as the drift seams take
+    them (``_seam_grid_and_cells``)."""
+    return sat._seam_grid_and_cells(
+        parameters, sat._inputs_grid(SourceCheckout(repo_dir), parameters)
+    )
+
+
+def assert_check_rows_match(curve: SaturationCurve, repo_dir: Path, rel: float) -> None:
+    """Rebuild a curve's check rows through the class seam, each from its requested fleet, and
+    every class's maximum use through the class's own plan (``_class_plan``), at the curve's own
+    settings from one grid load, and compare each within ``rel`` relative (0: exactly)."""
+    parameters = curve.parameters
+    population, cells = drift_grid_and_cells(parameters, repo_dir)
+    for device_class, fleet in DRIFT_CHECK_ROWS:
+        (committed,) = [row for row in class_curve(curve, device_class).rows if row.fleet == fleet]
+        recomputed = sat._class_row(
+            device_class, committed.requested_fleet, parameters, population=population
+        )
+        assert_rows_match(f"{device_class.value} row at {fleet}", committed, recomputed, rel)
+    for entry in curve.classes:
+        rebuilt = sat._plan_maximum_use(sat._class_plan(parameters, cells, entry.device_class))
+        assert rebuilt == pytest.approx(entry.markers.maximum_use_beams, rel=rel, abs=0), (
+            f"{entry.device_class.value} maximum use"
+        )
+
+
+def assert_band_rows_match(curve: SaturationCurve, repo_dir: Path, rel: float) -> None:
+    """Rebuild every band point's first row through the band seam, from its requested fleet, and
+    its maximum use through its own plan (``_band_plan``), at the curve's own settings from one
+    grid load, and compare each within ``rel`` relative (0: exactly)."""
+    parameters = curve.parameters
+    population, cells = drift_grid_and_cells(parameters, repo_dir)
+    for band in curve.bands:
+        label = f"band point {band.point.name.value}"
+        committed = band.rows[0]
+        recomputed = sat._band_row(
+            band.point, committed.requested_fleet, parameters, population=population
+        )
+        assert_rows_match(f"{label} row at {committed.fleet}", committed, recomputed, rel)
+        rebuilt = sat._plan_maximum_use(sat._band_plan(parameters, population, cells, band.point))
+        assert rebuilt == pytest.approx(band.markers.maximum_use_beams, rel=rel, abs=0), (
+            f"{label} maximum use"
+        )
+
+
+def test_the_drift_seams_and_plans_rebuild_the_coarse_curve_exactly(
+    coarse_real_curve: SaturationCurve, repo_dir: Path
+) -> None:
+    """Objective: the drift seams and the curve's own plans are the curve's computation: one
+    class's or one band point's row at one requested fleet, rebuilt in this process from the
+    row's request, is the curve's row, and each curve's maximum use rebuilt from its plan is the
+    curve's.
+
+    Sample: the coarse real-grid curve (one snapshot): every class's 342 row, the mounted
+    terminal's 1,980 row (requested 2,000), every band point's 342 row, and every class's and
+    band point's maximum use, from one grid load; and the small terminal's 342 row once more
+    through the seam's own grid load (no grid passed), the path a reviewer's script takes.
+
+    Expected outcome: every value of each row, the phone class's trim included, and every
+    maximum use equal to the curve's exactly (the same code on the same draw, in another
+    process), by either grid load.
+    """
+    assert_check_rows_match(coarse_real_curve, repo_dir, rel=0.0)
+    assert_band_rows_match(coarse_real_curve, repo_dir, rel=0.0)
+    committed = class_curve(coarse_real_curve, DeviceClass.SMALL_TERMINAL_CLASS).rows[0]
+    recomputed = sat._class_row(
+        DeviceClass.SMALL_TERMINAL_CLASS, committed.requested_fleet, coarse_real_curve.parameters
+    )
+    assert_rows_match(
+        "small_terminal_class row by the seam's own grid load", committed, recomputed, 0.0
+    )
+
+
+def test_committed_curve_has_not_drifted(repo_dir: Path) -> None:
+    """Objective: the committed curve's rows are what the code computes, so a change to the
+    allocation, the directional rules or maximum use after its promotion fails here until the
+    curve is re-promoted (the re-promotion rule). Its two neighbours guard the rest that can be
+    recomputed cheaply: each band point's first row and maximum use, and every field derived
+    from the rows and the parameters (the markers, the limits, the texts). Only the rows none of
+    them rebuilds (and those rows' trims) rest on the re-promotion rule alone.
+
+    Sample: ``communications/models/iridium/saturation_curve.json``, loaded with
+    ``load_saturation_curve`` (so it also loads whole and unaltered), at its own settings (its
+    parameters: the investor's usage, two snapshots for the directional classes and four for
+    the phone class): every class's first row (342) and the mounted terminal's 1,980 row (where
+    rules D3 and D4 act), each rebuilt through the drift seam from its requested fleet, and every
+    class's maximum use (the small terminal's and the mounted terminal's by the directional
+    rule), each rebuilt through the class's own plan; the grid loaded once. The three drift
+    tests' budget is 90 s.
+
+    Expected outcome: every value of each row (L, its spread, capacity, U, the ceiling, the
+    supply, the directional diagnostics, the phone class's trim) and each class's maximum use
+    within 1e-4 relative of the committed curve.
+    """
+    curve = load_saturation_curve(repo_dir / COMMITTED_CURVE)
+    assert_check_rows_match(curve, repo_dir, rel=1e-4)
+
+
+def test_committed_curve_has_not_drifted_in_its_band_rows(repo_dir: Path) -> None:
+    """Objective: the committed band points are what the code computes, so a change to a band
+    point's inputs (``_band_limits``, ``_band_cells``, the grid's aggregation) after the
+    promotion fails here until the curve is re-promoted.
+
+    Sample: the committed curve at its own settings (two snapshots for the band points): every
+    band point's first row (342), rebuilt through the band seam from its requested fleet, and
+    its maximum use, rebuilt through its own plan; the grid loaded once.
+
+    Expected outcome: every value of each row (L, its spread, capacity, U, the ceiling, the
+    supply, no diagnostics and no trim) and each maximum use within 1e-4 relative of the
+    committed curve.
+    """
+    curve = load_saturation_curve(repo_dir / COMMITTED_CURVE)
+    assert_band_rows_match(curve, repo_dir, rel=1e-4)
+
+
+def test_committed_curve_has_not_drifted_in_its_derived_fields(repo_dir: Path) -> None:
+    """Objective: every field of the committed curve that the code derives from its rows and
+    its parameters is what the code derives today, so a change to the markers' rules, the stated
+    limits or the curve's texts fails here until the curve is re-promoted.
+
+    Sample: the committed curve: each class's and band point's rows and maximum use, and its
+    parameters.
+
+    Expected outcome, exactly: every class's and band point's markers are ``_markers`` of its own
+    rows and maximum use; the limits are ``_stated_limits`` of the parameters and the curves (the
+    assembly ``compute_saturation`` uses); the method, the checks passed, the citations and the
+    licence are what the computation writes for these parameters.
+    """
+    curve = load_saturation_curve(repo_dir / COMMITTED_CURVE)
+    parameters = curve.parameters
+    for entry in curve.classes:
+        rederived = sat._markers(entry.device_class, entry.rows, entry.markers.maximum_use_beams)
+        assert rederived == entry.markers, entry.device_class
+    for band in curve.bands:
+        rederived = sat._markers(band.point.name, band.rows, band.markers.maximum_use_beams)
+        assert rederived == band.markers, band.point.name
+    assert curve.limits == sat._stated_limits(parameters, curve.classes, curve.bands)
+    provenance = curve.provenance
+    assert provenance.method == sat._method(parameters)
+    assert provenance.checks_passed == sat._checks_passed(parameters)
+    assert provenance.citations == sat._GRID_CITATIONS
+    assert provenance.licence == sat._GRID_LICENCE
+
+
+def test_the_committed_curve_loads_whole_from_the_shipped_scenario(
+    repo_dir: Path, iridium_yaml: Path
+) -> None:
+    """Objective: the committed curve is the one the shipped scenario implies, whole and
+    unaltered, so the engine can read it.
+
+    Sample: ``communications/models/iridium/saturation_curve.json`` and
+    ``scenarios/iridium.yaml``.
+
+    Expected outcome: the curve loads (schema, input hash, completeness), its parameters are
+    exactly ``saturation_inputs_for`` of the scenario's Iridium dials, and it lists the three
+    classes (small terminal first) and the six band points.
+    """
+    curve = load_saturation_curve(repo_dir / COMMITTED_CURVE)
+    dials = load_comms_config(iridium_yaml).iridium
+    assert dials is not None
+    assert curve.parameters == saturation_inputs_for(dials)
+    assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
+    assert [band.point.name for band in curve.bands] == list(BandName)
+
+
+def test_a_second_promotion_at_the_coarse_setting_is_byte_identical(
+    coarse_curve_file: Path, tmp_path: Path, iridium_yaml: Path
+) -> None:
+    """Objective: a promotion is deterministic: a second run of the saturation command's own
+    function at the coarse setting, with the pinned stamp, writes the same bytes but for the run's
+    own measurement (the plan's finding F2).
+
+    Sample: the coarse promoted curve and a second promotion of the shipped scenario at the same
+    setting, each computed and written through ``write_files_with_rollback``.
+
+    Expected outcome: ``curves_equal_but_measurement`` holds; the two measurements are each a
+    real measurement (a positive wall time and peak-memory bound).
+    """
+    second = promote_coarse(iridium_yaml, tmp_path / "saturation_curve.json")
+    assert curves_equal_but_measurement(coarse_curve_file, second)
+    for path in (coarse_curve_file, second):
+        measured = load_saturation_curve(path).provenance.run_measurement
+        assert measured.wall_time_s > 0
+        assert measured.peak_memory_mb > 0
+
+
+def test_the_byte_identity_helper_refuses_another_byte_form(
+    coarse_curve_file: Path, tmp_path: Path
+) -> None:
+    """Objective: ``curves_equal_but_measurement`` passes two promotions that differ only in their
+    run measurements and fails any other difference, in a value or in the bytes' form.
+
+    Sample: the coarse promoted curve against five second files written from it: its run
+    measurement changed; one row value changed by 1e-12 relative; the same values in compact
+    JSON, without the closing newline, and with a key moved to the front.
+
+    Expected outcome: equal for the measurement alone, in either order; not equal for each of the
+    four others.
+    """
+    text = coarse_curve_file.read_text(encoding="utf-8")
+    curve = SaturationCurve.model_validate_json(text)
+    canonical = rendered_with_measurement(
+        curve, RunMeasurement(wall_time_s=1.0, peak_memory_mb=2.0)
+    ).decode("utf-8")
+    data = json.loads(canonical)
+    changed = json.loads(text)
+    changed["classes"][2]["rows"][1]["useful_beams"] *= 1 + 1e-12
+    seconds = {
+        "only the measurement": (canonical, True),
+        "one value": (json.dumps(changed, indent=2) + ARTIFACT_FILE_END, False),
+        "compact": (json.dumps(data, separators=(",", ":")), False),
+        "no closing newline": (canonical.removesuffix(ARTIFACT_FILE_END), False),
+        "a key moved": (
+            json.dumps({"version_stamp": data["version_stamp"], **data}, indent=2)
+            + ARTIFACT_FILE_END,
+            False,
+        ),
+    }
+    for label, (second_text, equal) in seconds.items():
+        second = tmp_path / f"{label.replace(' ', '_')}.json"
+        second.write_text(second_text, encoding="utf-8")
+        assert curves_equal_but_measurement(coarse_curve_file, second) is equal, label
+        assert curves_equal_but_measurement(second, coarse_curve_file) is equal, label
+
+
+# ---------------------------------------------------------------------------
 # numpy confinement, the arithmetic and the constants
 # ---------------------------------------------------------------------------
 
 NUMPY_FREE_MODULES = (
     "communications.config",
     "communications.engine",
+    "communications.iridium",
     "communications.json_output",
     "communications.saturation_curve",
 )
@@ -902,7 +1650,7 @@ def test_numpy_stays_inside_the_saturation_module(code_dir: Path) -> None:
     imports included, which a grep would miss.
 
     Sample: a fresh interpreter importing ``communications.config``, ``.engine``,
-    ``.json_output`` and ``.saturation_curve``; then one importing
+    ``.iridium``, ``.json_output`` and ``.saturation_curve``; then one importing
     ``communications.saturation`` too, the control.
 
     Expected outcome: numpy is not in ``sys.modules`` after the first, and is after the
@@ -912,6 +1660,446 @@ def test_numpy_stays_inside_the_saturation_module(code_dir: Path) -> None:
     assert _numpy_loaded_after_importing(
         (*NUMPY_FREE_MODULES, "communications.saturation"), code_dir
     )
+
+
+def test_the_command_refuses_a_scenario_without_an_iridium_block(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Objective: the saturation command narrows its scenario first, so a scenario of the
+    cellular family fails with the family's message before anything runs.
+
+    Sample: a scenario setting only the cellular satellite block; an output path in a temporary
+    folder.
+
+    Expected outcome: exit status 1; exactly one ERROR record, on one line, naming the scenario
+    and the narrowing function's message; no file written.
+    """
+    scenario = tmp_path / "cellular.yaml"
+    scenario.write_text("satellite:\n  satellites_per_launch: 12\n", encoding="utf-8")
+    out_path = tmp_path / "saturation_curve.json"
+    assert sat.main([str(scenario), str(out_path)]) == EXIT_ERROR
+    errors = [record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert "\n" not in errors[0]
+    assert f"could not promote the saturation curve from {scenario}" in errors[0]
+    assert "the scenario does not select the Iridium model" in errors[0]
+    assert sorted(tmp_path.iterdir()) == [scenario]
+
+
+READ_ONLY_DIR_MODE = stat.S_IRUSR | stat.S_IXUSR
+"""A folder this process can read and search but not write into (as the sibling suites name it)."""
+
+OWNER_DIR_MODE = stat.S_IRWXU
+"""A folder's mode restored after a test: its owner may read, write and search it."""
+
+ROOT_IGNORES_PERMISSIONS = os.geteuid() == 0
+"""Whether the tests run as root, which a folder's mode bits do not stop."""
+
+OVER_LONG_NAME = "x" * 300
+"""A folder name past every file system's 255-byte limit on one name."""
+
+
+class UnusableDestination(StrEnum):
+    """A destination the shared writer refuses, as the pre-flight tests make it."""
+
+    DIRECTORY = "a directory"
+    SYMBOLIC_LINK = "a symbolic link"
+    READ_ONLY_FOLDER = "a read-only folder"
+    PATH_UNDER_A_FILE = "a path under a file"
+    OVER_LONG_FOLDER_NAME = "a folder name past the file system's limit"
+
+
+def unusable_destination(tmp_path: Path, case: UnusableDestination) -> Path:
+    """A destination the shared writer refuses, made in a temporary folder: a directory, a
+    symbolic link to a file, a file in a folder this process cannot write into, a path under a
+    regular file, or a path through a folder name past the file system's limit."""
+    match case:
+        case UnusableDestination.DIRECTORY:
+            destination = tmp_path / "curve.json"
+            destination.mkdir()
+        case UnusableDestination.SYMBOLIC_LINK:
+            (tmp_path / "target.json").write_text("ORIGINAL\n", encoding="utf-8")
+            destination = tmp_path / "curve.json"
+            destination.symlink_to(tmp_path / "target.json")
+        case UnusableDestination.READ_ONLY_FOLDER:
+            folder = tmp_path / "locked"
+            folder.mkdir()
+            destination = folder / "curve.json"
+            destination.write_text("ORIGINAL\n", encoding="utf-8")
+            folder.chmod(READ_ONLY_DIR_MODE)
+        case UnusableDestination.PATH_UNDER_A_FILE:
+            (tmp_path / "blocker").write_text("ORIGINAL\n", encoding="utf-8")
+            destination = tmp_path / "blocker" / "curve.json"
+        case UnusableDestination.OVER_LONG_FOLDER_NAME:
+            destination = tmp_path / OVER_LONG_NAME / "curve.json"
+        case _:
+            assert_never(case)
+    return destination
+
+
+def unlock(tmp_path: Path, case: UnusableDestination) -> None:
+    """Give the read-only folder its owner's mode back (the other cases change no mode)."""
+    if case is UnusableDestination.READ_ONLY_FOLDER:
+        (tmp_path / "locked").chmod(OWNER_DIR_MODE)
+
+
+def the_tree(tmp_path: Path) -> list[tuple[str, bool, bytes | None]]:
+    """Every path under a folder (no link followed): its name, whether it is a symbolic link, and
+    a regular file's bytes."""
+    return sorted(
+        (
+            str(path.relative_to(tmp_path)),
+            path.is_symlink(),
+            path.read_bytes() if path.is_file() and not path.is_symlink() else None,
+        )
+        for path in tmp_path.rglob("*")
+    )
+
+
+UNUSABLE_DESTINATIONS = [
+    pytest.param(
+        case,
+        marks=pytest.mark.skipif(
+            case is UnusableDestination.READ_ONLY_FOLDER and ROOT_IGNORES_PERMISSIONS,
+            reason="root ignores directory permissions",
+        ),
+        id=case.value,
+    )
+    for case in UnusableDestination
+]
+"""Every unusable destination, the read-only folder skipped under root."""
+
+PREFLIGHT_REASONS = {
+    UnusableDestination.DIRECTORY: "exists and is not a regular file",
+    UnusableDestination.SYMBOLIC_LINK: "is a symbolic link",
+    UnusableDestination.READ_ONLY_FOLDER: "is not a directory this process can write into",
+    UnusableDestination.PATH_UNDER_A_FILE: "is not a directory this process can write into",
+    UnusableDestination.OVER_LONG_FOLDER_NAME: "could not be checked (File name too long)",
+}
+"""The pre-flight's reason for each unusable destination."""
+
+
+@pytest.mark.parametrize("case", UNUSABLE_DESTINATIONS)
+def test_a_destination_the_writer_would_refuse_is_refused_before_the_computation(
+    tmp_path: Path,
+    iridium_yaml: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    case: UnusableDestination,
+) -> None:
+    """Objective: the saturation command refuses what the shared writer would refuse before it
+    computes (a full promotion computes for about 26 minutes first), and changes nothing.
+
+    Sample: the shipped scenario with ``compute_saturation`` patched to fail the test if called,
+    and a destination that is a directory, a symbolic link to a file, a file in a folder this
+    process cannot write into (skipped under root), a path under a regular file, or a path
+    through a folder name past the file system's limit (an error the system reports, never
+    hidden as a missing path).
+
+    Expected outcome: exit status 1; exactly one ERROR record, on one line, naming the scenario,
+    the destination and the reason, and saying nothing was computed; the computation never
+    called; every file and folder as it was.
+    """
+
+    def never(*args: object, **kwargs: object) -> SaturationCurve:
+        pytest.fail("compute_saturation ran before the destination was checked")
+
+    monkeypatch.setattr(sat, "compute_saturation", never)
+    destination = unusable_destination(tmp_path, case)
+    before = the_tree(tmp_path)
+    try:
+        status = sat.main([str(iridium_yaml), str(destination)])
+    finally:
+        unlock(tmp_path, case)
+    assert status == EXIT_ERROR
+    errors = [record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert "\n" not in errors[0]
+    assert f"could not promote the saturation curve from {iridium_yaml}: {destination}" in errors[0]
+    assert PREFLIGHT_REASONS[case] in errors[0]
+    assert "no destination was changed and nothing was computed" in errors[0]
+    assert the_tree(tmp_path) == before
+
+
+@pytest.mark.parametrize("case", UNUSABLE_DESTINATIONS)
+def test_the_shared_writer_refuses_every_destination_the_preflight_refuses(
+    tmp_path: Path, case: UnusableDestination
+) -> None:
+    """Objective: the pre-flight's copy of the writer's rule refuses nothing the writer would
+    write: each destination it refuses, the public writer refuses too.
+
+    Sample: each unusable destination above, checked by the pre-flight and then written by
+    ``write_files_with_rollback`` with one short text.
+
+    Expected outcome: both raise ModelFileError naming the destination; the writer leaves every
+    file and folder as it was (no staged or backup file beside the destination).
+    """
+    destination = unusable_destination(tmp_path, case)
+    before = the_tree(tmp_path)
+    try:
+        with pytest.raises(ModelFileError) as preflight:
+            sat._check_destination(destination)
+        with pytest.raises(ModelFileError) as writer:
+            write_files_with_rollback([PendingWrite(destination, "NEW\n")])
+    finally:
+        unlock(tmp_path, case)
+    assert preflight.value.path == writer.value.path == destination
+    assert the_tree(tmp_path) == before
+
+
+POOL_TERMINATED = (
+    "A process in the process pool was terminated abruptly while the future was running or pending."
+)
+"""The message a process pool breaks with when one of its workers dies."""
+
+WORKER_OUT_OF_MEMORY = (
+    "Unable to allocate 7.11 PiB for an array with shape (999999993568952,) and data type int64"
+)
+"""numpy's message for an allocation no machine can make (the cross-process test's real one)."""
+
+UNPICKLING_CAUSE = (
+    "\n'''\nTraceback (most recent call last):\n  File \"connection.py\", line 1, in recv\n"
+    "_pickle.UnpicklingError: pickle data was truncated\n'''"
+)
+"""A process pool's cause as it fences it: the formatted traceback of a failure in this
+process (here, receiving a result), between triple quotes."""
+
+
+def broken_pool_with_a_cause() -> BrokenProcessPool:
+    """A process pool broken by a failure in this process, with its fenced cause attached."""
+    broken = BrokenProcessPool(POOL_TERMINATED)
+    broken.__cause__ = Exception(UNPICKLING_CAUSE)
+    return broken
+
+
+@pytest.mark.parametrize(
+    ("failure", "reason"),
+    [
+        (
+            lambda: BrokenProcessPool(POOL_TERMINATED),
+            "a saturation worker died during a sweep of 27 snapshot tasks, most likely out of "
+            "memory",
+        ),
+        (
+            lambda: sat._WorkerMemoryError(WORKER_OUT_OF_MEMORY),
+            "a saturation worker ran out of memory during a sweep of 27 snapshot tasks "
+            f"({WORKER_OUT_OF_MEMORY})",
+        ),
+        (
+            broken_pool_with_a_cause,
+            "the saturation sweep's process pool broke during a sweep of 27 snapshot tasks "
+            "(_pickle.UnpicklingError: pickle data was truncated)",
+        ),
+    ],
+    ids=["a dead worker", "a worker out of memory", "a pool broken with a cause"],
+)
+def test_a_failed_sweep_is_one_error_line(
+    tmp_path: Path,
+    iridium_yaml: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    failure: Callable[[], Exception],
+    reason: str,
+) -> None:
+    """Objective: a sweep that fails (a saturation worker that dies, most likely killed out of
+    memory; one that runs out of memory itself; or the process pool broken by a stated cause in
+    this process) ends the command with one ERROR line, never a traceback, and only a worker's
+    own failure is blamed on a worker.
+
+    Sample: the shipped scenario at the coarse setting (nine curves at three fleets and one
+    snapshot: 27 snapshot tasks), with the sweep's first pool patched to raise what the process
+    pool raises in each case: ``BrokenProcessPool`` with no cause, the worker's marked
+    MemoryError, ``BrokenProcessPool`` with a fenced cause (an unpickling error).
+
+    Expected outcome: exit status 1; exactly one ERROR record, on one line, with no exception
+    attached, naming the scenario, the sweep's task count and what failed (the cause's own line
+    for a broken pool, with no worker named), and saying nothing was written; no file written.
+    """
+
+    def fails(*args: object, **kwargs: object) -> None:
+        raise failure()
+
+    monkeypatch.setattr(sat, "saturation_inputs_for", coarse_inputs_for)
+    monkeypatch.setattr(sat, "_run_alone", fails)
+    out_path = tmp_path / "saturation_curve.json"
+    assert sat.main([str(iridium_yaml), str(out_path)]) == EXIT_ERROR
+    errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert errors[0].exc_info is None
+    assert (len(DeviceClass) + len(BandName)) * len(COARSE_REAL_FLEETS) == 27
+    assert errors[0].getMessage() == (
+        f"could not promote the saturation curve from {iridium_yaml}: {reason}; nothing was written"
+    )
+    assert not out_path.exists()
+
+
+def test_a_memory_error_of_the_command_itself_is_not_blamed_on_a_worker(
+    tmp_path: Path,
+    iridium_yaml: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Objective: the sweep's error names a worker only for a worker's own failure: a
+    MemoryError the command's own process raises outside the pool's manager thread is left as
+    it is (one there breaks the pool and is named as its cause).
+
+    Sample: the shipped scenario at the coarse setting, with the sweep's first pool patched to
+    raise a bare MemoryError, as this process's own allocation would (a worker's arrives marked).
+
+    Expected outcome: the MemoryError itself leaves the command; no ERROR record, so no line
+    blames a worker; no file written.
+    """
+
+    def runs_out(*args: object, **kwargs: object) -> None:
+        raise MemoryError
+
+    monkeypatch.setattr(sat, "saturation_inputs_for", coarse_inputs_for)
+    monkeypatch.setattr(sat, "_run_alone", runs_out)
+    out_path = tmp_path / "saturation_curve.json"
+    with pytest.raises(MemoryError):
+        sat.main([str(iridium_yaml), str(out_path)])
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
+    assert not out_path.exists()
+
+
+def test_the_sweeps_error_survives_a_pickle_round_trip_and_a_copy() -> None:
+    """Objective: the sweep's public error can cross a process boundary and be copied, so a
+    caller running the computation in a pool of its own sees the sweep's message, never a
+    TypeError rebuilding it.
+
+    Sample: ``SaturationSweepError`` with a one-line message and a task count of 27.
+
+    Expected outcome: a pickle round trip and ``copy.copy`` each give the same type, message and
+    task count.
+    """
+    error = sat.SaturationSweepError(
+        "a saturation worker died during a sweep of 27 snapshot tasks, most likely out of memory",
+        27,
+    )
+    pickled = pickle.dumps(error)
+    unpickled = pickle.loads(pickled)  # noqa: S301 (the bytes this test itself pickled)
+    for rebuilt in (unpickled, copy.copy(error)):
+        assert type(rebuilt) is sat.SaturationSweepError
+        assert str(rebuilt) == str(error)
+        assert rebuilt.task_count == error.task_count
+
+
+UNBUILDABLE_FLEET = 10**15
+"""A requested fleet no machine can hold: its shell's first array of that size (8 PB) is refused
+at once, after a 0.25 GB array of its planes."""
+
+
+def phone_snapshot_task(fleet_index: int, requested_fleet: int) -> sat._SnapshotTask:
+    """One phone-class snapshot task at the draw's first snapshot, pricing no trim."""
+    return sat._SnapshotTask(
+        curve=PHONE,
+        fleet_index=fleet_index,
+        requested_fleet=requested_fleet,
+        snapshot_index=0,
+        time_s=0.0,
+        prices_trim=False,
+    )
+
+
+def one_patch_context(synthetic_population_grid: GridBuilder) -> sat._SweepContext:
+    """A phone-class snapshot context on one populated 2 degree cell (the default shell, B = 1)."""
+    cells = sat._demand_cells(synthetic_population_grid(2.0, patch_people(2.0, 0)), 1.0)
+    return sat._SweepContext(
+        shell=ShellInputs(), cells=cells, limits=seam_limits(1.0), trim=TrimInputs()
+    )
+
+
+def test_a_workers_memory_error_is_marked_as_the_workers(
+    monkeypatch: pytest.MonkeyPatch, synthetic_population_grid: GridBuilder
+) -> None:
+    """Objective: a pool's worker marks its own MemoryError, so the parent can tell it from one
+    of its own, and passes every result through unchanged.
+
+    Sample: the worker's entry, ``_run_snapshot_in_worker``, called in this process on one
+    phone-class task, with ``_run_snapshot`` patched to raise numpy's out-of-memory message, then
+    unpatched.
+
+    Expected outcome: ``_WorkerMemoryError`` carrying numpy's message, the MemoryError as its
+    cause; unpatched, the snapshot's own result (equal to ``_run_snapshot``'s).
+    """
+    task = phone_snapshot_task(0, 342)
+    context = one_patch_context(synthetic_population_grid)
+    unmarked = sat._run_snapshot(task, context)
+    with monkeypatch.context() as patch:
+
+        def raises(*args: object) -> sat._SnapshotResult:
+            raise MemoryError(WORKER_OUT_OF_MEMORY)
+
+        patch.setattr(sat, "_run_snapshot", raises)
+        with pytest.raises(sat._WorkerMemoryError, match=r"Unable to allocate 7\.11 PiB") as marked:
+            sat._run_snapshot_in_worker(task, context)
+    assert isinstance(marked.value.__cause__, MemoryError)
+    passed = sat._run_snapshot_in_worker(task, context)
+    assert dataclasses.replace(passed, worker_peak_mb=unmarked.worker_peak_mb) == unmarked
+
+
+def test_a_workers_memory_error_crosses_the_process_boundary_as_the_sweeps_error(
+    synthetic_population_grid: GridBuilder,
+) -> None:
+    """Objective: a real worker's MemoryError reaches the parent as the sweep's own error, its
+    message and the task count with it (the pool pickles the worker's exception and raises it
+    again here).
+
+    Sample: two phone-class snapshot tasks of 10^15 satellites run by ``_run_sweep`` in a spawned
+    worker: the shell's first array of that size (8 PB) is refused at once, after a 0.25 GB array
+    of its planes, so the worker raises numpy's real MemoryError.
+
+    Expected outcome: ``SaturationSweepError`` (a ValueError) carrying the task count 2 and
+    saying a saturation worker ran out of memory, with numpy's message.
+    """
+    tasks = [phone_snapshot_task(index, UNBUILDABLE_FLEET + index) for index in range(2)]
+    context = one_patch_context(synthetic_population_grid)
+    with pytest.raises(sat.SaturationSweepError) as failed:
+        sat._run_sweep(tasks, {PHONE: context})
+    assert isinstance(failed.value, ValueError)
+    assert failed.value.task_count == 2
+    assert str(failed.value).startswith(
+        "a saturation worker ran out of memory during a sweep of 2 snapshot tasks (Unable to "
+        "allocate"
+    )
+    assert str(failed.value).endswith("); nothing was written")
+
+
+def test_the_command_exits_with_the_usage_status_on_a_usage_error(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Objective: a usage error follows the shared convention.
+
+    Sample: the command with no arguments.
+
+    Expected outcome: exit status 2 with the usage line on stderr.
+    """
+    with pytest.raises(SystemExit) as stopped:
+        sat.main([])
+    assert stopped.value.code == EXIT_USAGE
+    assert "usage: python -m communications.saturation" in capsys.readouterr().err
+
+
+def test_the_narrowing_function_returns_the_iridium_dials_or_refuses_a_cellular_config(
+    iridium_yaml: Path,
+) -> None:
+    """Objective: one function narrows a config to its Iridium dials, and refuses a config of
+    the cellular family with the Iridium promotion command's own message, as a ValueError.
+
+    Sample: the shipped Iridium scenario; the default config (no ``iridium:`` block).
+
+    Expected outcome: the scenario's own ``iridium`` block back; for the default config,
+    NotAnIridiumConfigError with today's message, word for word.
+    """
+    config = load_comms_config(iridium_yaml)
+    assert iridium_dials_of(config) is config.iridium
+    with pytest.raises(NotAnIridiumConfigError) as refused:
+        iridium_dials_of(CommsConfig())
+    assert str(refused.value) == (
+        "the scenario does not select the Iridium model: it needs a top-level "
+        "'iridium:' block (see scenarios/iridium.yaml)"
+    )
+    assert isinstance(refused.value, ValueError)
 
 
 @pytest.mark.parametrize(
@@ -1544,6 +2732,622 @@ def test_the_contract_refuses_a_curve_out_of_shape(build: Callable[[], object]) 
     """
     with pytest.raises(ValueError, match="validation error"):
         build()
+
+
+COMPLETE_FLEETS = (342, 992)
+"""The complete bare curve's requested fleets: each realizes as itself (18 x 19, 31 x 32)."""
+
+
+NO_STACK = DirectionalDiagnostics(
+    kept_stacked_share=0.0, median_separation_deg=None, mean_full_sum_interference_db=None
+)
+"""A directional row's diagnostics when it keeps no stacked beam."""
+
+
+def complete_bare_curve() -> SaturationCurve:
+    """A complete curve on hand-built rows: the default inputs but for the sweep (fleets 342
+    and 992, no mounted extension), every class and every band point on the two bare rows, the
+    directional classes' rows with their diagnostics, the phone class's rows with a trim at the
+    default floors, one stated limit and one check passed."""
+    inputs = SaturationInputs(
+        sweep=SweepInputs(fleets=COMPLETE_FLEETS, mounted_terminal_extension=())
+    )
+    trim = tuple(TrimAtFloor(floor_dbi=floor, trim=0.01) for floor in inputs.trim.floors_dbi)
+    phone_rows = tuple(row.model_copy(update={"trim": trim}) for row in BARE_ROWS)
+    directional_rows = tuple(row.model_copy(update={"directional": NO_STACK}) for row in BARE_ROWS)
+    curve = bare_curve(
+        tuple(
+            ClassCurve(
+                device_class=device_class,
+                rows=phone_rows if device_class is PHONE else directional_rows,
+                markers=bare_markers(),
+            )
+            for device_class in DeviceClass
+        ),
+        tuple(
+            BandCurve(point=point, rows=BARE_ROWS, markers=bare_markers()) for point in inputs.bands
+        ),
+    )
+    return curve.model_copy(
+        update={
+            "parameters": inputs,
+            "input_hash": curve_input_hash(inputs),
+            "provenance": curve.provenance.model_copy(update={"checks_passed": ("a check",)}),
+            "limits": ("a stated limit",),
+        }
+    )
+
+
+def write_curve_json(path: Path, data: object) -> Path:
+    """Write a curve's JSON document to a file and return the path."""
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def test_a_complete_curve_passes_its_check_and_loads(tmp_path: Path) -> None:
+    """Objective: what the promotion writes, the loader reads back whole.
+
+    Sample: the complete bare curve, written as the promotion renders it.
+
+    Expected outcome: ``check_curve_complete`` passes it, and ``load_saturation_curve`` returns
+    a curve equal to it.
+    """
+    curve = complete_bare_curve()
+    check_curve_complete(curve)
+    path = tmp_path / "saturation_curve.json"
+    path.write_text(render_artifact_json(curve) + ARTIFACT_FILE_END, encoding="utf-8")
+    assert load_saturation_curve(path) == curve
+
+
+def with_phone_markers(curve: SaturationCurve, **changes: float | int | None) -> SaturationCurve:
+    """The curve with the phone class's markers changed as asked."""
+    phone = curve.classes[2]
+    return curve.model_copy(
+        update={
+            "classes": (
+                *curve.classes[:2],
+                phone.model_copy(update={"markers": phone.markers.model_copy(update=changes)}),
+            )
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"saturation_number": 582, "saturation_not_reached_by": None},
+        {"elasticity_under_0p25_fleet": 582},
+        {"fleet_at_90pct_of_maximum_use": 342},
+        {"fleet_at_90pct_of_maximum_use": 992},
+    ],
+    ids=[
+        "a saturation number at the midpoint",
+        "a 0.25 crossing at the midpoint",
+        "a 90 percent fleet at the first row",
+        "a 90 percent fleet at the last row",
+    ],
+)
+def test_markers_at_the_edges_of_their_spans_pass_the_completeness_check(
+    changes: dict[str, int | None],
+) -> None:
+    """Objective: the completeness check's conditions on the markers are necessary only, and its
+    spans are the ones the markers' definitions give: a crossing between the rows' first and last
+    geometric midpoints, each rounded half up; the 90 percent fleet within the rows' span.
+
+    Sample: the complete bare curve (rows at 342 and 992: one midpoint, sqrt(342 x 992) = 582.46,
+    582 rounded) with the phone class's markers at the edges of those spans.
+
+    Expected outcome: each passes ``check_curve_complete`` (whether ``_markers`` would give it is
+    the derived-fields drift test's to say, on the committed curve).
+    """
+    check_curve_complete(with_phone_markers(complete_bare_curve(), **changes))
+
+
+SMALL_TERMINAL_SECTORS = next(
+    entry.sector_wedges_per_ring
+    for entry in SaturationInputs().classes
+    if entry.device_class is DeviceClass.SMALL_TERMINAL_CLASS
+)
+"""The small terminal's default sky sectors: its azimuth wedges per ring, from the zenith down."""
+
+
+def complete_curve_with_sectors(small: tuple[int, ...], phone: tuple[int, ...]) -> SaturationCurve:
+    """The complete bare curve with the small terminal's and the phone class's sky sectors set in
+    its parameters, each row's diagnostics placed as the computation places them (on every row of
+    a class with sky sectors, a band point's by the phone class's) and its input hash recomputed."""
+    curve = complete_bare_curve()
+    layouts = {DeviceClass.SMALL_TERMINAL_CLASS: small, PHONE: phone}
+    classes = tuple(
+        entry.model_copy(update={"sector_wedges_per_ring": layouts[entry.device_class]})
+        if entry.device_class in layouts
+        else entry
+        for entry in curve.parameters.classes
+    )
+    parameters = SaturationInputs.model_validate(
+        {**curve.parameters.model_dump(), "classes": classes}
+    )
+    sectored = {entry.device_class: bool(entry.sector_wedges_per_ring) for entry in classes}
+
+    def placed(rows: tuple[CurveRow, ...], diagnostics: bool) -> tuple[CurveRow, ...]:
+        return tuple(
+            row.model_copy(update={"directional": NO_STACK if diagnostics else None})
+            for row in rows
+        )
+
+    return curve.model_copy(
+        update={
+            "parameters": parameters,
+            "input_hash": curve_input_hash(parameters),
+            "classes": tuple(
+                entry.model_copy(update={"rows": placed(entry.rows, sectored[entry.device_class])})
+                for entry in curve.classes
+            ),
+            "bands": tuple(
+                band.model_copy(update={"rows": placed(band.rows, sectored[PHONE])})
+                for band in curve.bands
+            ),
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("small", "phone", "flip", "message"),
+    [
+        ((), (), (0, None), "small_terminal_class row at 342 satellites carries stacking"),
+        (
+            SMALL_TERMINAL_SECTORS,
+            (1,),
+            (None, 0),
+            "band point taper row at 342 satellites lacks its stacking diagnostics",
+        ),
+    ],
+    ids=["an omni small terminal", "a sectored phone class"],
+)
+def test_the_diagnostics_sit_where_the_parameters_sky_sectors_put_them(
+    tmp_path: Path,
+    small: tuple[int, ...],
+    phone: tuple[int, ...],
+    flip: tuple[int | None, int | None],
+    message: str,
+) -> None:
+    """Objective: the completeness check places the stacking diagnostics by each class's sky
+    sectors in the curve's parameters, as the computation does, never by the class's name, so a
+    curve computed from contract-valid inputs is never refused after the run.
+
+    Sample: the complete bare curve with a small terminal of no sky sectors (its rows without
+    diagnostics), or a phone class of one sector (its rows and every band point's with them);
+    then the same curve with one row's diagnostics flipped (the small terminal's first row given
+    them, or the first band point's first row stripped of them).
+
+    Expected outcome: each curve passes ``check_curve_complete`` and loads; the flipped one is
+    refused naming the curve and the row.
+    """
+    curve = complete_curve_with_sectors(small, phone)
+    check_curve_complete(curve)
+    path = tmp_path / "saturation_curve.json"
+    path.write_text(render_artifact_json(curve) + ARTIFACT_FILE_END, encoding="utf-8")
+    assert load_saturation_curve(path) == curve
+    class_index, band_index = flip
+    data = json.loads(render_artifact_json(curve))
+    if class_index is not None:
+        data["classes"][class_index]["rows"][0]["directional"] = NO_STACK.model_dump()
+    if band_index is not None:
+        data["bands"][band_index]["rows"][0]["directional"] = None
+    flipped = write_curve_json(tmp_path / "flipped.json", data)
+    with pytest.raises(SaturationCurveError, match=message):
+        load_saturation_curve(flipped)
+
+
+def test_a_grid_named_otherwise_with_the_parameters_digest_loads(tmp_path: Path) -> None:
+    """Objective: the grid is identified by its digest alone, as the computation identifies it;
+    its file name is a label the parameters' path already gives.
+
+    Sample: the complete bare curve with its provenance's grid file name changed, its digest kept.
+
+    Expected outcome: the curve passes ``check_curve_complete`` and loads.
+    """
+    curve = complete_bare_curve()
+    renamed = curve.model_copy(
+        update={"provenance": curve.provenance.model_copy(update={"grid_file_name": "other.npz"})}
+    )
+    check_curve_complete(renamed)
+    path = write_curve_json(tmp_path / "renamed.json", json.loads(render_artifact_json(renamed)))
+    assert load_saturation_curve(path).provenance.grid_file_name == "other.npz"
+
+
+def test_one_bounds_tolerance_serves_the_computation_and_the_completeness_check() -> None:
+    """Objective: the computation's bounds check and the completeness check read one tolerance
+    through one predicate, so a retune moves both (a one-sided one would refuse the computation's
+    own curve after the full run).
+
+    Sample: the module's names for the tolerance and the predicate; the complete bare curve with
+    the phone class's maximum use set under its last row's ceiling by half the tolerance and by
+    twice it.
+
+    Expected outcome: the module's names are the contract's own objects; the curve passes at half
+    the tolerance and is refused at twice it.
+    """
+    assert sat._BOUNDS_RELATIVE_TOLERANCE is saturation_curve.BOUNDS_RELATIVE_TOLERANCE
+    assert sat.exceeds_bound is saturation_curve.exceeds_bound
+    curve = complete_bare_curve()
+    ceiling = curve.classes[2].rows[-1].ceiling_beams
+    tolerance = saturation_curve.BOUNDS_RELATIVE_TOLERANCE
+    check_curve_complete(with_phone_markers(curve, maximum_use_beams=ceiling * (1 - tolerance / 2)))
+    with pytest.raises(SaturationCurveError, match="above its maximum use"):
+        check_curve_complete(
+            with_phone_markers(curve, maximum_use_beams=ceiling * (1 - 2 * tolerance))
+        )
+
+
+def _phone_trim_json() -> list[dict[str, float]]:
+    """The complete bare curve's phone trim, as JSON."""
+    return [{"floor_dbi": floor, "trim": 0.01} for floor in SaturationInputs().trim.floors_dbi]
+
+
+@pytest.mark.parametrize(
+    ("alter", "message"),
+    [
+        (lambda d: d.update(input_hash="0" * 64), "the input hash 0000"),
+        (lambda d: d["parameters"].update(spectrum_mhz=10.5), "the parameters or the hash"),
+        (lambda d: d.update(schema_version="saturation-v2"), "schema is 'saturation-v2'"),
+        (lambda d: d.update(classes=d["classes"][:2]), r"lacks the classes \['phone_class'\]"),
+        (lambda d: d.update(bands=d["bands"][1:]), r"lacks the band points \['taper'\]"),
+        (lambda d: d["classes"][2]["rows"][0].update(trim=None), "342 satellites lacks its trim"),
+        (
+            lambda d: d["classes"][0]["rows"][1].update(trim=_phone_trim_json()),
+            "small_terminal_class row at 992 satellites carries a trim",
+        ),
+        (
+            lambda d: d["bands"][5]["rows"][0].update(trim=_phone_trim_json()),
+            "band point beams_48 row at 342 satellites carries a trim",
+        ),
+        (
+            lambda d: d["classes"][2]["rows"][1]["trim"].pop(),
+            r"floors \[-0.4, -2.0\], not the parameters' \[-0.4, -2.0, -8.0\]",
+        ),
+        (
+            lambda d: d["bands"][0]["point"].update(beamwidth_factor=1.2),
+            "band point taper is",
+        ),
+        (
+            lambda d: d["classes"][1].update(rows=d["classes"][1]["rows"][:1]),
+            r"mounted_terminal_class rows stand at the requested fleets \[342\]",
+        ),
+        (
+            lambda d: d.update(classes=[d["classes"][1], d["classes"][0], d["classes"][2]]),
+            r"not a saturation curve \(classes must hold each member at most once",
+        ),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(requested_fleet="342"),
+            "requested_fleet: Input should be a valid integer",
+        ),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(fleet=342.0),
+            "fleet: Input should be a valid integer",
+        ),
+        (
+            lambda d: (
+                d["parameters"]["bands"][0].update(grid_aggregation=True),
+                d["bands"][0]["point"].update(grid_aggregation=True),
+            ),
+            "grid_aggregation: Input should be a valid integer",
+        ),
+        (
+            lambda d: d["parameters"].update(spectrum_mhz="8.0"),
+            "spectrum_mhz: Input should be a valid number",
+        ),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(useful_beams=float("nan")),
+            "finite number",
+        ),
+        (lambda d: d["parameters"].update(sidelobe_floor_db=float("-inf")), "finite number"),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(requested_fleet=10**309),
+            "a number out of range: a row's requested_fleet is too large to build its shell from",
+        ),
+        (
+            lambda d: d["classes"][0]["rows"][0].update(directional=None),
+            "small_terminal_class row at 342 satellites lacks its stacking diagnostics",
+        ),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(directional=NO_STACK.model_dump()),
+            "phone_class row at 342 satellites carries stacking diagnostics",
+        ),
+        (
+            lambda d: d["bands"][0]["rows"][1].update(directional=NO_STACK.model_dump()),
+            "band point taper row at 992 satellites carries stacking diagnostics",
+        ),
+        (lambda d: d.update(limits=[]), "the curve states no limits"),
+        (lambda d: d["provenance"].update(checks_passed=[]), "names no checks passed"),
+        (
+            lambda d: d["provenance"].update(grid_sha256="0" * 64),
+            "the provenance's grid digest 0000",
+        ),
+        (
+            lambda d: d["bands"][5]["markers"].update(saturation_not_reached_by=500),
+            "band point beams_48 saturation_not_reached_by is 500, not its last row's fleet 992",
+        ),
+        (
+            lambda d: d["classes"][0]["markers"].update(
+                saturation_number=5_000, saturation_not_reached_by=None
+            ),
+            "saturation_number 5000 lies outside the span of its rows' geometric midpoints, 582 "
+            "to 582",
+        ),
+        (
+            lambda d: d["classes"][0]["markers"].update(
+                saturation_number=500, saturation_not_reached_by=None
+            ),
+            "saturation_number 500 lies outside the span of its rows' geometric midpoints",
+        ),
+        (
+            lambda d: d["bands"][1]["markers"].update(elasticity_under_0p25_fleet=900),
+            "band point taper_and_spacing elasticity_under_0p25_fleet 900 lies outside the span",
+        ),
+        (
+            lambda d: d["classes"][1]["markers"].update(fleet_at_90pct_of_maximum_use=1_000),
+            "fleet_at_90pct_of_maximum_use 1000 lies outside its rows' span, 342 to 992",
+        ),
+        (
+            lambda d: d["classes"][2]["markers"].update(maximum_use_beams=15.0),
+            "phone_class row at 992 satellites has a ceiling of 20.0 beams, above its maximum use",
+        ),
+    ],
+    ids=[
+        "an altered input hash",
+        "an altered parameter",
+        "an unknown schema",
+        "a class missing",
+        "a band point missing",
+        "a phone row without its trim",
+        "a directional row with a trim",
+        "a band row with a trim",
+        "a trim at other floors",
+        "a band point not its parameters'",
+        "rows missing",
+        "a curve the contract refuses",
+        "a fleet written as a string",
+        "a fleet written as a float",
+        "a count written as true",
+        "a number written as a string",
+        "NaN in a row",
+        "minus infinity in a parameter",
+        "a requested fleet out of range",
+        "a directional row without its diagnostics",
+        "a phone row with diagnostics",
+        "a band row with diagnostics",
+        "no stated limits",
+        "no checks passed",
+        "a grid digest not the parameters'",
+        "not reached by a fleet that is not the last row",
+        "a saturation number outside the rows",
+        "a saturation number before the first midpoint",
+        "a 0.25 crossing past the last midpoint",
+        "a 90 percent fleet past the last row",
+        "maximum use under a row's ceiling",
+    ],
+)
+def test_the_loader_refuses_a_curve_the_engine_must_not_read(
+    tmp_path: Path, alter: Callable[[dict[str, object]], object], message: str
+) -> None:
+    """Objective: ``load_saturation_curve`` refuses a promoted curve whose parameters or hash
+    were altered, one of another schema, one the contract refuses (a value of another JSON type
+    than the contract writes, a NaN or an infinity, a number out of range), an incomplete one
+    (diagnostics or a trim misplaced, no limits or checks, a grid not the parameters') and one
+    whose markers its rows cannot give, each with a SaturationCurveError (a ValueError, so both
+    commands catch it) naming the file.
+
+    Sample: the complete bare curve's JSON with one change each.
+
+    Expected outcome: SaturationCurveError whose message names the file and the breach.
+    """
+    data = json.loads(render_artifact_json(complete_bare_curve()))
+    alter(data)
+    path = write_curve_json(tmp_path / "altered.json", data)
+    with pytest.raises(SaturationCurveError, match=message) as refused:
+        load_saturation_curve(path)
+    assert str(path) in str(refused.value)
+    assert isinstance(refused.value, ValueError)
+    assert "(: " not in str(refused.value)
+    assert "Value error" not in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "message"),
+    [
+        (
+            '"schema_version": "saturation-v1",',
+            '"schema_version": "saturation-v2",\n  "schema_version": "saturation-v1",',
+            "the key 'schema_version' appears twice in one JSON object",
+        ),
+        ('"capacity_gbps": 1.0,', '"capacity_gbps": 1e999,', "finite number"),
+        ('"a stated limit"', '"\\ud800a stated limit"', r"not a saturation curve \(Invalid JSON"),
+        (
+            '"requested_fleet": 342,',
+            f'"requested_fleet": 1{"0" * 4_999},',
+            "a number out of range: Exceeds the limit",
+        ),
+    ],
+    ids=[
+        "a key written twice",
+        "a number too large for a float",
+        "a lone surrogate",
+        "an integer past Python's digit limit",
+    ],
+)
+def test_the_loader_refuses_json_text_the_promotion_never_writes(
+    tmp_path: Path, old: str, new: str, message: str
+) -> None:
+    """Objective: the loader refuses JSON text Python's parser reads, but not as the promotion
+    writes it: a key written twice in one object (Python's parser keeps the last, another
+    reader may keep the first), a number beyond a float (Python's parser reads it as infinity),
+    a lone surrogate escape (Python's parser keeps it, pydantic's refuses it with no location),
+    and an integer past Python's limit on digits; each refusal reads as one clean clause.
+
+    Sample: the complete bare curve as the promotion renders it, with ``schema_version`` written
+    twice (another schema first), its first capacity written ``1e999``, its stated limit led by
+    ``\\ud800``, or its first requested fleet written with 5,000 digits.
+
+    Expected outcome: SaturationCurveError naming the file and the repeated key, the value not a
+    finite number, pydantic's parser refusing the text (no empty location before it), or a
+    number out of range.
+    """
+    text = render_artifact_json(complete_bare_curve()) + ARTIFACT_FILE_END
+    assert old in text
+    path = tmp_path / "altered.json"
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+    with pytest.raises(SaturationCurveError, match=message) as refused:
+        load_saturation_curve(path)
+    assert str(path) in str(refused.value)
+    assert "(: " not in str(refused.value)
+
+
+@pytest.mark.parametrize("digit_limit", [sys.get_int_max_str_digits(), 0], ids=["Python's", "none"])
+def test_a_number_out_of_range_is_the_curves_error_whatever_pythons_digit_limit(
+    tmp_path: Path, digit_limit: int
+) -> None:
+    """Objective: one rule sorts the loader's refusals, so a number out of range is the curve's
+    error whether or not Python's parser reads it (its class never follows
+    ``sys.set_int_max_str_digits``).
+
+    Sample: the complete bare curve with its first requested fleet written with 5,000 digits,
+    loaded under Python's default limit on an integer's digits (Python's parser refuses it) and
+    with no limit (Python's parser reads it, and pydantic's refuses it).
+
+    Expected outcome: SaturationCurveError naming the file, a number out of range, both times.
+    """
+    text = (render_artifact_json(complete_bare_curve()) + ARTIFACT_FILE_END).replace(
+        '"requested_fleet": 342,', f'"requested_fleet": 1{"0" * 4_999},', 1
+    )
+    path = tmp_path / "long_integer.json"
+    path.write_text(text, encoding="utf-8")
+    default = sys.get_int_max_str_digits()
+    sys.set_int_max_str_digits(digit_limit)
+    try:
+        with pytest.raises(SaturationCurveError, match="number out of range") as refused:
+            load_saturation_curve(path)
+    finally:
+        sys.set_int_max_str_digits(default)
+    assert str(path) in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    ("text", "kind"),
+    [
+        ("[1, 2]", "an array"),
+        ("null", "null"),
+        ("true", "true"),
+        ("false", "false"),
+        ("3", "a number"),
+        ("2.5", "a number"),
+        ('"a curve"', "a string"),
+    ],
+    ids=["an array", "null", "true", "false", "an integer", "a decimal", "a string"],
+)
+def test_a_json_root_that_is_not_an_object_is_not_a_saturation_curve(
+    tmp_path: Path, text: str, kind: str
+) -> None:
+    """Objective: text Python's parser reads is the curve's to refuse, so a JSON root that is not
+    an object is the curve's error, not the file boundary's, and the refusal names the root in
+    JSON's own words.
+
+    Sample: a file holding each kind of JSON value that is not an object.
+
+    Expected outcome: SaturationCurveError naming the file and the root's kind (null, true,
+    false, a number, a string, an array), never a Python type's name.
+    """
+    path = tmp_path / "saturation_curve.json"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(
+        SaturationCurveError, match=f"its JSON root is {kind}, not an object"
+    ) as refused:
+        load_saturation_curve(path)
+    assert str(path) in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ('"requested_fleet": 342,', '"requested_fleet": "342",'),
+        ('"device_class": "small_terminal_class"', '"device_class": "mounted_terminal_class"'),
+        ('"a stated limit"', '"\\ud800a stated limit"'),
+    ],
+    ids=["a located error", "a refusal of the whole curve", "text pydantic's parser refuses"],
+)
+def test_the_loaders_one_line_reading_of_a_validation_error_is_the_shared_commands(
+    old: str, new: str
+) -> None:
+    """Objective: the loader's one-line reading of a pydantic error (``_validation_summary``, a
+    copy the rule keeping ``common/`` unchanged forces) stays the one the shared commands print
+    (``common.cli.describe_failure``), so the two cannot drift apart unseen.
+
+    Sample: the complete bare curve as the promotion renders it, with a requested fleet written
+    as text (a located error), a class written twice (the curve's own validator refusing the
+    whole curve, no location), or its stated limit led by a lone surrogate escape (pydantic's
+    parser refusing the text, no location), each validated as the loader validates.
+
+    Expected outcome: ``describe_failure`` of the error is ``invalid <title>:`` followed by the
+    loader's reading, whitespace collapsed as ``describe_failure`` collapses it.
+    """
+    text = render_artifact_json(complete_bare_curve()) + ARTIFACT_FILE_END
+    assert old in text
+    with pytest.raises(ValidationError) as refused:
+        SaturationCurve.model_validate_json(text.replace(old, new, 1), strict=True)
+    error = refused.value
+    summary = saturation_curve._validation_summary(error)
+    assert describe_failure(error) == " ".join(f"invalid {error.title}: {summary}".split())
+
+
+def test_a_code_defect_in_validation_is_never_reported_as_a_data_problem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Objective: the loader turns only a requested fleet too large for a float (``walker_shape``'s
+    OverflowError) into the curve's error; any other arithmetic failure in validation, a code
+    defect, leaves as itself.
+
+    Sample: the complete bare curve, loaded with ``walker_shape`` patched to divide by zero.
+
+    Expected outcome: ZeroDivisionError, not SaturationCurveError.
+    """
+    path = tmp_path / "saturation_curve.json"
+    path.write_text(
+        render_artifact_json(complete_bare_curve()) + ARTIFACT_FILE_END, encoding="utf-8"
+    )
+
+    def divides_by_zero(requested_fleet: int) -> tuple[int, int]:
+        return requested_fleet // 0, 1
+
+    monkeypatch.setattr(saturation_curve, "walker_shape", divides_by_zero)
+    with pytest.raises(ZeroDivisionError):
+        load_saturation_curve(path)
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        (None, "file not found"),
+        ("{not json", "not a JSON document"),
+        ("[" * 200_000 + "]" * 200_000, "nested too deeply"),
+    ],
+    ids=["missing", "not JSON", "nested past Python's parser"],
+)
+def test_the_loader_refuses_a_file_it_cannot_read_as_a_curve(
+    tmp_path: Path, content: str | None, message: str
+) -> None:
+    """Objective: a curve file that cannot be read, or that Python's JSON parser refuses as JSON,
+    is the shared file-boundary error.
+
+    Sample: no file; text that is not JSON; an array nested 200,000 deep (Python's parser runs
+    out of stack and raises RecursionError).
+
+    Expected outcome: ModelFileError naming the file and the reason.
+    """
+    path = tmp_path / "saturation_curve.json"
+    if content is not None:
+        path.write_text(content, encoding="utf-8")
+    with pytest.raises(ModelFileError, match=message) as refused:
+        load_saturation_curve(path)
+    assert refused.value.path == path
 
 
 def test_compute_saturation_refuses_requests_that_realize_one_row(
@@ -2531,7 +4335,7 @@ def test_the_mounted_terminal_runs_over_its_extension_through_compute_saturation
     Sample: the shared-usage world (every class at 1 Mbps x 2.5 percent) at fleets 500 and
     1,000 (realized 506 and 992) with the mounted terminal's extension 4,000 (realized 3,969),
     one snapshot, with a second fleet under 1,000, since the contract
-    takes two fleets at least.
+    takes two fleets at least; the band points at the central values (:func:`central_bands`).
 
     Expected outcome: the classes in the class key's order; the mounted terminal's rows 506,
     992 and 3,969, requested 500, 1,000 and 4,000, its 3,969 row a directional row with its
@@ -2549,7 +4353,7 @@ def test_the_mounted_terminal_runs_over_its_extension_through_compute_saturation
         }
     )
     curve = compute_saturation(
-        inputs.model_copy(update={"sweep": sweep}), grid, version_stamp=STAMP
+        central_bands(inputs.model_copy(update={"sweep": sweep})), grid, version_stamp=STAMP
     )
     assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
     fleets_rows = [(506, 500), (992, 1_000)]
@@ -2584,10 +4388,10 @@ def test_the_memory_tiers_change_no_number(
     a worker's own peak.
 
     Expected outcome: at the default budget (room for at least eight task peaks) one process
-    runs the three classes' largest tasks and one pool the rest; with the budget binding (room
-    for about two), each class's 992 task, a tier of its own (under half of 10,000), runs alone
-    too: four alone runs. The two curves are equal in everything but the run's own
-    measurement.
+    runs the nine curves' largest tasks (three classes, six band points) and one pool the
+    rest; with the budget binding (room for about two), each curve's 992 task, a tier of its
+    own (under half of 10,000), runs alone too: ten alone runs. The two curves are equal in
+    everything but the run's own measurement.
     """
     monkeypatch.setattr(sat.os, "process_cpu_count", lambda: TIER_TEST_CPUS)
     inputs = small_sweep(
@@ -2599,10 +4403,10 @@ def test_the_memory_tiers_change_no_number(
     def counted_run_alone(
         indices: Sequence[int],
         tasks: Sequence[sat._SnapshotTask],
-        context: sat._SweepContext,
+        contexts: Mapping[sat._CurveKey, sat._SweepContext],
         results: dict[int, sat._SnapshotResult],
     ) -> None:
-        run_alone(indices, tasks, context, results)
+        run_alone(indices, tasks, contexts, results)
         alone_runs.append([results[index].worker_peak_mb for index in indices])
 
     monkeypatch.setattr(sat, "_run_alone", counted_run_alone)
@@ -2613,7 +4417,7 @@ def test_the_memory_tiers_change_no_number(
     assert room >= TIER_TEST_CPUS
     monkeypatch.setattr(sat, "_MEMORY_BUDGET_MB", sat._own_peak_mb() + 2 * task_peak_mb)
     tiered = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
-    assert len(alone_runs) == 1 + 1 + len(DeviceClass)
+    assert len(alone_runs) == 1 + 1 + len(DeviceClass) + len(BandName)
     measured_as_free = tiered.model_copy(
         update={
             "provenance": tiered.provenance.model_copy(

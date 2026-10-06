@@ -16,7 +16,17 @@ family can read a curve without importing numpy:
 * :func:`saturation_inputs_for`, the inputs a config's Iridium dials imply (only the held
   spectrum), and :func:`curve_input_hash`, the SHA-256 of the inputs' canonical JSON;
 * :func:`walker_shape`, the shell's pinned planes and satellites per plane for a requested
-  fleet, which the module builds every shell with and the contract checks every row by.
+  fleet, which the module builds every shell with and the contract checks every row by;
+* :func:`exceeds_bound` at :data:`BOUNDS_RELATIVE_TOLERANCE`, the one test of the curve's
+  bounds, which the computation and the completeness check share;
+* :func:`check_curve_complete`, what a promoted curve must carry (and necessary conditions on
+  the markers its rows can give), and :func:`load_saturation_curve`, which reads a promoted
+  curve and refuses one with a repeated key, a number out of range, another schema, a value
+  pydantic's strict mode refuses (an integer field given a string, a float or a boolean; a
+  float field given a string or a boolean, while a JSON integer there reads as the same
+  float), altered parameters or input hash, or one that fails its completeness check, each
+  with a :class:`SaturationCurveError` naming the file (a file it cannot read, or whose text
+  Python's JSON parser cannot read as JSON, is the file boundary's ``ModelFileError``).
 
 Every model is a frozen pydantic model with ``extra="forbid"`` that refuses a NaN or an
 infinity, so a curve's JSON is standard JSON. The validators that belong to the contract:
@@ -42,6 +52,7 @@ import math
 from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from itertools import pairwise
+from pathlib import Path
 from types import MappingProxyType
 from typing import Annotated, Final, Self
 
@@ -51,10 +62,12 @@ from pydantic import (
     Field,
     NonNegativeInt,
     PositiveInt,
+    ValidationError,
     model_validator,
 )
 
-from common.file_io import TEXT_ENCODING
+from common.cadence import round_half_up
+from common.file_io import TEXT_ENCODING, ModelFileError
 from communications.config import IridiumDials
 from communications.constants import (
     APERTURE_REFERENCE_M2,
@@ -114,6 +127,18 @@ _SHA256_HEX_PATTERN: Final[str] = "^[0-9a-f]{64}$"
 
 _CANONICAL_JSON_SEPARATORS: Final[tuple[str, str]] = (",", ":")
 """The canonical JSON's item and key separators, with no spaces (the input hash's form)."""
+
+BOUNDS_RELATIVE_TOLERANCE: Final[float] = 1e-9
+"""The relative tolerance of the curve's bounds (the saturation strategy's 1e-9 for every
+invariant check): useful beams at most min(ceiling, supply) and the ceiling at most maximum use
+hold exactly in arithmetic, and only rounding may carry them past. The computation checks every
+snapshot by it and the completeness check every row's ceiling against maximum use, both through
+:func:`exceeds_bound`, so a curve the computation passed passes the completeness check too."""
+
+_PYDANTIC_VALUE_ERROR: Final[str] = "value_error"
+"""Pydantic's error type for a ``ValueError`` raised inside a validator, whose message pydantic
+leads with ``Value error,`` (the loader's refusals give the validator's own message, as
+``common.cli.describe_failure`` does)."""
 
 _RIGHT_ANGLE_DEG: Final[float] = 90.0
 """A right angle, degrees: the most an inclination or an elevation mask can be here (the
@@ -187,6 +212,22 @@ def _check_strictly_increasing(values: Sequence[int], what: str) -> None:
 
 _RequestedFleet = Annotated[int, Field(strict=True, gt=0)]
 """A requested fleet: a positive integer, strictly (a boolean or a whole float is refused)."""
+
+
+def exceeds_bound(value: float, bound: float) -> bool:
+    """Return whether a value lies above its bound by more than the bounds' tolerance.
+
+    The one test of the curve's bounds, for the computation and the completeness check alike:
+    above the bound, and not within :data:`BOUNDS_RELATIVE_TOLERANCE` of it, relative.
+
+    Args:
+        value: The bounded value (useful beams, or a ceiling).
+        bound: Its bound (min(ceiling, supply), or maximum use).
+
+    Returns:
+        Whether the value breaks the bound.
+    """
+    return value > bound and not math.isclose(value, bound, rel_tol=BOUNDS_RELATIVE_TOLERANCE)
 
 
 def walker_shape(requested_fleet: int) -> tuple[int, int]:
@@ -815,7 +856,341 @@ def curve_input_hash(parameters: SaturationInputs) -> str:
     return hashlib.sha256(canonical.encode(TEXT_ENCODING)).hexdigest()
 
 
+# ===========================================================================
+# 4. The promoted curve: what it must carry, and its loader
+# ===========================================================================
+
+
+class SaturationCurveError(ValueError):
+    """A saturation curve that cannot be used: a key repeated in one JSON object, a number out of
+    range, another schema, a JSON type or a shape the contract refuses, altered parameters or input
+    hash, or a curve that fails its completeness check (something missing or misplaced, or markers
+    its rows cannot give). The base of the curve's errors."""
+
+
+def _check_rows_requested(name: str, rows: Sequence[CurveRow], requested: Sequence[int]) -> None:
+    """Refuse a curve's rows unless they stand at exactly the sweep's requested fleets.
+
+    Raises:
+        SaturationCurveError: Naming the curve and both lists.
+    """
+    found = [row.requested_fleet for row in rows]
+    if found != list(requested):
+        raise SaturationCurveError(
+            f"the {name} rows stand at the requested fleets {found}, not the sweep's "
+            f"{list(requested)}"
+        )
+
+
+def _check_markers_on_rows(name: str, rows: Sequence[CurveRow], markers: ClassMarkers) -> None:
+    """Refuse markers that their own rows cannot give, by necessary conditions only.
+
+    Each condition follows from how the computation reads the markers on the rows
+    (``communications.saturation._markers``): a saturation number not reached names the last
+    row's fleet; the 0.10 and 0.25 crossings are interpolated in ln N between consecutive
+    geometric midpoints of the rows' fleets, sqrt(N_i x N_i+1), and rounded half up, so each lies
+    between the first and the last midpoint, each rounded half up; the 90 percent fleet is
+    interpolated between two rows and rounded half up, so it lies within the rows' span; and
+    maximum use, the most the shell could ever use, is at least every row's ceiling (by
+    :func:`exceeds_bound`). A marker that meets them all may still not be the one its rows give
+    (a saturation number moved within its span, say): the exact re-derivation is ``_markers``
+    itself, which the drift tests run on the committed curve. The rows hold two or more fleets
+    (the completeness check refuses rows off the sweep's requested fleets first, and a sweep
+    requests two or more), so every span holds at least one midpoint.
+
+    Raises:
+        SaturationCurveError: Naming the curve, the marker or row, and the values.
+    """
+    fleets = [row.fleet for row in rows]
+    last = fleets[-1]
+    if markers.saturation_not_reached_by not in (None, last):
+        raise SaturationCurveError(
+            f"the {name} saturation_not_reached_by is {markers.saturation_not_reached_by}, not "
+            f"its last row's fleet {last}"
+        )
+    midpoints = [round_half_up(math.sqrt(low * high)) for low, high in pairwise(fleets)]
+    between_midpoints = "the span of its rows' geometric midpoints"
+    for field, fleet, where, span in (
+        ("saturation_number", markers.saturation_number, between_midpoints, midpoints),
+        (
+            "elasticity_under_0p25_fleet",
+            markers.elasticity_under_0p25_fleet,
+            between_midpoints,
+            midpoints,
+        ),
+        (
+            "fleet_at_90pct_of_maximum_use",
+            markers.fleet_at_90pct_of_maximum_use,
+            "its rows' span",
+            fleets,
+        ),
+    ):
+        if fleet is None:
+            continue
+        if not span[0] <= fleet <= span[-1]:
+            raise SaturationCurveError(
+                f"the {name} {field} {fleet} lies outside {where}, {span[0]} to {span[-1]}"
+            )
+    for row in rows:
+        if exceeds_bound(row.ceiling_beams, markers.maximum_use_beams):
+            raise SaturationCurveError(
+                f"the {name} row at {row.fleet} satellites has a ceiling of {row.ceiling_beams} "
+                f"beams, above its maximum use of {markers.maximum_use_beams}"
+            )
+
+
+def _check_row_placement(name: str, row: CurveRow, *, directional: bool, trim: bool) -> None:
+    """Refuse a row whose stacking diagnostics or trim are not where the contract puts them.
+
+    Raises:
+        SaturationCurveError: Naming the curve, the row and what is missing or misplaced.
+    """
+    if directional and row.directional is None:
+        raise SaturationCurveError(
+            f"the {name} row at {row.fleet} satellites lacks its stacking diagnostics (its class "
+            "has sky sectors)"
+        )
+    if not directional and row.directional is not None:
+        raise SaturationCurveError(
+            f"the {name} row at {row.fleet} satellites carries stacking diagnostics, though its "
+            "class has no sky sectors"
+        )
+    if trim and row.trim is None:
+        raise SaturationCurveError(f"the {name} row at {row.fleet} satellites lacks its trim")
+    if not trim and row.trim is not None:
+        raise SaturationCurveError(
+            f"the {name} row at {row.fleet} satellites carries a trim, which only the phone "
+            "class's central rows carry"
+        )
+
+
+def check_curve_complete(curve: SaturationCurve) -> None:
+    """Refuse a curve that lacks anything a promoted curve must carry, or holds what it must not.
+
+    A promoted curve carries every class, in :class:`~communications.constants.DeviceClass`
+    order, and every band point, in :class:`BandName` order, each band point the one its
+    parameters name; its stated limits and the checks it passed (neither empty), and the grid
+    its parameters name (the provenance's digest, the grid's identity; its file name is a label
+    the parameters' path already gives); each curve's rows at exactly the sweep's requested
+    fleets (the mounted terminal's with its extension); the stacking diagnostics on every row of
+    a class whose parameters give it sky sectors (a band point's rows by the phone class's) and
+    on no other row, as the computation places them; the interference trim, at the parameters'
+    floors, on every row of the phone class's central curve and on no other row; and markers
+    that meet the necessary conditions of :func:`_check_markers_on_rows`.
+
+    Args:
+        curve: The curve.
+
+    Raises:
+        SaturationCurveError: Naming the curve and what is missing or misplaced (a class, a band
+            point, the limits, the checks, the grid's digest, a row, its diagnostics or its
+            trim), or a marker its rows cannot give.
+    """
+    parameters = curve.parameters
+    sweep = parameters.sweep
+    found_classes = [entry.device_class for entry in curve.classes]
+    missing_classes = [member.value for member in DeviceClass if member not in found_classes]
+    if missing_classes:
+        raise SaturationCurveError(f"the curve lacks the classes {missing_classes}")
+    found_bands = [entry.point.name for entry in curve.bands]
+    missing_bands = [member.value for member in BandName if member not in found_bands]
+    if missing_bands:
+        raise SaturationCurveError(f"the curve lacks the band points {missing_bands}")
+    if not curve.limits:
+        raise SaturationCurveError("the curve states no limits")
+    provenance = curve.provenance
+    if not provenance.checks_passed:
+        raise SaturationCurveError("the curve's provenance names no checks passed")
+    if provenance.grid_sha256 != parameters.demand.grid_sha256:
+        raise SaturationCurveError(
+            f"the provenance's grid digest {provenance.grid_sha256} is not the parameters' "
+            f"{parameters.demand.grid_sha256}"
+        )
+    sectored = {
+        entry.device_class: bool(entry.sector_wedges_per_ring) for entry in parameters.classes
+    }
+    floors = list(parameters.trim.floors_dbi)
+    for entry in curve.classes:
+        name = entry.device_class.value
+        _check_rows_requested(
+            name,
+            entry.rows,
+            sweep.fleets + sweep.mounted_terminal_extension
+            if entry.device_class is DeviceClass.MOUNTED_TERMINAL_CLASS
+            else sweep.fleets,
+        )
+        phone = entry.device_class is DeviceClass.PHONE_CLASS
+        for row in entry.rows:
+            _check_row_placement(name, row, directional=sectored[entry.device_class], trim=phone)
+            if row.trim is not None and [at_floor.floor_dbi for at_floor in row.trim] != floors:
+                raise SaturationCurveError(
+                    f"the {name} row at {row.fleet} satellites carries its trim at the floors "
+                    f"{[at_floor.floor_dbi for at_floor in row.trim]}, not the parameters' "
+                    f"{floors}"
+                )
+        _check_markers_on_rows(name, entry.rows, entry.markers)
+    for band, point in zip(curve.bands, parameters.bands, strict=True):
+        name = f"band point {band.point.name.value}"
+        if band.point != point:
+            raise SaturationCurveError(
+                f"the {name} is {band.point.model_dump()}, not its parameters' {point.model_dump()}"
+            )
+        _check_rows_requested(name, band.rows, sweep.fleets)
+        for row in band.rows:
+            _check_row_placement(
+                name, row, directional=sectored[DeviceClass.PHONE_CLASS], trim=False
+            )
+        _check_markers_on_rows(name, band.rows, band.markers)
+
+
+def _object_refusing_repeated_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Build one JSON object, refusing a key it holds twice (``json.loads`` would keep the last
+    value silently, and another reader might keep the first).
+
+    Raises:
+        SaturationCurveError: Naming the repeated key.
+    """
+    built: dict[str, object] = {}
+    for key, value in pairs:
+        if key in built:
+            raise SaturationCurveError(
+                f"the key {key!r} appears twice in one JSON object, so a reader could take "
+                "either value"
+            )
+        built[key] = value
+    return built
+
+
+def _validation_summary(exc: ValidationError) -> str:
+    """Return a pydantic validation error as one line, read as :func:`common.cli.describe_failure`
+    reads one: each error's location and message joined by ``;``, only the message where the
+    error has no location (a refusal of the whole curve, or text pydantic's parser refuses), and
+    a validator's own message without pydantic's ``Value error,`` prefix."""
+    parts = []
+    for error in exc.errors(include_url=False):
+        context = error.get("ctx") or {}
+        message = (
+            str(context["error"])
+            if error["type"] == _PYDANTIC_VALUE_ERROR and "error" in context
+            else error["msg"]
+        )
+        location = ".".join(str(part) for part in error["loc"])
+        parts.append(f"{location}: {message}" if location else message)
+    return "; ".join(parts)
+
+
+def _json_root_kind(value: object) -> str:
+    """Name a value Python's JSON parser produced in JSON's own words (null, true, false, a
+    number, a string, an array), for a refusal of a root that is not an object."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int | float):
+        return "a number"
+    if isinstance(value, str):
+        return "a string"
+    return "an array"
+
+
+def load_saturation_curve(path: Path) -> SaturationCurve:
+    """Load a promoted saturation curve, refusing one the engine must not read.
+
+    The file is read as UTF-8 text and parsed by Python's JSON parser with no key repeated in
+    any object; its root must be an object whose ``schema_version`` is
+    :data:`SATURATION_CURVE_SCHEMA_VERSION` (checked first, so a curve of another schema is named
+    as such whatever its shape); it is validated as :class:`SaturationCurve` in pydantic's strict
+    mode, so an integer field refuses a string, a float or a boolean, a float field refuses a
+    string or a boolean (and reads a JSON integer as the same float), and a text field refuses a
+    number or a boolean; its ``input_hash`` must be :func:`curve_input_hash` of its own
+    parameters, so an altered parameter or hash fails; and it must pass
+    :func:`check_curve_complete`.
+
+    One rule sorts the refusals: a file that cannot be read, or whose text Python's JSON parser
+    cannot read as JSON (malformed, or nested past its stack), is the file boundary's
+    :class:`~common.file_io.ModelFileError`; every other refusal is a
+    :class:`SaturationCurveError`, Python's parser's own for a repeated key or an integer past
+    its limit on digits included, and so is any other number out of range (a requested fleet
+    too large to build its shell from, a float past a float's range) and text pydantic's
+    parser refuses where Python's read it (a lone surrogate, nesting past pydantic's depth).
+
+    Args:
+        path: The curve's JSON file.
+
+    Returns:
+        The curve.
+
+    Raises:
+        ModelFileError: If the file is missing or unreadable, not UTF-8, or not a JSON document
+            Python's parser reads (malformed, or nested too deeply for it).
+        SaturationCurveError: Naming the file, for a repeated key, a number out of range, a root
+            that is not an object, another schema, a JSON type or a shape the contract refuses,
+            an input hash that does not match the parameters, or a curve that fails
+            :func:`check_curve_complete`.
+    """
+    try:
+        text = path.read_text(encoding=TEXT_ENCODING)
+    except FileNotFoundError as exc:
+        raise ModelFileError(path, "file not found") from exc
+    except OSError as exc:
+        raise ModelFileError(
+            path, f"could not read the saturation curve ({exc.strerror or exc})"
+        ) from exc
+    except UnicodeDecodeError as exc:
+        raise ModelFileError(
+            path, f"not valid {TEXT_ENCODING} text ({exc.reason} at byte {exc.start})"
+        ) from exc
+    try:
+        data = json.loads(text, object_pairs_hook=_object_refusing_repeated_keys)
+    except SaturationCurveError as exc:
+        raise SaturationCurveError(f"{path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ModelFileError(path, f"not a JSON document ({exc})") from exc
+    except RecursionError as exc:
+        raise ModelFileError(
+            path, f"not a JSON document Python's parser can read (nested too deeply: {exc})"
+        ) from exc
+    except ValueError as exc:
+        raise SaturationCurveError(
+            f"{path}: not a saturation curve (a number out of range: {exc})"
+        ) from exc
+    if not isinstance(data, dict):
+        raise SaturationCurveError(
+            f"{path}: not a saturation curve (its JSON root is {_json_root_kind(data)}, not an "
+            "object)"
+        )
+    schema = data.get("schema_version")
+    if schema != SATURATION_CURVE_SCHEMA_VERSION:
+        raise SaturationCurveError(
+            f"{path}: the curve's schema is {schema!r}, not {SATURATION_CURVE_SCHEMA_VERSION!r}"
+        )
+    try:
+        curve = SaturationCurve.model_validate_json(text, strict=True)
+    except ValidationError as exc:
+        raise SaturationCurveError(
+            f"{path}: not a saturation curve ({_validation_summary(exc)})"
+        ) from exc
+    except OverflowError as exc:
+        raise SaturationCurveError(
+            f"{path}: not a saturation curve (a number out of range: a row's requested_fleet is "
+            f"too large to build its shell from, {exc})"
+        ) from exc
+    expected_hash = curve_input_hash(curve.parameters)
+    if curve.input_hash != expected_hash:
+        raise SaturationCurveError(
+            f"{path}: the input hash {curve.input_hash} is not the hash of the curve's "
+            f"parameters ({expected_hash}); the parameters or the hash were altered"
+        )
+    try:
+        check_curve_complete(curve)
+    except SaturationCurveError as exc:
+        raise SaturationCurveError(f"{path}: {exc}") from exc
+    logger.debug("loaded the saturation curve %s (input hash %s)", path, curve.input_hash)
+    return curve
+
+
 __all__ = [
+    "BOUNDS_RELATIVE_TOLERANCE",
     "SATURATION_CURVE_SCHEMA_VERSION",
     "BandCurve",
     "BandName",
@@ -829,12 +1204,16 @@ __all__ = [
     "DirectionalDiagnostics",
     "RunMeasurement",
     "SaturationCurve",
+    "SaturationCurveError",
     "SaturationInputs",
     "ShellInputs",
     "SweepInputs",
     "TrimAtFloor",
     "TrimInputs",
+    "check_curve_complete",
     "curve_input_hash",
+    "exceeds_bound",
+    "load_saturation_curve",
     "saturation_inputs_for",
     "walker_shape",
 ]

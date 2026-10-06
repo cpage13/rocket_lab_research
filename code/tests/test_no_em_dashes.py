@@ -12,9 +12,10 @@ Coverage (paths relative to the repository root):
   Every tracked file there is covered; the walk skips only ``__pycache__``
   bytecode caches, which git ignores;
 * ``code/README.md``, ``code/CHANGELOG.md``, and ``code/pyproject.toml``;
-* the three promoted JSON artifacts: ``data_center/models/space/default.json``,
-  ``data_center/models/ground/default.json``, and
-  ``communications/models/iridium/default.json``;
+* the four promoted JSON artifacts: ``data_center/models/space/default.json``,
+  ``data_center/models/ground/default.json``,
+  ``communications/models/iridium/default.json``, and
+  ``communications/models/iridium/saturation_curve.json``;
 * the root ``README.md``, ``AGENTS.md``, ``CONTEXT.md``,
   ``rocket_lab_primer.md``, and ``.gitignore``;
 * every ``*.md`` under ``docs/``, ``data_center/``, and ``communications/``;
@@ -54,8 +55,9 @@ _PROMOTED_ARTIFACTS = (
     "data_center/models/space/default.json",
     "data_center/models/ground/default.json",
     "communications/models/iridium/default.json",
+    "communications/models/iridium/saturation_curve.json",
 )
-"""The three promoted JSON artifacts, repository-relative."""
+"""The four promoted JSON artifacts, repository-relative."""
 
 _ROOT_FILES = ("README.md", "AGENTS.md", "CONTEXT.md", "rocket_lab_primer.md", ".gitignore")
 """Files at the repository root: its documents and the git ignore rules."""
