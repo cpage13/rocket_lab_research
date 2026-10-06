@@ -1194,15 +1194,11 @@ def promote_coarse(scenario: Path, output: Path) -> Path:
         return sat.promote_saturation_curve(scenario, output, version_stamp=STAMP)
 
 
-def rendered_with_measurement_of(curve: SaturationCurve, source: SaturationCurve) -> bytes:
-    """A curve's bytes as the promotion writes them (``render_artifact_json`` and the one closing
-    newline), with ``source``'s run measurement copied in (``model_copy``)."""
+def rendered_with_measurement(curve: SaturationCurve, measurement: RunMeasurement) -> bytes:
+    """A curve's bytes as the promotion writes them (``render_artifact_json`` and
+    ``ARTIFACT_FILE_END``), with the given run measurement copied in (``model_copy``)."""
     measured = curve.model_copy(
-        update={
-            "provenance": curve.provenance.model_copy(
-                update={"run_measurement": source.provenance.run_measurement}
-            )
-        }
+        update={"provenance": curve.provenance.model_copy(update={"run_measurement": measurement})}
     )
     return (render_artifact_json(measured) + ARTIFACT_FILE_END).encode("utf-8")
 
@@ -1223,8 +1219,8 @@ def curves_equal_but_measurement(first: Path, second: Path) -> bool:
         for path in (first, second)
     )
     return (
-        rendered_with_measurement_of(two, one) == first.read_bytes()
-        and rendered_with_measurement_of(one, two) == second.read_bytes()
+        rendered_with_measurement(two, one.provenance.run_measurement) == first.read_bytes()
+        and rendered_with_measurement(one, two.provenance.run_measurement) == second.read_bytes()
     )
 
 
@@ -1582,14 +1578,9 @@ def test_the_byte_identity_helper_refuses_another_byte_form(
     """
     text = coarse_curve_file.read_text(encoding="utf-8")
     curve = SaturationCurve.model_validate_json(text)
-    remeasured = curve.model_copy(
-        update={
-            "provenance": curve.provenance.model_copy(
-                update={"run_measurement": RunMeasurement(wall_time_s=1.0, peak_memory_mb=2.0)}
-            )
-        }
-    )
-    canonical = render_artifact_json(remeasured) + ARTIFACT_FILE_END
+    canonical = rendered_with_measurement(
+        curve, RunMeasurement(wall_time_s=1.0, peak_memory_mb=2.0)
+    ).decode("utf-8")
     data = json.loads(canonical)
     changed = json.loads(text)
     changed["classes"][2]["rows"][1]["useful_beams"] *= 1 + 1e-12
@@ -1599,7 +1590,8 @@ def test_the_byte_identity_helper_refuses_another_byte_form(
         "compact": (json.dumps(data, separators=(",", ":")), False),
         "no closing newline": (canonical.removesuffix(ARTIFACT_FILE_END), False),
         "a key moved": (
-            json.dumps({"version_stamp": data["version_stamp"], **data}, indent=2) + "\n",
+            json.dumps({"version_stamp": data["version_stamp"], **data}, indent=2)
+            + ARTIFACT_FILE_END,
             False,
         ),
     }
@@ -2719,8 +2711,8 @@ NO_STACK = DirectionalDiagnostics(
 def complete_bare_curve() -> SaturationCurve:
     """A complete curve on hand-built rows: the default inputs but for the sweep (fleets 342
     and 992, no mounted extension), every class and every band point on the two bare rows, the
-    phone class's rows with a trim at the default floors, the directional classes' rows with
-    their diagnostics, one stated limit and one check passed."""
+    directional classes' rows with their diagnostics, the phone class's rows with a trim at the
+    default floors, one stated limit and one check passed."""
     inputs = SaturationInputs(
         sweep=SweepInputs(fleets=COMPLETE_FLEETS, mounted_terminal_extension=())
     )
@@ -2767,7 +2759,7 @@ def test_a_complete_curve_passes_its_check_and_loads(tmp_path: Path) -> None:
     curve = complete_bare_curve()
     check_curve_complete(curve)
     path = tmp_path / "saturation_curve.json"
-    path.write_text(render_artifact_json(curve) + "\n", encoding="utf-8")
+    path.write_text(render_artifact_json(curve) + ARTIFACT_FILE_END, encoding="utf-8")
     assert load_saturation_curve(path) == curve
 
 
@@ -3164,7 +3156,7 @@ def test_the_loader_refuses_json_text_the_promotion_never_writes(
     finite number, pydantic's parser refusing the text (no empty location before it), or a
     number out of range.
     """
-    text = render_artifact_json(complete_bare_curve()) + "\n"
+    text = render_artifact_json(complete_bare_curve()) + ARTIFACT_FILE_END
     assert old in text
     path = tmp_path / "altered.json"
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
@@ -3188,7 +3180,7 @@ def test_a_number_out_of_range_is_the_curves_error_whatever_pythons_digit_limit(
 
     Expected outcome: SaturationCurveError naming the file, a number out of range, both times.
     """
-    text = (render_artifact_json(complete_bare_curve()) + "\n").replace(
+    text = (render_artifact_json(complete_bare_curve()) + ARTIFACT_FILE_END).replace(
         '"requested_fleet": 342,', f'"requested_fleet": 1{"0" * 4_999},', 1
     )
     path = tmp_path / "long_integer.json"
@@ -3230,7 +3222,9 @@ def test_a_code_defect_in_validation_is_never_reported_as_a_data_problem(
     Expected outcome: ZeroDivisionError, not SaturationCurveError.
     """
     path = tmp_path / "saturation_curve.json"
-    path.write_text(render_artifact_json(complete_bare_curve()) + "\n", encoding="utf-8")
+    path.write_text(
+        render_artifact_json(complete_bare_curve()) + ARTIFACT_FILE_END, encoding="utf-8"
+    )
 
     def divides_by_zero(requested_fleet: int) -> tuple[int, int]:
         return requested_fleet // 0, 1

@@ -432,6 +432,10 @@ which bounds its temporary arrays: about ten arrays of 8 bytes a pair (the offse
 components among them), so about 0.5 GB. At 3,000 victims a chunk holds 2,000 satellites; the
 trim depends on it only through the rounding of its sums."""
 
+_NO_TRIM_SNAPSHOTS: Final[int] = 0
+"""A curve none of whose snapshots price the interference trim (every curve but the phone
+class's central one), so its rows carry no trim."""
+
 # ===========================================================================
 # The checks, the markers and the run's memory budget
 # ===========================================================================
@@ -2976,22 +2980,22 @@ def _row_trim(fleet: _FleetSnapshots, floors_dbi: Sequence[float]) -> tuple[Trim
 
 
 def _class_rows(
-    fleets: Sequence[_FleetSnapshots],
-    requested_fleets: Sequence[int],
-    *,
-    beams_per_satellite: float,
-    directional: bool,
-    trim_floors_dbi: Sequence[float] | None,
+    plan: _CurvePlan, fleets: Sequence[_FleetSnapshots], requested_fleets: Sequence[int]
 ) -> tuple[CurveRow, ...]:
-    """Return a class's rows: the snapshot means, the spread of L, U, the bounds and, for a
-    directional class, its stacking diagnostics; for the phone class's central curve, the
-    interference trim at each floor.
+    """Return one curve's rows from its fleets' snapshots, as its plan sets them: the snapshot
+    means, the spread of L, U at the plan's B, the bounds and, where the plan's limits are
+    directional, the stacking diagnostics; where the plan prices the trim (the phone class's
+    central curve), the interference trim at each floor.
 
     Each row carries the request its shell was built from (the sweep's fleet, in the order
     the tasks were made), so a reader can rebuild it. Each snapshot's capacity is its own (a
     phone beam carries the spectrum times the class's central SE; a directional cell, its
     kept layers by the full sum), and the row's is their mean (Gbps).
     """
+    limits = plan.context.limits
+    trim_floors_dbi = (
+        plan.context.trim.floors_dbi if plan.trim_snapshots > _NO_TRIM_SNAPSHOTS else None
+    )
     rows = []
     for fleet, requested_fleet in zip(fleets, requested_fleets, strict=True):
         useful = np.array(fleet.useful_beams)
@@ -3004,10 +3008,12 @@ def _class_rows(
                 useful_beams=useful_mean,
                 useful_beams_spread=float(np.std(useful)),
                 capacity_gbps=float(np.mean(capacity_gbps)),
-                ocean_factor=useful_mean / (fleet.fleet * beams_per_satellite),
+                ocean_factor=useful_mean / (fleet.fleet * limits.beams_per_satellite),
                 ceiling_beams=float(np.mean(fleet.ceiling_beams)),
                 supply_beams=float(np.mean(fleet.supply_beams)),
-                directional=_directional_diagnostics(fleet) if directional else None,
+                directional=(
+                    None if limits.directional is None else _directional_diagnostics(fleet)
+                ),
                 trim=None if trim_floors_dbi is None else _row_trim(fleet, trim_floors_dbi),
             )
         )
@@ -3313,6 +3319,9 @@ class _CurvePlan:
         key: The class or the band point.
         fleets: Its requested fleets, in order.
         snapshots: Its snapshots at each fleet.
+        trim_snapshots: How many of each row's first snapshots price the interference trim:
+            the sweep's count for the phone class's central curve, none for every other curve,
+            whose rows carry no trim.
         context: What its snapshot tasks need: the shell, its demand cells and limits, the
             trim's settings.
         point: The band point, for a band point's curve; None for a class's.
@@ -3321,6 +3330,7 @@ class _CurvePlan:
     key: _CurveKey
     fleets: tuple[int, ...]
     snapshots: int
+    trim_snapshots: int
     context: _SweepContext
     point: BandPoint | None
 
@@ -3329,8 +3339,9 @@ def _class_plan(
     inputs: SaturationInputs, cells: _DemandCells, device_class: DeviceClass
 ) -> _CurvePlan:
     """Return one class's plan: the mounted terminal over the sweep's fleets and its extension,
-    every other class over the fleets; the phone class at its central snapshots, the directional
-    classes at the directional snapshots.
+    every other class over the fleets; the directional classes at the directional snapshots, the
+    phone class at its central snapshots, the trim priced on the first of them (the one rule
+    that places the trim).
 
     Args:
         inputs: The curve's inputs.
@@ -3354,6 +3365,9 @@ def _class_plan(
             if limits.directional is None
             else sweep.snapshots_directional
         ),
+        trim_snapshots=(
+            sweep.snapshots_trim if device_class is DeviceClass.PHONE_CLASS else _NO_TRIM_SNAPSHOTS
+        ),
         context=_SweepContext(shell=inputs.shell, cells=cells, limits=limits, trim=inputs.trim),
         point=None,
     )
@@ -3363,7 +3377,7 @@ def _band_plan(
     inputs: SaturationInputs, population: PopulationGrid, cells: _DemandCells, point: BandPoint
 ) -> _CurvePlan:
     """Return one band point's plan: over the sweep's fleets at the bands' snapshots, with its own
-    demand cells (:func:`_band_cells`) and limits (:func:`_band_limits`).
+    demand cells (:func:`_band_cells`) and limits (:func:`_band_limits`), and no trim.
 
     Args:
         inputs: The curve's inputs.
@@ -3378,6 +3392,7 @@ def _band_plan(
         key=point.name,
         fleets=inputs.sweep.fleets,
         snapshots=inputs.sweep.snapshots_bands,
+        trim_snapshots=_NO_TRIM_SNAPSHOTS,
         context=_SweepContext(
             shell=inputs.shell,
             cells=_band_cells(population, point, cells, inputs.demand.density_threshold_per_km2),
@@ -3414,7 +3429,7 @@ def _snapshot_times(sweep: SweepInputs) -> npt.NDArray[np.float64]:
     """Return the run's snapshot times, drawn once from the sweep's seed.
 
     ``numpy.random.default_rng(seed).uniform(0, sidereal day, n)``, n the most snapshots any curve
-    takes (the phone class's central curve, the directional classes or the band points), so a
+    takes (the directional classes, the phone class's central curve or the band points), so a
     curve at fewer snapshots takes the first of them. The curve and both drift seams draw here, so
     a recomputed row reads the curve's own times.
     """
@@ -3426,15 +3441,10 @@ def _snapshot_times(sweep: SweepInputs) -> npt.NDArray[np.float64]:
 
 
 def _plan_tasks(
-    plan: _CurvePlan,
-    fleet_index: int,
-    fleet: int,
-    times: npt.NDArray[np.float64],
-    snapshots_trim: int,
+    plan: _CurvePlan, fleet_index: int, fleet: int, times: npt.NDArray[np.float64]
 ) -> list[_SnapshotTask]:
     """Return one curve's snapshot tasks at one requested fleet, one per snapshot of its plan in
-    the draw's order; the phone class's central curve prices the trim on the first
-    ``snapshots_trim`` of them."""
+    the draw's order, the first ``plan.trim_snapshots`` of them pricing the trim."""
     return [
         _SnapshotTask(
             curve=plan.key,
@@ -3442,28 +3452,10 @@ def _plan_tasks(
             requested_fleet=fleet,
             snapshot_index=snapshot_index,
             time_s=float(times[snapshot_index]),
-            prices_trim=plan.key is DeviceClass.PHONE_CLASS and snapshot_index < snapshots_trim,
+            prices_trim=snapshot_index < plan.trim_snapshots,
         )
         for snapshot_index in range(plan.snapshots)
     ]
-
-
-def _plan_rows(
-    plan: _CurvePlan, fleets: Sequence[_FleetSnapshots], requested_fleets: Sequence[int]
-) -> tuple[CurveRow, ...]:
-    """Return one curve's rows from its fleets' snapshots (:func:`_class_rows` at the plan's B, the
-    directional diagnostics for a directional class, the trim for the phone class's central
-    curve)."""
-    limits = plan.context.limits
-    return _class_rows(
-        fleets,
-        requested_fleets,
-        beams_per_satellite=limits.beams_per_satellite,
-        directional=limits.directional is not None,
-        trim_floors_dbi=(
-            plan.context.trim.floors_dbi if plan.key is DeviceClass.PHONE_CLASS else None
-        ),
-    )
 
 
 def _plan_maximum_use(plan: _CurvePlan) -> float:
@@ -3656,7 +3648,7 @@ def compute_saturation(
         task
         for plan in plans
         for fleet_index, fleet in enumerate(plan.fleets)
-        for task in _plan_tasks(plan, fleet_index, fleet, times, sweep.snapshots_trim)
+        for task in _plan_tasks(plan, fleet_index, fleet, times)
     ]
     logger.info(
         "saturation: %d classes and %d band points, %d snapshot tasks on %d demand cells of %s",
@@ -3677,7 +3669,7 @@ def compute_saturation(
         _check_bounds(plan.key, fleets, maximum_use)
         if plan.key is DeviceClass.PHONE_CLASS:
             _check_stall_floor(fleets, sweep.stall_floor)
-        rows = _plan_rows(plan, fleets, plan.fleets)
+        rows = _class_rows(plan, fleets, plan.fleets)
         _check_capacity_per_satellite(plan.key, rows)
         markers = _markers(plan.key, rows, maximum_use)
         if plan.point is not None:
@@ -3771,11 +3763,8 @@ def _plan_row(plan: _CurvePlan, fleet: int, sweep: SweepInputs) -> CurveRow:
     computes it: its plan's snapshots from the run's draw (:func:`_snapshot_times`), each through
     :func:`_run_snapshot`, grouped and built into the row as the curve's rows are."""
     times = _snapshot_times(sweep)
-    results = [
-        _run_snapshot(task, plan.context)
-        for task in _plan_tasks(plan, 0, fleet, times, sweep.snapshots_trim)
-    ]
-    (row,) = _plan_rows(plan, _by_fleet(results, 1), (fleet,))
+    results = [_run_snapshot(task, plan.context) for task in _plan_tasks(plan, 0, fleet, times)]
+    (row,) = _class_rows(plan, _by_fleet(results, 1), (fleet,))
     return row
 
 
