@@ -125,6 +125,11 @@ summed peaks of the largest set of workers alive at once).
     uv run python -m communications.saturation scenarios/iridium.yaml \\
         communications/models/iridium/saturation_curve.json --version-stamp <stamp>
 
+The full promotion of 2026-10-06 (the shipped scenario, 40 footprint bands, a shared machine
+of 16 CPUs and 32 GB) measured 1,564 s of wall time, about 26 minutes, and a peak-memory bound
+of 11,945 MB, under the 16 GB budget (``time -l`` reported a largest resident set of 7.14 GB);
+the curve's ``provenance.run_measurement`` carries the same two figures.
+
 It loads the scenario, narrows it to its Iridium dials (a scenario without an ``iridium:``
 block is refused before anything runs), computes the curve those dials imply, logs its
 summary, checks that it is complete and writes it through the shared writer. A relative
