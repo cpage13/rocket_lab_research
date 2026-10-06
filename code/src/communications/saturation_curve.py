@@ -17,10 +17,14 @@ family can read a curve without importing numpy:
   spectrum), and :func:`curve_input_hash`, the SHA-256 of the inputs' canonical JSON;
 * :func:`walker_shape`, the shell's pinned planes and satellites per plane for a requested
   fleet, which the module builds every shell with and the contract checks every row by;
-* :func:`check_curve_complete`, what a promoted curve must carry (and the markers its rows
-  can give), and :func:`load_saturation_curve`, which reads a promoted curve and refuses one
-  with a repeated key, of another schema or JSON types, whose parameters or input hash were
-  altered, or incomplete, each with a :class:`SaturationCurveError` naming the file.
+* :func:`check_curve_complete`, what a promoted curve must carry (and necessary conditions on
+  the markers its rows can give), and :func:`load_saturation_curve`, which reads a promoted
+  curve and refuses one with a repeated key, a number out of range, another schema, a value
+  pydantic's strict mode refuses (an integer field given a string, a float or a boolean; a
+  float field given a string or a boolean, while a JSON integer there reads as the same
+  float), altered parameters or input hash, or one that fails its completeness check, each
+  with a :class:`SaturationCurveError` naming the file (a file it cannot read, or that
+  Python's JSON parser refuses, is the file boundary's ``ModelFileError``).
 
 Every model is a frozen pydantic model with ``extra="forbid"`` that refuses a NaN or an
 infinity, so a curve's JSON is standard JSON. The validators that belong to the contract:
@@ -125,6 +129,11 @@ _CEILING_RELATIVE_TOLERANCE: Final[float] = 1e-9
 """How far a row's ceiling may lie above maximum use, relative: the computation's own bound on
 every snapshot (the saturation strategy's 1e-9 for every invariant check), so a curve the
 computation passed passes the completeness check too."""
+
+_PYDANTIC_VALUE_ERROR: Final[str] = "value_error"
+"""Pydantic's error type for a ``ValueError`` raised inside a validator, whose message pydantic
+leads with ``Value error,`` (the loader's refusals give the validator's own message, as
+``common.cli.describe_failure`` does)."""
 
 _RIGHT_ANGLE_DEG: Final[float] = 90.0
 """A right angle, degrees: the most an inclination or an elevation mask can be here (the
@@ -832,8 +841,10 @@ def curve_input_hash(parameters: SaturationInputs) -> str:
 
 
 class SaturationCurveError(ValueError):
-    """A saturation curve that cannot be used: another schema, altered parameters or input hash,
-    a shape the contract refuses, or an incomplete curve. The base of the curve's errors."""
+    """A saturation curve that cannot be used: a key repeated in one JSON object, a number out of
+    range, another schema, a JSON type or a shape the contract refuses, altered parameters or input
+    hash, or a curve that fails its completeness check (something missing or misplaced, or markers
+    its rows cannot give). The base of the curve's errors."""
 
 
 def _check_rows_requested(name: str, rows: Sequence[CurveRow], requested: Sequence[int]) -> None:
@@ -927,7 +938,9 @@ def check_curve_complete(curve: SaturationCurve) -> None:
         curve: The curve.
 
     Raises:
-        SaturationCurveError: Naming what is missing or misplaced.
+        SaturationCurveError: Naming the curve and what is missing or misplaced (a class, a band
+            point, the limits, the checks, the grid's name or digest, a row, its diagnostics or
+            its trim), or a marker its rows cannot give.
     """
     parameters = curve.parameters
     sweep = parameters.sweep
@@ -1006,23 +1019,42 @@ def _object_refusing_repeated_keys(pairs: list[tuple[str, object]]) -> dict[str,
 
 
 def _validation_summary(exc: ValidationError) -> str:
-    """Return a pydantic validation error as one line: each error's location and message."""
-    return "; ".join(
-        f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
-        for error in exc.errors(include_url=False)
-    )
+    """Return a pydantic validation error as one line, read as :func:`common.cli.describe_failure`
+    reads one: each error's location and message joined by ``;``, only the message where the
+    error has no location (a refusal of the whole curve, or text pydantic's parser refuses), and
+    a validator's own message without pydantic's ``Value error,`` prefix."""
+    parts = []
+    for error in exc.errors(include_url=False):
+        context = error.get("ctx") or {}
+        message = (
+            str(context["error"])
+            if error["type"] == _PYDANTIC_VALUE_ERROR and "error" in context
+            else error["msg"]
+        )
+        location = ".".join(str(part) for part in error["loc"])
+        parts.append(f"{location}: {message}" if location else message)
+    return "; ".join(parts)
 
 
 def load_saturation_curve(path: Path) -> SaturationCurve:
     """Load a promoted saturation curve, refusing one the engine must not read.
 
-    The file is read as UTF-8 JSON whose root is an object, with no key repeated in any object;
-    its ``schema_version`` must be :data:`SATURATION_CURVE_SCHEMA_VERSION` (checked first, so a
-    curve of another schema is named as such whatever its shape); it is validated as
-    :class:`SaturationCurve` in strict mode, so every value has the JSON type the contract
-    writes (an integer never a string, a float or a boolean); its ``input_hash`` must be
-    :func:`curve_input_hash` of its own parameters, so an altered parameter or hash fails; and
-    it must pass :func:`check_curve_complete`.
+    The file is read as UTF-8 text and parsed by Python's JSON parser with no key repeated in
+    any object; its root must be an object whose ``schema_version`` is
+    :data:`SATURATION_CURVE_SCHEMA_VERSION` (checked first, so a curve of another schema is named
+    as such whatever its shape); it is validated as :class:`SaturationCurve` in pydantic's strict
+    mode, so an integer field refuses a string, a float or a boolean, a float field refuses a
+    string or a boolean (and reads a JSON integer as the same float), and a text field refuses a
+    number or a boolean; its ``input_hash`` must be :func:`curve_input_hash` of its own
+    parameters, so an altered parameter or hash fails; and it must pass
+    :func:`check_curve_complete`.
+
+    One rule sorts the refusals: a file that cannot be read, or that Python's JSON parser refuses
+    as JSON, is the file boundary's :class:`~common.file_io.ModelFileError`; everything found
+    after that parse succeeds is a :class:`SaturationCurveError`, a number out of range included
+    (an integer past Python's limit on digits, a requested fleet too large to build its shell
+    from, a float past a float's range, or text pydantic's parser refuses where Python's
+    accepted it, such as a lone surrogate or nesting past pydantic's depth).
 
     Args:
         path: The curve's JSON file.
@@ -1031,11 +1063,12 @@ def load_saturation_curve(path: Path) -> SaturationCurve:
         The curve.
 
     Raises:
-        ModelFileError: If the file is missing or unreadable, not UTF-8, not JSON, or its root
-            is not an object.
-        SaturationCurveError: Naming the file, for a repeated key, another schema, a shape or a
-            JSON type the contract refuses (a number out of range included), an input hash that
-            does not match the parameters, or an incomplete curve.
+        ModelFileError: If the file is missing or unreadable, not UTF-8, or not a JSON document
+            Python's parser reads (malformed, or nested too deeply for it).
+        SaturationCurveError: Naming the file, for a repeated key, a number out of range, a root
+            that is not an object, another schema, a JSON type or a shape the contract refuses,
+            an input hash that does not match the parameters, or a curve that fails
+            :func:`check_curve_complete`.
     """
     try:
         text = path.read_text(encoding=TEXT_ENCODING)
@@ -1053,10 +1086,21 @@ def load_saturation_curve(path: Path) -> SaturationCurve:
         data = json.loads(text, object_pairs_hook=_object_refusing_repeated_keys)
     except SaturationCurveError as exc:
         raise SaturationCurveError(f"{path}: {exc}") from exc
-    except ValueError as exc:
+    except json.JSONDecodeError as exc:
         raise ModelFileError(path, f"not a JSON document ({exc})") from exc
+    except RecursionError as exc:
+        raise ModelFileError(
+            path, f"not a JSON document Python's parser can read (nested too deeply: {exc})"
+        ) from exc
+    except ValueError as exc:
+        raise SaturationCurveError(
+            f"{path}: not a saturation curve (a number out of range: {exc})"
+        ) from exc
     if not isinstance(data, dict):
-        raise ModelFileError(path, f"the JSON root must be an object, got {type(data).__name__}")
+        raise SaturationCurveError(
+            f"{path}: not a saturation curve (its JSON root is {type(data).__name__}, not an "
+            "object)"
+        )
     schema = data.get("schema_version")
     if schema != SATURATION_CURVE_SCHEMA_VERSION:
         raise SaturationCurveError(
@@ -1068,9 +1112,10 @@ def load_saturation_curve(path: Path) -> SaturationCurve:
         raise SaturationCurveError(
             f"{path}: not a saturation curve ({_validation_summary(exc)})"
         ) from exc
-    except ArithmeticError as exc:
+    except OverflowError as exc:
         raise SaturationCurveError(
-            f"{path}: not a saturation curve (a number out of range: {exc})"
+            f"{path}: not a saturation curve (a number out of range: a row's requested_fleet is "
+            f"too large to build its shell from, {exc})"
         ) from exc
     expected_hash = curve_input_hash(curve.parameters)
     if curve.input_hash != expected_hash:

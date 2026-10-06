@@ -70,6 +70,7 @@ from common.file_io import (
     render_artifact_json,
 )
 from communications import saturation as sat
+from communications import saturation_curve
 from communications.config import CommsConfig, IridiumDials, load_comms_config
 from communications.constants import (
     CLASS_SE_CENTRAL,
@@ -2720,7 +2721,7 @@ def _phone_trim_json() -> list[dict[str, float]]:
         ),
         (
             lambda d: d.update(classes=[d["classes"][1], d["classes"][0], d["classes"][2]]),
-            "not a saturation curve",
+            r"not a saturation curve \(classes must hold each member at most once",
         ),
         (
             lambda d: d["classes"][2]["rows"][0].update(requested_fleet="342"),
@@ -2748,7 +2749,7 @@ def _phone_trim_json() -> list[dict[str, float]]:
         (lambda d: d["parameters"].update(sidelobe_floor_db=float("-inf")), "finite number"),
         (
             lambda d: d["classes"][2]["rows"][0].update(requested_fleet=10**309),
-            "a number out of range",
+            "a number out of range: a row's requested_fleet is too large to build its shell from",
         ),
         (
             lambda d: d["classes"][0]["rows"][0].update(directional=None),
@@ -2840,6 +2841,8 @@ def test_the_loader_refuses_a_curve_the_engine_must_not_read(
         load_saturation_curve(path)
     assert str(path) in str(refused.value)
     assert isinstance(refused.value, ValueError)
+    assert "(: " not in str(refused.value)
+    assert "Value error" not in str(refused.value)
 
 
 @pytest.mark.parametrize(
@@ -2851,21 +2854,36 @@ def test_the_loader_refuses_a_curve_the_engine_must_not_read(
             "the key 'schema_version' appears twice in one JSON object",
         ),
         ('"capacity_gbps": 1.0,', '"capacity_gbps": 1e999,', "finite number"),
+        ('"a stated limit"', '"\\ud800a stated limit"', r"not a saturation curve \(Invalid JSON"),
+        (
+            '"requested_fleet": 342,',
+            f'"requested_fleet": 1{"0" * 4_999},',
+            "a number out of range: Exceeds the limit",
+        ),
     ],
-    ids=["a key written twice", "a number too large for a float"],
+    ids=[
+        "a key written twice",
+        "a number too large for a float",
+        "a lone surrogate",
+        "an integer past Python's digit limit",
+    ],
 )
 def test_the_loader_refuses_json_text_the_promotion_never_writes(
     tmp_path: Path, old: str, new: str, message: str
 ) -> None:
-    """Objective: the loader refuses JSON text that parses, but not as the promotion writes it:
-    a key written twice in one object (Python's parser keeps the last, another reader may keep
-    the first) and a number beyond a float (Python's parser reads it as infinity).
+    """Objective: the loader refuses JSON text Python's parser reads, but not as the promotion
+    writes it: a key written twice in one object (Python's parser keeps the last, another
+    reader may keep the first), a number beyond a float (Python's parser reads it as infinity),
+    a lone surrogate escape (Python's parser keeps it, pydantic's refuses it with no location),
+    and an integer past Python's limit on digits; each refusal reads as one clean clause.
 
-    Sample: the complete bare curve as the promotion renders it, with ``schema_version``
-    written twice (another schema first), or its first capacity written ``1e999``.
+    Sample: the complete bare curve as the promotion renders it, with ``schema_version`` written
+    twice (another schema first), its first capacity written ``1e999``, its stated limit led by
+    ``\\ud800``, or its first requested fleet written with 5,000 digits.
 
-    Expected outcome: SaturationCurveError naming the file and the repeated key, or the value
-    not a finite number.
+    Expected outcome: SaturationCurveError naming the file and the repeated key, the value not a
+    finite number, pydantic's parser refusing the text (no empty location before it), or a
+    number out of range.
     """
     text = render_artifact_json(complete_bare_curve()) + "\n"
     assert old in text
@@ -2874,6 +2892,73 @@ def test_the_loader_refuses_json_text_the_promotion_never_writes(
     with pytest.raises(SaturationCurveError, match=message) as refused:
         load_saturation_curve(path)
     assert str(path) in str(refused.value)
+    assert "(: " not in str(refused.value)
+
+
+@pytest.mark.parametrize("digit_limit", [sys.get_int_max_str_digits(), 0], ids=["Python's", "none"])
+def test_a_number_out_of_range_is_the_curves_error_whatever_pythons_digit_limit(
+    tmp_path: Path, digit_limit: int
+) -> None:
+    """Objective: one rule sorts the loader's refusals, so a number out of range is the curve's
+    error whether or not Python's parser reads it (its class never follows
+    ``sys.set_int_max_str_digits``).
+
+    Sample: the complete bare curve with its first requested fleet written with 5,000 digits,
+    loaded under Python's default limit on an integer's digits (Python's parser refuses it) and
+    with no limit (Python's parser reads it, and pydantic's refuses it).
+
+    Expected outcome: SaturationCurveError naming the file, a number out of range, both times.
+    """
+    text = (render_artifact_json(complete_bare_curve()) + "\n").replace(
+        '"requested_fleet": 342,', f'"requested_fleet": 1{"0" * 4_999},', 1
+    )
+    path = tmp_path / "long_integer.json"
+    path.write_text(text, encoding="utf-8")
+    default = sys.get_int_max_str_digits()
+    sys.set_int_max_str_digits(digit_limit)
+    try:
+        with pytest.raises(SaturationCurveError, match="number out of range") as refused:
+            load_saturation_curve(path)
+    finally:
+        sys.set_int_max_str_digits(default)
+    assert str(path) in str(refused.value)
+
+
+def test_a_json_root_that_is_not_an_object_is_not_a_saturation_curve(tmp_path: Path) -> None:
+    """Objective: text Python's parser reads is the curve's to refuse, so a JSON root that is not
+    an object is the curve's error, not the file boundary's.
+
+    Sample: a file holding the JSON list ``[1, 2]``.
+
+    Expected outcome: SaturationCurveError naming the file and the root's type.
+    """
+    path = tmp_path / "saturation_curve.json"
+    path.write_text("[1, 2]", encoding="utf-8")
+    with pytest.raises(SaturationCurveError, match="its JSON root is list, not an") as refused:
+        load_saturation_curve(path)
+    assert str(path) in str(refused.value)
+
+
+def test_a_code_defect_in_validation_is_never_reported_as_a_data_problem(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Objective: the loader turns only a requested fleet too large for a float (``walker_shape``'s
+    OverflowError) into the curve's error; any other arithmetic failure in validation, a code
+    defect, leaves as itself.
+
+    Sample: the complete bare curve, loaded with ``walker_shape`` patched to divide by zero.
+
+    Expected outcome: ZeroDivisionError, not SaturationCurveError.
+    """
+    path = tmp_path / "saturation_curve.json"
+    path.write_text(render_artifact_json(complete_bare_curve()) + "\n", encoding="utf-8")
+
+    def divides_by_zero(requested_fleet: int) -> tuple[int, int]:
+        return requested_fleet // 0, 1
+
+    monkeypatch.setattr(saturation_curve, "walker_shape", divides_by_zero)
+    with pytest.raises(ZeroDivisionError):
+        load_saturation_curve(path)
 
 
 @pytest.mark.parametrize(
@@ -2881,16 +2966,18 @@ def test_the_loader_refuses_json_text_the_promotion_never_writes(
     [
         (None, "file not found"),
         ("{not json", "not a JSON document"),
-        ("[1, 2]", "the JSON root must be an object, got list"),
+        ("[" * 200_000 + "]" * 200_000, "nested too deeply"),
     ],
-    ids=["missing", "not JSON", "not an object"],
+    ids=["missing", "not JSON", "nested past Python's parser"],
 )
 def test_the_loader_refuses_a_file_it_cannot_read_as_a_curve(
     tmp_path: Path, content: str | None, message: str
 ) -> None:
-    """Objective: a missing or unreadable curve file is the shared file-boundary error.
+    """Objective: a curve file that cannot be read, or that Python's JSON parser refuses as JSON,
+    is the shared file-boundary error.
 
-    Sample: no file; text that is not JSON; a JSON list.
+    Sample: no file; text that is not JSON; an array nested 200,000 deep (Python's parser runs
+    out of stack and raises RecursionError).
 
     Expected outcome: ModelFileError naming the file and the reason.
     """
