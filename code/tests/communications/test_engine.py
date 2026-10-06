@@ -45,6 +45,9 @@ from communications.engine import (
     Deployment,
     DeploymentRuleError,
     DeploymentStep,
+    cellular_rule,
+    compute_fleet_target,
+    first_year_at_target,
     margin_pct,
     per_satellite_annual_cost_musd,
     run_comms_model,
@@ -863,3 +866,39 @@ def test_margin_is_none_where_revenue_is_not_positive() -> None:
     assert margin_pct(0.0, 1.0) is None
     assert margin_pct(-1.0, 1.0) is None
     assert margin_pct(4.0, 1.0) == pytest.approx(75.0)
+
+
+def test_a_rule_keeps_no_state_between_runs() -> None:
+    """A rule reads only its step, so the loop run twice with one rule gives one record.
+
+    Objective: a deployment rule keeps no state between calls. The cellular rule is the one
+    that reads the years already computed (its hold), so it is the one a remembered
+    "target reached" flag would break.
+
+    Sample: the config defaults' fleet target (340, the coverage floor binding the 10M base),
+    one ``cellular_rule`` object, the loop run twice with it.
+
+    Expected: the two shared records are equal, every year and cohort line included. The run
+    reaches the target (in FY2035) with build years before it that replace less than they add,
+    so a rule that remembered reaching the target would count the second run's build as
+    replacement and fail here.
+    """
+    config = CommsConfig()
+    per_launch = config.satellite.satellites_per_launch
+    fleet_target, _ = compute_fleet_target(
+        subscriber_target=config.subscribers.subscribers_at_full_coverage,
+        subscribers_per_satellite=config.subscribers.subscribers_per_satellite,
+        coverage_floor=config.coverage.satellites_for_full_coverage,
+        max_fleet_satellites=config.coverage.max_fleet_satellites,
+    )
+    rule = cellular_rule(fleet_target)
+    first = run_fleet_loop(config, rule, satellites_per_launch=per_launch)
+    second = run_fleet_loop(config, rule, satellites_per_launch=per_launch)
+    assert first == second
+    reached = first_year_at_target(first.years, fleet_target)
+    assert reached is not None
+    assert any(
+        year.year <= reached
+        and year.satellites_replaced_this_year < year.satellites_deployed_this_year
+        for year in first.years
+    )

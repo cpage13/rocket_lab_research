@@ -129,6 +129,7 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final, Protocol
 
@@ -943,6 +944,179 @@ class DeploymentRuleError(ValueError):
     """A deployment rule returned an impossible deployment: an addition that is not whole
     launches or exceeds the cadence share's launches, or a replacement that is not whole
     launches or exceeds the addition."""
+
+
+# ---------------------------------------------------------------------------
+# The cellular family's record (beside the shared one; plain numerics).
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CellularSizing:
+    """How the cellular family sized a run's fleet, the input of its rule and its record.
+
+    Attributes:
+        fleet_target: The capacity-sized fleet the build fills toward and holds
+            (:func:`compute_fleet_target`).
+        binding_regime: Which constraint set the target (the coverage floor, the capacity
+            need, or the saturation cap).
+        subscribers_per_satellite: The per-satellite density that sized the target (people).
+        satellites_per_launch: The satellites per launch the run deploys with.
+    """
+
+    fleet_target: int
+    binding_regime: BindingRegime
+    subscribers_per_satellite: int
+    satellites_per_launch: int
+
+
+@dataclass(frozen=True)
+class CellularCohortRevenue:
+    """The cellular revenue on one living cohort's cost line in one year (both cases).
+
+    The cohort-level mirror of the DC per-cohort economics, read against the cohort's line
+    in the shared record (:class:`FleetCohortCost`, its satellites and annualized cost). The
+    cost-plus case is cost-coupled (revenue = the cohort's annual cost x the multiple), so
+    its margin is the same flat figure for every cohort. The ARPU case allocates the year's
+    served subscribers to the cohort by its share of the living fleet, so its revenue and
+    margin vary with the cohort's share and the year's served base.
+
+    Attributes:
+        launch_year: The cohort's deployment year (its key in the shared record's lines).
+        cost_plus_revenue_musd: The cost-plus revenue (the cohort's annual cost x the
+            multiple), $M/yr.
+        cost_plus_gross_margin_pct: The cost-plus margin, percent (flat across cohorts:
+            ``(multiple - 1) / multiple x 100``).
+        arpu_subscribers_served: The served subscribers allocated to this cohort this year
+            (the year's served base x this cohort's share of the living fleet).
+        arpu_revenue_musd: The ARPU revenue (``arpu_subscribers_served x monthly ARPU x
+            12``), $M/yr.
+        arpu_gross_margin_pct: The ARPU margin, percent.
+    """
+
+    launch_year: int
+    cost_plus_revenue_musd: float
+    cost_plus_gross_margin_pct: float
+    arpu_subscribers_served: int
+    arpu_revenue_musd: float
+    arpu_gross_margin_pct: float
+
+
+@dataclass(frozen=True)
+class CellularYear:
+    """One model year of the cellular family's record, beside its :class:`FleetYear`.
+
+    Attributes:
+        year: The fiscal year (the key of the shared record's year).
+        buildout_fraction: ``living_fleet / fleet_target``, at most 1.0: the fraction of the
+            capacity-sized fleet on orbit, which scales the served subscribers.
+        is_hold_phase: ``True`` in every year AFTER the year the fleet target was first
+            reached (:attr:`CellularTrajectory.full_coverage_reached_year`); the completion
+            year itself is the last build-out year (its deployment carries the final build
+            tranche).
+        subscribers_served_this_year: The served-PERSON count at this year's buildout
+            fraction (the subscriber target, or the override, capped at the fleet target's
+            people capacity and scaled by ``buildout_fraction``); it drives the year's ARPU
+            revenue (the final year's value is the headline ``subscribers_served``).
+        cost_plus_revenue_this_year_musd: The COST-PLUS revenue this year, $M (the shared
+            record's annualized cost x ``revenue_multiple``).
+        cost_plus_gross_margin_pct: The COST-PLUS margin this year, percent (``(revenue -
+            cost) / revenue x 100``; flat at the multiple's implied margin once any fleet is
+            on orbit; 0.0 with no revenue).
+        arpu_revenue_this_year_musd: The PRICES-TODAY ARPU revenue this year, $M
+            (``subscribers_served_this_year x arpu_usd_per_month x 12 / 1e6``).
+        arpu_gross_margin_pct: The ARPU margin this year, percent, against the annualized
+            cost (0.0 with no revenue).
+        cohort_revenue: The revenue on each living cohort's cost line, in the shared record's
+            order (oldest first; empty with no living fleet).
+    """
+
+    year: int
+    buildout_fraction: float
+    is_hold_phase: bool
+    subscribers_served_this_year: int
+    cost_plus_revenue_this_year_musd: float
+    cost_plus_gross_margin_pct: float
+    arpu_revenue_this_year_musd: float
+    arpu_gross_margin_pct: float
+    cohort_revenue: tuple[CellularCohortRevenue, ...]
+
+
+@dataclass(frozen=True)
+class CellularTrajectory:
+    """The cellular family's record of a run: its target, regime, served people and revenue.
+
+    Read beside the run's shared fleet-and-cost record (:class:`FleetTrajectory`), which
+    holds the deployment, the living fleet and every cost line; nothing here repeats it.
+
+    Attributes:
+        years: One :class:`CellularYear` per model year, in the shared record's order.
+        fleet_target: The capacity-sized fleet the build-out fills toward
+            (:func:`compute_fleet_target`: the subscriber target divided by the
+            per-satellite density, floored by the coverage floor, capped by the saturation
+            cap). The cellular rule builds and holds to THIS, not the floor.
+        subscribers_per_satellite: The attached-subscribers-per-satellite density that sized
+            the fleet.
+        binding_regime: Which constraint set the fleet target (the coverage floor, the
+            capacity need, or the saturation cap), the investor's coverage-vs-capacity
+            answer for this scenario.
+        full_coverage_reached_year: The first fiscal year the living fleet reached the
+            FLEET TARGET (full deployment, :func:`first_year_at_target`), or ``None`` if it
+            is never reached within the horizon (a truthful below-target output, not an
+            error).
+        subscribers_served: The served-PERSON count at the FINAL year's buildout fraction
+            (the final year's ``subscribers_served_this_year``): the capped base when the
+            build-out completed, the proportional partial-deployment count when it did not.
+        final_year_cash_cost_per_subscriber_usd: The shared record's final-year cash
+            replacement per served person, USD; ``None`` when that replacement is ``None``
+            or nobody is served. A lumpy cash figure, NOT an annualized cost to serve.
+        steady_state_revenue_cost_plus_musd: The steady-state COST-PLUS annual revenue,
+            $M/yr (the final year's ``cost_plus_revenue_this_year_musd``).
+        steady_state_gross_margin_cost_plus_pct: The steady-state COST-PLUS margin, percent.
+        steady_state_revenue_arpu_musd: The steady-state PRICES-TODAY ARPU annual revenue,
+            $M/yr (the final year's ``arpu_revenue_this_year_musd``).
+        steady_state_gross_margin_arpu_pct: The steady-state ARPU margin, percent; unlike
+            the cost-plus margin, it depends on whether the ARPU revenue clears the
+            annualized cost at the served base.
+        built_fleet_annual_cost_musd: Interim, read only by the Iridium artifact (v5): the
+            BUILT fleet's annualized cost, $M/yr, the published ARPU margin's cost basis.
+            When the final-year living fleet is at or above the fleet target it equals the
+            final year's annualized cost; otherwise it projects the whole-launch built fleet
+            (the target rounded up to whole launches) at the final year's per-satellite
+            annual cost.
+        iridium: Interim: the Iridium entry's v5 physics block (:class:`IridiumResult`) on
+            an Iridium run, ``None`` on a cellular run. It never perturbs the fields above.
+    """
+
+    years: tuple[CellularYear, ...]
+    fleet_target: int
+    subscribers_per_satellite: int
+    binding_regime: BindingRegime
+    full_coverage_reached_year: int | None
+    subscribers_served: int
+    final_year_cash_cost_per_subscriber_usd: float | None
+    steady_state_revenue_cost_plus_musd: float
+    steady_state_gross_margin_cost_plus_pct: float
+    steady_state_revenue_arpu_musd: float
+    steady_state_gross_margin_arpu_pct: float
+    built_fleet_annual_cost_musd: float
+    iridium: IridiumResult | None
+
+
+@dataclass(frozen=True)
+class CellularRun:
+    """A run of the cellular family's rule: the shared fleet-and-cost record and the
+    cellular record beside it.
+
+    Attributes:
+        fleet: The shared fleet-and-cost record (the deployment, living fleet, cost lines
+            and totals).
+        cellular: The cellular record (the target, regime, hold, served people and the two
+            revenue cases).
+    """
+
+    fleet: FleetTrajectory
+    cellular: CellularTrajectory
 
 
 @dataclass(frozen=True)
@@ -1882,6 +2056,268 @@ def run_fleet_loop(
 
 
 # ---------------------------------------------------------------------------
+# The cellular family: its deployment rule (target and hold) and its record.
+# ---------------------------------------------------------------------------
+
+
+def first_year_at_target(years: Sequence[FleetYear], fleet_target: int) -> int | None:
+    """The first year whose living fleet reached the fleet target: the cellular hold, defined once.
+
+    The cellular rule holds in a year when this is not None over the years before it, and
+    the cellular record reads its hold flag and its completion year the same way, so the
+    hold has one definition.
+
+    Args:
+        years: Shared records of consecutive model years, oldest first.
+        fleet_target: The cellular fleet target.
+
+    Returns:
+        The fiscal year of the first record whose living fleet is at or above the target,
+        or None if none is.
+    """
+    return next((year.year for year in years if year.living_fleet >= fleet_target), None)
+
+
+def cellular_rule(fleet_target: int) -> DeploymentRule:
+    """The cellular family's deployment rule: build to the fleet target, then hold it.
+
+    THE OVERSHOOT RULE. Launches are granular (a whole launch deploys its satellites at
+    once), so the last build-out launch may push the living fleet slightly OVER the target.
+    In every year, build-out and hold alike, the rule adds the deficit to the target
+    (``fleet_target - living_before``, at least 0) rounded UP to whole launches
+    (:func:`_ceil_to_launch`), capped by the cadence share's launches. The final build
+    cohort may overshoot by strictly less than one launch's worth, and the rule never
+    deploys beyond what holding needs: in hold the deficit is that year's cliff losses less
+    any overshoot still on orbit, so it replaces only the ageing cohorts.
+
+    THE REPLACEMENT SPLIT. Only the replacement of retiring cohorts counts as replacement,
+    never a build tranche. Up to and including the year the target is first reached, the
+    replacement is the part of the addition that matches the year's retirements
+    (``min(added, retiring)``, both whole launches); the rest is build. Once the target is
+    held (it was reached in an EARLIER year, :func:`first_year_at_target` over the years
+    already computed), every addition restores retired satellites and counts as
+    replacement.
+
+    The rule reads only its step (the hold from ``step.years_so_far``) and keeps no state
+    between calls.
+
+    Args:
+        fleet_target: The cellular fleet target (:func:`compute_fleet_target`).
+
+    Returns:
+        The :class:`DeploymentRule` for that target.
+    """
+
+    def build_and_hold(step: DeploymentStep) -> Deployment:
+        """Deploy one year toward the fleet target, and split its replacement by the hold."""
+        would_be_deployed = step.launches_allowed * step.satellites_per_launch
+        deficit = max(0, fleet_target - step.living_before)
+        satellites_added = min(
+            would_be_deployed, _ceil_to_launch(deficit, step.satellites_per_launch)
+        )
+        holding = first_year_at_target(step.years_so_far, fleet_target) is not None
+        satellites_replaced = (
+            satellites_added if holding else min(satellites_added, step.retiring_this_year)
+        )
+        return Deployment(
+            satellites_added=satellites_added, satellites_replaced=satellites_replaced
+        )
+
+    return build_and_hold
+
+
+def _cellular_cohort_revenue(
+    fleet_year: FleetYear,
+    *,
+    subscribers_served_this_year: int,
+    revenue_multiple: float,
+    arpu_usd_per_month: float,
+) -> tuple[CellularCohortRevenue, ...]:
+    """The cellular revenue on each living cohort's cost line for one year (both cases).
+
+    For each of the year's cohort cost lines (oldest first), the cost-plus revenue (the
+    line's annualized cost x the multiple) and the ARPU revenue on the served subscribers
+    allocated to the cohort by its share of the living fleet (a cohort with more living
+    satellites serves proportionally more of the base), each with its margin. The last
+    living cohort absorbs any rounding remainder, so the per-cohort served counts sum
+    exactly to the year's served total (no drift versus the year's ARPU line).
+
+    Args:
+        fleet_year: The year's shared record (its cohort cost lines and living fleet).
+        subscribers_served_this_year: The year's served-PERSON count (the ARPU base).
+        revenue_multiple: The cost-plus multiple.
+        arpu_usd_per_month: The monthly ARPU.
+
+    Returns:
+        One :class:`CellularCohortRevenue` per cohort cost line, in its order.
+    """
+    lines: list[CellularCohortRevenue] = []
+    subscribers_allocated = 0
+    last_index = len(fleet_year.cohort_costs) - 1
+    for idx, cost in enumerate(fleet_year.cohort_costs):
+        cost_plus_revenue_musd = cost.annual_cost_musd * revenue_multiple
+        # Allocate the year's served subscribers by the cohort's living-satellite share;
+        # the last living cohort takes the remainder so the parts sum exactly.
+        if idx == last_index:
+            cohort_subscribers = subscribers_served_this_year - subscribers_allocated
+        elif fleet_year.living_fleet > 0:
+            cohort_subscribers = round(
+                subscribers_served_this_year * cost.living_satellites / fleet_year.living_fleet
+            )
+        else:
+            cohort_subscribers = 0
+        subscribers_allocated += cohort_subscribers
+        arpu_revenue_musd = cohort_subscribers * arpu_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
+        lines.append(
+            CellularCohortRevenue(
+                launch_year=cost.launch_year,
+                cost_plus_revenue_musd=cost_plus_revenue_musd,
+                cost_plus_gross_margin_pct=_cellular_margin_pct(
+                    cost_plus_revenue_musd, cost.annual_cost_musd
+                ),
+                arpu_subscribers_served=cohort_subscribers,
+                arpu_revenue_musd=arpu_revenue_musd,
+                arpu_gross_margin_pct=_cellular_margin_pct(
+                    arpu_revenue_musd, cost.annual_cost_musd
+                ),
+            )
+        )
+    return tuple(lines)
+
+
+def build_cellular_record(
+    config: CommsConfig,
+    fleet: FleetTrajectory,
+    sizing: CellularSizing,
+    *,
+    iridium: IridiumResult | None,
+) -> CellularTrajectory:
+    """Build the cellular family's record of a run on its shared fleet-and-cost record.
+
+    Per year: the hold flag (the target reached in an earlier year,
+    :func:`first_year_at_target` over the years before it, the rule's own test), the
+    buildout fraction (the living fleet over the target, at most 1.0), the served people at
+    it (:func:`subscribers_served_at`, the subscriber target or the override capped at the
+    target's people capacity), and the two revenue cases on the year's annualized cost
+    (COST-PLUS: the cost x ``revenue_multiple``; ARPU: the served people x
+    ``arpu_usd_per_month`` x 12), each with its margin (:data:`ZERO_MARGIN_PCT` where there
+    is no revenue), with the revenue on each cohort cost line. Then the headlines: the
+    completion year, the final year's served people and its cash cost per person (the
+    shared final-year replacement over them, :func:`usd_per_person`), the steady-state
+    revenue and margins (the final year's), and the interim built-fleet cost.
+
+    It logs a WARNING when a served override exceeds the target's people capacity (the
+    served count is capped there; the fleet is sized from the target, not the override)
+    and when the build never reaches the target inside the horizon (a truthful
+    below-target output, not an error).
+
+    Args:
+        config: The comms config (the subscriber, revenue, satellite and comms-cadence
+            blocks).
+        fleet: The run's shared fleet-and-cost record, deployed under
+            :func:`cellular_rule` for ``sizing.fleet_target``.
+        sizing: How the fleet was sized (the target, its regime, the density, the
+            satellites per launch).
+        iridium: Interim: the Iridium entry's v5 physics block, or None on a cellular run.
+
+    Returns:
+        The :class:`CellularTrajectory`.
+    """
+    subscriber_target = config.subscribers.subscribers_at_full_coverage
+    served_override = config.subscribers.subscribers_served_override
+    fleet_target = sizing.fleet_target
+    # The most people the fleet target can carry: the ceiling on the served base.
+    people_capacity = fleet_target * sizing.subscribers_per_satellite
+    if served_override is not None and served_override > people_capacity:
+        logger.warning(
+            "subscribers_served_override (%d) exceeds the fleet target's people capacity "
+            "(%d = %d satellites x %d per satellite); the served count is capped at the "
+            "capacity (the fleet is sized from the subscriber target, not the override).",
+            served_override,
+            people_capacity,
+            fleet_target,
+            sizing.subscribers_per_satellite,
+        )
+    revenue_multiple = config.revenue.revenue_multiple
+    arpu_usd_per_month = config.revenue.arpu_usd_per_month
+
+    years: list[CellularYear] = []
+    for index, fleet_year in enumerate(fleet.years):
+        annual_cost_musd = fleet_year.annual_cost_this_year_musd
+        buildout_fraction = min(FULL_BUILDOUT_FRACTION, fleet_year.living_fleet / fleet_target)
+        subscribers_served_this_year = subscribers_served_at(
+            buildout_fraction,
+            subscriber_target=subscriber_target,
+            override=served_override,
+            people_capacity=people_capacity,
+        )
+        # Case 1, COST-PLUS: revenue = annual cost x the multiple (cost-coupled).
+        cost_plus_revenue_musd = annual_cost_musd * revenue_multiple
+        # Case 2, ARPU: revenue = served base x monthly ARPU x 12 (price x served base).
+        arpu_revenue_musd = (
+            subscribers_served_this_year * arpu_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
+        )
+        years.append(
+            CellularYear(
+                year=fleet_year.year,
+                buildout_fraction=buildout_fraction,
+                is_hold_phase=first_year_at_target(fleet.years[:index], fleet_target) is not None,
+                subscribers_served_this_year=subscribers_served_this_year,
+                cost_plus_revenue_this_year_musd=cost_plus_revenue_musd,
+                cost_plus_gross_margin_pct=_cellular_margin_pct(
+                    cost_plus_revenue_musd, annual_cost_musd
+                ),
+                arpu_revenue_this_year_musd=arpu_revenue_musd,
+                arpu_gross_margin_pct=_cellular_margin_pct(arpu_revenue_musd, annual_cost_musd),
+                cohort_revenue=_cellular_cohort_revenue(
+                    fleet_year,
+                    subscribers_served_this_year=subscribers_served_this_year,
+                    revenue_multiple=revenue_multiple,
+                    arpu_usd_per_month=arpu_usd_per_month,
+                ),
+            )
+        )
+
+    final_fleet_year = fleet.years[-1]
+    final_year = years[-1]
+    full_coverage_reached_year = first_year_at_target(fleet.years, fleet_target)
+    if full_coverage_reached_year is None:
+        logger.warning(
+            "Comms build-out did not reach the fleet target (%d satellites, %s regime) within "
+            "the %d-year horizon at share_of_fleet=%.3f; living fleet at FY%d is %d. This is a "
+            "truthful below-target output, not an error.",
+            fleet_target,
+            sizing.binding_regime.value,
+            config.metadata.horizon_years,
+            config.comms_cadence.share_of_fleet,
+            final_fleet_year.year,
+            final_fleet_year.living_fleet,
+        )
+    return CellularTrajectory(
+        years=tuple(years),
+        fleet_target=fleet_target,
+        subscribers_per_satellite=sizing.subscribers_per_satellite,
+        binding_regime=sizing.binding_regime,
+        full_coverage_reached_year=full_coverage_reached_year,
+        subscribers_served=final_year.subscribers_served_this_year,
+        final_year_cash_cost_per_subscriber_usd=usd_per_person(
+            fleet.final_year_replacement_cost_musd, final_year.subscribers_served_this_year
+        ),
+        steady_state_revenue_cost_plus_musd=final_year.cost_plus_revenue_this_year_musd,
+        steady_state_gross_margin_cost_plus_pct=final_year.cost_plus_gross_margin_pct,
+        steady_state_revenue_arpu_musd=final_year.arpu_revenue_this_year_musd,
+        steady_state_gross_margin_arpu_pct=final_year.arpu_gross_margin_pct,
+        built_fleet_annual_cost_musd=_built_fleet_annual_cost_musd(
+            config,
+            final_year=final_fleet_year,
+            fleet_target=fleet_target,
+            satellites_per_launch=sizing.satellites_per_launch,
+        ),
+        iridium=iridium,
+    )
+
+
+# ---------------------------------------------------------------------------
 # The build-and-hold treadmill: one model year.
 # ---------------------------------------------------------------------------
 
@@ -2165,7 +2601,7 @@ def _compute_comms_year(
 def _built_fleet_annual_cost_musd(
     config: CommsConfig,
     *,
-    final_year: CommsYear,
+    final_year: FleetYear | CommsYear,
     fleet_target: int,
     satellites_per_launch: int,
 ) -> float:
@@ -2449,6 +2885,11 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
 
 
 __all__ = [
+    "CellularCohortRevenue",
+    "CellularRun",
+    "CellularSizing",
+    "CellularTrajectory",
+    "CellularYear",
     "CommsCohortYear",
     "CommsTrajectory",
     "CommsYear",
@@ -2464,13 +2905,16 @@ __all__ = [
     "IridiumResult",
     "NotACellularConfigError",
     "arpu_stated_assumptions",
+    "build_cellular_record",
     "build_iridium_result",
+    "cellular_rule",
     "compute_fleet_target",
     "derive_arpu_buckets",
     "derive_iridium_per_user_rates",
     "derive_iridium_satellites_per_launch",
     "derive_iridium_subscribers_per_satellite",
     "derive_per_satellite_capacity_gbps",
+    "first_year_at_target",
     "iridium_assumptions",
     "margin_pct",
     "per_satellite_annual_cost_musd",
