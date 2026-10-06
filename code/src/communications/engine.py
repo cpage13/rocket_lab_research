@@ -1,10 +1,16 @@
 """The communications cost engine: the per-year cohort treadmill both families share.
 
-``run_comms_model(config)`` drives the slim cost-to-serve model across the
+``run_comms_trajectory(config)`` drives the slim cost-to-serve model across the
 horizon and returns a :class:`CommsTrajectory` of plain-numeric per-year rollups.
 The same treadmill serves both model families: the High-Bandwidth Cellular Pure
 Play model (a fixed subscriber-density dial) and the Iridium model (the density
-derived from L-band physics when ``config.iridium`` is set).
+derived from L-band physics when ``config.iridium`` is set). Each family has its own
+entry, and both call this one path (the interim shared path, until the shared
+fleet-and-cost loop lands): the cellular entry is ``run_comms_model(config)`` here;
+the Iridium entry is ``communications.iridium.run_iridium_model(config, curve)``,
+which checks its saturation curve against the config before the run. This module
+imports neither the Iridium family nor the curve's contract, so the shared path
+stays family-neutral.
 It mirrors the data-center model's fleet engine (the per-year loop in
 ``data_center/engine.py`` plus the living-cohort rollup in ``data_center/fleet.py``)
 with three deliberate differences, all driven by the comms design:
@@ -332,7 +338,7 @@ def compute_fleet_target(
 # subscribers_per_satellite dial of the High-Bandwidth Cellular Pure Play model
 # (formerly Model A), then feeds the SAME compute_fleet_target above. These are
 # pure derivations (primitives or the dials in, primitives out, no side effects);
-# run_comms_model wires them in behind the config.iridium branch. THE THREE LANES
+# run_comms_trajectory wires them in behind the config.iridium branch. THE THREE LANES
 # stay separate: the Iridium model is the MSS lane (purpose-built or in-chipset
 # devices on owned L-band), NOT cellular direct-to-cell to an unmodified phone
 # (the High-Bandwidth Cellular Pure Play model) and NOT broadband.
@@ -1180,7 +1186,7 @@ def build_iridium_result(
     aggregate as ``per_satellite_capacity_gbps x fleet_target`` (0.7 step 6), and
     echoes the derived density and the aperture-coupled effective
     satellites-per-launch (both passed in, already computed once in
-    :func:`run_comms_model`, so the density that sized the fleet and the density
+    :func:`run_comms_trajectory`, so the density that sized the fleet and the density
     reported here cannot drift). The operations cost and the ecosystem assumption are
     the stated Iridium-model constants (:data:`IRIDIUM_OPERATIONS_COST_MUSD`,
     :data:`ECOSYSTEM_ASSUMPTION_NOTE`). When the dials carry an ``arpu`` block, the
@@ -1766,14 +1772,17 @@ def _built_fleet_annual_cost_musd(
 
 
 # ---------------------------------------------------------------------------
-# The engine entry point.
+# The shared path and the cellular entry.
 # ---------------------------------------------------------------------------
 
 
-def run_comms_model(config: CommsConfig) -> CommsTrajectory:
+def run_comms_trajectory(config: CommsConfig) -> CommsTrajectory:
     """Run the build-and-hold cost trajectory for one communications scenario.
 
-    Serves both families: the High-Bandwidth Cellular Pure Play model (no ``iridium``
+    The interim shared path both entries call (the cellular entry :func:`run_comms_model`
+    and the Iridium entry ``communications.iridium.run_iridium_model``), so no year loop is
+    copied into the Iridium family; the shared fleet-and-cost loop replaces it. Serves
+    both families: the High-Bandwidth Cellular Pure Play model (no ``iridium``
     block) and the Iridium model (the density derived from the ``iridium`` block).
     Iterates the model years 0..``horizon_years`` inclusive (FY2026..FY2036 at
     the defaults), deploying satellites toward the CAPACITY-sized FLEET TARGET
@@ -1970,6 +1979,26 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
     )
 
 
+def run_comms_model(config: CommsConfig) -> CommsTrajectory:
+    """The cellular entry: run a config on the shared path, :func:`run_comms_trajectory`.
+
+    The Iridium family has its own entry, ``communications.iridium.run_iridium_model(config,
+    curve)``, which checks its saturation curve against the config before it runs the same
+    path.
+
+    Args:
+        config: The comms config (the frozen Pydantic tree). The all-defaults config
+            reproduces the High-Bandwidth Cellular Pure Play central case.
+
+    Returns:
+        The :class:`CommsTrajectory` of :func:`run_comms_trajectory`.
+
+    Raises:
+        ValueError: As :func:`run_comms_trajectory` raises it.
+    """
+    return run_comms_trajectory(config)
+
+
 __all__ = [
     "CommsCohortYear",
     "CommsTrajectory",
@@ -1989,6 +2018,7 @@ __all__ = [
     "margin_pct",
     "resolve_device_spectral_efficiency",
     "run_comms_model",
+    "run_comms_trajectory",
     "subscribers_served_at",
     "usd_per_person",
 ]
