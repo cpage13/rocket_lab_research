@@ -142,7 +142,8 @@ its own regeneration.
 Public: :func:`load_population_grid`, :class:`PopulationGrid`, :func:`compute_saturation`,
 :func:`promote_saturation_curve`, :func:`main`, :class:`PopulationGridError` and
 :class:`SaturationInvariantError`. Everything else is private; ``_allocate`` is the seam the
-tests drive with explicit satellite positions.
+tests drive with explicit satellite positions, and ``_class_row`` (one class's row at one
+requested fleet) the seam the drift test recomputes a committed curve's rows through.
 """
 
 from __future__ import annotations
@@ -3539,6 +3540,69 @@ def compute_saturation(
         bands=tuple(bands),
         limits=(*_curve_limits(inputs), *marker_limits),
     )
+
+
+def _class_row(class_key: DeviceClass, fleet: int, inputs: SaturationInputs) -> CurveRow:
+    """Return one class's row at one fleet, as the curve computes it: the drift test's seam.
+
+    ``fleet`` is the requested fleet the row's shell is built from (a row's
+    ``requested_fleet``, never its realized key, which can build another shell). The row is
+    computed in this process at the inputs' own settings: the grid they name (anchored at the
+    repository root and checked against its SHA-256), the class's limits
+    (:func:`_class_limits`), its snapshots taken from the same seeded draw, and on the phone
+    class's first snapshots the interference trim; so it equals the curve's row for that
+    request.
+
+    Args:
+        class_key: The class.
+        fleet: The requested fleet.
+        inputs: The curve's inputs (a committed curve's ``parameters``).
+
+    Returns:
+        The class's row at that request.
+
+    Raises:
+        ModelFileError: If the module is not in a source checkout or the grid is unreadable.
+        PopulationGridError: If the grid is not the one the inputs name.
+    """
+    checkout = locate_source_checkout(__file__)
+    population = load_population_grid(
+        _anchored(checkout, inputs.demand.grid_path), inputs.demand.grid_sha256
+    )
+    limits = _class_limits(inputs, class_key)
+    sweep = inputs.sweep
+    snapshots = (
+        sweep.snapshots_phone_central if limits.directional is None else sweep.snapshots_directional
+    )
+    times = np.random.default_rng(sweep.seed).uniform(_DAY_START_S, _SIDEREAL_DAY_S, snapshots)
+    context = _SweepContext(
+        shell=inputs.shell,
+        cells=_demand_cells(population, inputs.demand.density_threshold_per_km2),
+        limits=limits,
+        trim=inputs.trim,
+    )
+    results = [
+        _run_snapshot(
+            _SnapshotTask(
+                curve=class_key,
+                fleet_index=0,
+                requested_fleet=fleet,
+                snapshot_index=index,
+                time_s=float(times[index]),
+                prices_trim=class_key is DeviceClass.PHONE_CLASS and index < sweep.snapshots_trim,
+            ),
+            context,
+        )
+        for index in range(snapshots)
+    ]
+    (row,) = _class_rows(
+        _by_fleet(results, 1),
+        (fleet,),
+        beams_per_satellite=limits.beams_per_satellite,
+        directional=limits.directional is not None,
+        trim_floors_dbi=inputs.trim.floors_dbi if class_key is DeviceClass.PHONE_CLASS else None,
+    )
+    return row
 
 
 # ===========================================================================

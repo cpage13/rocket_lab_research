@@ -1143,13 +1143,31 @@ central maximum use and ceiling (neither depends on B); the two density points a
 degree grid change the demand, the taper and the spacing the area per beam."""
 
 
+COARSE_SWEEP = SweepInputs(
+    fleets=COARSE_REAL_FLEETS,
+    mounted_terminal_extension=(),
+    snapshots_phone_central=1,
+    snapshots_directional=1,
+    snapshots_bands=1,
+)
+"""The coarse setting: fleets 340, 1,000 and 2,000, one snapshot for every class and band
+point, no mounted extension."""
+
+
 @pytest.fixture(scope="module")
 def real_grid(repo_dir: Path) -> PopulationGrid:
     """The shipped population grid."""
     return load_population_grid(repo_dir / POPULATION_GRID_PATH, POPULATION_GRID_SHA256)
 
 
-def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) -> None:
+@pytest.fixture(scope="module")
+def coarse_real_curve(real_grid: PopulationGrid) -> SaturationCurve:
+    """The shipped grid's curve at the coarse setting (the default inputs but the sweep),
+    computed once for the tests that read it."""
+    return compute_saturation(SaturationInputs(sweep=COARSE_SWEEP), real_grid, version_stamp=STAMP)
+
+
+def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: SaturationCurve) -> None:
     """Objective: the module's numbers on the shipped grid do not drift.
 
     Sample: the default inputs (the investor's usage) at fleets 340, 1,000 and 2,000 and one
@@ -1165,16 +1183,8 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
     run measured, the stated limits, and the three classes (small terminal, mounted terminal,
     phone class).
     """
-    inputs = SaturationInputs(
-        sweep=SweepInputs(
-            fleets=COARSE_REAL_FLEETS,
-            mounted_terminal_extension=(),
-            snapshots_phone_central=1,
-            snapshots_directional=1,
-            snapshots_bands=1,
-        )
-    )
-    curve = compute_saturation(inputs, real_grid, version_stamp=STAMP)
+    inputs = SaturationInputs(sweep=COARSE_SWEEP)
+    curve = coarse_real_curve
     rows = phone_curve(curve).rows
     assert [row.fleet for row in rows] == [frozen[0] for frozen in COARSE_REAL_ROWS]
     assert [row.requested_fleet for row in rows] == list(COARSE_REAL_FLEETS)
@@ -1259,6 +1269,108 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(real_grid: PopulationGrid) 
 def walker_request_of(fleet: int) -> int:
     """The coarse setting's request for a realized fleet (340, 1,000 and 2,000)."""
     return dict(zip((342, 992, 1_980), COARSE_REAL_FLEETS, strict=True))[fleet]
+
+
+# ---------------------------------------------------------------------------
+# The drift test: the committed curve against the code
+# ---------------------------------------------------------------------------
+
+COMMITTED_CURVE = "communications/models/iridium/saturation_curve.json"
+"""The promoted saturation curve, repository-relative."""
+
+DRIFT_CHECK_ROWS = (
+    (DeviceClass.SMALL_TERMINAL_CLASS, 342),
+    (DeviceClass.MOUNTED_TERMINAL_CLASS, 342),
+    (DeviceClass.PHONE_CLASS, 342),
+    (DeviceClass.MOUNTED_TERMINAL_CLASS, 1_980),
+)
+"""The rows the drift test recomputes, by class and realized fleet: every class's first row and
+the mounted terminal's 1,980 row, where rules D3 and D4 act (about 11 percent of its beams
+stacked)."""
+
+
+def flat_values(value: object, path: str = "") -> dict[str, object]:
+    """A model dump's leaves by path, nested objects and lists flattened, so two rows compare
+    field by field."""
+    flat: dict[str, object] = {}
+    if isinstance(value, dict):
+        for key, item in value.items():
+            flat.update(flat_values(item, f"{path}.{key}" if path else str(key)))
+    elif isinstance(value, list | tuple):
+        for index, item in enumerate(value):
+            flat.update(flat_values(item, f"{path}[{index}]"))
+    else:
+        flat[path] = value
+    return flat
+
+
+def assert_check_rows_match(curve: SaturationCurve, repo_dir: Path, rel: float) -> None:
+    """Recompute a curve's check rows and the phone class's maximum use at the curve's own
+    settings, each row through the drift seam from its requested fleet, and compare every
+    value within ``rel`` relative (0: exactly)."""
+    parameters = curve.parameters
+    for device_class, fleet in DRIFT_CHECK_ROWS:
+        (committed,) = [row for row in class_curve(curve, device_class).rows if row.fleet == fleet]
+        recomputed = sat._class_row(device_class, committed.requested_fleet, parameters)
+        expected = flat_values(committed.model_dump())
+        found = flat_values(recomputed.model_dump())
+        assert found.keys() == expected.keys(), (device_class, fleet)
+        for key, value in expected.items():
+            if value is None:
+                assert found[key] is None, (device_class, fleet, key)
+            else:
+                assert found[key] == pytest.approx(value, rel=rel, abs=0), (
+                    device_class,
+                    fleet,
+                    key,
+                )
+    grid = load_population_grid(
+        repo_dir / parameters.demand.grid_path, parameters.demand.grid_sha256
+    )
+    maximum_use = sat._maximum_use(
+        sat._demand_cells(grid, parameters.demand.density_threshold_per_km2),
+        sat._class_limits(parameters, PHONE),
+        parameters.shell.inclination_deg,
+    )
+    assert maximum_use == pytest.approx(
+        class_curve(curve, PHONE).markers.maximum_use_beams, rel=rel, abs=0
+    )
+
+
+def test_the_drift_seam_recomputes_a_curves_check_rows_exactly(
+    coarse_real_curve: SaturationCurve, repo_dir: Path
+) -> None:
+    """Objective: the drift seam is the curve's own computation: one class's row at one
+    requested fleet, rebuilt in this process from the row's request, is the curve's row.
+
+    Sample: the coarse real-grid curve (one snapshot): every class's 342 row, the mounted
+    terminal's 1,980 row (requested 2,000) and the phone class's maximum use.
+
+    Expected outcome: every value of each row, the phone class's trim included, and maximum use
+    equal to the curve's exactly (the same code on the same draw, in another process).
+    """
+    assert_check_rows_match(coarse_real_curve, repo_dir, rel=0.0)
+
+
+def test_committed_curve_has_not_drifted(repo_dir: Path) -> None:
+    """Objective: the committed curve is what the code computes, so a change to the allocation,
+    the directional rules or maximum use after its promotion fails here until the curve is
+    re-promoted (the re-promotion rule; the markers, the bands and the other rows' trims rest
+    on that rule).
+
+    Sample: ``communications/models/iridium/saturation_curve.json``, loaded with
+    ``load_saturation_curve`` (so it also loads whole and unaltered), at its own settings (its
+    parameters: the investor's usage, four snapshots for the phone class and two for the
+    directional classes): every class's first row (342), the mounted terminal's 1,980 row
+    (where rules D3 and D4 act) and the phone class's maximum use, each row rebuilt through the
+    drift seam from its requested fleet. Its budget is 90 s.
+
+    Expected outcome: every value of each row (L, its spread, capacity, U, the ceiling, the
+    supply, the directional diagnostics, the phone class's trim) and maximum use within 1e-4
+    relative of the committed curve.
+    """
+    curve = load_saturation_curve(repo_dir / COMMITTED_CURVE)
+    assert_check_rows_match(curve, repo_dir, rel=1e-4)
 
 
 # ---------------------------------------------------------------------------
