@@ -1933,7 +1933,11 @@ def test_the_serving_set_holds_the_satellites_whose_layer_reaches_f_serve(
     sliver (share between 0 and f_serve) does not; the sliver's own stacking is refused (55
     degrees from the zenith satellite, under a beamwidth) and so is the candidate at (32, 270);
     the candidate at (27, 195) stacks, since the sliver is no serving satellite. With every
-    first-layer satellite serving (the diagnostic's any-share rule), the sliver blocks it.
+    first-layer satellite serving (the diagnostic's any-share rule), the sliver blocks it. With
+    only the cell's main first-layer satellite serving (the diagnostic's main-satellite rule),
+    the serving set is exactly the zenith pair at the end of stage 2, so it was after stage 1
+    too (a set that only grows) and no stacked pair joined it: the candidate at (27, 195)
+    stacks but does not serve.
     """
     allocation = allocate_seen_at(one_cell, SERVING_CASE_DEG, directional_limits(SMALL, 4.0))
     layers = directional_of(allocation)
@@ -1958,6 +1962,15 @@ def test_the_serving_set_holds_the_satellites_whose_layer_reaches_f_serve(
         one_cell, SERVING_CASE_DEG, directional_limits(SMALL, 4.0, sat._ServingRule.ANY_SHARE)
     )
     assert directional_of(any_share).stacked_beams[3] == 0.0
+    main_only = directional_of(
+        allocate_seen_at(
+            one_cell,
+            SERVING_CASE_DEG,
+            directional_limits(SMALL, 4.0, sat._ServingRule.MAIN_SATELLITE),
+        )
+    )
+    assert main_only.stacked_beams[3] > 0
+    assert main_only.serving.tolist() == [True, False, False, False]
 
 
 PAIRWISE_CASE_DEG = ((90.0, 0.0), (28.3, 170.0), (28.0, 190.0), (40.0, 270.0))
@@ -2500,6 +2513,60 @@ def test_the_sector_rule_ceiling_bounds_each_directional_row(
         assert row.directional is None
 
 
+EXTENSION_TEST_FLEETS = (500, 1_000)
+"""The extension test's requested fleets (realized 506 and 992): two, the fewest the contract
+takes, since a marker reads the elasticity between rows."""
+
+EXTENSION_TEST_MOUNTED = (4_000,)
+"""The extension test's mounted-terminal extension (realized 3,969)."""
+
+
+def test_the_mounted_terminal_runs_over_its_extension_through_compute_saturation(
+    synthetic_population_grid: GridBuilder, synthetic_saturation_inputs: SaturationInputsBuilder
+) -> None:
+    """Objective: compute_saturation runs the mounted terminal over the sweep's fleets and its
+    extension, every other class over the fleets alone, each row keyed by its realized fleet
+    and carrying its request, and each class's markers read its own rows.
+
+    Sample: the shared-usage world (every class at 1 Mbps x 2.5 percent) at fleets 500 and
+    1,000 (realized 506 and 992) with the mounted terminal's extension 4,000 (realized 3,969),
+    one snapshot: the spec review's sample, with a second fleet under 1,000, since the contract
+    takes two fleets at least.
+
+    Expected outcome: the classes in the class key's order; the mounted terminal's rows 506,
+    992 and 3,969, requested 500, 1,000 and 4,000, its 3,969 row a directional row with its
+    diagnostics; the small terminal's and the phone class's rows 506 and 992, requested 500 and
+    1,000; each class's 0.10 crossing not reached by its own last row (capacity still rises
+    steeply here), 3,969 for the mounted terminal and 992 for the others.
+    """
+    grid = synthetic_population_grid(MID_BAND_CELL_DEG, shared_usage_people)
+    inputs = shared_usage(synthetic_saturation_inputs(grid, fleets=EXTENSION_TEST_FLEETS))
+    sweep = SweepInputs.model_validate(
+        {
+            **inputs.sweep.model_dump(),
+            "mounted_terminal_extension": EXTENSION_TEST_MOUNTED,
+            "snapshots_directional": 1,
+        }
+    )
+    curve = compute_saturation(
+        inputs.model_copy(update={"sweep": sweep}), grid, version_stamp=STAMP
+    )
+    assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
+    fleets_rows = [(506, 500), (992, 1_000)]
+    expected = {SMALL: fleets_rows, MOUNTED: [*fleets_rows, (3_969, 4_000)], PHONE: fleets_rows}
+    for device_class, keyed in expected.items():
+        entry = class_curve(curve, device_class)
+        assert [(row.fleet, row.requested_fleet) for row in entry.rows] == keyed
+        assert entry.markers.saturation_number is None
+        assert entry.markers.saturation_not_reached_by == keyed[-1][0]
+    assert class_curve(curve, MOUNTED).rows[-1].directional is not None
+
+
+TIER_TEST_CPUS = 8
+"""The CPU count the memory-tier test pins (``os.process_cpu_count``, as the module reads it),
+so the schedule it checks does not depend on the machine's CPUs."""
+
+
 def test_the_memory_tiers_change_no_number(
     uniform_band: PopulationGrid,
     synthetic_saturation_inputs: SaturationInputsBuilder,
@@ -2511,28 +2578,39 @@ def test_the_memory_tiers_change_no_number(
     with a worker per CPU.
 
     Sample: the uniform band (B = 1) at 1,000 and 10,000 requested satellites (realized 992
-    and 10,000), one snapshot; computed once at the default budget and once with the budget
-    lowered to this process's peak plus two task peaks, so the budget binds.
+    and 10,000), one snapshot, the CPU count pinned to 8; computed once at the default budget
+    and once with the budget lowered to this process's peak plus two of the task peaks the
+    first run measured, so whether the budget binds depends on neither the machine's CPUs nor
+    a worker's own peak.
 
-    Expected outcome: at the default budget one process runs the three classes' largest tasks
-    and one pool the rest; with the budget binding, each class's 992 task, a tier of its own
-    (under half of 10,000), runs alone too: four alone runs. The two curves are equal in
-    everything but the run's own measurement.
+    Expected outcome: at the default budget (room for at least eight task peaks) one process
+    runs the three classes' largest tasks and one pool the rest; with the budget binding (room
+    for about two), each class's 992 task, a tier of its own (under half of 10,000), runs alone
+    too: four alone runs. The two curves are equal in everything but the run's own
+    measurement.
     """
+    monkeypatch.setattr(sat.os, "process_cpu_count", lambda: TIER_TEST_CPUS)
     inputs = small_sweep(
         synthetic_saturation_inputs(uniform_band, fleets=BAND_FLEETS, beams_per_satellite=ONE_BEAM)
     )
-    alone_runs: list[int] = []
+    alone_runs: list[list[float]] = []
     run_alone = sat._run_alone
 
-    def counted_run_alone(*args: object) -> None:
-        alone_runs.append(1)
-        run_alone(*args)  # type: ignore[arg-type]
+    def counted_run_alone(
+        indices: Sequence[int],
+        tasks: Sequence[sat._SnapshotTask],
+        context: sat._SweepContext,
+        results: dict[int, sat._SnapshotResult],
+    ) -> None:
+        run_alone(indices, tasks, context, results)
+        alone_runs.append([results[index].worker_peak_mb for index in indices])
 
     monkeypatch.setattr(sat, "_run_alone", counted_run_alone)
     free = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
     assert len(alone_runs) == 1
-    task_peak_mb = 400.0
+    task_peak_mb = max(alone_runs[0])
+    room = (sat._MEMORY_BUDGET_MB - sat._own_peak_mb()) / task_peak_mb
+    assert room >= TIER_TEST_CPUS
     monkeypatch.setattr(sat, "_MEMORY_BUDGET_MB", sat._own_peak_mb() + 2 * task_peak_mb)
     tiered = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
     assert len(alone_runs) == 1 + 1 + len(DeviceClass)
