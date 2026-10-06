@@ -24,6 +24,10 @@ specification, each naming what it exercises and what counts as success:
   point's one changed input (the beam, B, the demand threshold, the 2 x 2 grid);
 * the real grid at a coarse, fast setting, every class and band point frozen at 1e-4
   relative, the phone class's trim with them;
+* the committed curve against the code (the drift tests): every class's check rows, each
+  band point's first row and every maximum use rebuilt through the drift seams at 1e-4, and its
+  markers, limits and texts re-derived exactly; the coarse promotion, byte-identical but for its
+  measurement; the curve loader's refusals and the saturation command's;
 * numpy confinement (a subprocess), the people-per-beam arithmetic, the class constants,
   the checks' refusals, the grid loader's refusals and the contract's validators.
 
@@ -1381,33 +1385,70 @@ def assert_check_rows_match(curve: SaturationCurve, repo_dir: Path, rel: float) 
     )
 
 
+def assert_band_rows_match(curve: SaturationCurve, repo_dir: Path, rel: float) -> None:
+    """Recompute every band point's first row and its maximum use at the curve's own settings,
+    each row through the band seam from its requested fleet, and compare every value within
+    ``rel`` relative (0: exactly)."""
+    parameters = curve.parameters
+    grid = load_population_grid(
+        repo_dir / parameters.demand.grid_path, parameters.demand.grid_sha256
+    )
+    threshold = parameters.demand.density_threshold_per_km2
+    central = sat._demand_cells(grid, threshold)
+    for band in curve.bands:
+        committed = band.rows[0]
+        recomputed = sat._band_row(band.point, committed.requested_fleet, parameters)
+        expected = flat_values(committed.model_dump())
+        found = flat_values(recomputed.model_dump())
+        assert found.keys() == expected.keys(), band.point.name
+        for key, value in expected.items():
+            if value is None:
+                assert found[key] is None, (band.point.name, key)
+            else:
+                assert found[key] == pytest.approx(value, rel=rel, abs=0), (band.point.name, key)
+        maximum_use = sat._maximum_use(
+            sat._band_cells(grid, band.point, central, threshold),
+            sat._band_limits(parameters, band.point),
+            parameters.shell.inclination_deg,
+        )
+        assert maximum_use == pytest.approx(band.markers.maximum_use_beams, rel=rel, abs=0), (
+            band.point.name
+        )
+
+
 def test_the_drift_seam_recomputes_a_curves_check_rows_exactly(
     coarse_real_curve: SaturationCurve, repo_dir: Path
 ) -> None:
-    """Objective: the drift seam is the curve's own computation: one class's row at one
-    requested fleet, rebuilt in this process from the row's request, is the curve's row.
+    """Objective: the drift seams are the curve's own computation: one class's or one band
+    point's row at one requested fleet, rebuilt in this process from the row's request, is the
+    curve's row.
 
     Sample: the coarse real-grid curve (one snapshot): every class's 342 row, the mounted
-    terminal's 1,980 row (requested 2,000) and the phone class's maximum use.
+    terminal's 1,980 row (requested 2,000), the phone class's maximum use, and every band point's
+    342 row and maximum use.
 
-    Expected outcome: every value of each row, the phone class's trim included, and maximum use
-    equal to the curve's exactly (the same code on the same draw, in another process).
+    Expected outcome: every value of each row, the phone class's trim included, and every
+    maximum use equal to the curve's exactly (the same code on the same draw, in another
+    process).
     """
     assert_check_rows_match(coarse_real_curve, repo_dir, rel=0.0)
+    assert_band_rows_match(coarse_real_curve, repo_dir, rel=0.0)
 
 
 def test_committed_curve_has_not_drifted(repo_dir: Path) -> None:
-    """Objective: the committed curve is what the code computes, so a change to the allocation,
-    the directional rules or maximum use after its promotion fails here until the curve is
-    re-promoted (the re-promotion rule; the markers, the bands and the other rows' trims rest
-    on that rule).
+    """Objective: the committed curve's rows are what the code computes, so a change to the
+    allocation, the directional rules or maximum use after its promotion fails here until the
+    curve is re-promoted (the re-promotion rule). Its two neighbours guard the rest that can be
+    recomputed cheaply: each band point's first row and maximum use, and every field derived
+    from the rows and the parameters (the markers, the limits, the texts). Only the rows none of
+    them rebuilds (and those rows' trims) rest on the re-promotion rule alone.
 
     Sample: ``communications/models/iridium/saturation_curve.json``, loaded with
     ``load_saturation_curve`` (so it also loads whole and unaltered), at its own settings (its
     parameters: the investor's usage, four snapshots for the phone class and two for the
     directional classes): every class's first row (342), the mounted terminal's 1,980 row
     (where rules D3 and D4 act) and the phone class's maximum use, each row rebuilt through the
-    drift seam from its requested fleet. Its budget is 90 s.
+    drift seam from its requested fleet. The three drift tests' budget is 90 s.
 
     Expected outcome: every value of each row (L, its spread, capacity, U, the ceiling, the
     supply, the directional diagnostics, the phone class's trim) and maximum use within 1e-4
@@ -1415,6 +1456,52 @@ def test_committed_curve_has_not_drifted(repo_dir: Path) -> None:
     """
     curve = load_saturation_curve(repo_dir / COMMITTED_CURVE)
     assert_check_rows_match(curve, repo_dir, rel=1e-4)
+
+
+def test_committed_curve_has_not_drifted_in_its_band_rows(repo_dir: Path) -> None:
+    """Objective: the committed band points are what the code computes, so a change to a band
+    point's inputs (``_band_limits``, ``_band_cells``, the grid's aggregation) after the
+    promotion fails here until the curve is re-promoted.
+
+    Sample: the committed curve at its own settings (two snapshots for the band points): every
+    band point's first row (342), rebuilt through the band seam from its requested fleet, and
+    its maximum use.
+
+    Expected outcome: every value of each row (L, its spread, capacity, U, the ceiling, the
+    supply, no diagnostics and no trim) and each maximum use within 1e-4 relative of the
+    committed curve.
+    """
+    curve = load_saturation_curve(repo_dir / COMMITTED_CURVE)
+    assert_band_rows_match(curve, repo_dir, rel=1e-4)
+
+
+def test_committed_curve_has_not_drifted_in_its_derived_fields(repo_dir: Path) -> None:
+    """Objective: every field of the committed curve that the code derives from its rows and
+    its parameters is what the code derives today, so a change to the markers' rules, the stated
+    limits or the curve's texts fails here until the curve is re-promoted.
+
+    Sample: the committed curve: each class's and band point's rows and maximum use, and its
+    parameters.
+
+    Expected outcome, exactly: every class's and band point's markers are ``_markers`` of its own
+    rows and maximum use; the limits are ``_stated_limits`` of the parameters and the curves (the
+    assembly ``compute_saturation`` uses); the method, the checks passed, the citations and the
+    licence are what the computation writes for these parameters.
+    """
+    curve = load_saturation_curve(repo_dir / COMMITTED_CURVE)
+    parameters = curve.parameters
+    for entry in curve.classes:
+        rederived = sat._markers(entry.device_class, entry.rows, entry.markers.maximum_use_beams)
+        assert rederived == entry.markers, entry.device_class
+    for band in curve.bands:
+        rederived = sat._markers(band.point.name, band.rows, band.markers.maximum_use_beams)
+        assert rederived == band.markers, band.point.name
+    assert curve.limits == sat._stated_limits(parameters, curve.classes, curve.bands)
+    provenance = curve.provenance
+    assert provenance.method == sat._method(parameters)
+    assert provenance.checks_passed == sat._checks_passed(parameters)
+    assert provenance.citations == sat._GRID_CITATIONS
+    assert provenance.licence == sat._GRID_LICENCE
 
 
 def test_the_committed_curve_loads_whole_from_the_shipped_scenario(
