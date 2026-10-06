@@ -49,14 +49,16 @@ import json
 import logging
 import math
 import os
+import stat
 import subprocess
 import sys
 import tracemalloc
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures.process import BrokenProcessPool
+from enum import StrEnum
 from itertools import combinations, pairwise
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, assert_never
 
 import numpy as np
 import pytest
@@ -66,8 +68,10 @@ from common.cli import EXIT_ERROR, EXIT_USAGE
 from common.file_io import (
     ARTIFACT_FILE_END,
     ModelFileError,
+    PendingWrite,
     SourceCheckout,
     render_artifact_json,
+    write_files_with_rollback,
 )
 from communications import saturation as sat
 from communications import saturation_curve
@@ -1677,52 +1681,115 @@ def test_the_command_refuses_a_scenario_without_an_iridium_block(
     assert sorted(tmp_path.iterdir()) == [scenario]
 
 
-def unusable_destination(tmp_path: Path, case: str) -> Path:
-    """A destination the shared writer would refuse, made in a temporary folder: a directory, a
-    symbolic link to a file, a file in a folder this process cannot write into, or a path under
-    a regular file."""
-    if case == "a directory":
-        destination = tmp_path / "curve.json"
-        destination.mkdir()
-    elif case == "a symbolic link":
-        (tmp_path / "target.json").write_text("ORIGINAL\n", encoding="utf-8")
-        destination = tmp_path / "curve.json"
-        destination.symlink_to(tmp_path / "target.json")
-    elif case == "a read-only folder":
-        folder = tmp_path / "locked"
-        folder.mkdir()
-        destination = folder / "curve.json"
-        destination.write_text("ORIGINAL\n", encoding="utf-8")
-        folder.chmod(0o500)
-    else:
-        (tmp_path / "blocker").write_text("ORIGINAL\n", encoding="utf-8")
-        destination = tmp_path / "blocker" / "curve.json"
+READ_ONLY_DIR_MODE = stat.S_IRUSR | stat.S_IXUSR
+"""A folder this process can read and search but not write into (as the sibling suites name it)."""
+
+OWNER_DIR_MODE = stat.S_IRWXU
+"""A folder's mode restored after a test: its owner may read, write and search it."""
+
+ROOT_IGNORES_PERMISSIONS = os.geteuid() == 0
+"""Whether the tests run as root, which a folder's mode bits do not stop."""
+
+OVER_LONG_NAME = "x" * 300
+"""A folder name past every file system's 255-byte limit on one name."""
+
+
+class UnusableDestination(StrEnum):
+    """A destination the shared writer refuses, as the pre-flight tests make it."""
+
+    DIRECTORY = "a directory"
+    SYMBOLIC_LINK = "a symbolic link"
+    READ_ONLY_FOLDER = "a read-only folder"
+    PATH_UNDER_A_FILE = "a path under a file"
+    OVER_LONG_FOLDER_NAME = "a folder name past the file system's limit"
+
+
+def unusable_destination(tmp_path: Path, case: UnusableDestination) -> Path:
+    """A destination the shared writer refuses, made in a temporary folder: a directory, a
+    symbolic link to a file, a file in a folder this process cannot write into, a path under a
+    regular file, or a path through a folder name past the file system's limit."""
+    match case:
+        case UnusableDestination.DIRECTORY:
+            destination = tmp_path / "curve.json"
+            destination.mkdir()
+        case UnusableDestination.SYMBOLIC_LINK:
+            (tmp_path / "target.json").write_text("ORIGINAL\n", encoding="utf-8")
+            destination = tmp_path / "curve.json"
+            destination.symlink_to(tmp_path / "target.json")
+        case UnusableDestination.READ_ONLY_FOLDER:
+            folder = tmp_path / "locked"
+            folder.mkdir()
+            destination = folder / "curve.json"
+            destination.write_text("ORIGINAL\n", encoding="utf-8")
+            folder.chmod(READ_ONLY_DIR_MODE)
+        case UnusableDestination.PATH_UNDER_A_FILE:
+            (tmp_path / "blocker").write_text("ORIGINAL\n", encoding="utf-8")
+            destination = tmp_path / "blocker" / "curve.json"
+        case UnusableDestination.OVER_LONG_FOLDER_NAME:
+            destination = tmp_path / OVER_LONG_NAME / "curve.json"
+        case _:
+            assert_never(case)
     return destination
 
 
-@pytest.mark.parametrize(
-    ("case", "reason"),
-    [
-        ("a directory", "exists and is not a regular file"),
-        ("a symbolic link", "is a symbolic link"),
-        ("a read-only folder", "is not a directory this process can write into"),
-        ("a path under a file", "is not a directory this process can write into"),
-    ],
-)
+def unlock(tmp_path: Path, case: UnusableDestination) -> None:
+    """Give the read-only folder its owner's mode back (the other cases change no mode)."""
+    if case is UnusableDestination.READ_ONLY_FOLDER:
+        (tmp_path / "locked").chmod(OWNER_DIR_MODE)
+
+
+def the_tree(tmp_path: Path) -> list[tuple[str, bool, bytes | None]]:
+    """Every path under a folder (no link followed): its name, whether it is a symbolic link, and
+    a regular file's bytes."""
+    return sorted(
+        (
+            str(path.relative_to(tmp_path)),
+            path.is_symlink(),
+            path.read_bytes() if path.is_file() and not path.is_symlink() else None,
+        )
+        for path in tmp_path.rglob("*")
+    )
+
+
+UNUSABLE_DESTINATIONS = [
+    pytest.param(
+        case,
+        marks=pytest.mark.skipif(
+            case is UnusableDestination.READ_ONLY_FOLDER and ROOT_IGNORES_PERMISSIONS,
+            reason="root ignores directory permissions",
+        ),
+        id=case.value,
+    )
+    for case in UnusableDestination
+]
+"""Every unusable destination, the read-only folder skipped under root."""
+
+PREFLIGHT_REASONS = {
+    UnusableDestination.DIRECTORY: "exists and is not a regular file",
+    UnusableDestination.SYMBOLIC_LINK: "is a symbolic link",
+    UnusableDestination.READ_ONLY_FOLDER: "is not a directory this process can write into",
+    UnusableDestination.PATH_UNDER_A_FILE: "is not a directory this process can write into",
+    UnusableDestination.OVER_LONG_FOLDER_NAME: "could not be checked (File name too long)",
+}
+"""The pre-flight's reason for each unusable destination."""
+
+
+@pytest.mark.parametrize("case", UNUSABLE_DESTINATIONS)
 def test_a_destination_the_writer_would_refuse_is_refused_before_the_computation(
     tmp_path: Path,
     iridium_yaml: Path,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
-    case: str,
-    reason: str,
+    case: UnusableDestination,
 ) -> None:
     """Objective: the saturation command refuses what the shared writer would refuse before it
     computes (a full promotion computes for about 26 minutes first), and changes nothing.
 
     Sample: the shipped scenario with ``compute_saturation`` patched to fail the test if called,
     and a destination that is a directory, a symbolic link to a file, a file in a folder this
-    process cannot write into, or a path under a regular file.
+    process cannot write into (skipped under root), a path under a regular file, or a path
+    through a folder name past the file system's limit (an error the system reports, never
+    hidden as a missing path).
 
     Expected outcome: exit status 1; exactly one ERROR record, on one line, naming the scenario,
     the destination and the reason, and saying nothing was computed; the computation never
@@ -1734,26 +1801,45 @@ def test_a_destination_the_writer_would_refuse_is_refused_before_the_computation
 
     monkeypatch.setattr(sat, "compute_saturation", never)
     destination = unusable_destination(tmp_path, case)
+    before = the_tree(tmp_path)
     try:
         status = sat.main([str(iridium_yaml), str(destination)])
     finally:
-        destination.parent.chmod(0o700)
+        unlock(tmp_path, case)
     assert status == EXIT_ERROR
     errors = [record.getMessage() for record in caplog.records if record.levelno >= logging.ERROR]
     assert len(errors) == 1
     assert "\n" not in errors[0]
     assert f"could not promote the saturation curve from {iridium_yaml}: {destination}" in errors[0]
-    assert reason in errors[0]
+    assert PREFLIGHT_REASONS[case] in errors[0]
     assert "no destination was changed and nothing was computed" in errors[0]
-    if case == "a directory":
-        assert destination.is_dir() and not any(destination.iterdir())
-    elif case == "a symbolic link":
-        assert destination.is_symlink() and destination.read_text(encoding="utf-8") == "ORIGINAL\n"
-    else:
-        assert (tmp_path / ("locked" if case == "a read-only folder" else "blocker")).exists()
-        assert sorted(path.name for path in tmp_path.rglob("*")) == sorted(
-            ["locked", "curve.json"] if case == "a read-only folder" else ["blocker"]
-        )
+    assert the_tree(tmp_path) == before
+
+
+@pytest.mark.parametrize("case", UNUSABLE_DESTINATIONS)
+def test_the_shared_writer_refuses_every_destination_the_preflight_refuses(
+    tmp_path: Path, case: UnusableDestination
+) -> None:
+    """Objective: the pre-flight's copy of the writer's rule refuses nothing the writer would
+    write: each destination it refuses, the public writer refuses too.
+
+    Sample: each unusable destination above, checked by the pre-flight and then written by
+    ``write_files_with_rollback`` with one short text.
+
+    Expected outcome: both raise ModelFileError naming the destination; the writer leaves every
+    file and folder as it was (no staged or backup file beside the destination).
+    """
+    destination = unusable_destination(tmp_path, case)
+    before = the_tree(tmp_path)
+    try:
+        with pytest.raises(ModelFileError) as preflight:
+            sat._check_destination(destination)
+        with pytest.raises(ModelFileError) as writer:
+            write_files_with_rollback([PendingWrite(destination, "NEW\n")])
+    finally:
+        unlock(tmp_path, case)
+    assert preflight.value.path == writer.value.path == destination
+    assert the_tree(tmp_path) == before
 
 
 POOL_TERMINATED = (

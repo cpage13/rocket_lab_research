@@ -160,6 +160,7 @@ import logging
 import math
 import os
 import resource
+import stat
 import sys
 import time
 import zipfile
@@ -488,6 +489,10 @@ grid, where one worker's peak nears the budget)."""
 _TRACEBACK_QUOTES: Final[str] = "'\""
 """The quote marks a process pool fences a cause's formatted traceback with (``'''`` or three
 double quotes), which a sweep's error leaves out when it names the cause."""
+
+_NOTHING_CHANGED_OR_COMPUTED: Final[str] = "no destination was changed and nothing was computed"
+"""How every refusal of the command's destination pre-flight ends: it comes before the
+computation and the write."""
 
 # ===========================================================================
 # The grid's provenance and the curve's stated limits
@@ -3878,15 +3883,45 @@ def _log_summary(curve: SaturationCurve) -> None:
     )
 
 
+def _own_mode(path: Path, destination: Path) -> int | None:
+    """Return a path's own mode by ``lstat`` (a symbolic link is itself), or None when nothing is
+    there: a missing component, or one that is not a directory, so nothing below it exists.
+
+    Raises:
+        ModelFileError: Naming the destination, for any other error the system reports (a name
+            past the file system's limit, a loop of symbolic links, a folder that cannot be
+            searched), with its reason; never hidden as a path that is not there.
+    """
+    try:
+        return path.lstat().st_mode
+    except FileNotFoundError, NotADirectoryError:
+        return None
+    except OSError as exc:
+        where = "" if path == destination else f" at {path}"
+        raise ModelFileError(
+            destination,
+            f"could not be checked ({exc.strerror or exc}{where}); {_NOTHING_CHANGED_OR_COMPUTED}",
+        ) from exc
+
+
 def _check_destination(out: Path) -> None:
     """Refuse, before anything is computed, a destination the shared writer would refuse.
 
     The writer (:func:`common.file_io.write_files_with_rollback`) refuses a symbolic link and an
     existing file that is not a regular file, and stages its file beside the destination,
     creating the missing parent directories; so the destination's nearest existing ancestor must
-    be a directory this process can write into and search. A full promotion computes for about
-    26 minutes before it writes, so this refuses what it can know first; the writer keeps its own
-    checks at the write.
+    be a directory this process can write into and search. Each path is examined by ``lstat``
+    with no error hidden: a missing component climbs to the parent, and any other error the
+    system reports (a name past the file system's limit, a loop of symbolic links, a folder that
+    cannot be searched) refuses the destination with its reason. A full promotion computes for
+    about 26 minutes before it writes, so this refuses what it can know first.
+
+    The writer keeps its own checks at the write, and alone judges what this does not ask: an
+    existing file it cannot replace (a locked or append-only file, another user's file in a
+    folder with the sticky bit), a folder whose access control list grants or denies otherwise
+    than its mode bits (``os.access`` reads the mode bits), and a staged name past the file
+    system's limit (the writer's hidden sibling is 38 bytes longer than the destination's name;
+    checking it would copy the writer's private naming).
 
     Args:
         out: The anchored destination.
@@ -3894,23 +3929,29 @@ def _check_destination(out: Path) -> None:
     Raises:
         ModelFileError: Naming the destination, saying nothing was changed or computed.
     """
-    untouched = "no destination was changed and nothing was computed"
-    if out.is_symlink():
+    mode = _own_mode(out, out)
+    if mode is not None and stat.S_ISLNK(mode):
         raise ModelFileError(
             out,
             "is a symbolic link, and an artifact replaces only a regular file (point the output "
-            f"at the link's target); {untouched}",
+            f"at the link's target); {_NOTHING_CHANGED_OR_COMPUTED}",
         )
-    if out.exists() and not out.is_file():
-        raise ModelFileError(out, f"exists and is not a regular file; {untouched}")
+    if mode is not None and not stat.S_ISREG(mode):
+        raise ModelFileError(
+            out, f"exists and is not a regular file; {_NOTHING_CHANGED_OR_COMPUTED}"
+        )
     ancestor = out.parent
-    while not ancestor.exists(follow_symlinks=False):
+    while _own_mode(ancestor, out) is None:
+        if ancestor.parent == ancestor:
+            raise ModelFileError(
+                out, f"could not write: no parent of it exists; {_NOTHING_CHANGED_OR_COMPUTED}"
+            )
         ancestor = ancestor.parent
     if not ancestor.is_dir() or not os.access(ancestor, os.W_OK | os.X_OK):
         raise ModelFileError(
             out,
             f"could not write: its nearest existing parent, {ancestor}, is not a directory this "
-            f"process can write into; {untouched}",
+            f"process can write into; {_NOTHING_CHANGED_OR_COMPUTED}",
         )
 
 
@@ -3926,10 +3967,13 @@ def promote_saturation_curve(
     logs its summary, checks that it is complete and writes it through
     :func:`common.file_io.write_files_with_rollback`: staged in full beside the destination,
     then renamed over it, so a failure leaves any existing file as it was. A destination the
-    writer would refuse (a symbolic link, an existing file that is not a regular file, a nearest
-    existing parent that is not a writable directory) is refused before the computation, and
-    the writer checks again at the write. It reads no curve, so a stale or missing curve never
-    blocks its own regeneration.
+    writer would refuse that can be known first (a symbolic link, an existing file that is not a
+    regular file, a nearest existing parent that is not a writable directory, a path the system
+    cannot examine) is refused before the computation, and the writer checks again at the write;
+    what only the write can tell (an existing file locked or append-only, or another user's in a
+    folder with the sticky bit, a folder's access control list, a staged name past the file
+    system's limit) the writer refuses after it. It reads no curve, so a stale or missing curve
+    never blocks its own regeneration.
 
     Args:
         scenario_path: The scenario YAML (it must select the Iridium model); a relative path
