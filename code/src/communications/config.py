@@ -14,8 +14,9 @@ fraction, a subscriber count, or a comparison; it is the contract the engine
 (``communications.engine``), the ground comparison (``communications.ground``), and
 the Iridium artifact writer (``communications.json_output``) consume. Cross-field
 rules are model validators: the coverage floor may not exceed the saturation cap,
-an Iridium config leaves the fleet cap at its default (the cap is the cellular
-family's setting), the off-peak concurrency may not exceed the peak, the four ARPU
+an Iridium config keeps the fleet cap at its default (the cap is a setting of the
+cellular family only; its default still caps the Iridium model's fleet until that
+model sizes its own), the off-peak concurrency may not exceed the peak, the four ARPU
 mixes must sum to 100, and (the shared dial blocks' own validators) the cadence
 anchors must satisfy
 ``0 < launches_at_year_5 < launches_at_year_10 < cadence_ceiling`` and the
@@ -648,9 +649,14 @@ class IridiumDials(BaseModel):
     ecosystem assumption: this is the MSS lane (purpose-built or in-chipset devices on
     owned L-band), never an unmodified phone (that is the cellular lane, the
     High-Bandwidth Cellular Pure Play model).
+
+    Every number here is finite: a NaN or an infinity is refused at load, naming the field
+    (``allow_inf_nan=False``, as the saturation curve's contract models refuse them), so no
+    run starts from one. The nested ``saturation`` and ``arpu`` blocks refuse them through
+    their own bounds.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     spectrum_mhz: float = Field(
         default=SPECTRUM_MHZ_DEFAULT,
@@ -861,18 +867,25 @@ class CommsConfig(BaseModel):
     def _iridium_keeps_the_default_fleet_cap(self) -> CommsConfig:
         """Refuse a fleet cap other than its default on an Iridium config.
 
-        ``coverage.max_fleet_satellites`` is the cellular family's investor-set cap. The
-        Iridium model's spectrum bound is its saturation curve's, which no setting replaces,
-        so an Iridium config leaves the cap at :data:`MAX_FLEET_SATELLITES_DEFAULT`. The test
-        is on the value, not on whether the field was written: the test helpers round-trip
-        configs through ``model_dump`` and ``model_validate``, which marks every field as set.
+        ``coverage.max_fleet_satellites`` is the cellular family's investor-set cap, not an
+        Iridium setting, so an Iridium config keeps :data:`MAX_FLEET_SATELLITES_DEFAULT`. That
+        default still caps the Iridium model's fleet: the interim shared path both entries call
+        sizes it with the cellular family's fleet target, cap included, until the Iridium model
+        sizes its own fleet.
+
+        The cap is refused when an Iridium config is loaded or validated (a construction or a
+        ``model_validate``). A ``model_copy`` update is not validated, by pydantic's design (it
+        trusts the data it is given), so a value set that way is not refused. The test is on
+        the value, not on whether the field was written: the test helpers round-trip configs
+        through ``model_dump`` and ``model_validate``, which marks every field as set.
         """
         cap = self.coverage.max_fleet_satellites
         if self.iridium is not None and cap != MAX_FLEET_SATELLITES_DEFAULT:
             raise ValueError(
                 "coverage.max_fleet_satellites is not a setting on an Iridium config (one with "
-                f"an 'iridium:' block): it stays at its default, {MAX_FLEET_SATELLITES_DEFAULT}, "
-                f"the cellular family's fleet cap; got {cap}"
+                f"an 'iridium:' block): it keeps its default, {MAX_FLEET_SATELLITES_DEFAULT}, the "
+                "cellular family's fleet cap, which also caps the Iridium model's fleet until "
+                f"that model sizes its own; got {cap}"
             )
         return self
 

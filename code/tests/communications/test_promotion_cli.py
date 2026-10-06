@@ -4,8 +4,8 @@
 command-line conventions (``common.cli``) and writes its one artifact through
 the shared writer (``common.file_io.write_files_with_rollback``). The contract:
 
-1. a malformed scenario or an unwritable destination is one error record and
-   exit status 1, never a traceback;
+1. a malformed scenario, an unwritable destination or a value too large for the
+   model to compute is one error record and exit status 1, never a traceback;
 2. a failed write (a read-only directory, a failed rename) leaves the existing
    artifact exactly as it was, with no staged or backup file left behind, and
    the error says no destination was changed;
@@ -168,6 +168,37 @@ def test_a_successful_promotion_logs_its_status_and_prints_nothing(
     assert capsys.readouterr().out == ""
     status = [r.getMessage() for r in caplog.records if r.name == "communications.json_output"]
     assert status == [f"promoted Iridium model artifact written to {out_path}"]
+
+
+def test_a_value_too_large_for_the_model_is_one_error_line(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Objective: a finite dial too large for the model to compute ends the command in one
+    error record, never a traceback (before the fix the run's ``OverflowError`` escaped as one).
+
+    Sample: a scenario selecting the Iridium model with a panel of 1.0e308 m^2 (finite, so it
+    loads; neither the panel nor anything it scales is an input of the curve, so the identity
+    check passes and the run itself overflows).
+
+    Expected outcome: exit 1; exactly one ERROR record, on one line and with no exception
+    attached, naming the scenario and saying a value is too large for the model to compute; no
+    artifact written.
+    """
+    scenario = tmp_path / "huge_panel.yaml"
+    scenario.write_text("iridium:\n  aperture_m2: 1.0e+308\n", encoding="utf-8")
+    out_path = tmp_path / "out.json"
+
+    assert main([str(scenario), str(out_path)]) == EXIT_ERROR
+
+    records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(records) == 1
+    message = records[0].getMessage()
+    assert "\n" not in message
+    assert message.startswith(
+        f"could not promote {scenario}: a value is too large for the model to compute ("
+    )
+    assert records[0].exc_info is None
+    assert not out_path.exists()
 
 
 def test_a_scenario_without_an_iridium_block_fails_before_any_run(

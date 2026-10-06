@@ -1,22 +1,25 @@
 """The Iridium family: the narrowing function and the Iridium entry.
 
 A communications config of the Iridium family carries a top-level ``iridium:`` block; one of
-the High-Bandwidth Cellular Pure Play family does not. Every Iridium path starts by narrowing
-its config with :func:`iridium_dials_of`, which returns the Iridium dials or refuses a config
-of the other family with :class:`NotAnIridiumConfigError`, so one condition and one error
-guard every path: the saturation command (``python -m communications.saturation``) calls it
-before it reads the dials the curve depends on, the Iridium promotion command
+the High-Bandwidth Cellular Pure Play family does not. Each way into the Iridium family (the
+two commands and the Iridium entry) starts by narrowing its config with
+:func:`iridium_dials_of`, which returns the Iridium dials or refuses a config of the other
+family with :class:`NotAnIridiumConfigError`, so one condition and one error guard each of
+them: the saturation command (``python -m communications.saturation``) calls it before it
+reads the dials the curve depends on, the Iridium promotion command
 (``python -m communications.json_output``) before it loads the curve, and the Iridium entry
 before anything else. The message is the one the Iridium promotion command gives today.
 
 The Iridium entry, :func:`run_iridium_model`, takes the config and its saturation curve, both
-required, so the curve's presence is a type fact: no call runs the Iridium family without
-one. On every run it narrows the config, then
-checks that the curve was computed for the config's own inputs (the identity check,
-:func:`communications.saturation_curve.check_curve_matches`), and only then runs. Until the
-shared fleet-and-cost loop lands, the run itself is the interim shared path the cellular entry
-also calls (:func:`communications.engine.run_comms_trajectory`), where the fleet is still sized
-by today's density path; the curve does not yet size or price anything.
+required, so the curve's presence is a type fact: no call through the entry (the promotion
+command's among them) runs the Iridium family without one. On every run it narrows the
+config, then checks that the curve was computed for the config's own inputs (the identity
+check, :func:`communications.saturation_curve.check_curve_matches`), and only then runs. Until
+the shared fleet-and-cost loop lands, the run itself is the interim shared path the cellular
+entry also calls (:func:`communications.engine.run_comms_trajectory`), where the fleet is still
+sized by today's density path; the curve does not yet size or price anything. That path is
+not an entry: it checks neither the family nor a curve, so the guarantees here hold through
+the two entries.
 
 numpy-free, like every communications module but the saturation module (ADR 010).
 """

@@ -39,9 +39,10 @@ output); it defaults to today's ISO date.
 The command follows the shared CLI conventions (:mod:`common.cli`): the status
 line and any error are log records on stderr; an unreadable or invalid
 scenario, a scenario of the cellular family, a saturation curve that cannot be
-read or was computed for other inputs, a scenario the model cannot run, or a
-failed write is one ``ERROR:`` line and exit status 1, never a traceback; a
-usage error exits with status 2.
+read or was computed for other inputs, a scenario the model cannot run (a
+value too large for the model to compute among them), or a failed write is one
+``ERROR:`` line and exit status 1, never a traceback; a usage error exits with
+status 2.
 The one artifact is written through
 :func:`common.file_io.write_files_with_rollback`: staged in full beside its
 destination, then renamed over it in one atomic rename, so a failure leaves
@@ -768,17 +769,25 @@ def main(argv: list[str] | None = None) -> int:
         (after one ``ERROR:`` log line, no traceback) when the scenario cannot
         be read, is invalid, or does not select the Iridium model, its
         saturation curve cannot be read or was computed for other inputs, the
-        model cannot run, or the artifact cannot be written. Usage errors exit through
+        model cannot run (a value too large for it to compute, an
+        ``OverflowError``, among them), or the artifact cannot be written. Usage errors exit through
         :class:`~common.cli.CliArgumentParser` with
         :data:`~common.cli.EXIT_USAGE`.
     """
     configure_cli_logging()
     args = _build_parser().parse_args(argv)
+    scenario = Path(args.scenario)
     try:
-        export_iridium_json(args.scenario, args.output, args.version_stamp)
+        export_iridium_json(scenario, args.output, args.version_stamp)
     except (ModelFileError, ValueError) as exc:
-        scenario = Path(args.scenario)
         logger.error("could not promote %s: %s", scenario, describe_failure(exc, scenario))
+        return EXIT_ERROR
+    except OverflowError as exc:
+        logger.error(
+            "could not promote %s: a value is too large for the model to compute (%s)",
+            scenario,
+            describe_failure(exc, scenario),
+        )
         return EXIT_ERROR
     return EXIT_OK
 

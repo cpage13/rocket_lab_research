@@ -9,9 +9,13 @@ entry, and both call this one path (the interim shared path, until the shared
 fleet-and-cost loop lands): the cellular entry is ``run_comms_model(config)`` here,
 which refuses a config with an ``iridium`` block (:class:`NotACellularConfigError`);
 the Iridium entry is ``communications.iridium.run_iridium_model(config, curve)``,
-which checks its saturation curve against the config before the run. This module
-imports neither the Iridium family nor the curve's contract, so the shared path
-stays family-neutral.
+which checks its saturation curve against the config before the run. The interim
+path itself is not an entry (it is not in ``__all__``): it checks neither the family
+nor a curve, so what the entries guarantee holds through the entries. This module
+imports neither the Iridium family module nor the curve's contract, while the interim
+path still holds the Iridium model's branches (its density derivation and physics
+block, read from the ``iridium`` block) until the shared fleet-and-cost loop, which
+holds no family branch, replaces it.
 It mirrors the data-center model's fleet engine (the per-year loop in
 ``data_center/engine.py`` plus the living-cohort rollup in ``data_center/fleet.py``)
 with three deliberate differences, all driven by the comms design:
@@ -1794,7 +1798,9 @@ def run_comms_trajectory(config: CommsConfig) -> CommsTrajectory:
 
     The interim shared path both entries call (the cellular entry :func:`run_comms_model`
     and the Iridium entry ``communications.iridium.run_iridium_model``), so no year loop is
-    copied into the Iridium family, until the shared fleet-and-cost loop replaces it. Serves
+    copied into the Iridium family, until the shared fleet-and-cost loop replaces it. It is
+    not an entry and not in ``__all__``: it checks neither the family nor a saturation
+    curve and runs whatever config it is given, so a run goes through an entry. Serves
     both families: the High-Bandwidth Cellular Pure Play model (no ``iridium``
     block) and the Iridium model (the density derived from the ``iridium`` block).
     Iterates the model years 0..``horizon_years`` inclusive (FY2026..FY2036 at
@@ -1997,9 +2003,9 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
 
     A config with an ``iridium:`` block belongs to the Iridium family, whose entry is
     ``communications.iridium.run_iridium_model(config, curve)`` (it checks its saturation
-    curve against the config before it runs the same path); this entry refuses it, so no
-    Iridium config runs without its curve. Any other config runs the shared path,
-    :func:`run_comms_trajectory`.
+    curve against the config before it runs the same path); this entry refuses it, so
+    through the two entries no Iridium config runs without its curve. Any other config runs
+    the interim shared path, :func:`run_comms_trajectory`.
 
     Args:
         config: The comms config (the frozen Pydantic tree). The all-defaults config
@@ -2037,7 +2043,6 @@ __all__ = [
     "margin_pct",
     "resolve_device_spectral_efficiency",
     "run_comms_model",
-    "run_comms_trajectory",
     "subscribers_served_at",
     "usd_per_person",
 ]
