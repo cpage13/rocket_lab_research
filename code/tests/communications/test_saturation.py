@@ -2685,6 +2685,186 @@ def test_a_complete_curve_passes_its_check_and_loads(tmp_path: Path) -> None:
     assert load_saturation_curve(path) == curve
 
 
+def with_phone_markers(curve: SaturationCurve, **changes: float | int | None) -> SaturationCurve:
+    """The curve with the phone class's markers changed as asked."""
+    phone = curve.classes[2]
+    return curve.model_copy(
+        update={
+            "classes": (
+                *curve.classes[:2],
+                phone.model_copy(update={"markers": phone.markers.model_copy(update=changes)}),
+            )
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"saturation_number": 582, "saturation_not_reached_by": None},
+        {"elasticity_under_0p25_fleet": 582},
+        {"fleet_at_90pct_of_maximum_use": 342},
+        {"fleet_at_90pct_of_maximum_use": 992},
+    ],
+    ids=[
+        "a saturation number at the midpoint",
+        "a 0.25 crossing at the midpoint",
+        "a 90 percent fleet at the first row",
+        "a 90 percent fleet at the last row",
+    ],
+)
+def test_markers_at_the_edges_of_their_spans_pass_the_completeness_check(
+    changes: dict[str, int | None],
+) -> None:
+    """Objective: the completeness check's conditions on the markers are necessary only, and its
+    spans are the ones the markers' definitions give: a crossing between the rows' first and last
+    geometric midpoints, each rounded half up; the 90 percent fleet within the rows' span.
+
+    Sample: the complete bare curve (rows at 342 and 992: one midpoint, sqrt(342 x 992) = 582.46,
+    582 rounded) with the phone class's markers at the edges of those spans.
+
+    Expected outcome: each passes ``check_curve_complete`` (whether ``_markers`` would give it is
+    the derived-fields drift test's to say, on the committed curve).
+    """
+    check_curve_complete(with_phone_markers(complete_bare_curve(), **changes))
+
+
+SMALL_TERMINAL_SECTORS = next(
+    entry.sector_wedges_per_ring
+    for entry in SaturationInputs().classes
+    if entry.device_class is DeviceClass.SMALL_TERMINAL_CLASS
+)
+"""The small terminal's default sky sectors: its azimuth wedges per ring, from the zenith down."""
+
+
+def complete_curve_with_sectors(small: tuple[int, ...], phone: tuple[int, ...]) -> SaturationCurve:
+    """The complete bare curve with the small terminal's and the phone class's sky sectors set in
+    its parameters, each row's diagnostics placed as the computation places them (on every row of
+    a class with sky sectors, a band point's by the phone class's) and its input hash recomputed."""
+    curve = complete_bare_curve()
+    layouts = {DeviceClass.SMALL_TERMINAL_CLASS: small, PHONE: phone}
+    classes = tuple(
+        entry.model_copy(update={"sector_wedges_per_ring": layouts[entry.device_class]})
+        if entry.device_class in layouts
+        else entry
+        for entry in curve.parameters.classes
+    )
+    parameters = SaturationInputs.model_validate(
+        {**curve.parameters.model_dump(), "classes": classes}
+    )
+    sectored = {entry.device_class: bool(entry.sector_wedges_per_ring) for entry in classes}
+
+    def placed(rows: tuple[CurveRow, ...], diagnostics: bool) -> tuple[CurveRow, ...]:
+        return tuple(
+            row.model_copy(update={"directional": NO_STACK if diagnostics else None})
+            for row in rows
+        )
+
+    return curve.model_copy(
+        update={
+            "parameters": parameters,
+            "input_hash": curve_input_hash(parameters),
+            "classes": tuple(
+                entry.model_copy(update={"rows": placed(entry.rows, sectored[entry.device_class])})
+                for entry in curve.classes
+            ),
+            "bands": tuple(
+                band.model_copy(update={"rows": placed(band.rows, sectored[PHONE])})
+                for band in curve.bands
+            ),
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("small", "phone", "flip", "message"),
+    [
+        ((), (), (0, None), "small_terminal_class row at 342 satellites carries stacking"),
+        (
+            SMALL_TERMINAL_SECTORS,
+            (1,),
+            (None, 0),
+            "band point taper row at 342 satellites lacks its stacking diagnostics",
+        ),
+    ],
+    ids=["an omni small terminal", "a sectored phone class"],
+)
+def test_the_diagnostics_sit_where_the_parameters_sky_sectors_put_them(
+    tmp_path: Path,
+    small: tuple[int, ...],
+    phone: tuple[int, ...],
+    flip: tuple[int | None, int | None],
+    message: str,
+) -> None:
+    """Objective: the completeness check places the stacking diagnostics by each class's sky
+    sectors in the curve's parameters, as the computation does, never by the class's name, so a
+    curve computed from contract-valid inputs is never refused after the run.
+
+    Sample: the complete bare curve with a small terminal of no sky sectors (its rows without
+    diagnostics), or a phone class of one sector (its rows and every band point's with them);
+    then the same curve with one row's diagnostics flipped (the small terminal's first row given
+    them, or the first band point's first row stripped of them).
+
+    Expected outcome: each curve passes ``check_curve_complete`` and loads; the flipped one is
+    refused naming the curve and the row.
+    """
+    curve = complete_curve_with_sectors(small, phone)
+    check_curve_complete(curve)
+    path = tmp_path / "saturation_curve.json"
+    path.write_text(render_artifact_json(curve) + ARTIFACT_FILE_END, encoding="utf-8")
+    assert load_saturation_curve(path) == curve
+    class_index, band_index = flip
+    data = json.loads(render_artifact_json(curve))
+    if class_index is not None:
+        data["classes"][class_index]["rows"][0]["directional"] = NO_STACK.model_dump()
+    if band_index is not None:
+        data["bands"][band_index]["rows"][0]["directional"] = None
+    flipped = write_curve_json(tmp_path / "flipped.json", data)
+    with pytest.raises(SaturationCurveError, match=message):
+        load_saturation_curve(flipped)
+
+
+def test_a_grid_named_otherwise_with_the_parameters_digest_loads(tmp_path: Path) -> None:
+    """Objective: the grid is identified by its digest alone, as the computation identifies it;
+    its file name is a label the parameters' path already gives.
+
+    Sample: the complete bare curve with its provenance's grid file name changed, its digest kept.
+
+    Expected outcome: the curve passes ``check_curve_complete`` and loads.
+    """
+    curve = complete_bare_curve()
+    renamed = curve.model_copy(
+        update={"provenance": curve.provenance.model_copy(update={"grid_file_name": "other.npz"})}
+    )
+    check_curve_complete(renamed)
+    path = write_curve_json(tmp_path / "renamed.json", json.loads(render_artifact_json(renamed)))
+    assert load_saturation_curve(path).provenance.grid_file_name == "other.npz"
+
+
+def test_one_bounds_tolerance_serves_the_computation_and_the_completeness_check() -> None:
+    """Objective: the computation's bounds check and the completeness check read one tolerance
+    through one predicate, so a retune moves both (a one-sided one would refuse the computation's
+    own curve after the full run).
+
+    Sample: the module's names for the tolerance and the predicate; the complete bare curve with
+    the phone class's maximum use set under its last row's ceiling by half the tolerance and by
+    twice it.
+
+    Expected outcome: the module's names are the contract's own objects; the curve passes at half
+    the tolerance and is refused at twice it.
+    """
+    assert sat._BOUNDS_RELATIVE_TOLERANCE is saturation_curve.BOUNDS_RELATIVE_TOLERANCE
+    assert sat.exceeds_bound is saturation_curve.exceeds_bound
+    curve = complete_bare_curve()
+    ceiling = curve.classes[2].rows[-1].ceiling_beams
+    tolerance = saturation_curve.BOUNDS_RELATIVE_TOLERANCE
+    check_curve_complete(with_phone_markers(curve, maximum_use_beams=ceiling * (1 - tolerance / 2)))
+    with pytest.raises(SaturationCurveError, match="above its maximum use"):
+        check_curve_complete(
+            with_phone_markers(curve, maximum_use_beams=ceiling * (1 - 2 * tolerance))
+        )
+
+
 def _phone_trim_json() -> list[dict[str, float]]:
     """The complete bare curve's phone trim, as JSON."""
     return [{"floor_dbi": floor, "trim": 0.01} for floor in SaturationInputs().trim.floors_dbi]
@@ -2766,10 +2946,6 @@ def _phone_trim_json() -> list[dict[str, float]]:
         (lambda d: d.update(limits=[]), "the curve states no limits"),
         (lambda d: d["provenance"].update(checks_passed=[]), "names no checks passed"),
         (
-            lambda d: d["provenance"].update(grid_file_name="other.npz"),
-            "the provenance's grid file 'other.npz' is not the parameters'",
-        ),
-        (
             lambda d: d["provenance"].update(grid_sha256="0" * 64),
             "the provenance's grid digest 0000",
         ),
@@ -2781,7 +2957,22 @@ def _phone_trim_json() -> list[dict[str, float]]:
             lambda d: d["classes"][0]["markers"].update(
                 saturation_number=5_000, saturation_not_reached_by=None
             ),
-            "saturation_number 5000 lies outside its rows' span, 342 to 992",
+            "saturation_number 5000 lies outside the span of its rows' geometric midpoints, 582 "
+            "to 582",
+        ),
+        (
+            lambda d: d["classes"][0]["markers"].update(
+                saturation_number=500, saturation_not_reached_by=None
+            ),
+            "saturation_number 500 lies outside the span of its rows' geometric midpoints",
+        ),
+        (
+            lambda d: d["bands"][1]["markers"].update(elasticity_under_0p25_fleet=900),
+            "band point taper_and_spacing elasticity_under_0p25_fleet 900 lies outside the span",
+        ),
+        (
+            lambda d: d["classes"][1]["markers"].update(fleet_at_90pct_of_maximum_use=1_000),
+            "fleet_at_90pct_of_maximum_use 1000 lies outside its rows' span, 342 to 992",
         ),
         (
             lambda d: d["classes"][2]["markers"].update(maximum_use_beams=15.0),
@@ -2813,10 +3004,12 @@ def _phone_trim_json() -> list[dict[str, float]]:
         "a band row with diagnostics",
         "no stated limits",
         "no checks passed",
-        "a grid file not the parameters'",
         "a grid digest not the parameters'",
         "not reached by a fleet that is not the last row",
         "a saturation number outside the rows",
+        "a saturation number before the first midpoint",
+        "a 0.25 crossing past the last midpoint",
+        "a 90 percent fleet past the last row",
         "maximum use under a row's ceiling",
     ],
 )

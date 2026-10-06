@@ -17,6 +17,8 @@ family can read a curve without importing numpy:
   spectrum), and :func:`curve_input_hash`, the SHA-256 of the inputs' canonical JSON;
 * :func:`walker_shape`, the shell's pinned planes and satellites per plane for a requested
   fleet, which the module builds every shell with and the contract checks every row by;
+* :func:`exceeds_bound` at :data:`BOUNDS_RELATIVE_TOLERANCE`, the one test of the curve's
+  bounds, which the computation and the completeness check share;
 * :func:`check_curve_complete`, what a promoted curve must carry (and necessary conditions on
   the markers its rows can give), and :func:`load_saturation_curve`, which reads a promoted
   curve and refuses one with a repeated key, a number out of range, another schema, a value
@@ -64,6 +66,7 @@ from pydantic import (
     model_validator,
 )
 
+from common.cadence import round_half_up
 from common.file_io import TEXT_ENCODING, ModelFileError
 from communications.config import IridiumDials
 from communications.constants import (
@@ -125,10 +128,12 @@ _SHA256_HEX_PATTERN: Final[str] = "^[0-9a-f]{64}$"
 _CANONICAL_JSON_SEPARATORS: Final[tuple[str, str]] = (",", ":")
 """The canonical JSON's item and key separators, with no spaces (the input hash's form)."""
 
-_CEILING_RELATIVE_TOLERANCE: Final[float] = 1e-9
-"""How far a row's ceiling may lie above maximum use, relative: the computation's own bound on
-every snapshot (the saturation strategy's 1e-9 for every invariant check), so a curve the
-computation passed passes the completeness check too."""
+BOUNDS_RELATIVE_TOLERANCE: Final[float] = 1e-9
+"""The relative tolerance of the curve's bounds (the saturation strategy's 1e-9 for every
+invariant check): useful beams at most min(ceiling, supply) and the ceiling at most maximum use
+hold exactly in arithmetic, and only rounding may carry them past. The computation checks every
+snapshot by it and the completeness check every row's ceiling against maximum use, both through
+:func:`exceeds_bound`, so a curve the computation passed passes the completeness check too."""
 
 _PYDANTIC_VALUE_ERROR: Final[str] = "value_error"
 """Pydantic's error type for a ``ValueError`` raised inside a validator, whose message pydantic
@@ -207,6 +212,22 @@ def _check_strictly_increasing(values: Sequence[int], what: str) -> None:
 
 _RequestedFleet = Annotated[int, Field(strict=True, gt=0)]
 """A requested fleet: a positive integer, strictly (a boolean or a whole float is refused)."""
+
+
+def exceeds_bound(value: float, bound: float) -> bool:
+    """Return whether a value lies above its bound by more than the bounds' tolerance.
+
+    The one test of the curve's bounds, for the computation and the completeness check alike:
+    above the bound, and not within :data:`BOUNDS_RELATIVE_TOLERANCE` of it, relative.
+
+    Args:
+        value: The bounded value (useful beams, or a ceiling).
+        bound: Its bound (min(ceiling, supply), or maximum use).
+
+    Returns:
+        Whether the value breaks the bound.
+    """
+    return value > bound and not math.isclose(value, bound, rel_tol=BOUNDS_RELATIVE_TOLERANCE)
 
 
 def walker_shape(requested_fleet: int) -> tuple[int, int]:
@@ -862,36 +883,58 @@ def _check_rows_requested(name: str, rows: Sequence[CurveRow], requested: Sequen
 
 
 def _check_markers_on_rows(name: str, rows: Sequence[CurveRow], markers: ClassMarkers) -> None:
-    """Refuse markers that their own rows cannot give.
+    """Refuse markers that their own rows cannot give, by necessary conditions only.
 
-    Every marker fleet is read on the rows (the 0.10 and 0.25 crossings between the rows'
-    geometric midpoints, the 90 percent fleet between two rows, each rounded half up), so it lies
-    within the rows' span; a saturation number not reached names the last row's fleet; and
-    maximum use, the most the shell could ever use, is at least every row's ceiling (within the
-    computation's own tolerance).
+    Each condition follows from how the computation reads the markers on the rows
+    (``communications.saturation._markers``): a saturation number not reached names the last
+    row's fleet; the 0.10 and 0.25 crossings are interpolated in ln N between consecutive
+    geometric midpoints of the rows' fleets, sqrt(N_i x N_i+1), and rounded half up, so each lies
+    between the first and the last midpoint, each rounded half up; the 90 percent fleet is
+    interpolated between two rows and rounded half up, so it lies within the rows' span; and
+    maximum use, the most the shell could ever use, is at least every row's ceiling (by
+    :func:`exceeds_bound`). A marker that meets them all may still not be the one its rows give
+    (a saturation number moved within its span, say): the exact re-derivation is ``_markers``
+    itself, which the drift tests run on the committed curve.
 
     Raises:
         SaturationCurveError: Naming the curve, the marker or row, and the values.
     """
-    first, last = rows[0].fleet, rows[-1].fleet
+    fleets = [row.fleet for row in rows]
+    last = fleets[-1]
     if markers.saturation_not_reached_by not in (None, last):
         raise SaturationCurveError(
             f"the {name} saturation_not_reached_by is {markers.saturation_not_reached_by}, not "
             f"its last row's fleet {last}"
         )
-    for field, fleet in (
-        ("saturation_number", markers.saturation_number),
-        ("elasticity_under_0p25_fleet", markers.elasticity_under_0p25_fleet),
-        ("fleet_at_90pct_of_maximum_use", markers.fleet_at_90pct_of_maximum_use),
+    midpoints = [round_half_up(math.sqrt(low * high)) for low, high in pairwise(fleets)]
+    between_midpoints = "the span of its rows' geometric midpoints"
+    for field, fleet, where, span in (
+        ("saturation_number", markers.saturation_number, between_midpoints, midpoints),
+        (
+            "elasticity_under_0p25_fleet",
+            markers.elasticity_under_0p25_fleet,
+            between_midpoints,
+            midpoints,
+        ),
+        (
+            "fleet_at_90pct_of_maximum_use",
+            markers.fleet_at_90pct_of_maximum_use,
+            "its rows' span",
+            fleets,
+        ),
     ):
-        if fleet is not None and not first <= fleet <= last:
+        if fleet is None:
+            continue
+        if not span:
             raise SaturationCurveError(
-                f"the {name} {field} {fleet} lies outside its rows' span, {first} to {last}"
+                f"the {name} {field} is {fleet}, but its one row has no interval to place it on"
+            )
+        if not span[0] <= fleet <= span[-1]:
+            raise SaturationCurveError(
+                f"the {name} {field} {fleet} lies outside {where}, {span[0]} to {span[-1]}"
             )
     for row in rows:
-        if row.ceiling_beams > markers.maximum_use_beams and not math.isclose(
-            row.ceiling_beams, markers.maximum_use_beams, rel_tol=_CEILING_RELATIVE_TOLERANCE
-        ):
+        if exceeds_bound(row.ceiling_beams, markers.maximum_use_beams):
             raise SaturationCurveError(
                 f"the {name} row at {row.fleet} satellites has a ceiling of {row.ceiling_beams} "
                 f"beams, above its maximum use of {markers.maximum_use_beams}"
@@ -906,12 +949,13 @@ def _check_row_placement(name: str, row: CurveRow, *, directional: bool, trim: b
     """
     if directional and row.directional is None:
         raise SaturationCurveError(
-            f"the {name} row at {row.fleet} satellites lacks its stacking diagnostics"
+            f"the {name} row at {row.fleet} satellites lacks its stacking diagnostics (its class "
+            "has sky sectors)"
         )
     if not directional and row.directional is not None:
         raise SaturationCurveError(
-            f"the {name} row at {row.fleet} satellites carries stacking diagnostics, which only "
-            "the directional classes' rows carry"
+            f"the {name} row at {row.fleet} satellites carries stacking diagnostics, though its "
+            "class has no sky sectors"
         )
     if trim and row.trim is None:
         raise SaturationCurveError(f"the {name} row at {row.fleet} satellites lacks its trim")
@@ -928,19 +972,21 @@ def check_curve_complete(curve: SaturationCurve) -> None:
     A promoted curve carries every class, in :class:`~communications.constants.DeviceClass`
     order, and every band point, in :class:`BandName` order, each band point the one its
     parameters name; its stated limits and the checks it passed (neither empty), and the grid
-    its parameters name (the provenance's file name and digest); each curve's rows at exactly
-    the sweep's requested fleets (the mounted terminal's with its extension); the stacking
-    diagnostics on every directional class's row and on no other; the interference trim, at the
-    parameters' floors, on every row of the phone class's central curve and on no other row; and
-    markers its rows can give (:func:`_check_markers_on_rows`).
+    its parameters name (the provenance's digest, the grid's identity; its file name is a label
+    the parameters' path already gives); each curve's rows at exactly the sweep's requested
+    fleets (the mounted terminal's with its extension); the stacking diagnostics on every row of
+    a class whose parameters give it sky sectors (a band point's rows by the phone class's) and
+    on no other row, as the computation places them; the interference trim, at the parameters'
+    floors, on every row of the phone class's central curve and on no other row; and markers
+    that meet the necessary conditions of :func:`_check_markers_on_rows`.
 
     Args:
         curve: The curve.
 
     Raises:
         SaturationCurveError: Naming the curve and what is missing or misplaced (a class, a band
-            point, the limits, the checks, the grid's name or digest, a row, its diagnostics or
-            its trim), or a marker its rows cannot give.
+            point, the limits, the checks, the grid's digest, a row, its diagnostics or its
+            trim), or a marker its rows cannot give.
     """
     parameters = curve.parameters
     sweep = parameters.sweep
@@ -957,17 +1003,14 @@ def check_curve_complete(curve: SaturationCurve) -> None:
     provenance = curve.provenance
     if not provenance.checks_passed:
         raise SaturationCurveError("the curve's provenance names no checks passed")
-    grid_name = Path(parameters.demand.grid_path).name
-    if provenance.grid_file_name != grid_name:
-        raise SaturationCurveError(
-            f"the provenance's grid file {provenance.grid_file_name!r} is not the parameters' "
-            f"{grid_name!r}"
-        )
     if provenance.grid_sha256 != parameters.demand.grid_sha256:
         raise SaturationCurveError(
             f"the provenance's grid digest {provenance.grid_sha256} is not the parameters' "
             f"{parameters.demand.grid_sha256}"
         )
+    sectored = {
+        entry.device_class: bool(entry.sector_wedges_per_ring) for entry in parameters.classes
+    }
     floors = list(parameters.trim.floors_dbi)
     for entry in curve.classes:
         name = entry.device_class.value
@@ -980,7 +1023,7 @@ def check_curve_complete(curve: SaturationCurve) -> None:
         )
         phone = entry.device_class is DeviceClass.PHONE_CLASS
         for row in entry.rows:
-            _check_row_placement(name, row, directional=not phone, trim=phone)
+            _check_row_placement(name, row, directional=sectored[entry.device_class], trim=phone)
             if row.trim is not None and [at_floor.floor_dbi for at_floor in row.trim] != floors:
                 raise SaturationCurveError(
                     f"the {name} row at {row.fleet} satellites carries its trim at the floors "
@@ -996,7 +1039,9 @@ def check_curve_complete(curve: SaturationCurve) -> None:
             )
         _check_rows_requested(name, band.rows, sweep.fleets)
         for row in band.rows:
-            _check_row_placement(name, row, directional=False, trim=False)
+            _check_row_placement(
+                name, row, directional=sectored[DeviceClass.PHONE_CLASS], trim=False
+            )
         _check_markers_on_rows(name, band.rows, band.markers)
 
 
@@ -1132,6 +1177,7 @@ def load_saturation_curve(path: Path) -> SaturationCurve:
 
 
 __all__ = [
+    "BOUNDS_RELATIVE_TOLERANCE",
     "SATURATION_CURVE_SCHEMA_VERSION",
     "BandCurve",
     "BandName",
@@ -1153,6 +1199,7 @@ __all__ = [
     "TrimInputs",
     "check_curve_complete",
     "curve_input_hash",
+    "exceeds_bound",
     "load_saturation_curve",
     "saturation_inputs_for",
     "walker_shape",

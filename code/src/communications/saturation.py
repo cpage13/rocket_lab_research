@@ -201,6 +201,9 @@ from communications.constants import (
 )
 from communications.iridium import iridium_dials_of
 from communications.saturation_curve import (
+    BOUNDS_RELATIVE_TOLERANCE as _BOUNDS_RELATIVE_TOLERANCE,
+)
+from communications.saturation_curve import (
     SATURATION_CURVE_SCHEMA_VERSION,
     BandCurve,
     BandName,
@@ -220,6 +223,7 @@ from communications.saturation_curve import (
     TrimInputs,
     check_curve_complete,
     curve_input_hash,
+    exceeds_bound,
     saturation_inputs_for,
 )
 from communications.saturation_curve import walker_shape as _walker_shape
@@ -430,10 +434,6 @@ trim depends on it only through the rounding of its sums."""
 # ===========================================================================
 # The checks, the markers and the run's memory budget
 # ===========================================================================
-
-_BOUNDS_RELATIVE_TOLERANCE: Final[float] = 1e-9
-"""The relative tolerance of the bounds check: L <= min(ceiling, supply) and ceiling <=
-maximum use hold exactly in arithmetic, and only rounding may carry them past."""
 
 _CAPACITY_PER_SATELLITE_RISE_TOLERANCE: Final[float] = 0.02
 """A design rule (the build's amendment A6, from its numerics review of this module, finding
@@ -2860,11 +2860,6 @@ def _by_fleet(results: Sequence[_SnapshotResult], n_fleets: int) -> tuple[_Fleet
     return tuple(fleets)
 
 
-def _exceeds(value: float, bound: float, relative_tolerance: float) -> bool:
-    """Return whether ``value`` lies above ``bound`` by more than the relative tolerance."""
-    return value > bound and not math.isclose(value, bound, rel_tol=relative_tolerance)
-
-
 def _curve_label(curve: _CurveKey) -> str:
     """Return a curve's name in messages and limits: its class's key, or for a band point the
     phone class's key and the point's name."""
@@ -2884,12 +2879,12 @@ def _check_bounds(curve: _CurveKey, fleets: Sequence[_FleetSnapshots], maximum_u
         for snapshot, (useful, ceiling, supply) in enumerate(
             zip(fleet.useful_beams, fleet.ceiling_beams, fleet.supply_beams, strict=True)
         ):
-            if _exceeds(useful, min(ceiling, supply), _BOUNDS_RELATIVE_TOLERANCE):
+            if exceeds_bound(useful, min(ceiling, supply)):
                 raise SaturationInvariantError(
                     f"{name} at {fleet.fleet} satellites, snapshot {snapshot}: "
                     f"useful beams {useful} exceed min(ceiling {ceiling}, supply {supply})"
                 )
-            if _exceeds(ceiling, maximum_use, _BOUNDS_RELATIVE_TOLERANCE):
+            if exceeds_bound(ceiling, maximum_use):
                 raise SaturationInvariantError(
                     f"{name} at {fleet.fleet} satellites, snapshot {snapshot}: "
                     f"the ceiling {ceiling} exceeds maximum use {maximum_use}"
