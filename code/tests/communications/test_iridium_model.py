@@ -68,6 +68,7 @@ from communications.constants import (
 from communications.engine import (
     MUSD_TO_USD,
     CommsTrajectory,
+    NotACellularConfigError,
     derive_arpu_buckets,
     derive_iridium_per_user_rates,
     derive_iridium_satellites_per_launch,
@@ -432,6 +433,23 @@ def test_hb_cellular_default_has_no_iridium_block() -> None:
     """The default High-Bandwidth Cellular Pure Play config produces no Iridium block."""
     traj = run_comms_model(CommsConfig())
     assert traj.iridium is None
+
+
+def test_the_cellular_entry_refuses_an_iridium_config(iridium_yaml: Path) -> None:
+    """Objective: each family has its own entry: the cellular entry refuses a config of the
+    Iridium family with a typed error naming the Iridium entry, so no Iridium config runs
+    without its saturation curve.
+
+    Sample: the default Iridium dials; the shipped Iridium scenario.
+
+    Expected outcome: each raises NotACellularConfigError (a ValueError) whose message names
+    ``communications.iridium.run_iridium_model(config, curve)``.
+    """
+    for config in (CommsConfig(iridium=IridiumDials()), load_comms_config(iridium_yaml)):
+        with pytest.raises(NotACellularConfigError) as refused:
+            run_comms_model(config)
+        assert "communications.iridium.run_iridium_model(config, curve)" in str(refused.value)
+        assert isinstance(refused.value, ValueError)
 
 
 # ---------------------------------------------------------------------------

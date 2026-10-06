@@ -6,7 +6,8 @@ The same treadmill serves both model families: the High-Bandwidth Cellular Pure
 Play model (a fixed subscriber-density dial) and the Iridium model (the density
 derived from L-band physics when ``config.iridium`` is set). Each family has its own
 entry, and both call this one path (the interim shared path, until the shared
-fleet-and-cost loop lands): the cellular entry is ``run_comms_model(config)`` here;
+fleet-and-cost loop lands): the cellular entry is ``run_comms_model(config)`` here,
+which refuses a config with an ``iridium`` block (:class:`NotACellularConfigError`);
 the Iridium entry is ``communications.iridium.run_iridium_model(config, curve)``,
 which checks its saturation curve against the config before the run. This module
 imports neither the Iridium family nor the curve's contract, so the shared path
@@ -1775,6 +1776,18 @@ def _built_fleet_annual_cost_musd(
 # The shared path and the cellular entry.
 # ---------------------------------------------------------------------------
 
+_NOT_A_CELLULAR_CONFIG: Final[str] = (
+    "the config selects the Iridium model (it has an 'iridium:' block), which the cellular "
+    "entry does not run: run it through the Iridium entry, "
+    "communications.iridium.run_iridium_model(config, curve), on its saturation curve"
+)
+"""The cellular entry's refusal of an Iridium config, naming the Iridium entry."""
+
+
+class NotACellularConfigError(ValueError):
+    """A config of the Iridium family (one with an ``iridium:`` block) handed to the cellular
+    entry, :func:`run_comms_model`."""
+
 
 def run_comms_trajectory(config: CommsConfig) -> CommsTrajectory:
     """Run the build-and-hold cost trajectory for one communications scenario.
@@ -1980,11 +1993,13 @@ def run_comms_trajectory(config: CommsConfig) -> CommsTrajectory:
 
 
 def run_comms_model(config: CommsConfig) -> CommsTrajectory:
-    """The cellular entry: run a config on the shared path, :func:`run_comms_trajectory`.
+    """The cellular entry: run a High-Bandwidth Cellular Pure Play config.
 
-    The Iridium family has its own entry, ``communications.iridium.run_iridium_model(config,
-    curve)``, which checks its saturation curve against the config before it runs the same
-    path.
+    A config with an ``iridium:`` block belongs to the Iridium family, whose entry is
+    ``communications.iridium.run_iridium_model(config, curve)`` (it checks its saturation
+    curve against the config before it runs the same path); this entry refuses it, so no
+    Iridium config runs without its curve. Any other config runs the shared path,
+    :func:`run_comms_trajectory`.
 
     Args:
         config: The comms config (the frozen Pydantic tree). The all-defaults config
@@ -1994,8 +2009,11 @@ def run_comms_model(config: CommsConfig) -> CommsTrajectory:
         The :class:`CommsTrajectory` of :func:`run_comms_trajectory`.
 
     Raises:
-        ValueError: As :func:`run_comms_trajectory` raises it.
+        NotACellularConfigError: If the config has an ``iridium:`` block, naming the Iridium
+            entry.
     """
+    if config.iridium is not None:
+        raise NotACellularConfigError(_NOT_A_CELLULAR_CONFIG)
     return run_comms_trajectory(config)
 
 
@@ -2006,6 +2024,7 @@ __all__ = [
     "IridiumArpuBucket",
     "IridiumArpuResult",
     "IridiumResult",
+    "NotACellularConfigError",
     "arpu_stated_assumptions",
     "build_iridium_result",
     "compute_fleet_target",
