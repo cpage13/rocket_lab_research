@@ -144,9 +144,10 @@ directory; the stamp defaults to today's ISO date. It follows the shared command
 Public: :func:`load_population_grid`, :class:`PopulationGrid`, :func:`compute_saturation`,
 :func:`promote_saturation_curve`, :func:`main`, :class:`PopulationGridError` and
 :class:`SaturationInvariantError`. Everything else is private; ``_allocate`` is the seam the
-tests drive with explicit satellite positions, and ``_class_row`` and ``_band_row`` (one
-class's or one band point's row at one requested fleet) the seams the drift tests recompute a
-committed curve's rows through.
+tests drive with explicit satellite positions; ``_class_row`` and ``_band_row`` (one class's or
+one band point's row at one requested fleet) are the seams the drift tests recompute a committed
+curve's rows through, and ``_plan_maximum_use`` on the curve's own plans (``_class_plan``,
+``_band_plan``) what they rebuild every class's and band point's maximum use through.
 """
 
 from __future__ import annotations
@@ -3120,6 +3121,19 @@ def _unplaced_marker_limits(
 # ===========================================================================
 
 
+def _check_grid(population: PopulationGrid, inputs: SaturationInputs) -> None:
+    """Refuse a population grid that is not the one the inputs name (by its SHA-256).
+
+    Raises:
+        PopulationGridError: Naming the grid and both digests.
+    """
+    if population.sha256 != inputs.demand.grid_sha256:
+        raise PopulationGridError(
+            f"the population grid {population.file_name} has SHA-256 {population.sha256}, "
+            f"but the inputs expect {inputs.demand.grid_sha256}"
+        )
+
+
 def _check_realized_fleets(requested: Sequence[int]) -> None:
     """Refuse requested fleets whose realized fleets, P x S, do not strictly increase.
 
@@ -3381,6 +3395,14 @@ def _plan_rows(
     )
 
 
+def _plan_maximum_use(plan: _CurvePlan) -> float:
+    """Return one curve's maximum use (stage 10) from its plan: its demand cells and limits, at its
+    shell's inclination. The curve reads its markers against it, and the drift tests rebuild every
+    curve's maximum use through the curve's own plans."""
+    context = plan.context
+    return _maximum_use(context.cells, context.limits, context.shell.inclination_deg)
+
+
 def _stated_limits(
     inputs: SaturationInputs, classes: Sequence[ClassCurve], bands: Sequence[BandCurve]
 ) -> tuple[str, ...]:
@@ -3544,11 +3566,7 @@ def compute_saturation(
             for more snapshots than the phone class's central curve computes.
     """
     started = time.perf_counter()
-    if population.sha256 != inputs.demand.grid_sha256:
-        raise PopulationGridError(
-            f"the population grid {population.file_name} has SHA-256 {population.sha256}, "
-            f"but the inputs expect {inputs.demand.grid_sha256}"
-        )
+    _check_grid(population, inputs)
     sweep = inputs.sweep
     if sweep.snapshots_trim > sweep.snapshots_phone_central:
         raise SaturationInvariantError(
@@ -3582,8 +3600,7 @@ def compute_saturation(
         fleets = _by_fleet(
             [result for result in run.results if result.task.curve is plan.key], len(plan.fleets)
         )
-        limits = plan.context.limits
-        maximum_use = _maximum_use(plan.context.cells, limits, inputs.shell.inclination_deg)
+        maximum_use = _plan_maximum_use(plan)
         _check_bounds(plan.key, fleets, maximum_use)
         if plan.key is DeviceClass.PHONE_CLASS:
             _check_stall_floor(fleets, sweep.stall_floor)
@@ -3638,18 +3655,41 @@ def compute_saturation(
     )
 
 
-def _seam_grid_and_cells(inputs: SaturationInputs) -> tuple[PopulationGrid, _DemandCells]:
-    """Return the grid the inputs name (anchored at the repository root and checked against its
-    SHA-256) and its central demand cells, as a drift seam reads them.
+def _inputs_grid(checkout: SourceCheckout, inputs: SaturationInputs) -> PopulationGrid:
+    """Return the population grid the inputs name, anchored at the repository root and checked
+    against its SHA-256: the one grid load of the command and the drift seams.
+
+    Args:
+        checkout: The source checkout whose repository root a relative grid path anchors to.
+        inputs: The curve's inputs (their demand names the grid and its digest).
+
+    Returns:
+        The grid.
+
+    Raises:
+        ModelFileError: If the grid is missing, unreadable or not a population grid archive.
+        PopulationGridError: If the grid is not the one the inputs name.
+    """
+    return load_population_grid(
+        _anchored(checkout, inputs.demand.grid_path), inputs.demand.grid_sha256
+    )
+
+
+def _seam_grid_and_cells(
+    inputs: SaturationInputs, population: PopulationGrid | None
+) -> tuple[PopulationGrid, _DemandCells]:
+    """Return the grid the inputs name and its central demand cells, as a drift seam reads them:
+    the caller's grid when it has one loaded (checked against the inputs' digest), else the grid
+    loaded here (:func:`_inputs_grid`).
 
     Raises:
         ModelFileError: If the module is not in a source checkout or the grid is unreadable.
         PopulationGridError: If the grid is not the one the inputs name.
     """
-    population = load_population_grid(
-        _anchored(locate_source_checkout(__file__), inputs.demand.grid_path),
-        inputs.demand.grid_sha256,
-    )
+    if population is None:
+        population = _inputs_grid(locate_source_checkout(__file__), inputs)
+    else:
+        _check_grid(population, inputs)
     return population, _demand_cells(population, inputs.demand.density_threshold_per_km2)
 
 
@@ -3666,7 +3706,13 @@ def _plan_row(plan: _CurvePlan, fleet: int, sweep: SweepInputs) -> CurveRow:
     return row
 
 
-def _class_row(class_key: DeviceClass, fleet: int, inputs: SaturationInputs) -> CurveRow:
+def _class_row(
+    class_key: DeviceClass,
+    fleet: int,
+    inputs: SaturationInputs,
+    *,
+    population: PopulationGrid | None = None,
+) -> CurveRow:
     """Return one class's row at one fleet, as the curve computes it: a drift seam.
 
     ``fleet`` is the requested fleet the row's shell is built from (a row's
@@ -3680,6 +3726,8 @@ def _class_row(class_key: DeviceClass, fleet: int, inputs: SaturationInputs) -> 
         class_key: The class.
         fleet: The requested fleet.
         inputs: The curve's inputs (a committed curve's ``parameters``).
+        population: The grid the inputs name, when the caller has it loaded (a drift check
+            rebuilding several rows loads it once, through :func:`_inputs_grid`); None loads it.
 
     Returns:
         The class's row at that request.
@@ -3688,11 +3736,17 @@ def _class_row(class_key: DeviceClass, fleet: int, inputs: SaturationInputs) -> 
         ModelFileError: If the module is not in a source checkout or the grid is unreadable.
         PopulationGridError: If the grid is not the one the inputs name.
     """
-    _, cells = _seam_grid_and_cells(inputs)
+    _, cells = _seam_grid_and_cells(inputs, population)
     return _plan_row(_class_plan(inputs, cells, class_key), fleet, inputs.sweep)
 
 
-def _band_row(point: BandPoint, fleet: int, inputs: SaturationInputs) -> CurveRow:
+def _band_row(
+    point: BandPoint,
+    fleet: int,
+    inputs: SaturationInputs,
+    *,
+    population: PopulationGrid | None = None,
+) -> CurveRow:
     """Return one band point's row at one fleet, as the curve computes it: a drift seam.
 
     ``fleet`` is the requested fleet. The row is computed in this process at the inputs' own
@@ -3704,6 +3758,8 @@ def _band_row(point: BandPoint, fleet: int, inputs: SaturationInputs) -> CurveRo
         point: The band point (a committed curve's band point, which is its parameters').
         fleet: The requested fleet.
         inputs: The curve's inputs (a committed curve's ``parameters``).
+        population: The grid the inputs name, when the caller has it loaded (a drift check
+            rebuilding several rows loads it once, through :func:`_inputs_grid`); None loads it.
 
     Returns:
         The band point's row at that request.
@@ -3713,8 +3769,8 @@ def _band_row(point: BandPoint, fleet: int, inputs: SaturationInputs) -> CurveRo
         PopulationGridError: If the grid is not the one the inputs name, or does not divide by
             the point's aggregation.
     """
-    population, cells = _seam_grid_and_cells(inputs)
-    return _plan_row(_band_plan(inputs, population, cells, point), fleet, inputs.sweep)
+    grid, cells = _seam_grid_and_cells(inputs, population)
+    return _plan_row(_band_plan(inputs, grid, cells, point), fleet, inputs.sweep)
 
 
 # ===========================================================================
@@ -3832,9 +3888,7 @@ def promote_saturation_curve(
     inputs = saturation_inputs_for(iridium_dials_of(config))
     out = _anchored(checkout, output_path)
     _check_destination(out)
-    population = load_population_grid(
-        _anchored(checkout, inputs.demand.grid_path), inputs.demand.grid_sha256
-    )
+    population = _inputs_grid(checkout, inputs)
     stamp = version_stamp if version_stamp is not None else date.today().isoformat()
     logger.info("saturation curve: computing from %s, stamp %s", scenario_path, stamp)
     curve = compute_saturation(inputs, population, version_stamp=stamp)

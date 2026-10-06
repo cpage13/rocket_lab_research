@@ -24,10 +24,11 @@ specification, each naming what it exercises and what counts as success:
   point's one changed input (the beam, B, the demand threshold, the 2 x 2 grid);
 * the real grid at a coarse, fast setting, every class and band point frozen at 1e-4
   relative, the phone class's trim with them;
-* the committed curve against the code (the drift tests): every class's check rows, each
-  band point's first row and every maximum use rebuilt through the drift seams at 1e-4, and its
-  markers, limits and texts re-derived exactly; the coarse promotion, byte-identical but for its
-  measurement; the curve loader's refusals and the saturation command's;
+* the committed curve against the code (the drift tests): every class's check rows and each
+  band point's first row rebuilt through the drift seams, and every class's and band point's
+  maximum use through the curve's own plans, at 1e-4, and its markers, limits and texts
+  re-derived exactly; the coarse promotion, byte-identical but for its measurement; the curve
+  loader's refusals and the saturation command's;
 * numpy confinement (a subprocess), the people-per-beam arithmetic, the class constants,
   the checks' refusals, the grid loader's refusals and the contract's validators.
 
@@ -62,7 +63,12 @@ import pytest
 
 from common.cadence import round_half_up
 from common.cli import EXIT_ERROR, EXIT_USAGE
-from common.file_io import ARTIFACT_FILE_END, ModelFileError, render_artifact_json
+from common.file_io import (
+    ARTIFACT_FILE_END,
+    ModelFileError,
+    SourceCheckout,
+    render_artifact_json,
+)
 from communications import saturation as sat
 from communications.config import CommsConfig, IridiumDials, load_comms_config
 from communications.constants import (
@@ -1167,8 +1173,10 @@ def real_grid(repo_dir: Path) -> PopulationGrid:
 
 def coarse_inputs_for(iridium: IridiumDials) -> SaturationInputs:
     """The coarse setting's inputs for a config's Iridium dials: what the saturation command
-    builds (the dials' spectrum, every other input its named constant) but for the sweep."""
-    return SaturationInputs(spectrum_mhz=iridium.spectrum_mhz, sweep=COARSE_SWEEP)
+    builds (``saturation_inputs_for``) with its sweep replaced by the coarse one, validated anew."""
+    return SaturationInputs.model_validate(
+        {**saturation_inputs_for(iridium).model_dump(), "sweep": COARSE_SWEEP}
+    )
 
 
 def promote_coarse(scenario: Path, output: Path) -> Path:
@@ -1365,80 +1373,72 @@ def flat_values(value: object, path: str = "") -> dict[str, object]:
     return flat
 
 
+def assert_rows_match(label: str, committed: CurveRow, recomputed: CurveRow, rel: float) -> None:
+    """Compare a committed row with its recomputation: the same fields, every value (the
+    diagnostics and the trim included) within ``rel`` relative (0: exactly), the curve and the
+    row named in the message."""
+    expected = flat_values(committed.model_dump())
+    assert flat_values(recomputed.model_dump()) == pytest.approx(expected, rel=rel, abs=0), label
+
+
+def drift_grid_and_cells(
+    parameters: SaturationInputs, repo_dir: Path
+) -> tuple[PopulationGrid, sat._DemandCells]:
+    """A curve's grid, loaded once through the command's own grid load (``_inputs_grid``), and
+    its central demand cells, which the curve's plans are built on."""
+    population = sat._inputs_grid(SourceCheckout(repo_dir), parameters)
+    return population, sat._demand_cells(population, parameters.demand.density_threshold_per_km2)
+
+
 def assert_check_rows_match(curve: SaturationCurve, repo_dir: Path, rel: float) -> None:
-    """Recompute a curve's check rows and the phone class's maximum use at the curve's own
-    settings, each row through the drift seam from its requested fleet, and compare every
-    value within ``rel`` relative (0: exactly)."""
+    """Rebuild a curve's check rows through the class seam, each from its requested fleet, and
+    every class's maximum use through the class's own plan (``_class_plan``), at the curve's own
+    settings from one grid load, and compare each within ``rel`` relative (0: exactly)."""
     parameters = curve.parameters
+    population, cells = drift_grid_and_cells(parameters, repo_dir)
     for device_class, fleet in DRIFT_CHECK_ROWS:
         (committed,) = [row for row in class_curve(curve, device_class).rows if row.fleet == fleet]
-        recomputed = sat._class_row(device_class, committed.requested_fleet, parameters)
-        expected = flat_values(committed.model_dump())
-        found = flat_values(recomputed.model_dump())
-        assert found.keys() == expected.keys(), (device_class, fleet)
-        for key, value in expected.items():
-            if value is None:
-                assert found[key] is None, (device_class, fleet, key)
-            else:
-                assert found[key] == pytest.approx(value, rel=rel, abs=0), (
-                    device_class,
-                    fleet,
-                    key,
-                )
-    grid = load_population_grid(
-        repo_dir / parameters.demand.grid_path, parameters.demand.grid_sha256
-    )
-    maximum_use = sat._maximum_use(
-        sat._demand_cells(grid, parameters.demand.density_threshold_per_km2),
-        sat._class_limits(parameters, PHONE),
-        parameters.shell.inclination_deg,
-    )
-    assert maximum_use == pytest.approx(
-        class_curve(curve, PHONE).markers.maximum_use_beams, rel=rel, abs=0
-    )
+        recomputed = sat._class_row(
+            device_class, committed.requested_fleet, parameters, population=population
+        )
+        assert_rows_match(f"{device_class.value} row at {fleet}", committed, recomputed, rel)
+    for entry in curve.classes:
+        rebuilt = sat._plan_maximum_use(sat._class_plan(parameters, cells, entry.device_class))
+        assert rebuilt == pytest.approx(entry.markers.maximum_use_beams, rel=rel, abs=0), (
+            f"{entry.device_class.value} maximum use"
+        )
 
 
 def assert_band_rows_match(curve: SaturationCurve, repo_dir: Path, rel: float) -> None:
-    """Recompute every band point's first row and its maximum use at the curve's own settings,
-    each row through the band seam from its requested fleet, and compare every value within
-    ``rel`` relative (0: exactly)."""
+    """Rebuild every band point's first row through the band seam, from its requested fleet, and
+    its maximum use through its own plan (``_band_plan``), at the curve's own settings from one
+    grid load, and compare each within ``rel`` relative (0: exactly)."""
     parameters = curve.parameters
-    grid = load_population_grid(
-        repo_dir / parameters.demand.grid_path, parameters.demand.grid_sha256
-    )
-    threshold = parameters.demand.density_threshold_per_km2
-    central = sat._demand_cells(grid, threshold)
+    population, cells = drift_grid_and_cells(parameters, repo_dir)
     for band in curve.bands:
+        label = f"band point {band.point.name.value}"
         committed = band.rows[0]
-        recomputed = sat._band_row(band.point, committed.requested_fleet, parameters)
-        expected = flat_values(committed.model_dump())
-        found = flat_values(recomputed.model_dump())
-        assert found.keys() == expected.keys(), band.point.name
-        for key, value in expected.items():
-            if value is None:
-                assert found[key] is None, (band.point.name, key)
-            else:
-                assert found[key] == pytest.approx(value, rel=rel, abs=0), (band.point.name, key)
-        maximum_use = sat._maximum_use(
-            sat._band_cells(grid, band.point, central, threshold),
-            sat._band_limits(parameters, band.point),
-            parameters.shell.inclination_deg,
+        recomputed = sat._band_row(
+            band.point, committed.requested_fleet, parameters, population=population
         )
-        assert maximum_use == pytest.approx(band.markers.maximum_use_beams, rel=rel, abs=0), (
-            band.point.name
+        assert_rows_match(f"{label} row at {committed.fleet}", committed, recomputed, rel)
+        rebuilt = sat._plan_maximum_use(sat._band_plan(parameters, population, cells, band.point))
+        assert rebuilt == pytest.approx(band.markers.maximum_use_beams, rel=rel, abs=0), (
+            f"{label} maximum use"
         )
 
 
-def test_the_drift_seam_recomputes_a_curves_check_rows_exactly(
+def test_the_drift_seams_and_plans_rebuild_the_coarse_curve_exactly(
     coarse_real_curve: SaturationCurve, repo_dir: Path
 ) -> None:
-    """Objective: the drift seams are the curve's own computation: one class's or one band
-    point's row at one requested fleet, rebuilt in this process from the row's request, is the
-    curve's row.
+    """Objective: the drift seams and the curve's own plans are the curve's computation: one
+    class's or one band point's row at one requested fleet, rebuilt in this process from the
+    row's request, is the curve's row, and each curve's maximum use rebuilt from its plan is the
+    curve's.
 
     Sample: the coarse real-grid curve (one snapshot): every class's 342 row, the mounted
-    terminal's 1,980 row (requested 2,000), the phone class's maximum use, and every band point's
-    342 row and maximum use.
+    terminal's 1,980 row (requested 2,000), every band point's 342 row, and every class's and
+    band point's maximum use.
 
     Expected outcome: every value of each row, the phone class's trim included, and every
     maximum use equal to the curve's exactly (the same code on the same draw, in another
@@ -1458,14 +1458,16 @@ def test_committed_curve_has_not_drifted(repo_dir: Path) -> None:
 
     Sample: ``communications/models/iridium/saturation_curve.json``, loaded with
     ``load_saturation_curve`` (so it also loads whole and unaltered), at its own settings (its
-    parameters: the investor's usage, four snapshots for the phone class and two for the
-    directional classes): every class's first row (342), the mounted terminal's 1,980 row
-    (where rules D3 and D4 act) and the phone class's maximum use, each row rebuilt through the
-    drift seam from its requested fleet. The three drift tests' budget is 90 s.
+    parameters: the investor's usage, two snapshots for the directional classes and four for
+    the phone class): every class's first row (342) and the mounted terminal's 1,980 row (where
+    rules D3 and D4 act), each rebuilt through the drift seam from its requested fleet, and every
+    class's maximum use (the small terminal's and the mounted terminal's by the directional
+    rule), each rebuilt through the class's own plan; the grid loaded once. The three drift
+    tests' budget is 90 s.
 
     Expected outcome: every value of each row (L, its spread, capacity, U, the ceiling, the
-    supply, the directional diagnostics, the phone class's trim) and maximum use within 1e-4
-    relative of the committed curve.
+    supply, the directional diagnostics, the phone class's trim) and each class's maximum use
+    within 1e-4 relative of the committed curve.
     """
     curve = load_saturation_curve(repo_dir / COMMITTED_CURVE)
     assert_check_rows_match(curve, repo_dir, rel=1e-4)
@@ -1478,7 +1480,7 @@ def test_committed_curve_has_not_drifted_in_its_band_rows(repo_dir: Path) -> Non
 
     Sample: the committed curve at its own settings (two snapshots for the band points): every
     band point's first row (342), rebuilt through the band seam from its requested fleet, and
-    its maximum use.
+    its maximum use, rebuilt through its own plan; the grid loaded once.
 
     Expected outcome: every value of each row (L, its spread, capacity, U, the ceiling, the
     supply, no diagnostics and no trim) and each maximum use within 1e-4 relative of the
