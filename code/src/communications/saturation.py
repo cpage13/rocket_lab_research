@@ -126,10 +126,12 @@ summed peaks of the largest set of workers alive at once).
     uv run python -m communications.saturation scenarios/iridium.yaml \\
         communications/models/iridium/saturation_curve.json --version-stamp <stamp>
 
-The full promotion of 2026-10-06 (the shipped scenario, 40 footprint bands, a shared machine
-of 16 CPUs and 32 GB) measured 1,564 s of wall time, about 26 minutes, and a peak-memory bound
-of 11,945 MB, under the 16 GB budget (``time -l`` reported a largest resident set of 7.14 GB);
-the curve's ``provenance.run_measurement`` carries the same two figures.
+The full promotion of 2026-10-06 (the shipped scenario, 160 footprint bands, a shared machine
+of 16 CPUs and 32 GB, loaded by other work throughout: a one-minute load average of 6.8 at its
+start and 21.2 at its end, which its wall time reflects) measured 2,792.5 s of wall time, about
+47 minutes, and a peak-memory bound of 12,108 MB, under the 16 GB budget (``time -l`` reported a
+largest resident set of 3.24 GB); the curve's ``provenance.run_measurement`` carries the same two
+figures.
 
 It loads the scenario, narrows it to its Iridium dials (a scenario without an ``iridium:``
 block is refused before anything runs), refuses a destination the shared writer would refuse
@@ -3593,6 +3595,9 @@ def _curve_limits(inputs: SaturationInputs) -> tuple[str, ...]:
         "cap inside the curve (ADR 008).",
         "No interference trim for the directional classes: each terminal's own pattern "
         "suppresses the far-sidelobe leak.",
+        "The interference trim is a sampled mean: each row draws its victims afresh, so a step "
+        "between two rows can be the draw's noise; the trim is read where it levels off, never "
+        "row to row.",
         f"The directional terminals' pattern floor ({inputs.sidelobe_floor_db:g} dB) is an "
         "estimate, optimistic for the small terminal.",
         f"Computed at the {inputs.shell.reference_aperture_m2:g} m^2 reference panel. The "
@@ -3911,7 +3916,8 @@ def _check_destination(out: Path) -> None:
     directory, climbs to the parent, and any other error the
     system reports (a name past the file system's limit, a loop of symbolic links, a folder that
     cannot be searched) refuses the destination with its reason. A full promotion computes for
-    about 26 minutes before it writes, so this refuses what it can know first.
+    tens of minutes before it writes (the module docstring records its measured run), so this
+    refuses what it can know first.
 
     The writer keeps its own checks at the write, and alone judges what this does not ask: an
     existing file it cannot replace (a locked or append-only file, another user's file in a

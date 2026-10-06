@@ -858,10 +858,22 @@ SATURATION_SEED: Final[int] = 20260928
 ``default_rng(seed).uniform`` over one sidereal day, drawn once per run and shared by every
 fleet, so a run repeats exactly."""
 
-SATURATION_FOOTPRINT_BANDS: Final[int] = 40
-"""SCENARIO (the saturation design's allocation rule). Smallest footprint first fills each
-snapshot's satellite-cell pairs in this many geometric footprint bands, committing each
-band before the next."""
+SATURATION_FOOTPRINT_BANDS: Final[int] = 160
+"""SCENARIO (the saturation design's allocation rule; 160 by the investor's ruling of
+2026-10-06, in place of the design's 40). Smallest footprint first fills each snapshot's
+satellite-cell pairs in this many geometric footprint bands, committing each band before the
+next. The count is a numerical convention the fill converges in. Why 160: the fill shares a
+cell's first layer among every satellite of its smallest occupied band, so a wide band lets
+several near-zenith satellites reach the serving share and serve the cell, and each serving
+satellite keeps another sector's stacked layers a beamwidth away (rule D3's serving set). The
+numerics review of the directional classes (its finding B1) measured the mounted terminal's
+saturation number moving with the count at 40 bands, and 160 near converged: 320 bands adds
+0.3 to 0.5 percent of the mounted terminal's capacity over 160 (at 40,000 and 64,009
+satellites, at one shared usage of 1 Mbps x 2.5 percent). On the promoted curves of 2026-10-06,
+from 40 to 160 bands, the small terminal's saturation number rises 0.3 percent, the mounted
+terminal's moves from 48,912 to not reached by 64,009 (its last row), and the phone class's
+rises 1.2 percent and its band points' up to 2.3 percent, while both terminals' capacity at 528
+to 7,200 satellites moves 0.0 to 0.4 percent."""
 
 SATURATION_PASSES: Final[int] = 4
 """SCENARIO (the saturation design's allocation rule). The alternating proportional

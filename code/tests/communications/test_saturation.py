@@ -583,7 +583,8 @@ PATCH_CENTRE_DEG = (0.125, 0.125)
 
 CROWD_OFFSETS_DEG = ((0.0, 0.0), (0.1, 0.1), (2.0, 0.0), (0.0, -3.0), (-5.0, 2.0))
 """Satellite offsets from the patch's centre, degrees (latitude, longitude): one overhead,
-one 0.14 degree off it (the same footprint band), three farther out."""
+one 0.14 degree off it (over the patch's centre cell, in the overhead satellite's footprint
+band, so the two share that cell), three farther out."""
 
 
 def seam_limits(beams_per_satellite: float) -> sat._AllocationLimits:
@@ -877,41 +878,44 @@ COARSE_REAL_FLEETS = (340, 1_000, 2_000)
 COARSE_REAL_ROWS = (
     (
         342,
-        20650.005817588586,
-        107.38003025146064,
-        0.4025342264637151,
+        20648.821508692607,
+        107.37387184520156,
+        0.4025111405203237,
         102190.2125947176,
         21408.925531671954,
     ),
     (
         992,
-        56128.776221076834,
-        291.8696363495996,
-        0.3772095176147637,
+        56132.873844223934,
+        291.8909439899645,
+        0.37723705540473074,
         196678.16776641438,
         61894.68547314836,
     ),
     (
         1980,
-        101851.76200360352,
-        529.6291624187384,
-        0.34293522560135864,
+        101860.13574450975,
+        529.6727058714507,
+        0.3429634200151844,
         255760.63823593326,
         124345.18803992725,
     ),
 )
-"""The coarse rows as first computed (2026-10-05), frozen: fleet, L, capacity Gbps, U,
-ceiling, supply. They agree at float precision with the same snapshot of the saturation
-design's local prototype, which ``research/direct_communication/iridium_saturation_module.md``
-names."""
+"""The coarse rows at the default footprint band count, frozen: fleet, L, capacity Gbps, U,
+ceiling, supply. Re-frozen 2026-10-06, when the count moved from 40 to 160 (the investor's
+ruling): L, capacity and U moved under 0.01 percent, the ceiling and the supply (which do not
+read the fill) not at all. As first computed at 40 bands (2026-10-05), they agreed at float
+precision with the same snapshot of the saturation design's local prototype, which
+``research/direct_communication/iridium_saturation_module.md`` names and which fills 40 bands."""
 
 COARSE_REAL_TRIMS = (
-    (0.017985540528301147, 0.012521514195641736, 0.003179072785696957),
-    (0.03336923218875287, 0.023359409730369873, 0.00598735144565099),
-    (0.056200731314733576, 0.03968137913869685, 0.010327726966442241),
+    (0.017993748675121823, 0.012527386831419962, 0.003180633819415246),
+    (0.03330810517514904, 0.023316062840522456, 0.005975989962072492),
+    (0.056179393530459754, 0.03966498636703242, 0.010322814929000557),
 )
-"""The phone class's coarse interference trims as first computed (2026-10-06), frozen: at each
-row (342, 992 and 1,980), the trim at -0.4, -2 and -8 dBi, a fraction."""
+"""The phone class's coarse interference trims at the default footprint band count, frozen: at
+each row (342, 992 and 1,980), the trim at -0.4, -2 and -8 dBi, a fraction. First computed at 40
+bands (2026-10-06); re-frozen the same day at 160, each moving under 0.01 percentage point."""
 
 COARSE_REAL_MAXIMUM_USE = 380946.7365253218
 """The phone class's maximum use on the shipped grid at the investor's usage, beams."""
@@ -922,36 +926,36 @@ COARSE_DIRECTIONAL = {
         (
             (
                 342,
-                20795.284357278433,
-                332.0094048847808,
-                0.4053661668085465,
+                20792.954169882873,
+                331.97939685107104,
+                0.40532074405229773,
                 118922.09479969715,
                 21404.93606919374,
-                0.007298063627728474,
-                73.68645507577428,
-                -16.226495844804184,
+                0.007258472386192219,
+                73.77473900083181,
+                -16.20556550724097,
             ),
             (
                 992,
-                57317.3357433246,
-                911.7900760645404,
-                0.3851971488126653,
+                57331.80892087483,
+                911.914894500129,
+                0.38529441479082543,
                 284755.15413186094,
                 61880.005071762134,
-                0.021388980458577216,
-                75.70820538796879,
-                -16.25263410855952,
+                0.021563899477550323,
+                76.65064896736385,
+                -16.215255082970614,
             ),
             (
                 1980,
-                105783.56724985245,
-                1668.7218102640804,
-                0.3561736271038803,
+                105913.9452509351,
+                1669.6992799649254,
+                0.35661261027250873,
                 415005.8943781192,
                 124314.10789697223,
-                0.038860488536891065,
-                69.9964800593951,
-                -15.422851798039009,
+                0.039986848155697016,
+                70.42832772191979,
+                -15.360192562228939,
             ),
         ),
     ),
@@ -960,43 +964,46 @@ COARSE_DIRECTIONAL = {
         (
             (
                 342,
-                21219.844308904565,
-                421.61711937970705,
-                0.41364218925739893,
+                21219.486529869715,
+                421.58759052774246,
+                0.4136352150072069,
                 128941.14364361843,
                 21410.423077577965,
-                0.026664496864605185,
-                58.97992482795831,
-                -18.896911192752523,
+                0.02671810359437245,
+                59.14453682701641,
+                -18.868750734096075,
             ),
             (
                 992,
-                59751.81653615736,
-                1173.8143304053624,
-                0.40155790682901454,
+                59761.13650112314,
+                1173.8679577910011,
+                0.40162054100217165,
                 364336.338927603,
                 61905.084874337204,
-                0.06004851289809116,
-                52.75724194667607,
-                -15.914468840587588,
+                0.06011715221807194,
+                52.934937163081955,
+                -15.895460710816787,
             ),
             (
                 1980,
-                115630.13266001342,
-                2224.6783701054187,
-                0.3893270459933112,
+                115709.53180300078,
+                2225.2900025871227,
+                0.38959438317508677,
                 637680.7416468116,
                 124373.22731681664,
-                0.1174280164760068,
-                47.15112853069678,
-                -15.02233847489072,
+                0.11791801998358391,
+                47.40455087046911,
+                -14.976246507274176,
             ),
         ),
     ),
 }
-"""The directional classes' coarse rows as first computed (2026-10-05), frozen, with each
+"""The directional classes' coarse rows at the default footprint band count, frozen, with each
 class's maximum use: fleet, L, capacity Gbps, U, the sector-rule ceiling, supply, the kept
-stacked share, the median separation (degrees) and the mean full-sum interference (dB)."""
+stacked share, the median separation (degrees) and the mean full-sum interference (dB). First
+computed at 40 bands (2026-10-05); re-frozen 2026-10-06 at 160: L moved under 0.13 percent and
+the stacking diagnostics under 3 percent; the ceilings, supplies and maximum use (which do not
+read the fill) not at all."""
 
 COARSE_BANDS = {
     BandName.TAPER: (
@@ -1004,25 +1011,25 @@ COARSE_BANDS = {
         (
             (
                 342,
-                19268.861303115795,
-                100.19807877620214,
-                0.37561133144475234,
+                19268.86357941863,
+                100.19809061297688,
+                0.3756113758171273,
                 67204.6866775107,
                 20183.576871614907,
             ),
             (
                 992,
-                51982.26061129278,
-                270.3077551787225,
-                0.34934314926944077,
+                51985.154073872065,
+                270.32280118413473,
+                0.34936259458247354,
                 129498.5403789101,
                 58497.21294412446,
             ),
             (
                 1980,
-                90385.6844979183,
-                470.0055593891752,
-                0.3043289040333949,
+                90401.87206166257,
+                470.08973472064537,
+                0.30438340761502547,
                 168586.02171164897,
                 117183.53473941982,
             ),
@@ -1033,25 +1040,25 @@ COARSE_BANDS = {
         (
             (
                 342,
-                17883.794359746207,
-                92.99573067068027,
-                0.34861197582351283,
+                17884.335743744556,
+                92.99854586747169,
+                0.3486225291178276,
                 44803.29111163624,
                 18869.48870100613,
             ),
             (
                 992,
-                46285.68656170406,
-                240.68557012086112,
-                0.31105972151682837,
+                46289.50265445753,
+                240.70541380317917,
+                0.3110853673014619,
                 86332.9002698339,
                 54822.43062219184,
             ),
             (
                 1980,
-                78195.628411344,
-                406.61726773898886,
-                0.2632849441459394,
+                78209.25668990148,
+                406.6881347874877,
+                0.26333083060572887,
                 112391.94523636127,
                 109737.6448195993,
             ),
@@ -1062,25 +1069,25 @@ COARSE_BANDS = {
         (
             (
                 342,
-                17233.082918813285,
-                89.61203117782908,
-                0.33592754227706206,
+                17231.9211424255,
+                89.6059899406126,
+                0.3359048955638499,
                 66755.526511821,
                 18421.37507649095,
             ),
             (
                 992,
-                45599.27469399411,
-                237.1162284087694,
-                0.30644673853490667,
+                45602.84155305654,
+                237.13477607589402,
+                0.3064707093619391,
                 127802.00237942414,
                 53892.43809956228,
             ),
             (
                 1980,
-                78913.01953168925,
-                410.34770156478413,
-                0.26570040246360016,
+                78926.89257450642,
+                410.4198413874334,
+                0.26574711304547616,
                 167231.5596078611,
                 107888.44036897024,
             ),
@@ -1091,25 +1098,25 @@ COARSE_BANDS = {
         (
             (
                 342,
-                10235.839027540751,
-                53.2263629432119,
-                0.19952902587798735,
+                10235.907286577887,
+                53.226717890205016,
+                0.19953035646350656,
                 23577.929688830915,
                 11298.508971539646,
             ),
             (
                 992,
-                25876.40733770832,
-                134.55731815608326,
-                0.1739005869469645,
+                25882.827805905396,
+                134.59070459070807,
+                0.17394373525474055,
                 45897.65888676973,
                 34617.11517424151,
             ),
             (
                 1980,
-                40620.356108506894,
-                211.22585176423584,
-                0.1367688757862185,
+                40635.598123603406,
+                211.30511024273773,
+                0.13682019570236836,
                 60444.2866770497,
                 69302.28966736834,
             ),
@@ -1120,25 +1127,25 @@ COARSE_BANDS = {
         (
             (
                 342,
-                21601.799366765023,
-                112.32935670717812,
-                0.4210877069544839,
+                21602.31168039707,
+                112.33202073806476,
+                0.4210976935749916,
                 119629.71416586779,
                 22380.923093227226,
             ),
             (
                 992,
-                58807.60914697346,
-                305.799567564262,
-                0.3952124270629937,
+                58812.17076199278,
+                305.8232879623625,
+                0.39524308307790845,
                 230525.36179907064,
                 64696.68530694656,
             ),
             (
                 1980,
-                109231.32168481972,
-                568.0028727610626,
-                0.3677822278950159,
+                109248.4607145345,
+                568.0919957155795,
+                0.3678399350657727,
                 299752.75177026563,
                 129548.80947020264,
             ),
@@ -1149,35 +1156,37 @@ COARSE_BANDS = {
         (
             (
                 342,
-                7476.358546524962,
-                38.877064441929804,
-                0.4554311980095615,
+                7475.9854533204425,
+                38.8751243572663,
+                0.4554084705970055,
                 102190.2125947176,
                 7624.037949061897,
             ),
             (
                 992,
-                20908.703028287917,
-                108.72525574709717,
-                0.4391108666895144,
+                20910.97041359971,
+                108.7370461507185,
+                0.4391584848286229,
                 196678.16776641438,
                 22576.75501265761,
             ),
             (
                 1980,
-                39445.19868116313,
-                205.11503314204828,
-                0.4150378649112282,
+                39446.68674772166,
+                205.12277108815263,
+                0.415053522177206,
                 255760.63823593326,
                 44990.23618199112,
             ),
         ),
     ),
 }
-"""The phone class's band points' coarse rows as first computed (2026-10-06), frozen, with each
-point's maximum use: fleet, L, capacity Gbps, U, ceiling, supply. The 48-beam point keeps the
-central maximum use and ceiling (neither depends on B); the two density points and the 0.5
-degree grid change the demand, the taper and the spacing the area per beam."""
+"""The phone class's band points' coarse rows at the default footprint band count, frozen, with
+each point's maximum use: fleet, L, capacity Gbps, U, ceiling, supply. The 48-beam point keeps
+the central maximum use and ceiling (neither depends on B); the two density points and the 0.5
+degree grid change the demand, the taper and the spacing the area per beam. First computed at 40
+bands (2026-10-06); re-frozen the same day at 160: L, capacity and U moved under 0.04 percent,
+the ceilings, supplies and maximum use (which do not read the fill) not at all."""
 
 
 COARSE_SWEEP = SweepInputs(
@@ -1313,7 +1322,7 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: Saturati
     assert len(provenance.checks_passed) == 3
     assert provenance.run_measurement.wall_time_s > 0
     assert provenance.run_measurement.peak_memory_mb > 0
-    assert len(curve.limits) == 8
+    assert len(curve.limits) == 9
     assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
     assert [band.point for band in curve.bands] == list(inputs.bands)
     assert [band.point.name for band in curve.bands] == list(BandName)
@@ -1835,7 +1844,7 @@ def test_a_destination_the_writer_would_refuse_is_refused_before_the_computation
     case: UnusableDestination,
 ) -> None:
     """Objective: the saturation command refuses what the shared writer would refuse before it
-    computes (a full promotion computes for about 26 minutes first), and changes nothing.
+    computes (a full promotion computes for tens of minutes first), and changes nothing.
 
     Sample: the shipped scenario with ``compute_saturation`` patched to fail the test if called,
     and a destination that is a directory, a symbolic link to a file, a file in a folder this
@@ -3920,9 +3929,12 @@ def test_the_serving_set_holds_the_satellites_whose_layer_reaches_f_serve(
     assert main_only.serving.tolist() == [True, False, False, False]
 
 
-PAIRWISE_CASE_DEG = ((90.0, 0.0), (28.3, 170.0), (28.0, 190.0), (40.0, 270.0))
+PAIRWISE_CASE_DEG = ((90.0, 0.0), (28.05, 170.0), (28.0, 190.0), (40.0, 270.0))
 """The pairwise case: the zenith satellite, two candidates of one band either side of the ring
-halves' boundary, and a candidate within a beamwidth of the zenith."""
+halves' boundary, and a candidate within a beamwidth of the zenith. The two candidates'
+footprints differ by 0.5 percent, inside one band at 40, 160 or 320 footprint bands (at 160 a
+band spans 1.7 percent here; the first candidate sat at 28.3 degrees, 3.1 percent apart, while
+the fill had 40 bands)."""
 
 
 def test_a_stacked_candidate_needs_a_beamwidth_from_the_serving_set_and_the_bands_admitted(
@@ -3934,9 +3946,9 @@ def test_a_stacked_candidate_needs_a_beamwidth_from_the_serving_set_and_the_band
     in another sector.
 
     Sample: the small terminal, one cell, B = 150: a zenith satellite that covers the cell
-    alone in stage 1; candidates at (28.3, 170) and (28.0, 190) degrees, in one footprint band
+    alone in stage 1; candidates at (28.05, 170) and (28.0, 190) degrees, in one footprint band
     and in the two halves of the ring, 17.6 degrees apart, each over 60.3 from the zenith; one
-    at (40, 270), 50 degrees from the zenith. Then the same without the (28.3, 170) satellite.
+    at (40, 270), 50 degrees from the zenith. Then the same without the (28.05, 170) satellite.
 
     Expected outcome: the two band-mates share a band, the first by footprint taken first; it
     stacks; its band-mate, closer to it than a beamwidth in the other sector, is refused; the
@@ -3971,13 +3983,14 @@ def test_satellites_in_the_same_sector_are_exempt_from_each_other(one_cell: OneC
     rule never sets them against each other (rule D4).
 
     Sample: the small terminal, one cell, B = 150: a zenith satellite covering the cell, and two
-    candidates of one band in the same half of the ring, at (28.3, 60) and (28.0, 80) degrees,
-    17.7 degrees apart (under a beamwidth), each over a beamwidth from the zenith.
+    candidates of one band in the same half of the ring, at (28.05, 60) and (28.0, 80) degrees,
+    17.6 degrees apart (under a beamwidth), each over a beamwidth from the zenith; their
+    footprints differ by 0.5 percent, inside one band at 40, 160 or 320 footprint bands.
 
     Expected outcome: both stack, sharing their sector's area: their stacked shares of the cell
     sum to one layer, each positive.
     """
-    directions = ((90.0, 0.0), (28.3, 60.0), (28.0, 80.0))
+    directions = ((90.0, 0.0), (28.05, 60.0), (28.0, 80.0))
     allocation = allocate_seen_at(one_cell, directions, directional_limits(SMALL, 150.0))
     layers = directional_of(allocation)
     cells, _ = one_cell
@@ -4135,9 +4148,12 @@ SATELLITE_LIMITED_PEOPLE = 30.0
 """People in each cell of the satellite-limited world: under one beam of every class at the
 investor's usage (the mounted terminal's people cap is 0.75 beams)."""
 
-SATELLITE_LIMITED_FLEET = 300
-"""The satellite-limited world's requested fleet (realized 306): too few satellites for the
-mounted terminal's people caps, so many cells stay under their caps after stage 1."""
+SATELLITE_LIMITED_FLEET = 600
+"""The satellite-limited world's requested fleet (realized 600): too few satellites for the
+mounted terminal's people caps, so many cells stay under their caps after stage 1 (5,083 of its
+28,800). At 160 footprint bands the first-layer fill leaves stage 2 beams to complete short cells
+at this fleet; at 306 satellites (requested 300), this world's fleet while the fill had 40
+bands, the finer bands leave it none."""
 
 SIDEREAL_DAY_S = 86164.0905
 """One sidereal day, s, the span the snapshot times are drawn over (the curve's pinned value)."""
@@ -4189,8 +4205,8 @@ def test_the_statistics_count_stacks_only_in_cells_their_first_layer_covers(
     never as stacked layers.
 
     Sample: 0.5 degree cells between 20 and 40 degrees north, 30 people each, so the mounted
-    terminal's people caps (0.75 beams) outrun 306 satellites (requested 300) at the snapshot
-    draw's first time; the default B and the investor's usage.
+    terminal's people caps (0.75 beams) outrun 600 satellites (requested 600) at the snapshot
+    draw's first time; the default B, the investor's usage and the default footprint bands.
 
     Expected outcome: cells the first layer leaves short keep stage-2 beams beside a served
     layer of another sector, more than ten times the stacked beams of the covered cells (these
@@ -4203,7 +4219,7 @@ def test_the_statistics_count_stacks_only_in_cells_their_first_layer_covers(
     cells = sat._demand_cells(grid, inputs.demand.density_threshold_per_km2)
     first_time = float(np.random.default_rng(inputs.sweep.seed).uniform(0.0, SIDEREAL_DAY_S))
     satellites = sat._walker_positions(inputs.shell, SATELLITE_LIMITED_FLEET, first_time)
-    assert satellites.count == 306
+    assert satellites.count == 600
     allocation = sat._allocate(satellites, cells, directional_limits(MOUNTED, 150.0))
     sectors = sum(class_inputs(MOUNTED).sector_wedges_per_ring)
     covered = counted_stacked_beams(allocation, cells, sectors, covered_only=True)
