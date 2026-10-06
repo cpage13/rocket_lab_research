@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
 import math
 import os
 import subprocess
@@ -54,7 +55,7 @@ import numpy as np
 import pytest
 
 from common.cadence import round_half_up
-from common.file_io import ModelFileError
+from common.file_io import ModelFileError, render_artifact_json
 from communications import saturation as sat
 from communications.config import IridiumDials
 from communications.constants import (
@@ -84,10 +85,14 @@ from communications.saturation_curve import (
     DirectionalDiagnostics,
     RunMeasurement,
     SaturationCurve,
+    SaturationCurveError,
     SaturationInputs,
     ShellInputs,
     SweepInputs,
+    TrimAtFloor,
+    check_curve_complete,
     curve_input_hash,
+    load_saturation_curve,
     saturation_inputs_for,
     walker_shape,
 )
@@ -1929,6 +1934,155 @@ def test_the_contract_refuses_a_curve_out_of_shape(build: Callable[[], object]) 
     """
     with pytest.raises(ValueError, match="validation error"):
         build()
+
+
+COMPLETE_FLEETS = (342, 992)
+"""The complete bare curve's requested fleets: each realizes as itself (18 x 19, 31 x 32)."""
+
+
+def complete_bare_curve() -> SaturationCurve:
+    """A complete curve on hand-built rows: the default inputs but for the sweep (fleets 342
+    and 992, no mounted extension), every class and every band point on the two bare rows, the
+    phone class's rows with a trim at the default floors."""
+    inputs = SaturationInputs(
+        sweep=SweepInputs(fleets=COMPLETE_FLEETS, mounted_terminal_extension=())
+    )
+    trim = tuple(TrimAtFloor(floor_dbi=floor, trim=0.01) for floor in inputs.trim.floors_dbi)
+    phone_rows = tuple(row.model_copy(update={"trim": trim}) for row in BARE_ROWS)
+    return bare_curve(
+        tuple(
+            ClassCurve(
+                device_class=device_class,
+                rows=phone_rows if device_class is PHONE else BARE_ROWS,
+                markers=bare_markers(),
+            )
+            for device_class in DeviceClass
+        ),
+        tuple(
+            BandCurve(point=point, rows=BARE_ROWS, markers=bare_markers()) for point in inputs.bands
+        ),
+    ).model_copy(update={"parameters": inputs, "input_hash": curve_input_hash(inputs)})
+
+
+def write_curve_json(path: Path, data: object) -> Path:
+    """Write a curve's JSON document to a file and return the path."""
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def test_a_complete_curve_passes_its_check_and_loads(tmp_path: Path) -> None:
+    """Objective: what the promotion writes, the loader reads back whole.
+
+    Sample: the complete bare curve, written as the promotion renders it.
+
+    Expected outcome: ``check_curve_complete`` passes it, and ``load_saturation_curve`` returns
+    a curve equal to it.
+    """
+    curve = complete_bare_curve()
+    check_curve_complete(curve)
+    path = tmp_path / "saturation_curve.json"
+    path.write_text(render_artifact_json(curve) + "\n", encoding="utf-8")
+    assert load_saturation_curve(path) == curve
+
+
+def _phone_trim_json() -> list[dict[str, float]]:
+    """The complete bare curve's phone trim, as JSON."""
+    return [{"floor_dbi": floor, "trim": 0.01} for floor in SaturationInputs().trim.floors_dbi]
+
+
+@pytest.mark.parametrize(
+    ("alter", "message"),
+    [
+        (lambda d: d.update(input_hash="0" * 64), "the input hash 0000"),
+        (lambda d: d["parameters"].update(spectrum_mhz=10.5), "the parameters or the hash"),
+        (lambda d: d.update(schema_version="saturation-v2"), "schema is 'saturation-v2'"),
+        (lambda d: d.update(classes=d["classes"][:2]), r"lacks the classes \['phone_class'\]"),
+        (lambda d: d.update(bands=d["bands"][1:]), r"lacks the band points \['taper'\]"),
+        (lambda d: d["classes"][2]["rows"][0].update(trim=None), "342 satellites lacks its trim"),
+        (
+            lambda d: d["classes"][0]["rows"][1].update(trim=_phone_trim_json()),
+            "small_terminal_class row at 992 satellites carries a trim",
+        ),
+        (
+            lambda d: d["bands"][5]["rows"][0].update(trim=_phone_trim_json()),
+            "band point beams_48 row at 342 satellites carries a trim",
+        ),
+        (
+            lambda d: d["classes"][2]["rows"][1]["trim"].pop(),
+            r"floors \[-0.4, -2.0\], not the parameters' \[-0.4, -2.0, -8.0\]",
+        ),
+        (
+            lambda d: d["bands"][0]["point"].update(beamwidth_factor=1.2),
+            "band point taper is",
+        ),
+        (
+            lambda d: d["classes"][1].update(rows=d["classes"][1]["rows"][:1]),
+            r"mounted_terminal_class rows stand at the requested fleets \[342\]",
+        ),
+        (
+            lambda d: d.update(classes=[d["classes"][1], d["classes"][0], d["classes"][2]]),
+            "not a saturation curve",
+        ),
+    ],
+    ids=[
+        "an altered input hash",
+        "an altered parameter",
+        "an unknown schema",
+        "a class missing",
+        "a band point missing",
+        "a phone row without its trim",
+        "a directional row with a trim",
+        "a band row with a trim",
+        "a trim at other floors",
+        "a band point not its parameters'",
+        "rows missing",
+        "a curve the contract refuses",
+    ],
+)
+def test_the_loader_refuses_a_curve_the_engine_must_not_read(
+    tmp_path: Path, alter: Callable[[dict[str, object]], object], message: str
+) -> None:
+    """Objective: ``load_saturation_curve`` refuses a promoted curve whose parameters or hash
+    were altered, one of another schema, one the contract refuses and an incomplete one, each
+    with a SaturationCurveError (a ValueError, so both commands catch it) naming the file.
+
+    Sample: the complete bare curve's JSON with one change each.
+
+    Expected outcome: SaturationCurveError whose message names the file and the breach.
+    """
+    data = json.loads(render_artifact_json(complete_bare_curve()))
+    alter(data)
+    path = write_curve_json(tmp_path / "altered.json", data)
+    with pytest.raises(SaturationCurveError, match=message) as refused:
+        load_saturation_curve(path)
+    assert str(path) in str(refused.value)
+    assert isinstance(refused.value, ValueError)
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        (None, "file not found"),
+        ("{not json", "not a JSON document"),
+        ("[1, 2]", "the JSON root must be an object, got list"),
+    ],
+    ids=["missing", "not JSON", "not an object"],
+)
+def test_the_loader_refuses_a_file_it_cannot_read_as_a_curve(
+    tmp_path: Path, content: str | None, message: str
+) -> None:
+    """Objective: a missing or unreadable curve file is the shared file-boundary error.
+
+    Sample: no file; text that is not JSON; a JSON list.
+
+    Expected outcome: ModelFileError naming the file and the reason.
+    """
+    path = tmp_path / "saturation_curve.json"
+    if content is not None:
+        path.write_text(content, encoding="utf-8")
+    with pytest.raises(ModelFileError, match=message) as refused:
+        load_saturation_curve(path)
+    assert refused.value.path == path
 
 
 def test_compute_saturation_refuses_requests_that_realize_one_row(
