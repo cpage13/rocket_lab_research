@@ -8,7 +8,12 @@ these very classes (asserted below), so there is no second copy to drift.
 
 from __future__ import annotations
 
+import math
+from pathlib import Path
+from typing import get_args
+
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from common.cadence import (
@@ -25,8 +30,8 @@ from common.cadence import (
     compute_launch_cost_musd,
     compute_launches_per_year,
 )
-from communications.config import CommsConfig
-from data_center.config import ValuationConfig
+from communications.config import CommsConfig, load_comms_config
+from data_center.config import ValuationConfig, load_config
 
 
 def test_both_configs_hold_the_shared_dial_blocks() -> None:
@@ -105,6 +110,55 @@ def test_a_nonpositive_cadence_ceiling_is_rejected() -> None:
     """Objective: the carrying capacity is a positive launch count. Expected: 0 raises."""
     with pytest.raises(ValidationError):
         CadenceDials(cadence_ceiling=0)
+
+
+def test_the_launch_cost_dials_refuse_a_number_that_is_not_finite_naming_the_field(
+    tmp_path: Path,
+) -> None:
+    """Objective: no run of either model starts from a NaN or an infinity in the shared
+    launch-cost block: each float dial of :class:`LaunchCostDials` is refused at load when it
+    is not finite, naming the field (before the fix an infinite launch cost loaded for both
+    models, which the communications model's artifact then refused and the data-center path
+    did not check, and an infinite ``low_cadence_launches`` was refused only by the anchors'
+    order, naming no field).
+
+    Sample: every float field of the block, walked from the model's own fields (so a field
+    added later is walked too), each written in a scenario YAML's ``launch_cost`` block as
+    ``.inf``, ``-.inf`` and ``.nan`` in turn and loaded by both models' scenario loaders
+    (``communications.config.load_comms_config`` and ``data_center.config.load_config``).
+
+    Expected outcome: the walk finds the block's four dials; each scenario fails at load, for
+    both models, with one ValidationError located at that field
+    (``launch_cost.high_cadence_cost_musd``, say), of pydantic's type for a number that is not
+    finite.
+    """
+    fields = [
+        name
+        for name, field in LaunchCostDials.model_fields.items()
+        if float in (get_args(field.annotation) or (field.annotation,))
+    ]
+    assert {
+        "low_cadence_cost_musd",
+        "high_cadence_cost_musd",
+        "low_cadence_launches",
+        "high_cadence_launches",
+    } <= set(fields)
+    scenario = tmp_path / "not_finite.yaml"
+    for field in fields:
+        for value in (math.inf, -math.inf, math.nan):
+            scenario.write_text(yaml.safe_dump({"launch_cost": {field: value}}), encoding="utf-8")
+            for load in (load_comms_config, load_config):
+                with pytest.raises(ValidationError) as refused:
+                    load(scenario)
+                located = [
+                    (".".join(map(str, error["loc"])), error["type"])
+                    for error in refused.value.errors()
+                ]
+                assert located == [(f"launch_cost.{field}", "finite_number")], (
+                    load.__module__,
+                    field,
+                    value,
+                )
 
 
 def test_launches_per_year_year_zero_is_zero() -> None:
