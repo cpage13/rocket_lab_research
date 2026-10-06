@@ -21,7 +21,8 @@ any model runs. It then loads the promoted saturation curve that the scenario's
 :func:`communications.saturation_curve.load_saturation_curve` (an absolute path
 is used as given; a relative one is anchored to the REPO ROOT, like the output
 path), and runs the Iridium entry, which refuses a curve computed for other
-inputs (the identity check) before the run. The cellular entry has no
+inputs (the identity check) before the run; the command names the curve file
+in that refusal, as the loader names it in its own. The cellular entry has no
 command-line caller.
 
 Command-line usage, from the repo root::
@@ -94,7 +95,7 @@ from communications.engine import (
     usd_per_person,
 )
 from communications.iridium import iridium_dials_of, run_iridium_model
-from communications.saturation_curve import load_saturation_curve
+from communications.saturation_curve import SaturationCurveMismatchError, load_saturation_curve
 
 logger = logging.getLogger(__name__)
 
@@ -675,8 +676,9 @@ def export_iridium_json(
     loads the saturation curve its ``iridium.saturation.curve_path`` names with
     :func:`~communications.saturation_curve.load_saturation_curve`; runs the
     Iridium entry, :func:`~communications.iridium.run_iridium_model`, which first
-    checks that the curve was computed for the scenario's own inputs; assembles
-    the artifact, and writes it through
+    checks that the curve was computed for the scenario's own inputs (a refusal
+    names the curve file the path resolved to, as the loader's refusals do);
+    assembles the artifact, and writes it through
     :func:`common.file_io.write_files_with_rollback` (staged in full, then one
     atomic rename, so a failed write leaves any existing file as it was; an
     output path that is a symbolic link or not a regular file is refused). A
@@ -706,15 +708,19 @@ def export_iridium_json(
             model (:class:`~communications.iridium.NotAnIridiumConfigError`), its
             saturation curve is refused (a
             :class:`~communications.saturation_curve.SaturationCurveError`:
-            another schema, altered, incomplete, or computed for other inputs),
-            or it cannot be run.
+            another schema, altered, incomplete, or computed for other inputs,
+            each naming the curve file), or it cannot be run.
     """
     checkout = locate_source_checkout(__file__)
     scenario = Path(scenario_path)
     config = load_comms_config(scenario)
     dials = iridium_dials_of(config)
-    curve = load_saturation_curve(_anchored(checkout, dials.saturation.curve_path))
-    trajectory = run_iridium_model(config, curve)
+    curve_path = _anchored(checkout, dials.saturation.curve_path)
+    curve = load_saturation_curve(curve_path)
+    try:
+        trajectory = run_iridium_model(config, curve)
+    except SaturationCurveMismatchError as exc:
+        raise SaturationCurveMismatchError(f"{curve_path}: {exc}") from exc
     stamp = version_stamp if version_stamp is not None else date.today().isoformat()
     artifact = build_iridium_artifact(
         config=config,

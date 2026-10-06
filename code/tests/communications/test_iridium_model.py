@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 from collections.abc import Callable
 from pathlib import Path
 
@@ -649,7 +650,7 @@ def test_documented_density_variants(
 
 
 def test_degenerate_density_fails_with_a_clear_error(
-    tmp_path: Path, committed_saturation_curve: SaturationCurve
+    tmp_path: Path, committed_saturation_curve: SaturationCurve, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Dials that derive less than one subscriber per satellite fail clearly, not by division.
 
@@ -660,7 +661,9 @@ def test_degenerate_density_fails_with_a_clear_error(
     the Iridium entry's identity check passes on the committed curve and the density
     path's error is the one raised.
     Expected: the Iridium entry raises a ValueError naming the problem, and the promotion
-    command exits with the error code without writing an artifact (no traceback).
+    command exits with the error code without writing an artifact (no traceback), its one
+    ERROR record naming the density error (not one of the command's earlier refusals, which
+    end the same way).
     """
     dials = IridiumDials(
         aperture_m2=DEGENERATE_APERTURE_M2,
@@ -677,6 +680,9 @@ def test_degenerate_density_fails_with_a_clear_error(
     out_path = tmp_path / "degenerate.json"
     assert main([str(scenario), str(out_path)]) == EXIT_ERROR
     assert not out_path.exists()
+    errors = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert "fewer than one subscriber per satellite" in errors[0]
 
 
 def test_iridium_terminal_class_capacity(committed_saturation_curve: SaturationCurve) -> None:

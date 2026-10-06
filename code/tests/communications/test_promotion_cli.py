@@ -17,8 +17,8 @@ the shared writer (``common.file_io.write_files_with_rollback``). The contract:
 5. it loads the saturation curve the scenario's ``iridium.saturation.curve_path``
    names (a relative path anchored to the repository root, an absolute one as
    given) and runs the Iridium entry: a missing curve, or one computed for other
-   inputs (the identity check), is one error record naming it, and nothing is
-   written.
+   inputs (the identity check), is one error record naming the curve file, and
+   nothing is written.
 """
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ from common.cli import EXIT_ERROR, EXIT_OK
 from common.file_io import ARTIFACT_FILE_END, render_artifact_json
 from communications import json_output
 from communications.config import IridiumDials
+from communications.constants import SATURATION_CURVE_PATH_DEFAULT
 from communications.json_output import main
 from communications.saturation_curve import SaturationCurve
 
@@ -232,17 +233,20 @@ def test_a_scenario_without_an_iridium_block_fails_before_any_run(
     assert not out_path.exists()
 
 
-def test_a_curve_computed_for_other_inputs_fails_the_command_naming_the_field(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
+def test_a_curve_computed_for_other_inputs_fails_the_command_naming_the_curve_and_the_field(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, repo_dir: Path
 ) -> None:
     """Objective: the identity check runs inside the command: a scenario whose curve inputs
-    differ from its curve's is refused before the run, naming the first field that differs.
+    differ from its curve's is refused before the run, naming the curve file its curve path
+    resolved to (as the loader's refusals name their file) and the first field that differs.
 
     Sample: a scenario selecting the Iridium model at 10.5 MHz, its curve path the default (the
-    committed curve, computed for the held spectrum the shipped scenario sets).
+    committed curve, computed for the held spectrum the shipped scenario sets), so it resolves
+    under the repository root.
 
-    Expected outcome: exit 1; exactly one ERROR record, on one line, naming the scenario and
-    the mismatch at ``spectrum_mhz`` (10.5 for this run); no artifact written.
+    Expected outcome: exit 1; exactly one ERROR record, on one line, naming the scenario, the
+    resolved curve file and the mismatch at ``spectrum_mhz`` (10.5 for this run); no artifact
+    written.
     """
     scenario = tmp_path / "coordinated.yaml"
     scenario.write_text("iridium:\n  spectrum_mhz: 10.5\n", encoding="utf-8")
@@ -254,8 +258,8 @@ def test_a_curve_computed_for_other_inputs_fails_the_command_naming_the_field(
     assert len(errors) == 1
     assert "\n" not in errors[0]
     assert errors[0].startswith(
-        f"could not promote {scenario}: the saturation curve was computed for other inputs: "
-        "spectrum_mhz is 10.5 for this run but "
+        f"could not promote {scenario}: {repo_dir / SATURATION_CURVE_PATH_DEFAULT}: the "
+        "saturation curve was computed for other inputs: spectrum_mhz is 10.5 for this run but "
     )
     assert not out_path.exists()
 
