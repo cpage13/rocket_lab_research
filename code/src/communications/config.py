@@ -601,7 +601,9 @@ class SaturationDials(BaseModel):
     Nested as the ``saturation`` field of :class:`IridiumDials`, with every field defaulted, so
     every Iridium config carries the block (the shipped scenario writes it out). Neither field
     is an input of the curve: the curve is computed with the band in full-time use (d = 1, ADR
-    008) and one promoted file serves every scenario.
+    008), and one promoted file serves every value of d; the curve's inputs are the held
+    spectrum and the named constants
+    (:func:`communications.saturation_curve.saturation_inputs_for`).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
