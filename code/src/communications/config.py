@@ -8,7 +8,10 @@ MSS lane on Iridium's owned L-band, selected by the ``iridium`` block). It mirro
 the data-center model's config shape: a top-level frozen :class:`CommsConfig`
 (``extra="forbid"``) whose nested blocks are each their own frozen
 ``extra="forbid"`` BaseModel, every field with a named-constant default so a
-no-argument construct is fully valid, plus the ``comms_config_from_dict`` /
+no-argument construct is fully valid (and every block this module defines refuses a
+number that is not finite, ``allow_inf_nan=False``; the cadence and launch-cost blocks
+are ``common.cadence``'s, shared with the data-center model), plus the
+``comms_config_from_dict`` /
 ``load_comms_config`` YAML loader pair. Nothing here computes a cost, a coverage
 fraction, a subscriber count, or a comparison; it is the contract the engine
 (``communications.engine``), the ground comparison (``communications.ground``), and
@@ -135,7 +138,7 @@ class CommsMetadataDials(BaseModel):
     with no workload/operator/radiator taxonomy.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     base_year: int = Field(
         ge=MIN_FY,
@@ -165,7 +168,7 @@ class CommsCadenceDials(BaseModel):
     the comms slice's own cadence.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     share_of_fleet: float = Field(
         default=COMMS_SHARE_DEFAULT,
@@ -189,7 +192,7 @@ class SatelliteDials(BaseModel):
     build-cost scalar.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     satellites_per_launch: int = Field(
         default=SATELLITES_PER_LAUNCH_DEFAULT,
@@ -244,7 +247,7 @@ class CoverageDials(BaseModel):
     is the 25-degree quality-link, populated-band, 95%-coverage figure).
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     satellites_for_full_coverage: int = Field(
         default=SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
@@ -312,7 +315,7 @@ class SubscriberDials(BaseModel):
     the field names use a forbidden demand-side token.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     subscribers_at_full_coverage: int = Field(
         default=SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT,
@@ -378,7 +381,7 @@ class RevenueDials(BaseModel):
     token appears on this block).
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     revenue_multiple: float = Field(
         default=REVENUE_MULTIPLE_DEFAULT,
@@ -423,7 +426,7 @@ class GroundInterfaceDials(BaseModel):
     None on :class:`CommsConfig`); Phase 4 consumes it in ``ground.py``.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     dense_ground_cost_per_subscriber_usd: float | None = Field(
         default=None,
@@ -488,7 +491,7 @@ class IridiumArpuDials(BaseModel):
     alternative in ``scenarios/iridium.yaml``.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     standard_mix_pct: float = Field(
         default=ARPU_STANDARD_MIX_PCT_DEFAULT,
@@ -610,7 +613,7 @@ class SaturationDials(BaseModel):
     (:func:`communications.saturation_curve.saturation_inputs_for`).
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     downlink_share: float = Field(
         default=DOWNLINK_SHARE_DEFAULT,
@@ -813,7 +816,9 @@ class CommsConfig(BaseModel):
     derivation).
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True, validate_assignment=True)
+    model_config = ConfigDict(
+        extra="forbid", frozen=True, validate_assignment=True, allow_inf_nan=False
+    )
 
     metadata: CommsMetadataDials = Field(
         default_factory=lambda: _default_comms_metadata(),

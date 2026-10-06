@@ -473,6 +473,44 @@ def test_the_iridium_dials_refuse_a_number_that_is_not_finite_naming_the_field(
             assert located == [".".join(("iridium", *path))], (path, value)
 
 
+COMMON_CADENCE_BLOCKS = ("cadence", "launch_cost")
+"""The config's two blocks that ``common.cadence`` defines and the data-center model shares,
+outside this module (the Iridium block has its own test above)."""
+
+
+def test_every_block_this_module_defines_refuses_a_number_that_is_not_finite(
+    tmp_path: Path,
+) -> None:
+    """Objective: no run starts from a NaN or an infinity in any block ``communications.config``
+    defines (before the fix an infinite satellite build cost loaded, and the Iridium promotion
+    wrote an artifact whose cost fields were null).
+
+    Sample: every float field of the config's blocks, walked from the model's own fields, but the
+    Iridium block (tested above) and the two blocks ``common.cadence`` defines; each written in a
+    scenario YAML as ``.inf``, ``-.inf`` and ``.nan`` in turn.
+
+    Expected outcome: the walk finds the satellite build cost among others; each scenario fails at
+    load with one ValidationError, located at that field.
+    """
+    paths = [
+        path
+        for path in _float_dial_paths(CommsConfig)
+        if path[0] not in (*COMMON_CADENCE_BLOCKS, "iridium")
+    ]
+    assert ("satellite", "satellite_build_cost_musd") in paths
+    scenario = tmp_path / "not_finite.yaml"
+    for path in paths:
+        for value in (math.inf, -math.inf, math.nan):
+            dials: object = value
+            for key in reversed(path):
+                dials = {key: dials}
+            scenario.write_text(yaml.safe_dump(dials), encoding="utf-8")
+            with pytest.raises(ValidationError) as refused:
+                load_comms_config(scenario)
+            located = [".".join(map(str, error["loc"])) for error in refused.value.errors()]
+            assert located == [".".join(path)], (path, value)
+
+
 # -- the Iridium saturation block (ADRs 005 and 008) ---------------------
 
 
