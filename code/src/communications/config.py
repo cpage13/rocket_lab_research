@@ -503,8 +503,9 @@ class IridiumArpuDials(BaseModel):
         strict=True,
         description=(
             "The small terminal's monthly price, dollars, held flat. INVESTOR_SET to "
-            f"{SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-03), the midpoint of "
-            "the investor's 10-to-20 mass-market range (COMM-618 context). Configurable."
+            f"{SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-07; it was 15, set "
+            "2026-10-03), the low end of the investor's 10-to-20 mass-market range (COMM-618 "
+            "context). Configurable."
         ),
     )
     mounted_terminal_class_price_usd_month: float = Field(
@@ -514,8 +515,9 @@ class IridiumArpuDials(BaseModel):
         strict=True,
         description=(
             "The mounted terminal's monthly price, dollars, held flat. INVESTOR_SET to "
-            f"{MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-03), between "
-            "Iridium's voice and data $47 and Certus $259 (COMM-618). Configurable."
+            f"{MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-07; it was 100, set "
+            "2026-10-03), near Iridium's voice and data $47 and well under Certus $259 "
+            "(COMM-618). Configurable."
         ),
     )
     phone_class_price_usd_month: float = Field(

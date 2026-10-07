@@ -571,22 +571,24 @@ never moves this historical reading."""
 # divided. Government is left out of revenue (2026-10-04): no government count, price or
 # line.
 
-SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = 15.0
-"""INVESTOR_SET (the investor's prices, 2026-10-03; Sheet A's standard price of 2026-07-09,
-renamed for the small terminal). The small terminal's monthly price, dollars: the midpoint
-of the investor's 10-to-20 mass-market range (COMM-618 context), held flat."""
+SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = 10.0
+"""INVESTOR_SET (the investor, 2026-10-07: "Yes, let's use the $10 and $50"; it was $15, the
+midpoint of the investor's 10-to-20 mass-market range set 2026-10-03, Sheet A's standard
+price of 2026-07-09 renamed for the small terminal). The small terminal's monthly price,
+dollars: $10, the low end of that range (COMM-618 context), held flat in every year."""
 
-MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = 100.0
-"""INVESTOR_SET (the investor's prices, 2026-10-03; Sheet A's premium price of 2026-07-09,
-renamed for the mounted terminal). The mounted terminal's monthly price, dollars: between
-Iridium's reported voice and data $47 and Certus $259 for a 0.7 Mbps-class service
-(COMM-618), held flat."""
+MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = 50.0
+"""INVESTOR_SET (the investor, 2026-10-07: "Yes, let's use the $10 and $50"; it was $100, set
+2026-10-03, Sheet A's premium price of 2026-07-09 renamed for the mounted terminal). The
+mounted terminal's monthly price, dollars: $50, near Iridium's reported voice and data $47
+and well under Certus $259 for a 0.7 Mbps-class service (COMM-618), held flat in every
+year."""
 
 PHONE_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = 15.0
 """INVESTOR_SET (the investor, 2026-10-03; corrected 2026-10-04 from an unapproved $5). The
 phone class's monthly price, dollars: Sheet A's standard $15 and the investor's floor, held
-flat; no price haircut takes it lower. Its own constant, since Sheet A's standard price is
-now the small terminal's."""
+flat; no price haircut takes it lower. Its own constant, since Sheet A's standard price went
+to the small terminal, whose own price is now the investor's $10 (2026-10-07)."""
 
 MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT: Final[float] = 4.0
 """INVESTOR_SET (the investor's trial price, 2026-10-04). Minimal-packet IoT's monthly price

@@ -115,11 +115,12 @@ iridium:
     curve_path: communications/models/iridium/saturation_curve.json   # the promoted curve, repo-relative
 
   # The five monthly prices, dollars, held flat (the investor, 2026-10-03; the IoT
-  # split 2026-10-04). A lower price or a smaller market is a division in the
-  # conclusions, never a setting. Government is left out of revenue.
+  # split 2026-10-04; the two terminal prices moved to $10 and $50 on 2026-10-07).
+  # A lower price or a smaller market is a division in the conclusions, never a
+  # setting. Government is left out of revenue.
   arpu:
-    small_terminal_class_price_usd_month: 15.0     # the midpoint of the investor's $10 to $20 range
-    mounted_terminal_class_price_usd_month: 100.0  # between Iridium voice and data $47 and Certus $259
+    small_terminal_class_price_usd_month: 10.0     # the investor's $10 (2026-10-07), held flat; it was $15, the midpoint of the $10 to $20 range
+    mounted_terminal_class_price_usd_month: 50.0   # the investor's $50 (2026-10-07), held flat; it was $100; near Iridium voice and data $47, under Certus $259
     phone_class_price_usd_month: 15.0              # its floor (the investor, 2026-10-03); a fallback that needs the chip, never primary
     minimal_packet_iot_price_usd_month: 4.0        # 48 messages of 340 bytes a day; the IoT counts are named constants (ADR 007), not settings
     data_iot_price_usd_month: 8.0                  # about 88 kbps, 4 bursts of 100 KB a day plus the messages; its count 25,835,160, half the minimal-packet count at double its price (a named constant)

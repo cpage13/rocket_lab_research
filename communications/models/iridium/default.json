@@ -4,7 +4,7 @@
     "schema_version": "iridium-v6",
     "scenario_name": "Iridium L-band max-outcome (every device class)",
     "source_scenario_path": "code/scenarios/iridium.yaml",
-    "version_stamp": "2026-10-06"
+    "version_stamp": "2026-10-07"
   },
   "trajectory_summary": {
     "total_cost_through_final_year_musd": 8729.0,
@@ -31,7 +31,7 @@
   "classes": [
     {
       "device_class": "small_terminal_class",
-      "price_usd_per_month": 15.0,
+      "price_usd_per_month": 10.0,
       "active_user_rate_mbps": 2.0,
       "concurrency_peak": 0.025,
       "concurrency_offpeak": 0.005,
@@ -51,175 +51,175 @@
           "lower_fleet": 0,
           "upper_fleet": 342,
           "people_added_per_satellite": 8026.150558907727,
-          "revenue_per_satellite_year_musd": 1.444707100603391,
+          "revenue_per_satellite_year_musd": 0.9631380670689272,
           "pays": true
         },
         {
           "lower_fleet": 342,
           "upper_fleet": 506,
           "people_added_per_satellite": 7472.594334926542,
-          "revenue_per_satellite_year_musd": 1.3450669802867774,
+          "revenue_per_satellite_year_musd": 0.8967113201911849,
           "pays": true
         },
         {
           "lower_fleet": 506,
           "upper_fleet": 756,
           "people_added_per_satellite": 7639.606335847237,
-          "revenue_per_satellite_year_musd": 1.3751291404525028,
+          "revenue_per_satellite_year_musd": 0.9167527603016684,
           "pays": true
         },
         {
           "lower_fleet": 756,
           "upper_fleet": 992,
           "people_added_per_satellite": 6891.784900168313,
-          "revenue_per_satellite_year_musd": 1.2405212820302962,
+          "revenue_per_satellite_year_musd": 0.8270141880201974,
           "pays": true
         },
         {
           "lower_fleet": 992,
           "upper_fleet": 1482,
           "people_added_per_satellite": 6581.3065949812,
-          "revenue_per_satellite_year_musd": 1.184635187096616,
+          "revenue_per_satellite_year_musd": 0.7897567913977439,
           "pays": true
         },
         {
           "lower_fleet": 1482,
           "upper_fleet": 1980,
           "people_added_per_satellite": 6084.475642049005,
-          "revenue_per_satellite_year_musd": 1.0952056155688208,
+          "revenue_per_satellite_year_musd": 0.7301370770458806,
           "pays": true
         },
         {
           "lower_fleet": 1980,
           "upper_fleet": 3025,
           "people_added_per_satellite": 5189.456538437453,
-          "revenue_per_satellite_year_musd": 0.9341021769187414,
+          "revenue_per_satellite_year_musd": 0.6227347846124943,
           "pays": true
         },
         {
           "lower_fleet": 3025,
           "upper_fleet": 3969,
           "people_added_per_satellite": 4424.104690390051,
-          "revenue_per_satellite_year_musd": 0.7963388442702091,
+          "revenue_per_satellite_year_musd": 0.530892562846806,
           "pays": true
         },
         {
           "lower_fleet": 3969,
           "upper_fleet": 5402,
           "people_added_per_satellite": 3753.1857315243483,
-          "revenue_per_satellite_year_musd": 0.6755734316743827,
+          "revenue_per_satellite_year_musd": 0.45038228778292183,
           "pays": true
         },
         {
           "lower_fleet": 5402,
           "upper_fleet": 6006,
           "people_added_per_satellite": 3142.446154194927,
-          "revenue_per_satellite_year_musd": 0.5656403077550869,
+          "revenue_per_satellite_year_musd": 0.3770935385033913,
           "pays": true
         },
         {
           "lower_fleet": 6006,
           "upper_fleet": 8010,
           "people_added_per_satellite": 2543.671411549587,
-          "revenue_per_satellite_year_musd": 0.4578608540789257,
-          "pays": true
+          "revenue_per_satellite_year_musd": 0.30524056938595046,
+          "pays": false
         },
         {
           "lower_fleet": 8010,
           "upper_fleet": 10000,
           "people_added_per_satellite": 1884.7713368567652,
-          "revenue_per_satellite_year_musd": 0.33925884063421774,
+          "revenue_per_satellite_year_musd": 0.22617256042281184,
           "pays": false
         },
         {
           "lower_fleet": 10000,
           "upper_fleet": 11990,
           "people_added_per_satellite": 1407.7403384521865,
-          "revenue_per_satellite_year_musd": 0.2533932609213936,
+          "revenue_per_satellite_year_musd": 0.1689288406142624,
           "pays": false
         },
         {
           "lower_fleet": 11990,
           "upper_fleet": 14042,
           "people_added_per_satellite": 1067.00302358903,
-          "revenue_per_satellite_year_musd": 0.1920605442460254,
+          "revenue_per_satellite_year_musd": 0.1280403628306836,
           "pays": false
         },
         {
           "lower_fleet": 14042,
           "upper_fleet": 16002,
           "people_added_per_satellite": 783.7238050441771,
-          "revenue_per_satellite_year_musd": 0.14107028490795187,
+          "revenue_per_satellite_year_musd": 0.09404685660530125,
           "pays": false
         },
         {
           "lower_fleet": 16002,
           "upper_fleet": 17956,
           "people_added_per_satellite": 546.2485627698709,
-          "revenue_per_satellite_year_musd": 0.09832474129857675,
+          "revenue_per_satellite_year_musd": 0.0655498275323845,
           "pays": false
         },
         {
           "lower_fleet": 17956,
           "upper_fleet": 20022,
           "people_added_per_satellite": 339.1137133877245,
-          "revenue_per_satellite_year_musd": 0.06104046840979041,
+          "revenue_per_satellite_year_musd": 0.04069364560652695,
           "pays": false
         },
         {
           "lower_fleet": 20022,
           "upper_fleet": 22052,
           "people_added_per_satellite": 152.1309613466483,
-          "revenue_per_satellite_year_musd": 0.02738357304239669,
+          "revenue_per_satellite_year_musd": 0.018255715361597796,
           "pays": false
         },
         {
           "lower_fleet": 22052,
           "upper_fleet": 24025,
           "people_added_per_satellite": 39.40940497843176,
-          "revenue_per_satellite_year_musd": 0.007093692896117716,
+          "revenue_per_satellite_year_musd": 0.004729128597411811,
           "pays": false
         },
         {
           "lower_fleet": 24025,
           "upper_fleet": 25921,
           "people_added_per_satellite": 52.620809269774284,
-          "revenue_per_satellite_year_musd": 0.009471745668559371,
+          "revenue_per_satellite_year_musd": 0.006314497112372914,
           "pays": false
         },
         {
           "lower_fleet": 25921,
           "upper_fleet": 28056,
           "people_added_per_satellite": 14.99336829050782,
-          "revenue_per_satellite_year_musd": 0.002698806292291408,
+          "revenue_per_satellite_year_musd": 0.0017992041948609386,
           "pays": false
         },
         {
           "lower_fleet": 28056,
           "upper_fleet": 29929,
           "people_added_per_satellite": 52.58187436100813,
-          "revenue_per_satellite_year_musd": 0.009464737384981464,
+          "revenue_per_satellite_year_musd": 0.0063098249233209764,
           "pays": false
         },
         {
           "lower_fleet": 29929,
           "upper_fleet": 34040,
           "people_added_per_satellite": 22.883951043227572,
-          "revenue_per_satellite_year_musd": 0.0041191111877809635,
+          "revenue_per_satellite_year_musd": 0.0027460741251873087,
           "pays": false
         },
         {
           "lower_fleet": 34040,
           "upper_fleet": 40000,
           "people_added_per_satellite": 28.970164517319493,
-          "revenue_per_satellite_year_musd": 0.005214629613117508,
+          "revenue_per_satellite_year_musd": 0.0034764197420783394,
           "pays": false
         }
       ]
     },
     {
       "device_class": "mounted_terminal_class",
-      "price_usd_per_month": 100.0,
+      "price_usd_per_month": 50.0,
       "active_user_rate_mbps": 5.0,
       "concurrency_peak": 0.1,
       "concurrency_offpeak": 0.02,
@@ -239,182 +239,182 @@
           "lower_fleet": 0,
           "upper_fleet": 342,
           "people_added_per_satellite": 1016.5792179811168,
-          "revenue_per_satellite_year_musd": 1.21989506157734,
+          "revenue_per_satellite_year_musd": 0.60994753078867,
           "pays": true
         },
         {
           "lower_fleet": 342,
           "upper_fleet": 506,
           "people_added_per_satellite": 957.4010756717549,
-          "revenue_per_satellite_year_musd": 1.148881290806106,
+          "revenue_per_satellite_year_musd": 0.574440645403053,
           "pays": true
         },
         {
           "lower_fleet": 506,
           "upper_fleet": 756,
           "people_added_per_satellite": 993.6394748888221,
-          "revenue_per_satellite_year_musd": 1.1923673698665862,
+          "revenue_per_satellite_year_musd": 0.5961836849332931,
           "pays": true
         },
         {
           "lower_fleet": 756,
           "upper_fleet": 992,
           "people_added_per_satellite": 898.0523695213739,
-          "revenue_per_satellite_year_musd": 1.0776628434256488,
+          "revenue_per_satellite_year_musd": 0.5388314217128244,
           "pays": true
         },
         {
           "lower_fleet": 992,
           "upper_fleet": 1482,
           "people_added_per_satellite": 877.5253769121672,
-          "revenue_per_satellite_year_musd": 1.0530304522946006,
+          "revenue_per_satellite_year_musd": 0.5265152261473003,
           "pays": true
         },
         {
           "lower_fleet": 1482,
           "upper_fleet": 1980,
           "people_added_per_satellite": 871.4221711098577,
-          "revenue_per_satellite_year_musd": 1.0457066053318294,
+          "revenue_per_satellite_year_musd": 0.5228533026659147,
           "pays": true
         },
         {
           "lower_fleet": 1980,
           "upper_fleet": 3025,
           "people_added_per_satellite": 777.9490698421126,
-          "revenue_per_satellite_year_musd": 0.9335388838105352,
+          "revenue_per_satellite_year_musd": 0.4667694419052676,
           "pays": true
         },
         {
           "lower_fleet": 3025,
           "upper_fleet": 3969,
           "people_added_per_satellite": 718.6606897047944,
-          "revenue_per_satellite_year_musd": 0.8623928276457534,
+          "revenue_per_satellite_year_musd": 0.4311964138228767,
           "pays": true
         },
         {
           "lower_fleet": 3969,
           "upper_fleet": 5402,
           "people_added_per_satellite": 630.975395717457,
-          "revenue_per_satellite_year_musd": 0.7571704748609484,
+          "revenue_per_satellite_year_musd": 0.3785852374304742,
           "pays": true
         },
         {
           "lower_fleet": 5402,
           "upper_fleet": 6006,
           "people_added_per_satellite": 583.0988819256952,
-          "revenue_per_satellite_year_musd": 0.6997186583108342,
-          "pays": true
+          "revenue_per_satellite_year_musd": 0.3498593291554171,
+          "pays": false
         },
         {
           "lower_fleet": 6006,
           "upper_fleet": 8010,
           "people_added_per_satellite": 511.44469452477404,
-          "revenue_per_satellite_year_musd": 0.6137336334297288,
-          "pays": true
+          "revenue_per_satellite_year_musd": 0.3068668167148644,
+          "pays": false
         },
         {
           "lower_fleet": 8010,
           "upper_fleet": 10000,
           "people_added_per_satellite": 432.95243967668944,
-          "revenue_per_satellite_year_musd": 0.5195429276120274,
-          "pays": true
+          "revenue_per_satellite_year_musd": 0.2597714638060137,
+          "pays": false
         },
         {
           "lower_fleet": 10000,
           "upper_fleet": 11990,
           "people_added_per_satellite": 368.283115057373,
-          "revenue_per_satellite_year_musd": 0.44193973806884757,
-          "pays": true
+          "revenue_per_satellite_year_musd": 0.22096986903442378,
+          "pays": false
         },
         {
           "lower_fleet": 11990,
           "upper_fleet": 14042,
           "people_added_per_satellite": 314.746200475638,
-          "revenue_per_satellite_year_musd": 0.37769544057076554,
-          "pays": true
+          "revenue_per_satellite_year_musd": 0.18884772028538277,
+          "pays": false
         },
         {
           "lower_fleet": 14042,
           "upper_fleet": 16002,
           "people_added_per_satellite": 274.87719004404477,
-          "revenue_per_satellite_year_musd": 0.32985262805285376,
+          "revenue_per_satellite_year_musd": 0.16492631402642688,
           "pays": false
         },
         {
           "lower_fleet": 16002,
           "upper_fleet": 17956,
           "people_added_per_satellite": 241.93751224883601,
-          "revenue_per_satellite_year_musd": 0.2903250146986032,
+          "revenue_per_satellite_year_musd": 0.1451625073493016,
           "pays": false
         },
         {
           "lower_fleet": 17956,
           "upper_fleet": 20022,
           "people_added_per_satellite": 216.73096444485898,
-          "revenue_per_satellite_year_musd": 0.2600771573338308,
+          "revenue_per_satellite_year_musd": 0.1300385786669154,
           "pays": false
         },
         {
           "lower_fleet": 20022,
           "upper_fleet": 22052,
           "people_added_per_satellite": 192.83478640305347,
-          "revenue_per_satellite_year_musd": 0.23140174368366417,
+          "revenue_per_satellite_year_musd": 0.11570087184183209,
           "pays": false
         },
         {
           "lower_fleet": 22052,
           "upper_fleet": 24025,
           "people_added_per_satellite": 210.64618731658476,
-          "revenue_per_satellite_year_musd": 0.2527754247799017,
+          "revenue_per_satellite_year_musd": 0.12638771238995086,
           "pays": false
         },
         {
           "lower_fleet": 24025,
           "upper_fleet": 25921,
           "people_added_per_satellite": 168.8424030860821,
-          "revenue_per_satellite_year_musd": 0.20261088370329852,
+          "revenue_per_satellite_year_musd": 0.10130544185164926,
           "pays": false
         },
         {
           "lower_fleet": 25921,
           "upper_fleet": 28056,
           "people_added_per_satellite": 145.4096624614335,
-          "revenue_per_satellite_year_musd": 0.17449159495372019,
+          "revenue_per_satellite_year_musd": 0.08724579747686009,
           "pays": false
         },
         {
           "lower_fleet": 28056,
           "upper_fleet": 29929,
           "people_added_per_satellite": 114.46818633349011,
-          "revenue_per_satellite_year_musd": 0.13736182360018814,
+          "revenue_per_satellite_year_musd": 0.06868091180009407,
           "pays": false
         },
         {
           "lower_fleet": 29929,
           "upper_fleet": 34040,
           "people_added_per_satellite": 90.39687221914954,
-          "revenue_per_satellite_year_musd": 0.10847624666297945,
+          "revenue_per_satellite_year_musd": 0.054238123331489724,
           "pays": false
         },
         {
           "lower_fleet": 34040,
           "upper_fleet": 40000,
           "people_added_per_satellite": 67.96658848030492,
-          "revenue_per_satellite_year_musd": 0.0815599061763659,
+          "revenue_per_satellite_year_musd": 0.04077995308818295,
           "pays": false
         },
         {
           "lower_fleet": 40000,
           "upper_fleet": 47961,
           "people_added_per_satellite": 45.27265370563173,
-          "revenue_per_satellite_year_musd": 0.054327184446758076,
+          "revenue_per_satellite_year_musd": 0.027163592223379038,
           "pays": false
         },
         {
           "lower_fleet": 47961,
           "upper_fleet": 64009,
           "people_added_per_satellite": 25.153223314900313,
-          "revenue_per_satellite_year_musd": 0.03018386797788037,
+          "revenue_per_satellite_year_musd": 0.015091933988940185,
           "pays": false
         }
       ]
@@ -760,14 +760,14 @@
         {
           "device_class": "small_terminal_class",
           "people_served": 4139229,
-          "revenue_musd": 745.06122,
-          "own_margin_pct": 74.31083582634996
+          "revenue_musd": 496.70748,
+          "own_margin_pct": 61.46625373952491
         },
         {
           "device_class": "mounted_terminal_class",
           "people_served": 526557,
-          "revenue_musd": 631.8684,
-          "own_margin_pct": 69.70888241918729
+          "revenue_musd": 315.9342,
+          "own_margin_pct": 39.417764838374566
         },
         {
           "device_class": "phone_class",
@@ -788,14 +788,14 @@
         {
           "device_class": "small_terminal_class",
           "people_served": 6519755,
-          "revenue_musd": 1173.5559,
-          "own_margin_pct": 73.80610501809075
+          "revenue_musd": 782.3706,
+          "own_margin_pct": 60.709157527136114
         },
         {
           "device_class": "mounted_terminal_class",
           "people_served": 836317,
-          "revenue_musd": 1003.5804,
-          "own_margin_pct": 69.36966883769352
+          "revenue_musd": 501.7902,
+          "own_margin_pct": 38.739337675387056
         },
         {
           "device_class": "phone_class",
@@ -816,14 +816,14 @@
         {
           "device_class": "small_terminal_class",
           "people_served": 9941462,
-          "revenue_musd": 1789.46316,
-          "own_margin_pct": 72.44983797263532
+          "revenue_musd": 1192.97544,
+          "own_margin_pct": 58.674756958952976
         },
         {
           "device_class": "mounted_terminal_class",
           "people_served": 1289233,
-          "revenue_musd": 1547.0796,
-          "own_margin_pct": 68.13350780399405
+          "revenue_musd": 773.5398,
+          "own_margin_pct": 36.267015607988114
         },
         {
           "device_class": "phone_class",
@@ -844,14 +844,14 @@
         {
           "device_class": "small_terminal_class",
           "people_served": 14389815,
-          "revenue_musd": 2590.1667,
-          "own_margin_pct": 70.66598068765228
+          "revenue_musd": 1726.7778,
+          "own_margin_pct": 55.998971031478405
         },
         {
           "device_class": "mounted_terminal_class",
           "people_served": 1921616,
-          "revenue_musd": 2305.9392,
-          "own_margin_pct": 67.05030210683786
+          "revenue_musd": 1152.9696,
+          "own_margin_pct": 34.10060421367571
         },
         {
           "device_class": "phone_class",
@@ -872,14 +872,14 @@
         {
           "device_class": "small_terminal_class",
           "people_served": 19400399,
-          "revenue_musd": 3492.07182,
-          "own_margin_pct": 68.1106215049151
+          "revenue_musd": 2328.04788,
+          "own_margin_pct": 52.165932257372646
         },
         {
           "device_class": "mounted_terminal_class",
           "people_served": 2676447,
-          "revenue_musd": 3211.7364,
-          "own_margin_pct": 65.3271669493175
+          "revenue_musd": 1605.8682,
+          "own_margin_pct": 30.654333898635024
         },
         {
           "device_class": "phone_class",
@@ -900,14 +900,14 @@
         {
           "device_class": "small_terminal_class",
           "people_served": 24607046,
-          "revenue_musd": 4429.26828,
-          "own_margin_pct": 64.9061673003921
+          "revenue_musd": 2952.84552,
+          "own_margin_pct": 47.359250950588155
         },
         {
           "device_class": "mounted_terminal_class",
           "people_served": 3527090,
-          "revenue_musd": 4232.508,
-          "own_margin_pct": 63.27472978196379
+          "revenue_musd": 2116.254,
+          "own_margin_pct": 26.549459563927574
         },
         {
           "device_class": "phone_class",
@@ -946,8 +946,8 @@
             "share_of_maximum_use": 0.030241572555208925,
             "ocean_factor": 0.4059058884512246,
             "people": 2728891,
-            "revenue_musd": 491.20038,
-            "own_margin_pct": 74.90840703339848
+            "revenue_musd": 327.46692,
+            "own_margin_pct": 62.362610550097706
           },
           {
             "device_class": "mounted_terminal_class",
@@ -955,8 +955,8 @@
             "share_of_maximum_use": 0.010838490520744773,
             "ocean_factor": 0.4130906017880937,
             "people": 345637,
-            "revenue_musd": 414.7644,
-            "own_margin_pct": 70.28433491398974
+            "revenue_musd": 207.3822,
+            "own_margin_pct": 40.568669827979456
           },
           {
             "device_class": "phone_class",
@@ -980,8 +980,8 @@
             "share_of_maximum_use": 0.155740469362339,
             "ocean_factor": 0.3553623241555012,
             "people": 13870568,
-            "revenue_musd": 2496.70224,
-            "own_margin_pct": 70.96169545632321
+            "revenue_musd": 1664.46816,
+            "own_margin_pct": 56.442543184484826
           },
           {
             "device_class": "mounted_terminal_class",
@@ -989,8 +989,8 @@
             "share_of_maximum_use": 0.05974984153556303,
             "ocean_factor": 0.3871347814903472,
             "people": 1845010,
-            "revenue_musd": 2214.012,
-            "own_margin_pct": 67.25401669006311
+            "revenue_musd": 1107.006,
+            "own_margin_pct": 34.50803338012622
           },
           {
             "device_class": "phone_class",
@@ -1014,8 +1014,8 @@
             "share_of_maximum_use": 0.2794269140061941,
             "ocean_factor": 0.2973810946823632,
             "people": 24607046,
-            "revenue_musd": 4429.26828,
-            "own_margin_pct": 64.9061673003921
+            "revenue_musd": 2952.84552,
+            "own_margin_pct": 47.359250950588155
           },
           {
             "device_class": "mounted_terminal_class",
@@ -1023,8 +1023,8 @@
             "share_of_maximum_use": 0.11948926460321996,
             "ocean_factor": 0.36110170662979413,
             "people": 3527090,
-            "revenue_musd": 4232.508,
-            "own_margin_pct": 63.27472978196379
+            "revenue_musd": 2116.254,
+            "own_margin_pct": 26.549459563927574
           },
           {
             "device_class": "phone_class",
@@ -1048,8 +1048,8 @@
             "share_of_maximum_use": 0.3872494601820424,
             "ocean_factor": 0.2454472794131617,
             "people": 33755488,
-            "revenue_musd": 6075.98784,
-            "own_margin_pct": 57.04402199725271
+            "revenue_musd": 4050.65856,
+            "own_margin_pct": 35.56603299587906
           },
           {
             "device_class": "mounted_terminal_class",
@@ -1057,8 +1057,8 @@
             "share_of_maximum_use": 0.18443599395182847,
             "ocean_factor": 0.331946897182229,
             "people": 5197846,
-            "revenue_musd": 6237.4152,
-            "own_margin_pct": 58.155743744620366
+            "revenue_musd": 3118.7076,
+            "own_margin_pct": 16.31148748924074
           },
           {
             "device_class": "phone_class",
@@ -1179,7 +1179,7 @@
     "The fleet is every comms launch the cadence share allows (100 percent of the Neutron cadence) times 16 satellites per launch, each cohort living 5 years: there is no fleet target and no cap, and no saturation number sizes, caps, stops or slows the build.",
     "Satellites per launch is a direct scenario setting (bounds 1 to 16). The Iridium scenario's 16 assumes the Neutron block upgrade from the first launch, for the stack kept in the fairing's cylinder at calculation C's pitch on a rod-held base (COMM-713); without the upgrade it is 15, the mass-bound count today (COMM-712).",
     "Every seat is sold: each year each device class serves every person its living fleet carries, and each class's column is the whole fleet sold to that class alone, so revenue rises with the fleet.",
-    "Each class's price is held flat: the small terminal $15, the mounted terminal $100 and the phone class $15 a month (its floor). A lower price or a smaller market is a division in the conclusions, never in the model: a price haircut divides revenue only, a market haircut people and revenue, and every margin is re-derived against the same fleet cost, never divided or averaged.",
+    "Each class's price is held flat: the small terminal $10, the mounted terminal $50 and the phone class $15 a month (its floor). A lower price or a smaller market is a division in the conclusions, never in the model: a price haircut divides revenue only, a market haircut people and revenue, and every margin is re-derived against the same fleet cost, never divided or averaged.",
     "Each class's own margin is its own revenue against the whole fleet's annualized build and launch cost (operations zero, above), null in a year with no revenue; the IoT lines are never inside it.",
     "Each class's usage is the investor's (2026-10-04): the small terminal 2 Mbps while active, 2.5 percent of users at the busy hour and 0.5 percent off-peak; the mounted terminal 5 Mbps, 10 and 2 percent; the phone class 0.75 Mbps, 2.5 and 0.5 percent.",
     "Spectral efficiency is estimate-tier: the small terminal's band 1.5 to 2.5, the mounted terminal's 2 to 3 and the phone class's 0.5 to 0.8 bps/Hz, each class read at its central value (2, 2.5 and 0.65).",
