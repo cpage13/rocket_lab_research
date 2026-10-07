@@ -238,8 +238,9 @@ IOT_TARGETS = (
 # The marginal intervals' verdicts at full price at A14's prices, each derived from the curve's
 # people on consecutive rows x the price x 12 against $0.3625M a satellite-year (section E's,
 # 8,010, 11,990 and 8,010, were at the build's $15 and $100; the phone's holds), and the first
-# chord below cost at the prototypes' endpoints, the prototypes' own at the new price (section
-# E's prototype chord at the build's price x the new price over it).
+# chord below cost at the prototypes' endpoints, the prototypes' own at the new price (the
+# prototype's own chord over 5,402 to 8,010 on its rows, by section E's rule (section E prints
+# only the first chord below cost), at the build's price x the new price over it).
 # ---------------------------------------------------------------------------
 SMALL_MODULE_LAST_PAYING_ROW = 6_006  # the module's finer grid splits 5,402 to 8,010.
 SMALL_PROTOTYPE_LAST_PAYING_ROW = 5_402
@@ -1354,7 +1355,12 @@ def test_the_marginal_interval_verdicts_on_the_committed_curve(
         chord = (people[1] - people[0]) / (upper - lower) * CLASS_PRICES[device_class] * 12 / 1e6
         assert chord < cost, (device_class, chord)
         assert _within(chord, prototype, _tolerance(device_class)), (device_class, chord)
-    assert SMALL_PROTOTYPE_LAST_PAYING_ROW < SMALL_MODULE_LAST_PAYING_ROW
+    bounds = [
+        (interval.lower_fleet, interval.upper_fleet)
+        for interval in run.iridium.classes[0].marginal_intervals
+    ]
+    assert (SMALL_PROTOTYPE_LAST_PAYING_ROW, SMALL_MODULE_LAST_PAYING_ROW) in bounds
+    assert (SMALL_MODULE_LAST_PAYING_ROW, 8_010) in bounds
 
 
 def test_a_saturation_number_is_reported_beside_the_cadence_never_a_cap(
@@ -1438,7 +1444,8 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
     Expected outcome: the lines state the ecosystem assumption and operations at zero; the curve,
     d and the panel and its limits as the rule (no measured magnitude); the cadence fleet with no
     target and no cap; the block upgrade with its two conditions and the 15 without it; every
-    seat sold; the class prices held flat, a haircut as a division with every margin re-derived;
+    seat sold; the class prices held flat (the small terminal $10, the mounted terminal $50 and
+    the phone class $15 a month), a haircut as a division with every margin re-derived;
     each class's usage; the two IoT lines and the floor rule; government left out of revenue;
     the readings; the limits; no line calls the margin gross; no stack caveat at the default.
     """
@@ -1457,6 +1464,7 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
         "rod-held base",
         "without the upgrade it is 15",
         "every seat is sold",
+        "the small terminal $10, the mounted terminal $50 and the phone class $15 a month",
         "re-derived against the same fleet cost, never divided or averaged",
         "the small terminal 2 mbps while active",
         "the mounted terminal 5 mbps",

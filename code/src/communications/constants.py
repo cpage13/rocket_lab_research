@@ -561,8 +561,8 @@ comparison only. It caps nothing. It is its own constant, not
 never moves this historical reading."""
 
 # ===========================================================================
-# The Iridium model's prices (investor-set, 2026-10-03 and 2026-10-04): each class's and
-# each IoT line's monthly price, held flat
+# The Iridium model's prices (investor-set, 2026-10-03 and 2026-10-04; the two terminal
+# prices 2026-10-07): each class's and each IoT line's monthly price, held flat
 # ===========================================================================
 #
 # Each device class sells every seat its living fleet carries at its own price, and the two
@@ -572,13 +572,13 @@ never moves this historical reading."""
 # line.
 
 SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = 10.0
-"""INVESTOR_SET (the investor, 2026-10-07: "Yes, let's use the $10 and $50"; it was $15, the
+"""INVESTOR_SET (the investor, 2026-10-07 (A14): "Yes, let's use the $10 and $50"; it was $15, the
 midpoint of the investor's 10-to-20 mass-market range set 2026-10-03, Sheet A's standard
 price of 2026-07-09 renamed for the small terminal). The small terminal's monthly price,
 dollars: $10, the low end of that range (COMM-618 context), held flat in every year."""
 
 MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = 50.0
-"""INVESTOR_SET (the investor, 2026-10-07: "Yes, let's use the $10 and $50"; it was $100, set
+"""INVESTOR_SET (the investor, 2026-10-07 (A14): "Yes, let's use the $10 and $50"; it was $100, set
 2026-10-03, Sheet A's premium price of 2026-07-09 renamed for the mounted terminal). The
 mounted terminal's monthly price, dollars: $50, near Iridium's reported voice and data $47
 and well under Certus $259 for a 0.7 Mbps-class service (COMM-618), held flat in every
@@ -1075,7 +1075,7 @@ __all__ = [
     "IRIDIUM_SCENARIO_NAME_DEFAULT",
     "RETIRED_CAP_READING_FLEET",
     "SECONDS_PER_DAY",
-    # The Iridium model's prices (2026-10-03 and 2026-10-04).
+    # The Iridium model's prices (2026-10-03 and 2026-10-04; the two terminal prices 2026-10-07).
     "ARPU_PRICE_CEILING_USD_MONTH",
     "DATA_IOT_PRICE_USD_MONTH_DEFAULT",
     "MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT",
