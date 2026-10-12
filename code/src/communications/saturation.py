@@ -1345,7 +1345,12 @@ class _FootprintBands:
 
 def _footprint_bands(footprint_km2: npt.NDArray[np.float64], bands: int) -> _FootprintBands:
     """Return the snapshot's footprint bands: edges ``geomspace(min footprint x 0.999, max
-    footprint x 1.001, bands + 1)`` over every pair in view (none when no pair is in view)."""
+    footprint x 1.001, bands + 1)`` over every pair in view (none when no pair is in view).
+
+    The pairs are sorted stably by their band index held in the smallest unsigned type that holds
+    it (an unsigned byte up to 256 bands), on which numpy's stable sort is a radix sort, many
+    times faster than the timsort it takes on 64-bit keys at a snapshot's millions of pairs; a
+    stable sort's order is unique, so it is the same order."""
     if footprint_km2.size == 0:
         return _FootprintBands(
             order=np.empty(0, dtype=np.int64), starts=np.zeros(bands + 1, dtype=np.int64)
@@ -1356,7 +1361,7 @@ def _footprint_bands(footprint_km2: npt.NDArray[np.float64], bands: int) -> _Foo
         bands + 1,
     )
     band = np.clip(np.searchsorted(edges, footprint_km2, side="right") - 1, 0, bands - 1)
-    order = np.argsort(band, kind="stable")
+    order = np.argsort(band.astype(np.min_scalar_type(bands - 1)), kind="stable")
     return _FootprintBands(order=order, starts=np.searchsorted(band[order], np.arange(bands + 1)))
 
 
@@ -1905,6 +1910,37 @@ def _serving_index(
     )
 
 
+def _with_joins(
+    index: _ServingIndex, joins: npt.NDArray[np.int64], pair_cell: npt.NDArray[np.int64]
+) -> _ServingIndex:
+    """Return the serving index with a band's joins merged in, never sorting the whole set again.
+
+    The joins, in pair index order, are sorted stably by cell and each is placed after its
+    cell's servers (the index's cells are sorted, so ``searchsorted`` on its right side finds
+    the place; ``insert`` keeps joins of one cell in their order). The result is
+    :func:`_serving_index` of the serving pairs with the joins appended: the same pairs in the
+    same order, without its sort of every serving pair at each band.
+
+    Args:
+        index: The serving index so far.
+        joins: The band's pairs that join their cells' serving sets, in pair index order.
+        pair_cell: Every pair's cell.
+
+    Returns:
+        The index with the joins.
+    """
+    join_cell = pair_cell[joins]
+    by_cell = np.argsort(join_cell, kind="stable")
+    joins, join_cell = joins[by_cell], join_cell[by_cell]
+    places = np.searchsorted(pair_cell[index.pairs], join_cell, side="right")
+    counts = index.counts + np.bincount(join_cell, minlength=index.counts.size)
+    return _ServingIndex(
+        pairs=np.insert(index.pairs, places, joins),
+        counts=counts,
+        starts=np.cumsum(counts) - counts,
+    )
+
+
 def _admitted(
     candidates: npt.NDArray[np.int64],
     pair_cell: npt.NDArray[np.int64],
@@ -2041,8 +2077,7 @@ def _stacked_layers(
     )
     stacked = np.zeros(footprint_km2.size)
     serving = _initial_serving_set(pairs, footprint_km2, cells, first.beams, rules)
-    serving_pairs = np.flatnonzero(serving)
-    serving_lookup = _serving_index(serving_pairs, pairs.cell, cells.count)
+    serving_lookup = _serving_index(np.flatnonzero(serving), pairs.cell, cells.count)
     cos_beamwidth = math.cos(rules.beamwidth_rad)
     for band in range(bands.count):
         members = bands.members(band)
@@ -2098,8 +2133,7 @@ def _stacked_layers(
         ]
         if joins.size:
             serving[joins] = True
-            serving_pairs = np.concatenate([serving_pairs, joins])
-            serving_lookup = _serving_index(serving_pairs, pairs.cell, cells.count)
+            serving_lookup = _with_joins(serving_lookup, joins, pairs.cell)
     return _StackedLayers(beams=stacked, serving=serving)
 
 

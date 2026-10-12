@@ -4539,6 +4539,55 @@ def test_the_vectorized_admission_equals_the_rule_taken_candidate_by_candidate(
     assert 0 < found.sum() < found.size
 
 
+@pytest.mark.parametrize("bands", [160, 300], ids=["an unsigned byte key", "a two-byte key"])
+def test_the_footprint_bands_order_is_the_stable_order_of_the_band_index(bands: int) -> None:
+    """Objective: the footprint bands' sort on the smallest unsigned key that holds the band index
+    (a radix sort) gives the stable order of the 64-bit band index exactly, so every fill takes
+    its pairs in the same order.
+
+    Sample: 200,000 random footprints from 170 to 3,300 km^2 (seed 7), at 160 bands (a byte key,
+    the default) and 300 (a two-byte key).
+
+    Expected outcome: the order equals numpy's stable argsort of the 64-bit band index, at the
+    pinned edges ``geomspace(min x 0.999, max x 1.001, bands + 1)``, and so do the band starts.
+    """
+    footprint = np.random.default_rng(7).uniform(170.0, 3_300.0, 200_000)
+    found = sat._footprint_bands(footprint, bands)
+    edges = np.geomspace(footprint.min() * 0.999, footprint.max() * 1.001, bands + 1)
+    band = np.clip(np.searchsorted(edges, footprint, side="right") - 1, 0, bands - 1)
+    expected = np.argsort(band, kind="stable")
+    assert np.array_equal(found.order, expected)
+    assert np.array_equal(found.starts, np.searchsorted(band[expected], np.arange(bands + 1)))
+
+
+def test_the_serving_index_merged_band_by_band_is_the_index_sorted_from_every_server() -> None:
+    """Objective: the serving index kept sorted by cell, each band's joins merged in, is the index
+    sorted afresh from every serving pair in the order they joined, so the admission reads the
+    same servers at every band.
+
+    Sample: 400 cells and 30,000 pairs with random cells (seed 3), a random tenth of the pairs
+    serving at first, then five bands, each joining a random twentieth of the pairs not yet
+    serving, in pair index order.
+
+    Expected outcome: after every band the merged index's pairs, counts and starts equal those of
+    ``_serving_index`` over the initial servers and every band's joins appended.
+    """
+    rng = np.random.default_rng(3)
+    n_cells, n_pairs = 400, 30_000
+    pair_cell = rng.integers(0, n_cells, n_pairs).astype(np.int64)
+    serving = rng.random(n_pairs) < 0.1
+    joined = np.flatnonzero(serving)
+    index = sat._serving_index(joined, pair_cell, n_cells)
+    for _ in range(5):
+        joins = np.flatnonzero(~serving & (rng.random(n_pairs) < 0.05))
+        serving[joins] = True
+        index = sat._with_joins(index, joins, pair_cell)
+        joined = np.concatenate([joined, joins])
+        rebuilt = sat._serving_index(joined, pair_cell, n_cells)
+        for field in ("pairs", "counts", "starts"):
+            assert np.array_equal(getattr(index, field), getattr(rebuilt, field)), field
+
+
 def shared_usage(inputs: SaturationInputs) -> SaturationInputs:
     """The inputs with every class at one shared usage, 1 Mbps x 2.5 percent, so the
     classes' people per beam differ only by their central SE (640, 800 and 208)."""
