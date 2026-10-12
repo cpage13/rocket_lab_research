@@ -16,7 +16,7 @@ Use this exact public taxonomy in docs, code metadata, and JSON source fields.
 
 | Source status | Meaning |
 |---|---|
-| `certified` | Directly supported by a primary or official source, or a standard's exact value confirmed by two credible secondary sources that cite it (the second clause added 2026-10-12, on the investor's yes). |
+| `certified` | Directly supported by a primary or official source, or a standard's or a textbook's value, or an operator's published system fact, confirmed by two credible secondary sources that cite it (the second clause added 2026-10-12, on the investor's yes). |
 | `sourced_estimate` | Estimated from credible external sources, but not an official exact value. |
 | `derived_estimate` | Computed from sourced or scenario inputs using a stated formula. |
 | `projection` | A forward-looking market or technical projection from an external source. |
