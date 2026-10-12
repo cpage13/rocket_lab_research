@@ -12,8 +12,8 @@ deployment rule (how many satellites a year adds, and how many of them
 replace retiring cohorts) and builds its own record beside the shared one.
 The Iridium model, the published family in the MSS lane, flies every comms
 launch the cadence share allows, with no target and no cap; reads the people
-of its three people classes (the small terminal, the mounted terminal and
-the phone class) from the promoted saturation curve (the useful co-channel
+of the small terminal, the mounted terminal and the phone class (its three
+people classes) from the promoted saturation curve (the useful co-channel
 beams a shell keeps lit over the places people live, computed once at the
 25 m^2 reference panel with the band in full-time use) times the downlink
 share and the panel factor, over each class's busy-hour load per person;
