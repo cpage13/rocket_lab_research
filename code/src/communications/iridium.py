@@ -5,13 +5,13 @@ the High-Bandwidth Cellular Pure Play family does not. Each way into the Iridium
 two commands and the Iridium entry) starts by narrowing its config with
 :func:`iridium_dials_of`, which returns the Iridium dials or refuses a config of the other
 family with :class:`NotAnIridiumConfigError`, so one condition and one error guard each of
-them, and which re-validates the config whole, so a config built with ``model_copy`` (which
-pydantic does not validate) cannot carry a setting past the validators into a run (a
-``pydantic.ValidationError`` naming the field): the saturation command
-(``python -m communications.saturation``) calls it before it reads the dials the curve depends
-on, the Iridium promotion command (``python -m communications.json_output``) before it loads
-the curve, and the Iridium entry before anything else. The refusal of the other family's
-config gives the Iridium promotion command's message.
+them: the saturation command (``python -m communications.saturation``) calls it before it
+reads the dials the curve depends on, the Iridium promotion command
+(``python -m communications.json_output``) before it loads the curve, and the Iridium entry
+before anything else. It also re-validates the config whole, so a config built with
+``model_copy`` (which pydantic does not validate) cannot carry a setting past the validators
+into a run (a ``pydantic.ValidationError`` naming the field). The refusal of the other
+family's config gives the Iridium promotion command's message.
 
 The Iridium entry, :func:`run_iridium_model`, takes the config and its saturation curve, both
 required, so the curve's presence is a type fact. On every run it narrows the config, checks
@@ -1200,8 +1200,8 @@ def _assumptions(
     phone = CLASS_USAGE[DeviceClass.PHONE_CLASS]
     floor = config.coverage.satellites_for_full_coverage
     below_phone_floor = (
-        "; this run prices the phone class below that floor, at "
-        f"${arpu.phone_class_price_usd_month:g} a month"
+        "; this run sets the phone class below that floor, at "
+        f"${arpu.phone_class_price_usd_month:g} a month (a scenario setting, not a haircut)"
         if arpu.phone_class_price_usd_month < PHONE_CLASS_PRICE_FLOOR_USD_MONTH
         else ""
     )

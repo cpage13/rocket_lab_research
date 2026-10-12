@@ -1780,7 +1780,8 @@ def test_a_phone_price_below_the_floor_is_named_in_the_price_line(
     same at $15 (the floor itself) and at $20 (above it).
 
     Expected outcome: at $12 the price line states the phone class at $12, the floor at the
-    investor's $15, and that this run prices the phone class below that floor, at $12 a month;
+    investor's $15, and that this run sets the phone class below that floor, at $12 a month (a
+    scenario setting, not a haircut);
     at $15 and at $20 the floor's sentence ends where it did and no line says the run is below
     the floor.
     """
@@ -1790,8 +1791,9 @@ def test_a_phone_price_below_the_floor_is_named_in_the_price_line(
     assert _line_with(lines, "Each class's price is held flat").startswith(
         "Each class's price is held flat: the small terminal $10, the mounted terminal $50 and "
         "the phone class $12 a month. The phone class's floor is the investor's $15 a month, "
-        "which no price haircut goes below; this run prices the phone class below that floor, at "
-        "$12 a month. A lower price or a smaller market is a division in the conclusions"
+        "which no price haircut goes below; this run sets the phone class below that floor, at "
+        "$12 a month (a scenario setting, not a haircut). A lower price or a smaller market is a "
+        "division in the conclusions"
     )
     for price in (15.0, 20.0):
         at_or_above = _with_iridium(shipped, arpu={"phone_class_price_usd_month": price})

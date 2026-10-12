@@ -516,9 +516,9 @@ the panel factor (0.616 at the default :data:`APERTURE_M2_DEFAULT`). What the li
 gives against a curve computed at the panel itself, measured, is
 :data:`PANEL_RULE_LIMITS_NOTE`: below this panel every class carries at least what the rule
 gives (the mounted terminal's useful beams exactly), above it the rule gives at least what the
-panel would, in useful beams and in maximum use, and the measured gaps are wider farther from
-this panel for the small terminal below it and for every class's maximum use above it; each
-beam's rate is held at its value here."""
+panel would, in useful beams and in maximum use, and the gaps measured wider at 10 m^2 than at
+15.4 m^2 for the small terminal, and at 60 m^2 than at 40 m^2 for every class's maximum use;
+each beam's rate is held at its value here."""
 
 APERTURE_M2_DEFAULT: Final[float] = 15.4
 """DERIVED (COMM-711; the investor's approved default, 2026-10-03). The Iridium model's
@@ -575,8 +575,8 @@ the panel factor times their reference-panel values, and each class's maximum us
   terminal at most 0.46 below (0.19 in capacity); maximum use 11.30 percent (small terminal),
   4.99 (mounted terminal) and 7.04 (phone class) below, each further below than at 40 m^2.
 
-Each magnitude holds at its panel and fleets as measured, not at every panel. Stated with the
-run's assumptions, after the panel line."""
+Each magnitude holds at its panel and fleets as measured, not at every panel. Stated in the
+run's panel line, after its first sentence."""
 
 APERTURE_VALIDATED_STACK_LIMIT_M2: Final[float] = 15.4
 """DERIVED (COMM-711, COMM-713). The largest flat panel the validated 16-satellite
@@ -690,7 +690,7 @@ PHONE_CLASS_PRICE_FLOOR_USD_MONTH: Final[float] = 15.0
 phone class's floor, dollars a month: the lowest price the investor states the phone class at,
 which no price haircut goes below. A stated value, not a config bound: the configured price is
 the ``arpu.phone_class_price_usd_month`` setting, and the stated assumptions name both, and say
-so when a run prices the phone class below this floor."""
+so when a run sets the phone class below this floor."""
 
 PHONE_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = PHONE_CLASS_PRICE_FLOOR_USD_MONTH
 """INVESTOR_SET (the investor, 2026-10-03; corrected 2026-10-04 from an unapproved $5). The

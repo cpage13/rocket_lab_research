@@ -798,7 +798,7 @@ def export_iridium_json(
     :func:`~communications.saturation_curve.load_saturation_curve`; runs the
     Iridium entry, :func:`~communications.iridium.run_iridium_model`, which first
     checks that the curve was computed for the scenario's own inputs (a refusal
-    names the curve file the path resolved to, as the loader's refusals do);
+    names the curve file by its anchored path, as the loader's refusals do);
     assembles the artifact from the run's two records, and writes it through
     :func:`common.file_io.write_files_with_rollback` (staged in full, then one
     atomic rename, so a failed write leaves any existing file as it was; an

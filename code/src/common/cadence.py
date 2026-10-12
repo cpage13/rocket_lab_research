@@ -108,9 +108,9 @@ def _refuse_a_boolean_or_text(value: object) -> object:
 
 
 WholeNumber = Annotated[int, BeforeValidator(_refuse_a_boolean_or_text)]
-"""A dial that takes a whole number (a launch count, satellites per launch, a life in years):
-pydantic's integer, refusing a boolean or a quoted number at load (strict numbers, the
-investor's yes of 2026-10-12), so neither is ever read as a count."""
+"""A dial that takes a whole number (a launch count, satellites per launch, a life in years,
+the base year, the horizon): pydantic's integer, refusing a boolean or a quoted number at load
+(strict numbers, the investor's yes of 2026-10-12), so neither is ever read as a number."""
 
 
 class CadenceDials(BaseModel):
