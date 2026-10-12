@@ -309,19 +309,22 @@ curve's or the current Iridium schema (the promotion page, Open).
   (`CLAUDE.md` among them), every document under `atlas/`, `docs/`,
   `data_center/` and `communications/`, and the research front door and
   ledgers; not the research write-ups.
-- Every link, path, module, test, claim ID and code name the charter, the
-  glossary, the atlas and the ADRs spell resolves on the tree, and every
-  `.agent/` path they name is marked (local) on its line
+- Every link, path, module, entry point, `jq` field, test, claim ID and
+  code name the charter, the glossary, the atlas and the ADRs spell
+  resolves on the tree (a code name is a word of the code, never of a
+  comment or docstring alone), and every line that names a
+  `.agent/` path, in any form, is marked (local)
   (`code/tests/test_agent_docs_resolve.py`, which also lists the spans an
   accepted ADR names before its code exists).
 
 ## Open, cross-cutting
 
-- **The documents guard's reach.** It resolves names, not numbers, counts
-  or claims, and a name it finds may still sit in the wrong place (its
-  docstring says what it misses). The human documents (the root
-  `README.md`, `code/README.md` and the folders' documents) are outside it:
-  no test resolves their links, paths or numbers.
+- **The documents guard's reach.** It resolves names in backticks, not
+  numbers, counts, claims or a command's flags, and a name it finds may
+  still sit in the wrong place (its docstring says what it misses). The
+  human documents (the root `README.md`, `code/README.md` and the folders'
+  documents) are outside it: no test resolves their links, paths or
+  numbers.
 - **The suite as a whole** should keep covering config parsing, the
   generation and physical math, integer cadence, deployed-year versus
   living capacity, the source-status and input-manifest contract, the JSON

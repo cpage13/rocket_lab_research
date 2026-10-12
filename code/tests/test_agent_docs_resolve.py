@@ -7,32 +7,43 @@ grounds in: the charter ``AGENTS.md``, ``CLAUDE.md``, the glossary ``CONTEXT.md`
 
 What it checks, on every line of every page:
 
+* a line that names a ``.agent`` path, in any form (plain text, a backticked span, a link's
+  target, a ``../.agent/`` path), carries the mark ``(local)``: ``.agent`` is the investor's
+  local working record, absent from a fresh clone, so its paths are marked, never looked up;
 * a Markdown link's target resolves from the page's folder (a web link is not looked up), and
   each ``@`` import in ``CLAUDE.md`` names a file at the repository root;
 * every backticked span, word by word when it holds a command:
 
   - a path or a file name resolves: from the repository root, from ``code/`` (where the
     commands run) or from the page's folder; a bare file name anywhere in the repository; a
-    glob matches at least one file. A ``.agent/`` path is the investor's local working record,
-    absent from a fresh clone, so it is not looked up: its line must carry the mark
-    ``(local)`` instead. An absolute path, and a command's output after ``tee``, are not
-    looked up;
+    glob matches at least one file. An absolute path, and a command's output after ``tee``,
+    are not looked up;
   - a module path (``communications.saturation``, ``common.file_io.load_yaml_mapping``, the
     word after ``-m``) names a module under ``code/src/`` and then a name that module defines
     at its top level;
+  - the word right after ``uv run`` is a command-line tool or an entry point that
+    ``code/pyproject.toml`` declares under ``[project.scripts]`` (``rklb-value``);
+  - a ``jq`` query's field names (``.name``, ``."key"``, ``["key"]`` and an object's shorthand
+    ``{name}``) are keys of the JSON file it reads, or of a promoted artifact when it names
+    none;
   - a test name (``test_...``) is a test function defined under ``code/tests/``;
   - a claim ID (``COMM-601``) is a row of ``research/SOURCE_INDEX.md``;
   - any other code name (``run_iridium_model``, ``fixed_books``,
-    ``comms_cadence.share_of_fleet``) occurs, each dotted part, as a word in the code
-    (``code/src/``), the scenarios or the four promoted JSON artifacts.
+    ``comms_cadence.share_of_fleet``) is, each dotted part, a code word: an identifier of the
+    code (``code/src/``) or a word of a string literal there that is not a docstring, the
+    source class a docstring opens with (``SOURCED_FACT``), a word of the scenarios or of the
+    four promoted JSON artifacts, or a name a test module defines at its top level. A word
+    the code keeps only in a comment or a docstring (a history note naming a removed field)
+    is not a code word.
 
 What counts as success: no span fails, and every page and source the guard reads exists, so
 it cannot pass vacuously. On failure the message lists each ``page:line``, the span and why.
 
 What it misses: a name that exists but is placed wrongly (a field said to live in the wrong
-artifact, a dial that is an artifact field), numbers, counts and prose claims; a code name
-that survives only in a comment or a docstring still resolves. The human documents (the
-root ``README.md`` and the folders' documents) are not its pages.
+artifact, a dial that is an artifact field); numbers, counts and prose claims; a name written
+outside backticks; a command's flags, an entry point that follows a flag
+(``uv run --project code pytest``) and the values a ``jq`` filter compares against. The
+human documents (the root ``README.md`` and the folders' documents) are not its pages.
 
 Decided, not built: an accepted ADR may name a path or a field before the code that makes it
 exists. :data:`_DECIDED_NOT_BUILT` lists each such span with the ADR that decides it; a
@@ -44,9 +55,11 @@ from __future__ import annotations
 
 import ast
 import fnmatch
+import json
 import os
 import re
 import shlex
+import tomllib
 from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import cache
@@ -74,11 +87,17 @@ _PROMOTED_ARTIFACTS = (
 _SCENARIOS_DIR = "code/scenarios"
 """The scenario files, whose keys are the dials a page may cite."""
 
+_PYPROJECT = "code/pyproject.toml"
+"""The package configuration, whose ``[project.scripts]`` names the entry points."""
+
 _LOCAL_DIR = ".agent"
 """The investor's local working record: never in a clone, so its paths are marked, not found."""
 
 _LOCAL_MARK = "(local)"
 """The mark a line naming a ``.agent/`` path must carry (the atlas's rules)."""
+
+_LOCAL_PATH = re.compile(r"(?<![\w.-])\.agent(?![\w-])[^\s`)\]]*")
+"""A ``.agent`` path in any form (plain text, a span, a link's target, ``../.agent/``)."""
 
 _PACKAGES = ("common", "communications", "data_center")
 """The top-level packages under ``code/src/``; a dotted name headed by one is a module path."""
@@ -100,10 +119,14 @@ _FILE_EXTENSIONS = (
 _COMMAND_TOOLS = frozenset(
     {"uv", "jq", "git", "pytest", "ruff", "mypy", "python", "python3", "tee", "cmp", "rm", "rmdir"}
 )
-"""Command-line tools a page may name in a span of its own: names, but not the code's."""
+"""Command-line tools a page may name, in a span of its own or right after ``uv run``: names,
+but not the code's."""
 
 _OUTPUT_WORDS = frozenset({"tee", ">", ">>"})
 """Words after which a command's next word is the output it writes, not an input."""
+
+_COMMAND_SEPARATORS = frozenset({"|", "||", "&&", ";"})
+"""Words that end one command and start the next inside a span."""
 
 _CLAIM_ID = re.compile(r"(COMM|NTR|RLDC|GPU|REV|THR)-[A-Z0-9][A-Z0-9_.-]*")
 """A claim ID of the source ledger."""
@@ -140,6 +163,24 @@ _SHELL_OPERATORS = re.compile(r"[<>|&;]")
 
 _PLACEHOLDER = re.compile(r"[<>{}]")
 """Characters that mark a placeholder in a path (``<stamp>``, ``{type}``)."""
+
+_SOURCE_CLASS = re.compile(r"[A-Z][A-Z_]+\b")
+"""The source class a constant's docstring opens with (``SOURCED_FACT``, ``ESTIMATE``)."""
+
+_JQ_STRING = re.compile(r'"(?:[^"\\]|\\.)*"')
+"""A string literal in a ``jq`` filter."""
+
+_JQ_QUOTED_KEY = re.compile(r'(?:\.|\[)\s*"((?:[^"\\]|\\.)*)"')
+"""A key a ``jq`` filter reads by its quoted name: ``."2036"`` or ``["key"]``."""
+
+_JQ_FIELD = re.compile(r"\.([A-Za-z_][A-Za-z0-9_]*)")
+"""A field a ``jq`` filter reads by name: ``.name``."""
+
+_JQ_OBJECT = re.compile(r"\{([^{}]*)\}")
+"""The body of an object a ``jq`` filter builds."""
+
+_JQ_SHORTHAND = re.compile(r"\s*[A-Za-z_][A-Za-z0-9_]*\s*")
+"""An object entry in shorthand, ``{name}``, which reads the field of that name."""
 
 
 @dataclass(frozen=True)
@@ -238,18 +279,92 @@ def _repo_tree(repo_dir: Path) -> RepoTree:
 
 @cache
 def _vocabulary(repo_dir: Path) -> frozenset[str]:
-    """Return the code names a page may cite: every word of the code (``code/src/``), the
-    scenarios and the promoted JSON artifacts, and every name a test module defines at its
-    top level (never the words of a test's assertions, which may name what was removed)."""
-    sources = [*(repo_dir / "code" / "src").rglob("*.py")]
-    sources += sorted((repo_dir / _SCENARIOS_DIR).glob("*.yaml"))
-    sources += [repo_dir / name for name in _PROMOTED_ARTIFACTS]
+    """Return the code names a page may cite: the code words of every module under
+    ``code/src/`` (:func:`_code_words`), every word of the scenarios and the promoted JSON
+    artifacts, and every name a test module defines at its top level (never the words of a
+    test's assertions, which may name what was removed)."""
     words: set[str] = set()
-    for source in sources:
+    for module_file in (repo_dir / "code" / "src").rglob("*.py"):
+        words.update(_code_words(module_file))
+    data = [*sorted((repo_dir / _SCENARIOS_DIR).glob("*.yaml"))]
+    data += [repo_dir / name for name in _PROMOTED_ARTIFACTS]
+    for source in data:
         words.update(_WORD.findall(source.read_text(encoding="utf-8")))
     for test_module in (repo_dir / "code" / "tests").rglob("*.py"):
         words.update(_top_level_names(test_module))
     return frozenset(words)
+
+
+def _docstring_constants(tree: ast.Module) -> list[ast.Constant]:
+    """Return every string that stands as a statement of its own: the docstrings of modules,
+    classes and functions, and the docstrings written under constants."""
+    return [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Constant)
+        and isinstance(node.value.value, str)
+    ]
+
+
+@cache
+def _code_words(module_file: Path) -> frozenset[str]:
+    """Return a module's code words: every identifier it names (names, attributes,
+    definitions, arguments, keywords, imports), every word of its string literals but its
+    docstrings, and the source class each docstring may open with. A comment, and the rest of
+    a docstring, add nothing: a history note naming a removed field must not revive it."""
+    tree = ast.parse(module_file.read_text(encoding="utf-8"))
+    docstrings = _docstring_constants(tree)
+    skipped = {id(node) for node in docstrings}
+    words: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            words.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            words.add(node.attr)
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            words.add(node.name)
+        elif isinstance(node, ast.arg | ast.keyword) and node.arg is not None:
+            words.add(node.arg)
+        elif isinstance(node, ast.alias):
+            words.update(_WORD.findall(node.name))
+            if node.asname is not None:
+                words.add(node.asname)
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            words.update(_WORD.findall(node.module))
+        elif (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and id(node) not in skipped
+        ):
+            words.update(_WORD.findall(node.value))
+    for docstring in docstrings:
+        if (source_class := _SOURCE_CLASS.match(str(docstring.value).lstrip())) is not None:
+            words.add(source_class.group(0))
+    return frozenset(words)
+
+
+@cache
+def _entry_points(repo_dir: Path) -> frozenset[str]:
+    """Return the command names ``code/pyproject.toml`` declares under ``[project.scripts]``."""
+    with (repo_dir / _PYPROJECT).open("rb") as handle:
+        project = tomllib.load(handle)
+    return frozenset(project.get("project", {}).get("scripts", {}))
+
+
+@cache
+def _json_keys(json_file: Path) -> frozenset[str]:
+    """Return every object key, at any depth, of a JSON file."""
+    keys: set[str] = set()
+    pending: list[object] = [json.loads(json_file.read_text(encoding="utf-8"))]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, dict):
+            keys.update(str(key) for key in node)
+            pending.extend(node.values())
+        elif isinstance(node, list):
+            pending.extend(node)
+    return frozenset(keys)
 
 
 @cache
@@ -315,8 +430,7 @@ def _module_problem(repo_dir: Path, dotted: str) -> str | None:
             return None
         if rest[0] not in _top_level_names(module_file):
             return f"{'.'.join(parts[:cut])} defines no top-level {rest[0]}"
-        text_words = set(_WORD.findall(module_file.read_text(encoding="utf-8")))
-        missing = [part for part in rest[1:] if part not in text_words]
+        missing = [part for part in rest[1:] if part not in _code_words(module_file)]
         return f"{'.'.join(parts[:cut])} has no {missing[0]}" if missing else None
     return "no such module under code/src"
 
@@ -356,9 +470,65 @@ def _path_problem(repo_dir: Path, page: Path, span: str) -> str | None:
     return "no such file or folder"
 
 
-def _local_problem(line: str) -> str | None:
-    """Return why a ``.agent/`` path's line breaks the local rule, or None when it holds."""
-    return None if _LOCAL_MARK in line else f"a {_LOCAL_DIR}/ path whose line lacks {_LOCAL_MARK}"
+def _local_failure(where: str, number: int, line: str) -> Failure | None:
+    """Return the failure of a line that names a ``.agent`` path without the mark, or None."""
+    local = _LOCAL_PATH.search(line)
+    if local is None or _LOCAL_MARK in line:
+        return None
+    why = f"a {_LOCAL_DIR} path whose line lacks {_LOCAL_MARK}"
+    return Failure(where, number, local.group(0), why)
+
+
+def _entry_point_problem(repo_dir: Path, word: str) -> str | None:
+    """Return why the word after ``uv run`` names no tool or entry point, or None when it does."""
+    if word in _COMMAND_TOOLS or word in _entry_points(repo_dir):
+        return None
+    return "no command-line tool or [project.scripts] entry of that name"
+
+
+def _jq_fields(query: str) -> list[str]:
+    """Return the field names a ``jq`` filter reads: ``.name``, ``."key"``, ``["key"]`` and an
+    object's shorthand ``{name}``; a string it compares against is a value, not a field."""
+    fields = _JQ_QUOTED_KEY.findall(query)
+    bare = _JQ_STRING.sub('""', query)
+    fields += _JQ_FIELD.findall(bare)
+    for body in _JQ_OBJECT.findall(bare):
+        fields += [entry.strip() for entry in body.split(",") if _JQ_SHORTHAND.fullmatch(entry)]
+    return fields
+
+
+def _jq_problems(repo_dir: Path, page: Path, arguments: list[str]) -> Iterator[tuple[str, str]]:
+    """Yield (field, why) for each field a ``jq`` query reads that the JSON it reads lacks.
+
+    ``arguments`` are the command's words after ``jq``: flags, the filter, then the files it
+    reads, up to the next command. With no file that resolves to a JSON file, the fields are
+    looked up in the four promoted artifacts.
+    """
+    operands: list[str] = []
+    for word in arguments:
+        if word in _COMMAND_SEPARATORS or word in _OUTPUT_WORDS:
+            break
+        if not word.startswith("-"):
+            operands.append(word)
+    if not operands:
+        return
+    query, files = operands[0], operands[1:]
+    root = repo_dir.resolve()
+    read = list(
+        dict.fromkeys(
+            candidate
+            for name in files
+            for base in (root, root / "code", page.parent.resolve())
+            if (candidate := (base / name).resolve()).is_file() and candidate.suffix == ".json"
+        )
+    )
+    targets = read or [root / name for name in _PROMOTED_ARTIFACTS]
+    keys = frozenset[str]().union(*(_json_keys(target) for target in targets))
+    named = ", ".join(path.relative_to(root).as_posix() for path in read)
+    where = named or "the promoted artifacts"
+    for field in _jq_fields(query):
+        if field not in keys:
+            yield field, f"no key {field!r} in {where}"
 
 
 def _name_problem(repo_dir: Path, span: str) -> str | None:
@@ -383,33 +553,40 @@ def _name_problem(repo_dir: Path, span: str) -> str | None:
     return f"{missing[0]} is no word of the code, scenarios or artifacts" if missing else None
 
 
-def _command_words(span: str) -> Iterator[tuple[str, str | None]]:
-    """Yield each word of a command span, shell quoting respected, with the word before it."""
+def _command_words(span: str) -> list[str]:
+    """Return the words of a command span, shell quoting respected."""
     try:
-        words = shlex.split(span)
+        return shlex.split(span)
     except ValueError:
-        words = span.split()
-    previous: str | None = None
-    for word in words:
-        yield word, previous
-        previous = word
+        return span.split()
 
 
-def _span_problems(repo_dir: Path, page: Path, line: str, span: str) -> Iterator[tuple[str, str]]:
+def _span_problems(repo_dir: Path, page: Path, span: str) -> Iterator[tuple[str, str]]:
     """Yield (word, why) for each part of a span that does not resolve."""
     if not any(ch.isspace() for ch in span):
-        why = _single_problem(repo_dir, page, line, span)
+        why = _single_problem(repo_dir, page, span)
         if why is not None:
             yield span, why
         return
-    for word, previous in _command_words(span):
+    words = _command_words(span)
+    for index, word in enumerate(words):
+        previous = words[index - 1] if index > 0 else None
+        before = words[index - 2] if index > 1 else None
         if previous == "-m":
             why = _module_problem(repo_dir, word)
-        elif previous in _OUTPUT_WORDS or word.startswith("/") or any(c.isspace() for c in word):
+        elif previous == "run" and before == "uv" and not word.startswith("-"):
+            why = _entry_point_problem(repo_dir, word)
+        elif word == "jq" and (previous is None or previous in _COMMAND_SEPARATORS):
+            yield from _jq_problems(repo_dir, page, words[index + 1 :])
             continue
-        elif word.startswith(_LOCAL_DIR):
-            why = _local_problem(line)
-        elif _SHELL_OPERATORS.search(word) or _PLACEHOLDER.search(word) or word.startswith("-"):
+        elif (
+            previous in _OUTPUT_WORDS
+            or word.startswith(("/", "-"))
+            or any(c.isspace() for c in word)
+            or _LOCAL_PATH.search(word)
+            or _SHELL_OPERATORS.search(word)
+            or _PLACEHOLDER.search(word)
+        ):
             continue
         elif _is_path_like(word) and not word.startswith(("'", '"', ".")):
             why = _path_problem(repo_dir, page, word)
@@ -419,10 +596,11 @@ def _span_problems(repo_dir: Path, page: Path, line: str, span: str) -> Iterator
             yield word, why
 
 
-def _single_problem(repo_dir: Path, page: Path, line: str, span: str) -> str | None:
-    """Return why a span with no white space does not resolve, or None when it does."""
-    if span.startswith(_LOCAL_DIR):
-        return _local_problem(line)
+def _single_problem(repo_dir: Path, page: Path, span: str) -> str | None:
+    """Return why a span with no white space does not resolve, or None when it does (a
+    ``.agent`` path is never looked up: its line's mark is checked once, for the line)."""
+    if _LOCAL_PATH.search(span):
+        return None
     if "::" in span:
         file_part, _, test_part = span.partition("::")
         return _path_problem(repo_dir, page, file_part) or _name_problem(repo_dir, test_part)
@@ -434,8 +612,9 @@ def _single_problem(repo_dir: Path, page: Path, line: str, span: str) -> str | N
 
 
 def _link_problem(page: Path, target: str) -> str | None:
-    """Return why a Markdown link's target does not resolve, or None when it does."""
-    if target.startswith(("http://", "https://", "mailto:", "#")):
+    """Return why a Markdown link's target does not resolve, or None when it does (a web link
+    and a ``.agent`` path are not looked up; the line check holds a local link to its mark)."""
+    if target.startswith(("http://", "https://", "mailto:", "#")) or _LOCAL_PATH.search(target):
         return None
     path = (page.parent / target.split("#")[0]).resolve()
     return None if path.exists() else "the link's target does not exist"
@@ -446,6 +625,8 @@ def _failures(repo_dir: Path, page: Path) -> Iterator[Failure]:
     where = page.relative_to(repo_dir).as_posix()
     exceptions = {entry.span for entry in _DECIDED_NOT_BUILT if entry.page == where}
     for number, line in enumerate(page.read_text(encoding="utf-8").splitlines(), start=1):
+        if (local := _local_failure(where, number, line)) is not None:
+            yield local
         imported = _IMPORT.match(line.strip()) if page.name == "CLAUDE.md" else None
         if imported is not None and not (repo_dir / imported.group(1)).is_file():
             yield Failure(where, number, line.strip(), "the import names no file")
@@ -455,14 +636,14 @@ def _failures(repo_dir: Path, page: Path) -> Iterator[Failure]:
         for span in _SPAN.findall(line):
             if span in exceptions:
                 continue
-            for word, why in _span_problems(repo_dir, page, line, span):
+            for word, why in _span_problems(repo_dir, page, span):
                 yield Failure(where, number, word, why)
 
 
 def test_every_path_and_name_the_agent_pages_spell_resolves(repo_dir: Path) -> None:
-    """Objective: every link, path, module, test, claim ID and code name the charter, the
-    glossary, the atlas and the ADRs spell resolves on the tree, and every ``.agent/`` path
-    they name is marked ``(local)`` on its line.
+    """Objective: every link, path, module, entry point, ``jq`` field, test, claim ID and code
+    name the charter, the glossary, the atlas and the ADRs spell resolves on the tree, and
+    every line that names a ``.agent`` path, in any form, is marked ``(local)``.
 
     Sample: the pages on disk (``AGENTS.md``, ``CLAUDE.md``, ``CONTEXT.md``, every ``*.md``
     under ``atlas/`` and ``docs/adr/``), against the tree they describe.
@@ -471,7 +652,11 @@ def test_every_path_and_name_the_agent_pages_spell_resolves(repo_dir: Path) -> N
     vacuously), and no span fails; the message lists each ``page:line``, the span and why.
     """
     pages = _pages(repo_dir)
-    sources = [repo_dir / _SOURCE_LEDGER, *(repo_dir / name for name in _PROMOTED_ARTIFACTS)]
+    sources = [
+        repo_dir / _SOURCE_LEDGER,
+        repo_dir / _PYPROJECT,
+        *(repo_dir / name for name in _PROMOTED_ARTIFACTS),
+    ]
     missing = [path for path in pages + sources if not path.is_file()]
     assert not missing, f"the guard names pages or sources that do not exist: {missing}"
     assert all(any((repo_dir / tree).rglob("*.md")) for tree in _PAGE_TREES), (
@@ -479,6 +664,7 @@ def test_every_path_and_name_the_agent_pages_spell_resolves(repo_dir: Path) -> N
     )
     assert _vocabulary(repo_dir), "the code's vocabulary is empty"
     assert _test_names(repo_dir), "no test function found under code/tests"
+    assert _entry_points(repo_dir), f"{_PYPROJECT} declares no [project.scripts] entry"
 
     failures = [failure for page in pages for failure in _failures(repo_dir, page)]
     assert not failures, (
@@ -504,7 +690,6 @@ def test_every_decided_not_built_exception_is_still_needed(
     page = repo_dir / entry.page
     text = page.read_text(encoding="utf-8")
     assert f"`{entry.span}`" in text, f"{entry.page} no longer spells `{entry.span}`"
-    line = next(line for line in text.splitlines() if f"`{entry.span}`" in line)
-    assert list(_span_problems(repo_dir, page, line, entry.span)), (
+    assert list(_span_problems(repo_dir, page, entry.span)), (
         f"`{entry.span}` ({entry.decided_by}) now resolves: remove its _DECIDED_NOT_BUILT entry"
     )
