@@ -437,9 +437,8 @@ def test_capacity_base_builds_beyond_the_coverage_floor() -> None:
 def test_final_year_cash_per_subscriber_is_over_the_served_base() -> None:
     """The final-year cash per subscriber divides the final-year replacement by the served base.
 
-    Objective: the cash per-person figure uses the served base (the same base the
-    annualized per-person figure uses), not the configured target. Expected: on the
-    default run it equals the final-year replacement (USD) over
+    Objective: the cash per-person figure uses the served base, not the configured
+    target. Expected: on the default run it equals the final-year replacement (USD) over
     ``subscribers_served``; with a served override of half the target it doubles
     (the fleet, and so the replacement cash, is unchanged).
     """
@@ -527,7 +526,7 @@ def test_comms_share_exact_half_rounds_up() -> None:
     assert final.comms_launches_flown_this_year == expected_fy2036_launches
 
 
-# -- the revenue + gross-margin overlay (the two cases, per cohort + fleet) --
+# -- the revenue and margin overlay (the two cases, per cohort + fleet) --
 
 
 def test_cost_plus_revenue_is_annual_cost_times_multiple() -> None:
@@ -573,7 +572,7 @@ def test_arpu_revenue_is_served_base_times_arpu_annualized() -> None:
         )
 
 
-def test_gross_margin_is_revenue_minus_cost_over_revenue() -> None:
+def test_the_margin_is_revenue_minus_cost_over_revenue() -> None:
     """Both margins follow ``(revenue - cost) / revenue x 100`` against the annual cost."""
     config = CommsConfig()
     run = run_comms_model(config)
