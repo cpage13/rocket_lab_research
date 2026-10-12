@@ -78,8 +78,9 @@ for one class on one set of inputs; this version runs stages 2 to 11 for every c
     ignored).
 11. **The markers**, on the rows: the elasticity of capacity, d ln C / d ln N, at each
     interval's geometric midpoint; the saturation number is the first crossing under 0.10,
-    interpolated in ln N between the midpoints that straddle it and rounded half up (or the
-    last fleet when it is not reached); beside it the crossing under 0.25 and the fleet at
+    interpolated in ln N between the midpoints that straddle it and rounded half up (when it is
+    not reached there is none, and the last midpoint the rows measure, rounded half up, is
+    published as the fleet it is not reached by); beside it the crossing under 0.25 and the fleet at
     which L reaches 90 percent of maximum use (log-log between rows), each None when not
     reached, or when the rows cannot place it: the 0.25 crossing when it lies before the
     first midpoint (the geometric mean of the first two rows), the 90 percent fleet when the
@@ -136,8 +137,10 @@ two figures.
 
 It loads the scenario, narrows it to its Iridium dials (a scenario without an ``iridium:``
 block is refused before anything runs), refuses a destination the shared writer would refuse
-(before the computation, so a bad path costs no run), computes the curve those dials imply,
-logs its summary, checks that it is complete and writes it through the shared writer. A
+(before the computation, so a bad path costs no run), computes the curve those dials imply
+(the computation logs each curve's maximum use and saturation number, or the last measured
+fleet it is not reached by, then the run's wall time and peak-memory bound, each once),
+checks that it is complete and writes it through the shared writer. A
 relative output path anchors to the repository root, a relative scenario path to the working
 directory; the stamp defaults to today's ISO date. It follows the shared command conventions
 (:mod:`common.cli`): status on stderr, an expected failure one ``ERROR:`` line and exit status
@@ -3133,10 +3136,13 @@ def _markers(curve: _CurveKey, rows: Sequence[CurveRow], maximum_use: float) -> 
     """Return a curve's markers, read on its rows against maximum use.
 
     The saturation number, placed first, is the first crossing of the elasticity under 0.10,
-    rounded half up, or, when not reached, the last row's fleet as
-    ``saturation_not_reached_by``; it is the one marker that refuses a curve whose rows cannot
-    place it. Beside it, the first crossing under 0.25 and the fleet at which L reaches 90
-    percent of maximum use: each is None when not reached, and None too when the rows cannot
+    rounded half up. When the elasticity is under 0.10 at no midpoint there is none, and
+    ``saturation_not_reached_by`` names the last midpoint the rows measure the elasticity at
+    (the geometric mean of the last two rows' fleets, rounded half up), never the last row's
+    fleet: the rows measure nothing past that midpoint. The saturation number is the one marker
+    that refuses a curve whose rows cannot place it. Beside it, the first crossing under 0.25
+    and the fleet at which L reaches 90 percent of maximum use: each is None when not reached,
+    and None too when the rows cannot
     place it (the 0.25 crossing before the first midpoint, the 90 percent fleet at or before
     the first row; :func:`_unplaced_marker_limits` states that in the curve's limits).
 
@@ -3168,7 +3174,7 @@ def _markers(curve: _CurveKey, rows: Sequence[CurveRow], maximum_use: float) -> 
     return ClassMarkers(
         maximum_use_beams=maximum_use,
         saturation_number=None if saturation is None else round_half_up(saturation),
-        saturation_not_reached_by=fleets[-1] if saturation is None else None,
+        saturation_not_reached_by=round_half_up(midpoints[-1]) if saturation is None else None,
         elasticity_under_0p25_fleet=None if supporting is None else round_half_up(supporting),
         fleet_at_90pct_of_maximum_use=None if ninety is None else round_half_up(ninety),
     )
@@ -3624,7 +3630,9 @@ def compute_saturation(
     satellite for every class and band point and the stall floor for the phone class's
     central curve; reads each curve's markers against its own maximum use, states any
     supporting marker the rows cannot place among the limits, and records the run's wall
-    time and peak-memory bound.
+    time and peak-memory bound. Logs, once each, every curve's maximum use and its saturation
+    number (or the last measured fleet it is not reached by), then the run's workers,
+    peak-memory bound and wall time: the command's summary.
 
     Args:
         inputs: The curve's inputs.
@@ -3689,13 +3697,16 @@ def compute_saturation(
             bands.append(BandCurve(point=plan.point, rows=rows, markers=markers))
         elif isinstance(plan.key, DeviceClass):
             curves.append(ClassCurve(device_class=plan.key, rows=rows, markers=markers))
+        reading = (
+            f"saturation number {markers.saturation_number:,}"
+            if markers.saturation_number is not None
+            else f"not reached by the last measured fleet, {markers.saturation_not_reached_by:,}"
+        )
         logger.info(
-            "saturation: %s, maximum use %.0f beams, saturation number %s",
+            "saturation: %s, maximum use %.0f beams, %s",
             _curve_label(plan.key),
             maximum_use,
-            markers.saturation_number
-            if markers.saturation_number is not None
-            else f"not reached by {markers.saturation_not_reached_by}",
+            reading,
         )
     wall_time_s = time.perf_counter() - started
     peak_memory_mb = _own_peak_mb() + run.workers_peak_mb
@@ -3859,32 +3870,6 @@ def _anchored(checkout: SourceCheckout, path: str | Path) -> Path:
     return candidate if candidate.is_absolute() else checkout.repo_dir / candidate
 
 
-def _log_summary(curve: SaturationCurve) -> None:
-    """Log the curve's summary: each class's saturation number, or the last row it is not
-    reached by, and its maximum use, in the class key's order; then the run's wall time and
-    peak-memory bound."""
-    for entry in curve.classes:
-        markers = entry.markers
-        reading = (
-            f"saturation number {markers.saturation_number:,}"
-            if markers.saturation_number is not None
-            else f"not reached by {markers.saturation_not_reached_by:,}"
-        )
-        logger.info(
-            "saturation curve: %s, %s, maximum use %.0f beams",
-            entry.device_class.value,
-            reading,
-            markers.maximum_use_beams,
-        )
-    measured = curve.provenance.run_measurement
-    logger.info(
-        "saturation curve: computed in %.1f s, peak memory bound %.0f MB (budget %.0f MB)",
-        measured.wall_time_s,
-        measured.peak_memory_mb,
-        _MEMORY_BUDGET_MB,
-    )
-
-
 def _own_mode(path: Path, destination: Path) -> int | None:
     """Return a path's own mode by ``lstat`` (a symbolic link is itself), or None when nothing is
     there: a missing component, or one that is not a directory, so nothing below it exists.
@@ -3967,8 +3952,8 @@ def promote_saturation_curve(
     Loads the scenario, narrows it to its Iridium dials (a scenario without an ``iridium:``
     block is refused before anything runs), builds the curve's inputs from those dials (the
     held spectrum; every other input its named constant), loads the population grid the inputs
-    name, anchored at the repository root and checked against its SHA-256, computes the curve,
-    logs its summary, checks that it is complete and writes it through
+    name, anchored at the repository root and checked against its SHA-256, computes the curve
+    (:func:`compute_saturation` logs its summary), checks that it is complete and writes it through
     :func:`common.file_io.write_files_with_rollback`: staged in full beside the destination,
     then renamed over it, so a failure leaves any existing file as it was. A destination the
     writer would refuse that can be known first (a symbolic link, an existing file that is not a
@@ -4009,7 +3994,6 @@ def promote_saturation_curve(
     stamp = version_stamp if version_stamp is not None else date.today().isoformat()
     logger.info("saturation curve: computing from %s, stamp %s", scenario_path, stamp)
     curve = compute_saturation(inputs, population, version_stamp=stamp)
-    _log_summary(curve)
     check_curve_complete(curve)
     write_files_with_rollback([artifact_write(out, curve)])
     logger.info("promoted saturation curve written to %s", out)

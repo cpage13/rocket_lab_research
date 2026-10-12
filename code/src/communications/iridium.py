@@ -251,7 +251,9 @@ class ClassRecord:
         per_user_rate_offpeak_mbps: Its off-peak per-user rate, Mbps.
         maximum_use_beams: The curve's maximum use times the panel factor, beams.
         saturation_number: The curve's saturation number, or None when not reached.
-        saturation_not_reached_by: The curve's last row when the number is not reached.
+        saturation_not_reached_by: When the number is not reached, the last fleet at which
+            the curve's rows measure the elasticity (their last midpoint, the geometric mean of
+            the last two rows' fleets, rounded half up); else None.
         elasticity_under_0p25_fleet: The curve's 0.25 marker, or None.
         fleet_at_90pct_of_maximum_use: The curve's 90 percent fleet, or None.
         binding_limit_at_horizon_end: Spectrum when the final year's living fleet is at or past

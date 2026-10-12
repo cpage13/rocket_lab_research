@@ -666,8 +666,10 @@ class ClassMarkers(BaseModel):
             satellite the shell can offer it, capped by its people.
         saturation_number: The fleet at the first elasticity crossing under 0.10, rounded
             half up: the spectrum bound (ADR 005). None when not reached.
-        saturation_not_reached_by: The last row's fleet when the 0.10 crossing is not
-            reached on the curve; None when it is.
+        saturation_not_reached_by: When the 0.10 crossing is not reached, the last midpoint
+            at which the rows measure the elasticity: the geometric mean of the last two rows'
+            fleets, rounded half up (the rows measure nothing past it, so it is never the last
+            row's fleet); None when the crossing is reached.
         elasticity_under_0p25_fleet: The fleet at the first crossing under 0.25 (fragile to
             the demand definition), rounded half up; None when not reached by the last row,
             or when the crossing lies before the first midpoint (the geometric mean of the
@@ -901,10 +903,11 @@ def _check_markers_on_rows(name: str, rows: Sequence[CurveRow], markers: ClassMa
     """Refuse markers that their own rows cannot give, by necessary conditions only.
 
     Each condition follows from how the computation reads the markers on the rows
-    (``communications.saturation._markers``): a saturation number not reached names the last
-    row's fleet; the 0.10 and 0.25 crossings are interpolated in ln N between consecutive
-    geometric midpoints of the rows' fleets, sqrt(N_i x N_i+1), and rounded half up, so each lies
-    between the first and the last midpoint, each rounded half up; the 90 percent fleet is
+    (``communications.saturation._markers``): the 0.10 and 0.25 crossings are interpolated in
+    ln N between consecutive geometric midpoints of the rows' fleets, sqrt(N_i x N_i+1), and
+    rounded half up, so each lies between the first and the last midpoint, each rounded half
+    up; a saturation number not reached names exactly the last midpoint, rounded half up (the
+    last fleet at which the rows measure the elasticity); the 90 percent fleet is
     interpolated between two rows and rounded half up, so it lies within the rows' span; and
     maximum use, the most the shell could ever use, is at least every row's ceiling (by
     :func:`exceeds_bound`). A marker that meets them all may still not be the one its rows give
@@ -917,13 +920,13 @@ def _check_markers_on_rows(name: str, rows: Sequence[CurveRow], markers: ClassMa
         SaturationCurveError: Naming the curve, the marker or row, and the values.
     """
     fleets = [row.fleet for row in rows]
-    last = fleets[-1]
-    if markers.saturation_not_reached_by not in (None, last):
+    midpoints = [round_half_up(math.sqrt(low * high)) for low, high in pairwise(fleets)]
+    if markers.saturation_not_reached_by not in (None, midpoints[-1]):
         raise SaturationCurveError(
             f"the {name} saturation_not_reached_by is {markers.saturation_not_reached_by}, not "
-            f"its last row's fleet {last}"
+            f"its last measured midpoint, {midpoints[-1]} (the geometric mean of its last two "
+            "rows' fleets, rounded half up)"
         )
-    midpoints = [round_half_up(math.sqrt(low * high)) for low, high in pairwise(fleets)]
     between_midpoints = "the span of its rows' geometric midpoints"
     for field, fleet, where, span in (
         ("saturation_number", markers.saturation_number, between_midpoints, midpoints),

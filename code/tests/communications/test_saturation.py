@@ -418,16 +418,19 @@ def test_supply_bound_on_a_uniform_band_is_the_time_fraction_over_land(
     assert first.ocean_factor == pytest.approx(share, rel=0.01)
 
 
-def test_a_class_whose_crossing_is_not_reached_reports_the_last_fleet(
+def test_a_class_whose_crossing_is_not_reached_reports_its_last_measured_midpoint(
     uniform_band_curve: SaturationCurve,
 ) -> None:
-    """Objective: a curve that has not flattened by its last row reports no spectrum bound.
+    """Objective: a curve whose elasticity has not fallen under 0.10 at any midpoint reports no
+    saturation number, and names as the fleet it is not reached by the last fleet its rows
+    measure the elasticity at, never the last row's fleet (foundation v3, amendment A17).
 
     Sample: the uniform band's curve (fleets 992 and 10,000), whose capacity still grows
     with an elasticity well above 0.10 between its two rows.
 
-    Expected outcome: no saturation number; ``saturation_not_reached_by`` is the last row's
-    fleet, 10,000; no crossing under 0.25 either.
+    Expected outcome: no saturation number; ``saturation_not_reached_by`` is the rows' one
+    midpoint, sqrt(992 x 10,000) = 3,149.6, rounded half up to 3,150; no crossing under 0.25
+    either.
     """
     rows = phone_curve(uniform_band_curve).rows
     markers = phone_curve(uniform_band_curve).markers
@@ -435,7 +438,7 @@ def test_a_class_whose_crossing_is_not_reached_reports_the_last_fleet(
     elasticity = math.log(high.capacity_gbps / low.capacity_gbps) / math.log(high.fleet / low.fleet)
     assert elasticity > 0.25
     assert markers.saturation_number is None
-    assert markers.saturation_not_reached_by == rows[-1].fleet == 10_000
+    assert markers.saturation_not_reached_by == round_half_up(math.sqrt(992 * 10_000)) == 3_150
     assert markers.elasticity_under_0p25_fleet is None
 
 
@@ -875,6 +878,10 @@ def test_each_band_point_changes_its_one_input(synthetic_population_grid: GridBu
 COARSE_REAL_FLEETS = (340, 1_000, 2_000)
 """The coarse setting's requested fleets (realized 342, 992 and 1,980), one snapshot."""
 
+COARSE_LAST_MIDPOINT = 1_401
+"""The coarse rows' last midpoint, sqrt(992 x 1,980) = 1,401.48, rounded half up: the fleet each
+coarse curve names as not reached by, since no curve's elasticity falls under 0.10 there."""
+
 COARSE_REAL_ROWS = (
     (
         342,
@@ -1277,8 +1284,9 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: Saturati
     directional classes their stacking diagnostics, and for the phone class its interference
     trim at -0.4, -2 and -8 dBi) and maximum use within 1e-4 relative of the frozen values;
     the six band points in their order, each the inputs' point, its rows (no trim, no
-    diagnostics) and maximum use within 1e-4 relative; no 0.10 crossing by 1,980 and no other
-    marker on any curve; the curve's envelope: schema, stamp, the input hash of its
+    diagnostics) and maximum use within 1e-4 relative; no 0.10 crossing on any curve, each not
+    reached by the rows' last midpoint (1,401), and no other marker on any curve (the
+    directional classes' included); the curve's envelope: schema, stamp, the input hash of its
     parameters, the grid's name, digest, citations and licence, the three checks passed, the
     run measured, the stated limits, and the three classes (small terminal, mounted terminal,
     phone class).
@@ -1305,7 +1313,7 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: Saturati
     markers = phone_curve(curve).markers
     assert markers.maximum_use_beams == pytest.approx(COARSE_REAL_MAXIMUM_USE, rel=1e-4)
     assert markers.saturation_number is None
-    assert markers.saturation_not_reached_by == 1_980
+    assert markers.saturation_not_reached_by == COARSE_LAST_MIDPOINT
     assert markers.elasticity_under_0p25_fleet is None
     assert markers.fleet_at_90pct_of_maximum_use is None
     assert curve.schema_version == SATURATION_CURVE_SCHEMA_VERSION == "saturation-v1"
@@ -1329,7 +1337,7 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: Saturati
     for band in curve.bands:
         maximum_use, frozen_rows = COARSE_BANDS[band.point.name]
         assert band.markers.maximum_use_beams == pytest.approx(maximum_use, rel=1e-4)
-        assert band.markers.saturation_not_reached_by == 1_980
+        assert band.markers.saturation_not_reached_by == COARSE_LAST_MIDPOINT
         assert band.markers.elasticity_under_0p25_fleet is None
         assert band.markers.fleet_at_90pct_of_maximum_use is None
         for row, (fleet, useful, capacity, ocean, ceiling, supply) in zip(
@@ -1346,7 +1354,9 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: Saturati
     for device_class, (maximum_use, frozen_rows) in COARSE_DIRECTIONAL.items():
         directional = class_curve(curve, device_class)
         assert directional.markers.maximum_use_beams == pytest.approx(maximum_use, rel=1e-4)
-        assert directional.markers.saturation_not_reached_by == 1_980
+        assert directional.markers.saturation_not_reached_by == COARSE_LAST_MIDPOINT
+        assert directional.markers.elasticity_under_0p25_fleet is None
+        assert directional.markers.fleet_at_90pct_of_maximum_use is None
         for row, frozen in zip(directional.rows, frozen_rows, strict=True):
             fleet, useful, capacity, ocean, ceiling, supply, share, separation, interference = (
                 frozen
@@ -2684,12 +2694,41 @@ def test_a_supporting_marker_before_the_first_row_never_takes_the_saturation_num
     assert sat._unplaced_marker_limits(PHONE, placed_rows, 1_000.0) == ()
 
 
+BARE_LAST_MIDPOINT = 582
+"""The bare rows' one midpoint, sqrt(342 x 992) = 582.46, rounded half up: the fleet bare markers
+with no crossing are not reached by."""
+
+
+def test_a_saturation_number_not_reached_names_the_last_midpoint_the_rows_measure() -> None:
+    """Objective: when the elasticity of capacity is under 0.10 at no midpoint, the curve has no
+    saturation number, and the fleet it is not reached by is the last midpoint at which its rows
+    measure the elasticity, never the last row's fleet: past that midpoint the rows measure
+    nothing (foundation v3, amendment A17; the review's code_sat_b M1).
+
+    Sample: hand-built rows at 342, 992, 1,980 and 3,969 satellites whose capacity's elasticity is
+    0.60, 0.40 and 0.30 over the three intervals (never under 0.10, nor under 0.25), with L far
+    under 90 percent of maximum use.
+
+    Expected outcome, worked by hand: no saturation number; not reached by sqrt(1,980 x 3,969) =
+    sqrt(7,858,620) = 2,803.32, rounded half up to 2,803, not by the last row's 3,969; no
+    crossing under 0.25 and no 90 percent fleet.
+    """
+    rows = rows_with_elasticities(MARKER_FLEETS, (0.60, 0.40, 0.30), (100.0, 200.0, 300.0, 400.0))
+    markers = sat._markers(PHONE, rows, 1_000.0)
+    assert markers.saturation_number is None
+    assert markers.saturation_not_reached_by == 2_803
+    assert markers.saturation_not_reached_by != rows[-1].fleet == 3_969
+    assert markers.elasticity_under_0p25_fleet is None
+    assert markers.fleet_at_90pct_of_maximum_use is None
+
+
 def bare_markers(**changes: int | None) -> ClassMarkers:
-    """Markers with no crossing (not reached by 992), but for the changes asked."""
+    """Markers with no crossing (not reached by the bare rows' midpoint, 582), but for the changes
+    asked."""
     fields: dict[str, float | int | None] = {
         "maximum_use_beams": 1_000.0,
         "saturation_number": None,
-        "saturation_not_reached_by": 992,
+        "saturation_not_reached_by": BARE_LAST_MIDPOINT,
         "elasticity_under_0p25_fleet": None,
         "fleet_at_90pct_of_maximum_use": None,
     }
@@ -3190,8 +3229,14 @@ def _phone_trim_json() -> list[dict[str, float]]:
             "the provenance's grid digest 0000",
         ),
         (
-            lambda d: d["bands"][5]["markers"].update(saturation_not_reached_by=500),
-            "band point beams_48 saturation_not_reached_by is 500, not its last row's fleet 992",
+            lambda d: d["bands"][5]["markers"].update(saturation_not_reached_by=992),
+            "band point beams_48 saturation_not_reached_by is 992, not its last measured "
+            r"midpoint, 582 \(the geometric mean of its last two rows' fleets, rounded half up\)",
+        ),
+        (
+            lambda d: d["classes"][1]["markers"].update(saturation_not_reached_by=500),
+            "mounted_terminal_class saturation_not_reached_by is 500, not its last measured "
+            "midpoint, 582",
         ),
         (
             lambda d: d["classes"][0]["markers"].update(
@@ -3245,7 +3290,8 @@ def _phone_trim_json() -> list[dict[str, float]]:
         "no stated limits",
         "no checks passed",
         "a grid digest not the parameters'",
-        "not reached by a fleet that is not the last row",
+        "not reached by the last row's fleet, past the last midpoint",
+        "not reached by a fleet that is no midpoint",
         "a saturation number outside the rows",
         "a saturation number before the first midpoint",
         "a 0.25 crossing past the last midpoint",
@@ -4473,8 +4519,9 @@ def test_the_mounted_terminal_runs_over_its_extension_through_compute_saturation
     Expected outcome: the classes in the class key's order; the mounted terminal's rows 506,
     992 and 3,969, requested 500, 1,000 and 4,000, its 3,969 row a directional row with its
     diagnostics; the small terminal's and the phone class's rows 506 and 992, requested 500 and
-    1,000; each class's 0.10 crossing not reached by its own last row (capacity still rises
-    steeply here), 3,969 for the mounted terminal and 992 for the others.
+    1,000; each class's 0.10 crossing not reached by its own rows' last midpoint (capacity still
+    rises steeply here): sqrt(992 x 3,969) = 1,984.25, rounded half up to 1,984, for the
+    mounted terminal and sqrt(506 x 992) = 708.49, rounded to 708, for the others.
     """
     grid = synthetic_population_grid(MID_BAND_CELL_DEG, shared_usage_people)
     inputs = shared_usage(synthetic_saturation_inputs(grid, fleets=EXTENSION_TEST_FLEETS))
@@ -4491,11 +4538,12 @@ def test_the_mounted_terminal_runs_over_its_extension_through_compute_saturation
     assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
     fleets_rows = [(506, 500), (992, 1_000)]
     expected = {SMALL: fleets_rows, MOUNTED: [*fleets_rows, (3_969, 4_000)], PHONE: fleets_rows}
+    not_reached_by = {SMALL: 708, MOUNTED: 1_984, PHONE: 708}
     for device_class, keyed in expected.items():
         entry = class_curve(curve, device_class)
         assert [(row.fleet, row.requested_fleet) for row in entry.rows] == keyed
         assert entry.markers.saturation_number is None
-        assert entry.markers.saturation_not_reached_by == keyed[-1][0]
+        assert entry.markers.saturation_not_reached_by == not_reached_by[device_class]
     assert class_curve(curve, MOUNTED).rows[-1].directional is not None
 
 
@@ -5046,8 +5094,9 @@ def test_the_short_curve_fixture_ends_at_its_row_and_refuses_a_reading_past_it(
     request); a fleet past it, 3,072; a cut at 3,000, which is no row; a cut at 342, the first
     row, which keeps one row.
 
-    Expected outcome: every class's and band point's rows end at 3,025, each not reached by
-    3,025; the identity check passes; the completeness check refuses the short rows; a reading
+    Expected outcome: every class's and band point's rows end at 3,025, each not reached by its
+    kept rows' last midpoint, sqrt(1,980 x 3,025) = 2,447.3, rounded half up to 2,447; the
+    identity check passes; the completeness check refuses the short rows; a reading
     at 3,025 is given (L = 3,025 x 150), and one at 3,072 is a CurveBeyondLastRowError naming
     the class, 3,025 and 3,072; the cut at 3,000 is a ValueError, and so is the cut at 342 (a
     curve's markers read the elasticity between two rows).
@@ -5057,8 +5106,8 @@ def test_the_short_curve_fixture_ends_at_its_row_and_refuses_a_reading_past_it(
     curves = [(entry.rows, entry.markers) for entry in curve.classes]
     curves += [(band.rows, band.markers) for band in curve.bands]
     for rows, markers in curves:
-        assert rows[-1].fleet == 3_025
-        assert markers.saturation_not_reached_by == 3_025
+        assert (rows[-2].fleet, rows[-1].fleet) == (1_980, 3_025)
+        assert markers.saturation_not_reached_by == 2_447
     check_curve_matches(saturation_inputs_for(dials), curve)
     with pytest.raises(SaturationCurveError, match="rows stand at the requested fleets"):
         check_curve_complete(curve)
@@ -5095,7 +5144,8 @@ def test_a_curve_cut_short_carries_the_markers_its_kept_rows_give(
     Expected outcome: at each cut, every class's and band point's rows are its rows up to the
     cut, its markers ``_markers`` of those rows at its maximum use, valid as the contract's; a
     curve whose rows are all kept keeps the committed markers; a saturation number the full
-    curve places past the cut is not reached, by the cut's fleet.
+    curve places past the cut is not reached, by the kept rows' last midpoint (the geometric
+    mean of the last two kept rows' fleets, rounded half up).
     """
     curve = committed_saturation_curve
     full = [(entry.device_class, entry.rows, entry.markers) for entry in curve.classes]
@@ -5120,4 +5170,6 @@ def test_a_curve_cut_short_carries_the_markers_its_kept_rows_give(
                 full_markers.saturation_number > last_fleet
             ):
                 assert markers.saturation_number is None
-                assert markers.saturation_not_reached_by == last_fleet
+                assert markers.saturation_not_reached_by == round_half_up(
+                    math.sqrt(rows[-2].fleet * rows[-1].fleet)
+                )

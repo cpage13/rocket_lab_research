@@ -22,9 +22,12 @@ and the exclusive 8 MHz, with the band in full-time use (ADR 008). It is
 reported beside the launch cadence in every run, never a build target and
 never a cap on the build. A fleet past a class's saturation number is read
 from the curve like any other; a fleet past the curve's last computed row is
-refused with an error. When a class's marker is not reached on the grid,
-that class has no spectrum bound. 2,000 stays only as a reading, labeled the
-retired cap, for comparison.
+refused with an error. When a class's crossing is not reached on its rows,
+the curve publishes no saturation number for that class and names the last
+midpoint at which its rows measure the elasticity (the geometric mean of the
+last two rows' fleets) as the fleet it is not reached by: the class's
+spectrum bound lies beyond that fleet, unmeasured. 2,000 stays only as a
+reading, labeled the retired cap, for comparison.
 
 ## Consequences
 

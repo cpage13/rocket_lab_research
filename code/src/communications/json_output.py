@@ -341,7 +341,11 @@ class ClassBlock(BaseModel):
         )
     )
     saturation_not_reached_by: int | None = Field(
-        description="The curve's last row when the saturation number is not reached, else None."
+        description=(
+            "When the saturation number is not reached, the last fleet at which the curve's "
+            "rows measure the elasticity (their last midpoint, the geometric mean of the last two "
+            "rows' fleets, rounded half up); else None."
+        )
     )
     elasticity_under_0p25_fleet: int | None = Field(
         description="The fleet at the first elasticity crossing under 0.25, or None."
