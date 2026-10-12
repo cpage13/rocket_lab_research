@@ -3122,6 +3122,49 @@ def _elasticity(curve: _CurveKey, rows: Sequence[CurveRow]) -> tuple[list[float]
     return midpoints, elasticity
 
 
+def _check_crossings_hold(
+    curve: _CurveKey,
+    rows: Sequence[CurveRow],
+    midpoints: Sequence[float],
+    elasticity: Sequence[float],
+) -> None:
+    """Refuse a curve whose capacity falls between two rows, or whose elasticity, once under a
+    marker's threshold (0.10 or 0.25), is at or above it again at a later midpoint.
+
+    The markers take the first crossing under each threshold as the fleet past which one more
+    satellite adds less than that share of an average satellite's capacity, which holds only
+    while the elasticity stays under it; and a capacity that falls between two rows (a negative
+    elasticity) would read as such a crossing. A converged curve shows neither. A curve whose
+    snapshot noise straddled a threshold would place its marker early, silently, so it is
+    refused instead, naming the curve and the midpoints.
+
+    Raises:
+        SaturationInvariantError: Naming the curve and the two rows whose capacity falls, or
+            the threshold, the midpoint where the elasticity first falls under it and the later
+            midpoint where it is back at or above it, with both elasticities.
+    """
+    name = _curve_label(curve)
+    for (low, high), value in zip(pairwise(rows), elasticity, strict=True):
+        if value < 0:
+            raise SaturationInvariantError(
+                f"{name}: capacity falls from {low.capacity_gbps} Gbps at {low.fleet} satellites "
+                f"to {high.capacity_gbps} Gbps at {high.fleet} (an elasticity of {value:.4f} at "
+                "their midpoint); a curve's capacity must not fall between rows"
+            )
+    for threshold in (_SATURATION_ELASTICITY, _SUPPORTING_ELASTICITY):
+        under = next((i for i, value in enumerate(elasticity) if value < threshold), None)
+        if under is None:
+            continue
+        for later in range(under + 1, len(elasticity)):
+            if elasticity[later] >= threshold:
+                raise SaturationInvariantError(
+                    f"{name}: the elasticity falls under {threshold:g} at the midpoint "
+                    f"{midpoints[under]:.0f} ({elasticity[under]:.4f}) and is back at "
+                    f"{elasticity[later]:.4f} at the later midpoint {midpoints[later]:.0f}, so "
+                    "the first crossing would place its marker early"
+                )
+
+
 def _crosses_before_first_midpoint(elasticity: Sequence[float], threshold: float) -> bool:
     """Return whether the elasticity is already under the threshold at the first midpoint."""
     return elasticity[0] < threshold
@@ -3148,11 +3191,14 @@ def _markers(curve: _CurveKey, rows: Sequence[CurveRow], maximum_use: float) -> 
 
     Raises:
         SaturationInvariantError: If a row's capacity is not positive (the elasticity needs
-            its logarithm), or the saturation number's crossing lies before the first
-            midpoint.
+            its logarithm), the capacity falls between two rows or the elasticity, once under
+            0.10 or 0.25, is at or above it again at a later midpoint
+            (:func:`_check_crossings_hold`), or the saturation number's crossing lies before
+            the first midpoint.
     """
     fleets = [row.fleet for row in rows]
     midpoints, elasticity = _elasticity(curve, rows)
+    _check_crossings_hold(curve, rows, midpoints, elasticity)
     name = _curve_label(curve)
     saturation = _first_crossing_under(
         midpoints, elasticity, _SATURATION_ELASTICITY, f"{name}, the saturation number"
@@ -3585,6 +3631,9 @@ def _checks_passed(inputs: SaturationInputs) -> tuple[str, ...]:
         "capacity per satellite never rises between consecutive rows of any class or band "
         f"point by more than {_CAPACITY_PER_SATELLITE_RISE_TOLERANCE:g} relative to the "
         "earlier row (the snapshots' noise)",
+        "the markers' crossings hold: capacity never falls between consecutive rows of any class "
+        f"or band point, and the elasticity of capacity, once under {_SATURATION_ELASTICITY:g} "
+        f"or {_SUPPORTING_ELASTICITY:g}, stays under it at every later midpoint",
     )
 
 
@@ -3613,6 +3662,17 @@ def _curve_limits(inputs: SaturationInputs) -> tuple[str, ...]:
         "not shrink with the panel; the rule is exact in beams for the phone class; and each "
         "beam's rate is held at its reference-panel value, so the link effect of another "
         "array size is not modeled.",
+        "A null marker is one the rows do not place: the saturation number when the elasticity "
+        f"of capacity is under {_SATURATION_ELASTICITY:g} at no midpoint "
+        "(saturation_not_reached_by then names the last midpoint, the geometric mean of the last "
+        "two rows' fleets, rounded "
+        "half up: the rows measure nothing past it); the crossing under "
+        f"{_SUPPORTING_ELASTICITY:g} when the elasticity is under {_SUPPORTING_ELASTICITY:g} at "
+        "no midpoint; the fleet at which the useful beams reach "
+        f"{_MAXIMUM_USE_MARKER_SHARE:g} of maximum use when they are under it at every row. A "
+        "supporting marker the rows cannot place before their first midpoint or row is null too, "
+        "and a limit below names it; saturation_not_reached_by is null when the saturation "
+        "number is placed.",
     )
 
 

@@ -1287,9 +1287,9 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: Saturati
     diagnostics) and maximum use within 1e-4 relative; no 0.10 crossing on any curve, each not
     reached by the rows' last midpoint (1,401), and no other marker on any curve (the
     directional classes' included); the curve's envelope: schema, stamp, the input hash of its
-    parameters, the grid's name, digest, citations and licence, the three checks passed, the
-    run measured, the stated limits, and the three classes (small terminal, mounted terminal,
-    phone class).
+    parameters, the grid's name, digest, citations and licence, the four checks passed, the
+    run measured, the ten stated limits (the curve's own; no marker unplaced), and the three
+    classes (small terminal, mounted terminal, phone class).
     """
     inputs = SaturationInputs(sweep=COARSE_SWEEP)
     curve = coarse_real_curve
@@ -1327,10 +1327,10 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: Saturati
     assert "doi:10.2905/2FF68A52-5B5B-4A22-8F40-C41DA8332CFE" in provenance.citations[0]
     assert "doi:10.1080/17538947.2024.2390454" in provenance.citations[1]
     assert provenance.licence == "CC BY 4.0"
-    assert len(provenance.checks_passed) == 3
+    assert len(provenance.checks_passed) == 4
     assert provenance.run_measurement.wall_time_s > 0
     assert provenance.run_measurement.peak_memory_mb > 0
-    assert len(curve.limits) == 9
+    assert len(curve.limits) == 10
     assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
     assert [band.point for band in curve.bands] == list(inputs.bands)
     assert [band.point.name for band in curve.bands] == list(BandName)
@@ -2266,6 +2266,29 @@ def _row(fleet: int, useful: float, capacity: float) -> CurveRow:
             ),
             "the saturation number: the elasticity is already",
         ),
+        (
+            lambda: sat._markers(
+                PHONE, rows_with_elasticities(MARKER_FLEETS, (0.60, 0.09, 0.40), (1.0,) * 4), 10.0
+            ),
+            r"phone_class: the elasticity falls under 0.1 at the midpoint 1401 \(0.0900\) and is "
+            r"back at 0.4000 at the later midpoint 2803",
+        ),
+        (
+            lambda: sat._markers(
+                BandName.TAPER,
+                rows_with_elasticities(MARKER_FLEETS, (0.60, 0.24, 0.40), (1.0,) * 4),
+                10.0,
+            ),
+            r"phone_class band point taper: the elasticity falls under 0.25 at the midpoint 1401 "
+            r"\(0.2400\) and is back at 0.4000 at the later midpoint 2803",
+        ),
+        (
+            lambda: sat._markers(
+                PHONE, rows_with_elasticities(MARKER_FLEETS, (0.60, -0.10, 0.40), (1.0,) * 4), 10.0
+            ),
+            r"phone_class: capacity falls from .* Gbps at 992 satellites to .* Gbps at 1980 "
+            r"\(an elasticity of -0.1000 at their midpoint\)",
+        ),
     ],
     ids=[
         "L above min(ceiling, supply)",
@@ -2273,6 +2296,9 @@ def _row(fleet: int, useful: float, capacity: float) -> CurveRow:
         "stalled allocation",
         "capacity per satellite rising",
         "saturation before the first midpoint",
+        "the elasticity back over 0.10 after its crossing",
+        "the elasticity back over 0.25 after its crossing",
+        "capacity falling between rows",
     ],
 )
 def test_each_check_refuses_a_curve_that_breaks_it(
@@ -2283,9 +2309,14 @@ def test_each_check_refuses_a_curve_that_breaks_it(
     Sample: hand-built snapshots or rows: L above min(ceiling, supply); a ceiling above
     maximum use; L at 0.90 of its bound at 20,022 satellites against the 0.98 floor; capacity
     per satellite rising from 1.0 / 342 to 4.0 / 992; an elasticity of 0.01 at the first
-    midpoint (the saturation number cannot be placed).
+    midpoint (the saturation number cannot be placed); rows at 342, 992, 1,980 and 3,969
+    whose elasticity runs 0.60, 0.09, 0.40 (under 0.10 at the midpoint 1,401, back over it at
+    2,803), 0.60, 0.24, 0.40 (the same for 0.25, on a band point) and 0.60, -0.10, 0.40 (capacity
+    falling from 992 to 1,980 satellites); the review's code_sat_b m1.
 
-    Expected outcome: SaturationInvariantError, its message naming the breach.
+    Expected outcome: SaturationInvariantError, its message naming the breach: the curve, and
+    for a crossing that does not hold the threshold, both midpoints and both elasticities, or
+    for a fall the two rows and the elasticity between them.
     """
     with pytest.raises(SaturationInvariantError, match=message):
         refused()
