@@ -209,7 +209,7 @@ def test_revenue_dials_defaults() -> None:
     assert rev.arpu_usd_per_month == pytest.approx(50.0)
 
 
-# -- ground interface block (declared in Phase 1, None-able baselines) -
+# -- ground interface block (None-able baselines) ---------------------
 
 
 def test_ground_interface_dials_defaults_are_none_able() -> None:
@@ -364,8 +364,8 @@ IRIDIUM_FIXED_BLOCKS: tuple[tuple[str, type[BaseModel]], ...] = (
     ("subscribers", SubscriberDials),
     ("revenue", RevenueDials),
 )
-"""The blocks whose every field an Iridium config keeps at its default (E3): the cellular
-family's sizing and revenue dials, and the coverage floor the Iridium path pins."""
+"""The blocks whose every field an Iridium config keeps at its default: the cellular family's
+sizing and revenue dials, and the coverage floor the Iridium path pins."""
 
 
 def _a_non_default(block: type[BaseModel], field_name: str) -> object:
@@ -375,15 +375,28 @@ def _a_non_default(block: type[BaseModel], field_name: str) -> object:
     return 1 if default is None else default + 1
 
 
+def _nested(path: tuple[str, ...], value: object) -> object:
+    """A value written at a dotted path: ``("a", "b"), 1`` gives ``{"a": {"b": 1}}``."""
+    nested = value
+    for key in reversed(path):
+        nested = {key: nested}
+    return nested
+
+
+def _located(refused: pytest.ExceptionInfo[ValidationError]) -> list[str]:
+    """Each error's location in a refused load, as a dotted path."""
+    return [".".join(map(str, error["loc"])) for error in refused.value.errors()]
+
+
 def test_iridium_config_refuses_every_cellular_sizing_and_revenue_field(tmp_path: Path) -> None:
     """Objective: on an Iridium config every field of the ``coverage``, ``subscribers`` and
-    ``revenue`` blocks keeps its default and ``ground`` stays unset (E3; guard G34): the Iridium
+    ``revenue`` blocks keeps its default and ``ground`` stays unset: the Iridium
     path reads none of the cellular family's sizing and revenue dials and pins the coverage
     floor at 340. The test walks each block's own fields, so a field added later is covered
     with no edit here; it is on the value, so a config written out whole still loads.
 
     Sample: for every field of the three blocks, a scenario with an ``iridium:`` block and that
-    field at a value other than its default (the cap also at 1,999 and 3,000, p4's samples);
+    field at a value other than its default (the cap also at 1,999 and 3,000, under and past it);
     the same scenario without the ``iridium:`` block; a scenario with an ``iridium:`` block and
     a ``ground`` block; an Iridium scenario writing every field at its default; the default
     Iridium config round-tripped through ``model_dump`` and ``model_validate``.
@@ -461,9 +474,9 @@ RETIRED_IRIDIUM_SETTINGS: tuple[tuple[str, ...], ...] = (
     ("arpu", "iot_price_usd_month"),
     ("arpu", "government_price_usd_month"),
 )
-"""The Iridium settings the switch retires (K11 to K18): the device class, the SE override, the
-one usage for every class, the IoT passthrough, the four-bucket sheet's mixes and prices, the
-single IoT price and the government price."""
+"""The Iridium settings the switch retires, with the investor's OK of 2026-10-04: the device
+class, the SE override, the one usage for every class, the IoT passthrough, the four-bucket
+sheet's mixes and prices, the single IoT price and the government price."""
 
 
 def test_a_retired_iridium_setting_fails_at_load_naming_it(tmp_path: Path) -> None:
@@ -480,17 +493,11 @@ def test_a_retired_iridium_setting_fails_at_load_naming_it(tmp_path: Path) -> No
     """
     scenario = tmp_path / "retired.yaml"
     for path in RETIRED_IRIDIUM_SETTINGS:
-        setting: object = 1.0
-        for key in reversed(path):
-            setting = {key: setting}
-        scenario.write_text(yaml.safe_dump({"iridium": setting}), encoding="utf-8")
+        scenario.write_text(yaml.safe_dump(_nested(("iridium", *path), 1.0)), encoding="utf-8")
         with pytest.raises(ValidationError) as refused:
             load_comms_config(scenario)
-        errors = refused.value.errors()
-        assert [".".join(map(str, error["loc"])) for error in errors] == [
-            ".".join(("iridium", *path))
-        ], path
-        assert errors[0]["type"] == "extra_forbidden"
+        assert _located(refused) == [".".join(("iridium", *path))], path
+        assert refused.value.errors()[0]["type"] == "extra_forbidden"
 
 
 def _float_dial_paths(block: type[BaseModel]) -> list[tuple[str, ...]]:
@@ -532,14 +539,11 @@ def test_the_iridium_dials_refuse_a_number_that_is_not_finite_naming_the_field(
     scenario = tmp_path / "not_finite.yaml"
     for path in paths:
         for value in (math.inf, -math.inf, math.nan):
-            dials: object = value
-            for key in reversed(path):
-                dials = {key: dials}
-            scenario.write_text(yaml.safe_dump({"iridium": dials}), encoding="utf-8")
+            written = _nested(("iridium", *path), value)
+            scenario.write_text(yaml.safe_dump(written), encoding="utf-8")
             with pytest.raises(ValidationError) as refused:
                 load_comms_config(scenario)
-            located = [".".join(map(str, error["loc"])) for error in refused.value.errors()]
-            assert located == [".".join(("iridium", *path))], (path, value)
+            assert _located(refused) == [".".join(("iridium", *path))], (path, value)
 
 
 def test_the_iridium_dials_refuse_a_boolean_naming_the_field(tmp_path: Path) -> None:
@@ -565,14 +569,10 @@ def test_the_iridium_dials_refuse_a_boolean_naming_the_field(tmp_path: Path) -> 
     } == set(paths)
     scenario = tmp_path / "boolean.yaml"
     for path in paths:
-        dials: object = True
-        for key in reversed(path):
-            dials = {key: dials}
-        scenario.write_text(yaml.safe_dump({"iridium": dials}), encoding="utf-8")
+        scenario.write_text(yaml.safe_dump(_nested(("iridium", *path), True)), encoding="utf-8")
         with pytest.raises(ValidationError) as refused:
             load_comms_config(scenario)
-        located = [".".join(map(str, error["loc"])) for error in refused.value.errors()]
-        assert located == [".".join(("iridium", *path))], path
+        assert _located(refused) == [".".join(("iridium", *path))], path
     for written in ("yes", "on", '"15"'):
         scenario.write_text(f"iridium:\n  aperture_m2: {written}\n", encoding="utf-8")
         with pytest.raises(ValidationError, match=r"iridium\.aperture_m2"):
@@ -584,25 +584,12 @@ def test_the_iridium_dials_refuse_a_boolean_naming_the_field(tmp_path: Path) -> 
     assert loaded.aperture_m2 == 15.0
 
 
-def _nested(path: tuple[str, ...], value: object) -> object:
-    """A value written at a dotted path: ``("a", "b"), 1`` gives ``{"a": {"b": 1}}``."""
-    nested = value
-    for key in reversed(path):
-        nested = {key: nested}
-    return nested
-
-
-def _located(refused: pytest.ExceptionInfo[ValidationError]) -> list[str]:
-    """Each error's location in a refused load, as a dotted path."""
-    return [".".join(map(str, error["loc"])) for error in refused.value.errors()]
-
-
 STRICT_DEPLOYMENT_BLOCKS: tuple[tuple[str, type[BaseModel]], ...] = (
     ("comms_cadence", CommsCadenceDials),
     ("satellite", SatelliteDials),
 )
 """The comms-owned blocks of deployment and cost settings, both families' (the Iridium path
-reads them all): strict since the review since the push (code_config m2)."""
+reads them all): strict since 2026-10-12 (a YAML boolean or a quoted number refused)."""
 
 
 def test_the_comms_share_and_satellite_blocks_refuse_a_boolean_or_a_quoted_number(
@@ -687,14 +674,10 @@ def test_every_block_this_module_defines_refuses_a_number_that_is_not_finite(
     scenario = tmp_path / "not_finite.yaml"
     for path in paths:
         for value in (math.inf, -math.inf, math.nan):
-            dials: object = value
-            for key in reversed(path):
-                dials = {key: dials}
-            scenario.write_text(yaml.safe_dump(dials), encoding="utf-8")
+            scenario.write_text(yaml.safe_dump(_nested(path, value)), encoding="utf-8")
             with pytest.raises(ValidationError) as refused:
                 load_comms_config(scenario)
-            located = [".".join(map(str, error["loc"])) for error in refused.value.errors()]
-            assert located == [".".join(path)], (path, value)
+            assert _located(refused) == [".".join(path)], (path, value)
 
 
 # -- the Iridium saturation block (ADRs 005 and 008) ---------------------

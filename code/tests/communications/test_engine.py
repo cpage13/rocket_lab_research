@@ -154,7 +154,7 @@ def test_fleet_cadence_non_decreasing_every_year() -> None:
     Unlike the comms flown count, the whole-fleet cadence is the raw shared
     logistic ramp and is monotonic across the whole horizon, build-out and HOLD
     alike. The launch cost is priced at this series, so its non-increasing cost
-    behaviour (the Phase 5 invariant) rests on this monotonicity.
+    behaviour (the launch-cost invariant) rests on this monotonicity.
     """
     run = run_comms_model(CommsConfig())
     for earlier, later in zip(run.fleet.years, run.fleet.years[1:], strict=False):
@@ -1002,10 +1002,11 @@ def test_the_cohort_cost_lines_are_each_living_cohort_at_its_locked_cost() -> No
     satellites times the per-satellite cost at its launch year's price, exactly; the lines'
     satellites sum to the living fleet and their costs to the annualized fleet cost; some year
     carries cohorts locked at two prices (so a line priced at the current year's launch price
-    would fail here); and the replacement split under this family-neutral rule, the one p6's
-    rule reads: each year replaces the lesser of its deployment and the deployment one life
-    earlier (the step's retirements), its replacement line those satellites at the build cost
-    plus their launches at the year's price, and some year replaces satellites.
+    would fail here); and the replacement split under this family-neutral rule, the one the
+    Iridium family's full-cadence rule reads: each year replaces the lesser of its deployment
+    and the deployment one life earlier (the step's retirements), its replacement line those
+    satellites at the build cost plus their launches at the year's price, and some year replaces
+    satellites.
     """
     config = CommsConfig()
     per_launch = config.satellite.satellites_per_launch
