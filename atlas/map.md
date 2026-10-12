@@ -323,8 +323,9 @@ curve's or the current Iridium schema (the promotion page, Open).
 - Every link, path, module, entry point, `jq` field, test, claim ID and
   code name the charter, the glossary, the atlas and the ADRs spell
   resolves on the tree (a code name is a word of the code, never of a
-  comment or docstring alone), and every line that names a
-  `.agent/` path, in any form, is marked (local)
+  comment or docstring alone; a superseded ADR is history, so its code
+  names are not checked, its links and paths are), and every line that
+  names a `.agent/` path, in any form, is marked (local)
   (`code/tests/test_agent_docs_resolve.py`, which also lists the spans an
   accepted ADR names before its code exists).
 

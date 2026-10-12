@@ -49,6 +49,16 @@ Decided, not built: an accepted ADR may name a path or a field before the code t
 exists. :data:`_DECIDED_NOT_BUILT` lists each such span with the ADR that decides it; a
 second test checks that each entry is still on its page and still does not resolve, so the
 entry is removed in the change that builds it.
+
+Superseded, history: an ADR under ``docs/adr/`` whose status line reads ``Superseded by ADR
+N`` is history, and its code names are not checked. Why: an accepted ADR's body is never
+edited (a decision changes only by a new ADR), and a superseded one records the old state, so
+it keeps naming the code of its day, which the decision that replaced it may have removed (ADR
+007 names ``fixed_books``, which ADR 011's code removes). Its links, paths, claim IDs and
+``.agent`` marks are still checked as on any page; its code names (identifiers and fields,
+module paths, test names, the word after ``uv run`` and a ``jq`` query's fields) are not. The
+ADR its status names must exist under ``docs/adr/``, so the rule cannot excuse a page by a
+status no ADR bears out.
 """
 
 from __future__ import annotations
@@ -72,6 +82,15 @@ _ROOT_PAGES = ("AGENTS.md", "CLAUDE.md", "CONTEXT.md")
 
 _PAGE_TREES = ("atlas", "docs/adr")
 """Folders whose every ``*.md`` is a page: the atlas and the ADRs."""
+
+_ADR_DIR = "docs/adr"
+"""The ADRs: the pages that carry a status line, and the only ones a status can make history."""
+
+_STATUS_PREFIX = "Status:"
+"""The start of an ADR's status line."""
+
+_SUPERSEDED = re.compile(r"Status:\s*Superseded by ADR (\d+)\b")
+"""A status line that makes its ADR history: the number of the ADR that replaced it."""
 
 _SOURCE_LEDGER = "research/SOURCE_INDEX.md"
 """The source ledger, whose rows the claim IDs name."""
@@ -561,10 +580,13 @@ def _command_words(span: str) -> list[str]:
         return span.split()
 
 
-def _span_problems(repo_dir: Path, page: Path, span: str) -> Iterator[tuple[str, str]]:
-    """Yield (word, why) for each part of a span that does not resolve."""
+def _span_problems(
+    repo_dir: Path, page: Path, span: str, *, history: bool = False
+) -> Iterator[tuple[str, str]]:
+    """Yield (word, why) for each part of a span that does not resolve; on a superseded ADR
+    (``history``) its code names are not checked, its paths and claim IDs are."""
     if not any(ch.isspace() for ch in span):
-        why = _single_problem(repo_dir, page, span)
+        why = _single_problem(repo_dir, page, span, history=history)
         if why is not None:
             yield span, why
         return
@@ -572,12 +594,16 @@ def _span_problems(repo_dir: Path, page: Path, span: str) -> Iterator[tuple[str,
     for index, word in enumerate(words):
         previous = words[index - 1] if index > 0 else None
         before = words[index - 2] if index > 1 else None
+        entry_point = previous == "run" and before == "uv" and not word.startswith("-")
+        if history and (previous == "-m" or entry_point):
+            continue
         if previous == "-m":
             why = _module_problem(repo_dir, word)
-        elif previous == "run" and before == "uv" and not word.startswith("-"):
+        elif entry_point:
             why = _entry_point_problem(repo_dir, word)
         elif word == "jq" and (previous is None or previous in _COMMAND_SEPARATORS):
-            yield from _jq_problems(repo_dir, page, words[index + 1 :])
+            if not history:
+                yield from _jq_problems(repo_dir, page, words[index + 1 :])
             continue
         elif (
             previous in _OUTPUT_WORDS
@@ -596,18 +622,23 @@ def _span_problems(repo_dir: Path, page: Path, span: str) -> Iterator[tuple[str,
             yield word, why
 
 
-def _single_problem(repo_dir: Path, page: Path, span: str) -> str | None:
+def _single_problem(repo_dir: Path, page: Path, span: str, *, history: bool = False) -> str | None:
     """Return why a span with no white space does not resolve, or None when it does (a
-    ``.agent`` path is never looked up: its line's mark is checked once, for the line)."""
+    ``.agent`` path is never looked up: its line's mark is checked once, for the line; on a
+    superseded ADR, ``history``, a code name is not looked up, a path or a claim ID is)."""
     if _LOCAL_PATH.search(span):
         return None
     if "::" in span:
         file_part, _, test_part = span.partition("::")
+        if history:
+            return _path_problem(repo_dir, page, file_part)
         return _path_problem(repo_dir, page, file_part) or _name_problem(repo_dir, test_part)
     if span.startswith((".", "-", "'", '"', "/")) or _PLACEHOLDER.search(span):
         return None
     if _is_path_like(span):
         return _path_problem(repo_dir, page, span)
+    if history and not _CLAIM_ID.fullmatch(span):
+        return None
     return _name_problem(repo_dir, span)
 
 
@@ -620,11 +651,53 @@ def _link_problem(page: Path, target: str) -> str | None:
     return None if path.exists() else "the link's target does not exist"
 
 
+@dataclass(frozen=True)
+class Supersession:
+    """A superseded ADR's status line.
+
+    Attributes:
+        line: The status line's number, from 1.
+        by: The number of the ADR that replaced this one, as the status line writes it.
+    """
+
+    line: int
+    by: str
+
+
+def _supersession(repo_dir: Path, page: Path, lines: list[str]) -> Supersession | None:
+    """Return the status of an ADR that a later ADR replaced, or None for any other page (an
+    ADR whose status says otherwise, and every page outside ``docs/adr/``)."""
+    if page.relative_to(repo_dir).parent.as_posix() != _ADR_DIR:
+        return None
+    for number, line in enumerate(lines, start=1):
+        if line.startswith(_STATUS_PREFIX):
+            superseded = _SUPERSEDED.match(line)
+            return None if superseded is None else Supersession(number, superseded.group(1))
+    return None
+
+
+def _missing_successor(repo_dir: Path, supersession: Supersession) -> bool:
+    """Return whether no ADR under ``docs/adr/`` has the number a status line names."""
+    numbered = f"{int(supersession.by):03d}-*.md"
+    return not any((repo_dir / _ADR_DIR).glob(numbered))
+
+
 def _failures(repo_dir: Path, page: Path) -> Iterator[Failure]:
-    """Yield every failure on one page."""
+    """Yield every failure on one page (a superseded ADR's code names excepted: the module
+    docstring's history rule)."""
     where = page.relative_to(repo_dir).as_posix()
     exceptions = {entry.span for entry in _DECIDED_NOT_BUILT if entry.page == where}
-    for number, line in enumerate(page.read_text(encoding="utf-8").splitlines(), start=1):
+    lines = page.read_text(encoding="utf-8").splitlines()
+    supersession = _supersession(repo_dir, page, lines)
+    if supersession is not None and _missing_successor(repo_dir, supersession):
+        yield Failure(
+            where,
+            supersession.line,
+            f"Superseded by ADR {supersession.by}",
+            f"no ADR numbered {supersession.by} under {_ADR_DIR}",
+        )
+    history = supersession is not None
+    for number, line in enumerate(lines, start=1):
         if (local := _local_failure(where, number, line)) is not None:
             yield local
         imported = _IMPORT.match(line.strip()) if page.name == "CLAUDE.md" else None
@@ -636,13 +709,14 @@ def _failures(repo_dir: Path, page: Path) -> Iterator[Failure]:
         for span in _SPAN.findall(line):
             if span in exceptions:
                 continue
-            for word, why in _span_problems(repo_dir, page, span):
+            for word, why in _span_problems(repo_dir, page, span, history=history):
                 yield Failure(where, number, word, why)
 
 
 def test_every_path_and_name_the_agent_pages_spell_resolves(repo_dir: Path) -> None:
     """Objective: every link, path, module, entry point, ``jq`` field, test, claim ID and code
-    name the charter, the glossary, the atlas and the ADRs spell resolves on the tree, and
+    name the charter, the glossary, the atlas and the ADRs spell resolves on the tree (a
+    superseded ADR's code names excepted: they are history, as the module docstring says), and
     every line that names a ``.agent`` path, in any form, is marked ``(local)``.
 
     Sample: the pages on disk (``AGENTS.md``, ``CLAUDE.md``, ``CONTEXT.md``, every ``*.md``
