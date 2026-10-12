@@ -200,8 +200,11 @@ SATELLITES_PER_LAUNCH_NO_UPGRADE: Final[int] = 15
 upgrade: mass-bound (range 11 to 20). The no-upgrade bracket's value."""
 
 SATELLITES_PER_LAUNCH_MIN: Final[int] = 1
-"""The fewest satellites per launch a config accepts: a launch carries at least one. A
-structural bound, not a tunable."""
+"""The fewest satellites per launch, one: the bound the config's ``satellites_per_launch`` field
+accepts and the shared fleet-and-cost loop (``communications.engine.run_fleet_loop``) checks. The
+loop deploys and costs whole launches (a cohort is a multiple of the satellites per launch, and
+the launches flown are its quotient), so a count below one has no launch to divide into; the loop
+refuses it with a clear error instead. A structural bound, not a tunable."""
 
 SATELLITES_PER_LAUNCH_MAX: Final[int] = SATELLITES_PER_LAUNCH_BLOCK_UPGRADE
 """DERIVED (COMM-713). The most satellites per launch a config accepts: the validated count with

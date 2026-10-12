@@ -156,7 +156,7 @@ from common.cadence import (
 from common.cohort import LivedCohort, cohort_is_alive_at, living_cohorts
 from common.provenance import as_float, as_int
 from communications.config import CommsConfig
-from communications.constants import MONTHS_PER_YEAR, BindingRegime
+from communications.constants import MONTHS_PER_YEAR, SATELLITES_PER_LAUNCH_MIN, BindingRegime
 
 logger = logging.getLogger(__name__)
 
@@ -197,12 +197,6 @@ round an exact half DOWN. The error is of order 1e-14 at any modeled cadence, fa
 below this tolerance, while 1e-9 of a launch is far below any meaningful fraction a
 share dial can express, so the tolerance only ever repairs representation error. A
 fixed numerical constant, not a tunable."""
-
-MIN_SATELLITES_PER_LAUNCH: Final[int] = 1
-"""The fewest satellites a launch carries in the shared fleet-and-cost loop: one. The loop
-deploys and costs whole launches (a cohort is a multiple of the satellites per launch, and the
-launches flown are its quotient), so a count below one has no launch to divide into; the loop
-refuses it with a clear error instead. A structural bound, not a tunable."""
 
 MARGIN_PERCENT_SCALE: Final[float] = 100.0
 """The percent scale for a margin: ``(revenue - cost) / revenue`` times this yields a
@@ -1030,7 +1024,8 @@ def run_fleet_loop(
             coverage and metadata blocks).
         rule: The family's deployment rule; it reads only its step and keeps no state.
         satellites_per_launch: The satellites one launch carries this run (at least
-            :data:`MIN_SATELLITES_PER_LAUNCH`).
+            :data:`~communications.constants.SATELLITES_PER_LAUNCH_MIN`, the bound the
+            config's field accepts).
 
     Returns:
         The :class:`FleetTrajectory`: one :class:`FleetYear` per model year and the
@@ -1038,17 +1033,17 @@ def run_fleet_loop(
 
     Raises:
         ValueError: If ``satellites_per_launch`` is not an integer (a bool or a float is
-            not one) or is below :data:`MIN_SATELLITES_PER_LAUNCH`.
+            not one) or is below :data:`~communications.constants.SATELLITES_PER_LAUNCH_MIN`.
         DeploymentRuleError: If the rule returns an impossible deployment for a year.
     """
     if (
         not isinstance(satellites_per_launch, int)
         or isinstance(satellites_per_launch, bool)
-        or satellites_per_launch < MIN_SATELLITES_PER_LAUNCH
+        or satellites_per_launch < SATELLITES_PER_LAUNCH_MIN
     ):
         raise ValueError(
             f"the fleet loop deploys whole launches, so satellites_per_launch must be an "
-            f"integer of at least {MIN_SATELLITES_PER_LAUNCH}; got {satellites_per_launch!r}"
+            f"integer of at least {SATELLITES_PER_LAUNCH_MIN}; got {satellites_per_launch!r}"
         )
     life = config.satellite.satellite_lifetime_years
     coverage_floor = config.coverage.satellites_for_full_coverage
