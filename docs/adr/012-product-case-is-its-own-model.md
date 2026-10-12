@@ -16,8 +16,8 @@ at the investor's prices held flat ("These prices are fixed, and the service imp
 
 The product case is its own package, `code/src/product_case/`. It reads only the engineering
 model's promoted artifact, its schema pinned and its SHA-256 recorded, and nothing it computes
-feeds that model; the demand curve, the market draws, the usable test, the Pareto fronts and
-the pick live only there. numpy is its runtime dependency too, in one module (ADR 010's scope
+feeds that model; the demand curve, the market draws, the usable test, the Pareto fronts and the
+pick live only there. numpy is its runtime dependency too, in one module (ADR 010's scope
 widened). The investor's prices are held flat; the pick chooses only each IoT class's usage, the
 most median revenue among the usages usable in at least three quarters of the markets, or, when
 none is, the most usable, warned; lower prices appear only as context. Every usage at the
@@ -27,11 +27,12 @@ can move with a price or a terminal change, in steps: a change that carries IoT'
 filled markets across the floor's slack, the fill under the floor, or the median's peak past a
 step moves it, and others leave it. Its headline is the pick at the central market, each market
 response at the middle of its range. With the responses drawn independently and uniformly, each
-class's customers there are its median over all markets, so the headline is the typical market;
-among the markets in which the pick is usable, which lean strong, it sits below their median, and
-the artifact publishes both spreads and the headline's rank in each. At the central market the
-price response is 1, so for a given usage an uncapped class's price change shows there as
-customers, not revenue; the headline moves with a price through the usage the pick then takes.
+class's customers there are, in the population of markets, its median; in the drawn sample, within
+sampling error. So the headline is the typical market; among the markets in which the pick is
+usable, which lean strong, it sits below their median, and the artifact publishes both spreads and
+the headline's rank in each. At the central market the price response is 1, so for a given usage
+an uncapped class's price change shows there as customers, not revenue; the headline moves with a
+price through the usage the pick then takes.
 
 ## Consequences
 

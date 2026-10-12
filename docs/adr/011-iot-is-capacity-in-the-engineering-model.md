@@ -7,14 +7,19 @@ lines). Supersedes ADR 007. Replaces the consequence of ADR 006 that names the I
 ## Context
 
 ADR 007 held IoT as two lines of their own in the Iridium model, sold from the coverage floor.
-On 2026-10-06 the investor decided that IoT is two device classes, minimal-packet IoT and data
-IoT, beside the small and mounted terminals, whose customers and usage come from the product
-case's Monte Carlo ("If we barely use any of the network, then we just increase usage as is ...
-So we just do a Pareto. That is why we do the Monte Carlo"). The owned spectrum does not bound
-IoT the way it bounds people: its IoT room holds far more devices than any market, so selling
-every IoT seat would publish revenue no market supports. The investor keeps market assumptions
-out of the engineering model ("you don't want to mix your market with your engineering and your
-production ... Keep it separate").
+Its reading that IoT uses a small share of a beam's uplink held for minimal-packet IoT alone: at
+the coverage floor, the IoT check that `default.json` publishes at `iridium-v6`, on the device
+counts of the two lines this decision removes, puts minimal-packet IoT at 1.8 percent of a
+beam's uplink bits with the 20 percent MAC efficiency (0.4 percent without; its tones 1.3 to 2.3
+percent), data IoT at 23.0 percent with it and 4.6 percent without, and the two lines together
+at 24.8 and 5.0 percent. On 2026-10-06 the investor decided that IoT is two device classes,
+minimal-packet IoT and data IoT, beside the small and mounted terminals, whose customers and
+usage come from the product case's Monte Carlo ("If we barely use any of the network, then we
+just increase usage as is ... So we just do a Pareto. That is why we do the Monte Carlo"). The
+owned spectrum does not bound IoT the way it bounds people: its IoT room holds far more devices
+than any market, so selling every IoT seat would publish revenue no market supports. The
+investor keeps market assumptions out of the engineering model ("you don't want to mix your
+market with your engineering and your production ... Keep it separate").
 
 ## Decision
 
