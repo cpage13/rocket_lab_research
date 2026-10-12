@@ -165,17 +165,17 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 FULL_COVERAGE_FRACTION: Final[float] = 1.0
-"""The coverage fraction at the coverage FLOOR: the living fleet is clamped to this
-so the coverage metric (``living_fleet / coverage_floor``) never reports above 1.0
-once the fleet meets or exceeds the floor (with a large base the fleet runs well
-above the floor, so coverage saturates at 1.0 while the build continues toward the
-capacity-sized fleet target)."""
+"""The coverage fraction at the coverage FLOOR, the cap on the shared loop's coverage metric:
+the ratio ``living_fleet / coverage_floor`` is clamped to this, so it never reports above 1.0
+once the living fleet meets or exceeds the floor, for every family (a fleet that keeps growing
+past the floor, the Iridium fleet's or a cellular build toward a capacity-sized target, reads
+1.0 from the year it reaches the floor)."""
 
 FULL_BUILDOUT_FRACTION: Final[float] = 1.0
-"""The buildout fraction at full deployment: the living fleet is clamped to this so
-the served-subscribers mapping (``buildout_fraction x subscriber_target``) never
-scales beyond the target when the build overshoots the fleet target by less than one
-launch's worth."""
+"""The buildout fraction at full deployment, the cellular family's: the ratio ``living_fleet
+/ fleet_target`` is clamped to this, so the served-subscribers mapping (``buildout_fraction x
+subscriber_target``) never scales beyond the target when the build overshoots the fleet target
+by less than one launch's worth."""
 
 NO_BUILDOUT_FRACTION: Final[float] = 0.0
 """The lower clamp on the buildout fraction fed to the served-subscribers mapping: a
@@ -401,13 +401,12 @@ def usd_per_person(cost_musd: float | None, people_served: int) -> float | None:
     """Divide a $M cost by the served-people base into USD per person.
 
     The one per-person conversion: the cost (converted from $M to whole USD via
-    :data:`MUSD_TO_USD`) over the served people. It prices both published
-    per-person figures on the same base: the final-year cash cost (the final
-    year's replacement line) and the annualized cost (the final year's annualized
-    fleet cost), so an override or a capacity-capped base flows through both.
-    ``None`` when there is no cost basis (the final year replaced no retiring
-    cohort) or nobody is served (the division is undefined): an undefined figure
-    is never published as 0.0.
+    :data:`MUSD_TO_USD`) over the served people. It prices the cellular record's one
+    per-person figure, the final-year cash cost per served person (the final year's
+    replacement line over the final year's served people), so an override or a
+    capacity-capped base flows through it; no artifact publishes it. ``None`` when
+    there is no cost basis (the final year replaced no retiring cohort) or nobody is
+    served (the division is undefined): an undefined figure is never published as 0.0.
 
     Args:
         cost_musd: The cost, $M, or ``None`` when no basis exists.
@@ -738,13 +737,11 @@ class CellularSizing:
         binding_regime: Which constraint set the target (the coverage floor, the capacity
             need, or the fleet cap).
         subscribers_per_satellite: The per-satellite density that sized the target (people).
-        satellites_per_launch: The satellites per launch the run deploys with.
     """
 
     fleet_target: int
     binding_regime: BindingRegime
     subscribers_per_satellite: int
-    satellites_per_launch: int
 
 
 @dataclass(frozen=True)
@@ -1326,8 +1323,7 @@ def build_cellular_record(
             blocks).
         fleet: The run's shared fleet-and-cost record, deployed under
             :func:`cellular_rule` for ``sizing.fleet_target``.
-        sizing: How the fleet was sized (the target, its regime, the density, the
-            satellites per launch).
+        sizing: How the fleet was sized (the target, its regime and the density).
 
     Returns:
         The :class:`CellularTrajectory`.
@@ -1478,7 +1474,6 @@ def run_comms_model(config: CommsConfig) -> CellularRun:
         fleet_target=fleet_target,
         binding_regime=binding_regime,
         subscribers_per_satellite=subscribers_per_satellite,
-        satellites_per_launch=satellites_per_launch,
     )
     fleet = run_fleet_loop(
         config, cellular_rule(fleet_target), satellites_per_launch=satellites_per_launch
