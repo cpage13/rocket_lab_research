@@ -223,10 +223,12 @@ anchor), not a certified field life."""
 
 SATELLITE_LIFETIME_YEARS_MAX: Final[int] = 20
 """The longest satellite life a config accepts, years: a sanity bound on the cohort cliff, not
-a sourced life. It sits above the longest design life the research records for an L-band
-satellite (Iridium NEXT's 12.5 years, COMM-642) and at four times the 5-year default (COMM-088).
-A life near it gives a steady state (the final year's comms launches x satellites per launch x
-the life) that can pass the saturation curve's last row, which the Iridium run refuses."""
+a sourced life, at four times the 5-year default (COMM-088). The research records L-band lives
+on both sides of it: Iridium NEXT's 12.5-year design life (COMM-642), extended to about 17.5
+years by a 2024 engineering reassessment, and Iridium's first-generation satellites of the
+1990s, which lasted more than 20 years (COMM-643). A life near it gives a steady state (the final
+year's comms launches x satellites per launch x the life) that can pass the saturation curve's
+last row, which the Iridium run refuses."""
 
 ORBIT_ALTITUDE_KM_SCENARIO: Final[float] = 450.0
 """SCENARIO (Part 7 physics loop, 2026-07-10). The published fleet altitude, km.
