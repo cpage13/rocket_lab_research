@@ -1,4 +1,5 @@
-"""Tests for the Iridium promotion command's failure handling and output streams.
+"""Tests for the Iridium promotion command: its failure handling, its output streams and the
+artifact's coverage of the run's records.
 
 ``python -m communications.json_output <scenario> <output>`` follows the shared
 command-line conventions (``common.cli``) and writes its one artifact through
@@ -22,7 +23,12 @@ the shared writer (``common.file_io.write_files_with_rollback``). The contract:
    names (a relative path anchored to the repository root, an absolute one as
    given) and runs the Iridium entry: a missing curve, or one computed for other
    inputs (the identity check), is one error record naming the curve file, and
-   nothing is written.
+   nothing is written;
+6. no field of the run's Iridium record can stay unpublished silently: each record the
+   artifact publishes whole and its block carry the same fields in the same order, each year's
+   Iridium lines sit in the year block, every field of the Iridium record has its home in the
+   artifact, and every artifact field is required, so a field the writer forgets to map fails
+   the build instead of publishing a default.
 """
 
 from __future__ import annotations
@@ -33,17 +39,45 @@ import logging
 import os
 import stat
 from collections.abc import Callable
+from dataclasses import fields
 from pathlib import Path
-from typing import NoReturn
+from typing import Final, NoReturn, get_args
 
 import pytest
+from pydantic import BaseModel
 
 from common.cli import EXIT_ERROR, EXIT_OK
 from common.file_io import ARTIFACT_FILE_END, render_artifact_json
 from communications import json_output
 from communications.config import IridiumArpuDials, IridiumDials
 from communications.constants import SATURATION_CURVE_PATH_DEFAULT
-from communications.json_output import main
+from communications.iridium import (
+    ClassReadingRecord,
+    ClassRecord,
+    ClassYearRecord,
+    FixedBooksRecord,
+    IotCheckRecord,
+    IotCheckRowRecord,
+    IridiumRecord,
+    MarginalIntervalRecord,
+    ReadingRecord,
+    SaturationRecord,
+    YearRecord,
+)
+from communications.json_output import (
+    ClassBlock,
+    ClassReadingBlock,
+    ClassYearBlock,
+    FixedBooksBlock,
+    IotCheckBlock,
+    IotCheckRowBlock,
+    IridiumModelArtifact,
+    MarginalIntervalBlock,
+    ReadingBlock,
+    SaturationBlock,
+    YearBlock,
+    main,
+)
 from communications.saturation_curve import SaturationCurve
 
 _NOT_AN_IRIDIUM_SCENARIO = (
@@ -451,3 +485,134 @@ def test_a_scenario_runs_on_a_curve_computed_for_its_inputs(
     phone = payload["classes"][2]
     assert phone["device_class"] == "phone_class"
     assert phone["per_satellite_capacity_gbps"] == pytest.approx(10.5 * 0.65 * 0.15 * 0.616)
+
+
+# --------------------------------------------------------------------------
+# Every field of the run's records reaches the artifact (contract item 6)
+# --------------------------------------------------------------------------
+
+_RECORDS_AND_BLOCKS: Final[tuple[tuple[type, type[BaseModel]], ...]] = (
+    (ClassRecord, ClassBlock),
+    (MarginalIntervalRecord, MarginalIntervalBlock),
+    (ClassYearRecord, ClassYearBlock),
+    (FixedBooksRecord, FixedBooksBlock),
+    (ReadingRecord, ReadingBlock),
+    (ClassReadingRecord, ClassReadingBlock),
+    (IotCheckRecord, IotCheckBlock),
+    (IotCheckRowRecord, IotCheckRowBlock),
+    (SaturationRecord, SaturationBlock),
+)
+"""Each Iridium record the artifact publishes whole, beside the block the writer maps it onto
+field for field."""
+
+_IRIDIUM_RECORD_HOMES: Final[dict[str, str | None]] = {
+    "scenario_name": "provenance",
+    "spectrum_mhz": "iridium_physics",
+    "aperture_m2": "iridium_physics",
+    "satellites_per_launch": "iridium_physics",
+    "operations_cost_musd": "iridium_physics",
+    "ecosystem_assumption": "iridium_physics",
+    "coverage_floor_reached_year": "trajectory_summary",
+    "cost_per_satellite_year_musd": "trajectory_summary",
+    "classes": None,
+    "years": None,
+    "fixed_books": None,
+    "saturation": None,
+    "assumptions": None,
+}
+"""Where each field of the Iridium record is published, under its own name: the artifact's
+block that holds it, or None for a field of the artifact's top level."""
+
+
+def _types_in(annotation: object) -> list[object]:
+    """Return an annotation and every type argument inside it, depth first."""
+    return [annotation, *(inner for arg in get_args(annotation) for inner in _types_in(arg))]
+
+
+def _blocks_under(model: type[BaseModel]) -> list[type[BaseModel]]:
+    """Return ``model`` and every block model its fields reach, each once, in the order found."""
+    found = [model]
+    index = 0
+    while index < len(found):
+        for info in found[index].model_fields.values():
+            for inner in _types_in(info.annotation):
+                if isinstance(inner, type) and issubclass(inner, BaseModel) and inner not in found:
+                    found.append(inner)
+        index += 1
+    return found
+
+
+@pytest.mark.parametrize(
+    ("record", "block"),
+    _RECORDS_AND_BLOCKS,
+    ids=[record.__name__ for record, _ in _RECORDS_AND_BLOCKS],
+)
+def test_each_record_and_its_block_carry_the_same_fields_in_the_same_order(
+    record: type, block: type[BaseModel]
+) -> None:
+    """Objective: a field added to one of the Iridium records the artifact publishes whole
+    cannot stay unpublished silently, since the regeneration test compares only what is
+    published: the block the writer maps the record onto carries the record's every field,
+    under the same name and in the same order (the artifact's key order), and no other.
+
+    Sample: the nine record and block pairs the writer maps field for field (classes and their
+    intervals, each year's class lines, the fixed books, the readings and their class lines,
+    the IoT check and its rows, the saturation block).
+
+    Expected outcome: the record's field names, in order, equal the block's.
+    """
+    assert [field.name for field in fields(record)] == list(block.model_fields)
+
+
+def test_every_field_of_the_iridium_record_and_its_years_reaches_the_artifact() -> None:
+    """Objective: the Iridium record's own fields, and each year's Iridium lines, are published
+    too: none can be added without a home in the artifact.
+
+    Sample: the Iridium record's thirteen fields and their homes (``_IRIDIUM_RECORD_HOMES``);
+    the year record's fields against the year block, which also carries the shared record's
+    launches, living fleet and annualized cost beside them.
+
+    Expected outcome: the homes name exactly the Iridium record's fields; each home is a field
+    of the artifact's top level, or of the block it names, under the same name; every field of
+    the year record is a field of the year block.
+    """
+    assert set(_IRIDIUM_RECORD_HOMES) == {field.name for field in fields(IridiumRecord)}
+    top_level = IridiumModelArtifact.model_fields
+    for name, block in _IRIDIUM_RECORD_HOMES.items():
+        if block is None:
+            assert name in top_level, name
+            continue
+        holder = top_level[block].annotation
+        assert isinstance(holder, type), block
+        assert issubclass(holder, BaseModel), block
+        assert name in holder.model_fields, f"{block}.{name}"
+    assert {field.name for field in fields(YearRecord)} <= set(YearBlock.model_fields)
+
+
+def test_every_artifact_field_is_required_so_a_field_left_unmapped_fails_the_build() -> None:
+    """Objective: the writer maps each record onto its block by name, so a field it forgets
+    must fail the artifact's construction rather than publish a default: no field of the
+    artifact, or of any block under it, has a default.
+
+    Sample: the artifact model and every block model its fields reach, walked through their
+    annotations (tuples, unions and dictionaries included).
+
+    Expected outcome: the walk reaches exactly the block models ``json_output`` defines (so no
+    block escapes the check), and every field of each is required.
+    """
+    blocks = _blocks_under(IridiumModelArtifact)
+    defined = {
+        value
+        for value in vars(json_output).values()
+        if isinstance(value, type)
+        and issubclass(value, BaseModel)
+        and value.__module__ == json_output.__name__
+    }
+    assert set(blocks) == defined
+    with_a_default = [
+        f"{block.__name__}.{name}"
+        for block in blocks
+        for name, info in block.model_fields.items()
+        if not info.is_required()
+    ]
+    assert with_a_default == []

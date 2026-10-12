@@ -172,9 +172,9 @@ class PendingWrite:
 def render_artifact_json(artifact: BaseModel) -> str:
     """Serialize a typed artifact as the house JSON: indented, without a trailing newline.
 
-    The one serializer for the space model, the ground reference, and the
-    Iridium model, whether printed (``rklb-value --json``) or promoted
-    (:func:`artifact_write`).
+    The one serializer for the space model, the ground reference, the Iridium
+    model and the saturation curve, whether printed (``rklb-value --json``) or
+    promoted (:func:`artifact_write`).
 
     Args:
         artifact: The built artifact model.
@@ -506,6 +506,24 @@ class SourceCheckout:
     """
 
     repo_dir: Path
+
+    def anchored(self, path: str | Path) -> Path:
+        """Return ``path`` anchored at the repository root when it is relative, else as given.
+
+        The one anchoring rule of the commands that read and write the promoted
+        files: those files live under the repository root, never under
+        ``code/``, so a relative path names a file there whatever the working
+        directory; an absolute path is used as given. The path is not resolved.
+
+        Args:
+            path: A file path, relative or absolute.
+
+        Returns:
+            ``repo_dir / path`` for a relative path; the path itself for an
+            absolute one.
+        """
+        given = Path(path)
+        return given if given.is_absolute() else self.repo_dir / given
 
     def repo_relative(self, path: Path) -> str:
         """Return ``path`` as a repository-relative POSIX path, the provenance form.

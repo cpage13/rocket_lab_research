@@ -282,9 +282,11 @@ def round_half_up(quantity: float) -> int:
     """Round a non-negative quantity to the nearest integer, half up.
 
     ``floor(quantity + ROUND_TO_NEAREST_OFFSET)``: the one half-up rounding both
-    models use (the launch ramp's mission counts here; the communications
-    subscriber density, served base, and ARPU bucket counts), where Python's
-    ``round`` would round an exact half to even.
+    models use, where Python's ``round`` would round an exact half to even: the
+    launch ramp's mission counts here; in communications, the cellular family's
+    served base, the Iridium model's people per class in every year and reading,
+    the saturation curve's markers, and the rows' geometric midpoints the curve's
+    loader checks those markers against.
 
     Args:
         quantity: A non-negative quantity, e.g. the smooth logistic launch rate.
