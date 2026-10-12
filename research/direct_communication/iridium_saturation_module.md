@@ -88,7 +88,7 @@ Three cross-checks the module's ADRs cite: how the downlink share relaxes each c
 
 **What it measures.** The curve's demand is every resident of an inhabited cell (take-up 1.0, the maximal-demand bound; ADR 009). The run gives each cell 5 percent of its residents instead (take-up 0.05), for the phone class at the design's settings, to see how much the result rests on that choice.
 
-| Marker (the round-2 reviewer's dense rerun, 2 snapshots a fleet) | Every resident | 5 percent of residents |
+| Marker | Every resident (the design's central sweep, 4 snapshots a fleet) | 5 percent of residents (the round-2 reviewer's dense rerun, 2 snapshots a fleet) |
 |---|---|---|
 | Maximum use (beams) | 384,932 | 255,384 |
 | The saturation number (elasticity under 0.10) | 20,456 | 18,892 (-7.6 percent) |

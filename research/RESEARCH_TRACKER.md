@@ -325,9 +325,11 @@ Intentionally excluded:
   three cross-checks ADRs 008 to 010 cite. On the design's prototypes,
   smallest footprint first reaches 95.6 to 97.8 percent of the exact
   optimum, a 5 percent subscriber share moves the saturation number 7.6
-  percent, and applying the downlink share after the curve under-counts the
-  terminals by a few percent at the one usage measured
-  (`direct_communication/iridium_saturation_module.md` Section 2).
+  percent, and applying the downlink share after the curve (at d = 0.67)
+  under-counts the terminals' capacity by 0.36 to 6.0 percent at 342 to
+  34,040 satellites and their maximum use by 5.8 and 9.8 percent, at the one
+  usage measured (`direct_communication/iridium_saturation_module.md`
+  Section 2).
 
 ## Stakeholder Input Trail
 
@@ -553,23 +555,25 @@ Highest-priority research gaps:
       `.agent/lifecycle/strategy_09_29.md` (local): the realistic-array band's
       results, the interference trim's agreement with the design review's
       independent code, the 2026-10-03 revenue table's independent check with
-      its measurement of the linear panel rule, and design point j's link
-      arithmetic. Section 2 holds only the three records ADRs 008 to 010 cite
-      (2026-10-12). The 2026-10-03 panel-rule figures were measured on the
-      prototypes at one usage for every class; the review since the push
-      measured the rule on the module as built at the investor's usage and
-      found every class at or above it and the mounted terminal exactly at it
-      (code_sat_a O1, confirmed in
+      its measurement of the linear panel rule; and, from p7's task 2
+      (`.agent/lifecycle/plan_saturation_10_04_p7.md` (local)),
+      design point j's link arithmetic. Section 2 holds only the three records
+      ADRs 008 to 010 cite (2026-10-12). The 2026-10-03 panel-rule figures
+      were measured on the prototypes at one usage for every class; the review
+      since the push measured the rule on the module as built at the
+      investor's usage and found every class at or above it and the mounted
+      terminal exactly at it (code_sat_a O1, confirmed in
       `.agent/other/review_since_push_10_12/verify_code.md` (local)). So the
       two must be reconciled before the panel gap is recorded or quoted. Each
       record joins with a row when a public document quotes it.
     - The on-hold cellular family (code, outside this wiki) still sizes one
       flat ~25 m^2 satellite, flown 12 a launch
-      (`SUBSCRIBERS_PER_SATELLITE_DEFAULT` and `SATELLITES_PER_LAUNCH_DEFAULT`
-      in `code/src/communications/constants.py`, on COMM-535..560). That
-      premise rests on the fit COMM-711 supersedes: no flat 25 m^2 body fits
-      Neutron. Re-ground it before the family resumes (the review since the
-      push, research M1, 2026-10-12).
+      (`SUBSCRIBERS_PER_SATELLITE_DEFAULT`, on COMM-535..560, and
+      `SATELLITES_PER_LAUNCH_DEFAULT`, on COMM-258 / COMM-260, in
+      `code/src/communications/constants.py`). That premise rests on the fit
+      COMM-711 supersedes: no flat 25 m^2 body fits Neutron. Re-ground it
+      before the family resumes (the review since the push, research M1,
+      2026-10-12).
 
 Tracker hygiene backlog:
 

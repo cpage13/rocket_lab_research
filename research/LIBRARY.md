@@ -29,7 +29,7 @@ docs behind any claim you want to inspect:
 - Topic folders below, source research and historical review artifacts.
 
 For communications (nine research waves, 2026-06-11 to 2026-07-08, and the saturation
-build's two notes, 2026-10-05 and 2026-10-12), start with
+build's two notes, 2026-10-05; the saturation note's Section 2, 2026-10-12), start with
 [vision/comms_thesis.md](vision/comms_thesis.md), the belief record (its latest
 revision, Revision 4, covers wave 4), then the syntheses, which cover waves 1, 4, 5 and 6:
 [synthesis/comms_baseline_synthesis.md](synthesis/comms_baseline_synthesis.md) (the neutral
@@ -488,8 +488,10 @@ for the aggregate co-channel interference from every satellite in view, priced o
 sampled served cells at each fleet and reported at three far-sidelobe floors of the
 satellite's array: -0.4 dBi, the conservative edge (COMM-715), and -2 and -8 dBi, the
 calibrated-array band (COMM-716), with each beam weighted by the scan roll-off
-(COMM-717). The directional classes get none: each terminal's own pattern suppresses
-the far-sidelobe leak (`direct_communication/iridium_saturation_module.md`, 1.2 to 1.4).
+(COMM-717; `direct_communication/iridium_saturation_module.md`, 1.2 to 1.4). The
+directional classes get none: each terminal's own pattern suppresses the far-sidelobe
+leak (the curve's stated limits, `limits` in
+[`communications/models/iridium/saturation_curve.json`](../communications/models/iridium/saturation_curve.json)).
 
 **Realistic-array band:** the saturation curve's three points for the ground area each
 beam takes, the design's F9: the uniform beam with footprints touching (central, the
