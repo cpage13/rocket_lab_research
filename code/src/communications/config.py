@@ -548,7 +548,8 @@ class IridiumArpuDials(BaseModel):
         description=(
             "The phone class's monthly price, dollars, held flat. INVESTOR_SET to "
             f"{PHONE_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-03), its floor: no price "
-            "haircut takes it lower. Configurable."
+            "haircut takes it lower. Configurable; a run priced below the floor says so in its "
+            "stated assumptions."
         ),
     )
     minimal_packet_iot_price_usd_month: float = Field(

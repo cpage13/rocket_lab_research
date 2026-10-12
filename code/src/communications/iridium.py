@@ -1196,6 +1196,12 @@ def _assumptions(
     mounted = CLASS_USAGE[DeviceClass.MOUNTED_TERMINAL_CLASS]
     phone = CLASS_USAGE[DeviceClass.PHONE_CLASS]
     floor = config.coverage.satellites_for_full_coverage
+    below_phone_floor = (
+        "; this run prices the phone class below that floor, at "
+        f"${arpu.phone_class_price_usd_month:g} a month"
+        if arpu.phone_class_price_usd_month < PHONE_CLASS_PRICE_FLOOR_USD_MONTH
+        else ""
+    )
     lines = [
         ECOSYSTEM_ASSUMPTION_NOTE,
         (
@@ -1260,7 +1266,7 @@ def _assumptions(
             f"${arpu.mounted_terminal_class_price_usd_month:g} and the phone class "
             f"${arpu.phone_class_price_usd_month:g} a month. The phone class's floor is the "
             f"investor's ${PHONE_CLASS_PRICE_FLOOR_USD_MONTH:g} a month, which no price haircut "
-            "goes below. A lower price or a "
+            f"goes below{below_phone_floor}. A lower price or a "
             "smaller market is a division in the conclusions, never in the model: a price "
             "haircut divides revenue only, a market haircut people and revenue, and every "
             "margin is re-derived against the same fleet cost, never divided or averaged."

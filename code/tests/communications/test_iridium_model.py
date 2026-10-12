@@ -1767,6 +1767,41 @@ def test_the_per_launch_and_price_lines_state_the_run_beside_the_validated_value
     assert "(its floor)" not in " ".join(lines)
 
 
+def test_a_phone_price_below_the_floor_is_named_in_the_price_line(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
+    """Objective: a phone class price below the investor's floor, which the config accepts (the
+    floor is a stated value, not a config bound), publishes a price line that says the run is
+    below the floor, never the floor beside a price that breaks it and nothing more.
+
+    Sample: the shipped scenario with the phone class at $12 a month (below the $15 floor); the
+    same at $15 (the floor itself) and at $20 (above it).
+
+    Expected outcome: at $12 the price line states the phone class at $12, the floor at the
+    investor's $15, and that this run prices the phone class below that floor, at $12 a month;
+    at $15 and at $20 the floor's sentence ends where it did and no line says the run is below
+    the floor.
+    """
+    shipped = load_comms_config(iridium_yaml)
+    below = _with_iridium(shipped, arpu={"phone_class_price_usd_month": 12.0})
+    lines = run_iridium_model(below, committed_saturation_curve).iridium.assumptions
+    assert _line_with(lines, "Each class's price is held flat").startswith(
+        "Each class's price is held flat: the small terminal $10, the mounted terminal $50 and "
+        "the phone class $12 a month. The phone class's floor is the investor's $15 a month, "
+        "which no price haircut goes below; this run prices the phone class below that floor, at "
+        "$12 a month. A lower price or a smaller market is a division in the conclusions"
+    )
+    for price in (15.0, 20.0):
+        at_or_above = _with_iridium(shipped, arpu={"phone_class_price_usd_month": price})
+        lines = run_iridium_model(at_or_above, committed_saturation_curve).iridium.assumptions
+        line = _line_with(lines, "Each class's price is held flat")
+        assert (
+            f"the phone class ${price:g} a month. The phone class's floor is the investor's $15 a "
+            "month, which no price haircut goes below. A lower price"
+        ) in line, line
+        assert "below that floor" not in " ".join(lines), price
+
+
 def test_promoted_json_export_writes_frozen_baseline(
     tmp_path: Path, iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:

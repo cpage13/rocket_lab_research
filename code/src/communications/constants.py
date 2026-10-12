@@ -682,9 +682,10 @@ year."""
 
 PHONE_CLASS_PRICE_FLOOR_USD_MONTH: Final[float] = 15.0
 """INVESTOR_SET (the investor, 2026-10-03; corrected 2026-10-04 from an unapproved $5). The
-phone class's floor, dollars a month: the lowest price the phone class is ever stated at, which
-no price haircut goes below. A stated value, not a config bound: the configured price is the
-``arpu.phone_class_price_usd_month`` setting, and the stated assumptions name both."""
+phone class's floor, dollars a month: the lowest price the investor states the phone class at,
+which no price haircut goes below. A stated value, not a config bound: the configured price is
+the ``arpu.phone_class_price_usd_month`` setting, and the stated assumptions name both, and say
+so when a run prices the phone class below this floor."""
 
 PHONE_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = PHONE_CLASS_PRICE_FLOOR_USD_MONTH
 """INVESTOR_SET (the investor, 2026-10-03; corrected 2026-10-04 from an unapproved $5). The
