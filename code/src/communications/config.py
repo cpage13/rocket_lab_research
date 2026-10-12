@@ -14,11 +14,12 @@ number that is not finite (``allow_inf_nan=False``), and so do the cadence and l
 blocks, ``common.cadence``'s, shared with the data-center model (the launch cost's by the
 same setting, the cadence's dials being whole numbers), each at load, naming the field. The
 numeric fields of the Iridium blocks (the held spectrum, the panel, the downlink share and the
-five prices), of the comms share and satellite blocks, and of the shared cadence and
+five prices), of the metadata, comms share and satellite blocks, and of the shared cadence and
 launch-cost blocks are also strict: a boolean (a YAML ``true``, ``yes`` or ``on``) is refused
 at load, naming the field, never read as 1, and so is a quoted number; an integer loads as a
 float field's float, and a whole-number float (16.0) as an integer field's integer, as before
-(a launch count, satellites per launch and the life are :data:`common.cadence.WholeNumber`).
+(a launch count, satellites per launch, the life, the base year and the horizon are
+:data:`common.cadence.WholeNumber`).
 Nothing here computes a cost, a coverage
 fraction, a subscriber count, or a comparison; it is the contract the engine
 (``communications.engine``), the Iridium family (``communications.iridium``), the
@@ -142,17 +143,20 @@ class CommsMetadataDials(BaseModel):
     no field default; the all-defaults construct supplies them via the
     :func:`_default_comms_metadata` factory). The DC-specific enums (workload,
     operator, radiator architecture) are DROPPED: the satellite is a fixed spec
-    with no workload/operator/radiator taxonomy.
+    with no workload/operator/radiator taxonomy. The base year and the horizon are
+    whole numbers (:data:`common.cadence.WholeNumber`): a YAML boolean or a quoted
+    number is refused at load, naming the field (never read as a 1-year horizon), and
+    a whole-number float (10.0) loads as its integer, as before.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
-    base_year: int = Field(
+    base_year: WholeNumber = Field(
         ge=MIN_FY,
         le=MAX_FY,
         description="Calendar year corresponding to model year 0 (Neutron first-flight year).",
     )
-    horizon_years: int = Field(
+    horizon_years: WholeNumber = Field(
         ge=MIN_HORIZON_YEARS,
         le=MAX_HORIZON_YEARS,
         description="Number of fiscal-year steps after year 0 (base_year + horizon = final year).",

@@ -8,8 +8,9 @@ classes' own defaults and bounds are tested once, in
 ground blocks, the field bounds, the cross-field validators (the coverage floor at or
 below the fleet cap; on an Iridium config every cellular sizing and revenue dial at its
 default and no ground block), a retired Iridium setting refused at load, every float dial of
-an Iridium config finite and never a boolean, the YAML loader pair, and the Iridium saturation
-block (its defaults, the shipped scenario's block, its bounds). Mirrors the data-center
+an Iridium config finite and never a boolean, the numbers of the metadata, comms share and
+satellite blocks never a boolean or a quoted number, the YAML loader pair, and the Iridium
+saturation block (its defaults, the shipped scenario's block, its bounds). Mirrors the data-center
 ``test_config.py`` assertion style without importing ``data_center`` (forbidden).
 """
 
@@ -591,23 +592,34 @@ STRICT_DEPLOYMENT_BLOCKS: tuple[tuple[str, type[BaseModel]], ...] = (
 """The comms-owned blocks of deployment and cost settings, both families' (the Iridium path
 reads them all): strict since 2026-10-12 (a YAML boolean or a quoted number refused)."""
 
+METADATA_WRITTEN_WHOLE: dict[str, int] = {
+    "base_year": BASE_YEAR_DEFAULT,
+    "horizon_years": HORIZON_YEARS_DEFAULT,
+}
+"""The metadata block's two required whole numbers at their defaults, written beside the field
+under test, so a refusal names that field alone (a block missing one would add a second error)."""
 
-def test_the_comms_share_and_satellite_blocks_refuse_a_boolean_or_a_quoted_number(
+
+def test_the_metadata_share_and_satellite_blocks_refuse_a_boolean_or_a_quoted_number(
     tmp_path: Path,
 ) -> None:
-    """Objective: a YAML boolean or a quoted number never loads as a number in the comms share
-    and satellite blocks (before the fix ``share_of_fleet: yes`` loaded as the all-in share 1.0,
-    ``satellites_per_launch: on`` as 1, ``satellite_lifetime_years: true`` as a 1-year life and
-    ``satellites_per_launch: '16'`` as 16), on either family's config.
+    """Objective: a YAML boolean or a quoted number never loads as a number in the comms metadata,
+    share and satellite blocks (before the fix ``share_of_fleet: yes`` loaded as the all-in share
+    1.0, ``satellites_per_launch: on`` as 1, ``satellite_lifetime_years: true`` as a 1-year life,
+    ``satellites_per_launch: '16'`` as 16, and ``horizon_years: yes`` as a 1-year horizon), on
+    either family's config: both families read these very blocks.
 
-    Sample: every field of the two blocks, walked from the models' own fields, written in a
-    cellular scenario YAML as ``true`` and as its default quoted; the share and the build cost
-    as the integer ``1``; satellites per launch as the float ``16.0`` and ``16.5``.
+    Sample: every field of the share and satellite blocks, and every whole-number field of the
+    metadata block (all but its label), walked from the models' own fields, written in a cellular
+    scenario YAML as ``true`` and as its default quoted (a metadata field beside the block's other
+    required field at its default); the share and the build cost as the integer ``1``; satellites
+    per launch as the float ``16.0`` and ``16.5``; the horizon as the float ``10.0``.
 
-    Expected outcome: the walk finds the share, satellites per launch, the life and the build
-    cost; each boolean and each quoted number fails at load with one ValidationError located at
-    that field; the integer share and build cost load as the floats 1.0; the whole-number float
-    count loads as the integer 16, as before, and the fractional one is refused.
+    Expected outcome: the walk finds the share, satellites per launch, the life, the build cost,
+    the base year and the horizon; each boolean and each quoted number fails at load with one
+    ValidationError located at that field; the integer share and build cost load as the floats
+    1.0; the whole-number float count and horizon load as the integers 16 and 10, as before, and
+    the fractional count is refused.
     """
     scenario = tmp_path / "strict.yaml"
     walked: list[str] = []
@@ -620,12 +632,29 @@ def test_the_comms_share_and_satellite_blocks_refuse_a_boolean_or_a_quoted_numbe
                     load_comms_config(scenario)
                 assert _located(refused) == [".".join(path)], (path, written)
             walked.append(".".join(path))
+    whole_numbers = [
+        name for name, field in CommsMetadataDials.model_fields.items() if field.annotation is int
+    ]
+    for field_name in whole_numbers:
+        path = ("metadata", field_name)
+        for written in (True, str(METADATA_WRITTEN_WHOLE[field_name])):
+            metadata = {**METADATA_WRITTEN_WHOLE, field_name: written}
+            scenario.write_text(yaml.safe_dump({"metadata": metadata}), encoding="utf-8")
+            with pytest.raises(ValidationError) as refused:
+                load_comms_config(scenario)
+            assert _located(refused) == [".".join(path)], (path, written)
+        walked.append(".".join(path))
     assert walked == [
         "comms_cadence.share_of_fleet",
         "satellite.satellites_per_launch",
         "satellite.satellite_lifetime_years",
         "satellite.satellite_build_cost_musd",
+        "metadata.base_year",
+        "metadata.horizon_years",
     ]
+    scenario.write_text("metadata:\n  base_year: 2026\n  horizon_years: 10.0\n", encoding="utf-8")
+    horizon = load_comms_config(scenario).metadata.horizon_years
+    assert (type(horizon), horizon) == (int, 10)
     scenario.write_text(
         "comms_cadence:\n  share_of_fleet: 1\nsatellite:\n  satellite_build_cost_musd: 1\n",
         encoding="utf-8",
