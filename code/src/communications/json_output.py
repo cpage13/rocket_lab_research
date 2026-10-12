@@ -808,7 +808,9 @@ def export_iridium_json(
     there, never under ``code/``); an absolute path is used as-is
     (:meth:`common.file_io.SourceCheckout.anchored`). The
     ``scenario_path`` resolves against the working directory as usual and is
-    recorded repository-relative in the provenance header.
+    recorded in the provenance header repository-relative, or as its absolute
+    path when it lies outside the repository
+    (:meth:`common.file_io.SourceCheckout.repo_relative`).
 
     Args:
         scenario_path: The scenario YAML to run (must select the Iridium model).
@@ -818,7 +820,8 @@ def export_iridium_json(
             or any string); defaults to today's ISO date.
 
     Returns:
-        The resolved path the artifact was written to.
+        The path the artifact was written to: the output path anchored at the repository
+        root when it is relative, else as given, and not resolved.
 
     Raises:
         common.file_io.ModelFileError: If the module is not running from a

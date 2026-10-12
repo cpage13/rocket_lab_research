@@ -813,6 +813,8 @@ class CommsConfig(BaseModel):
         field as set, so a config written out whole still loads. It runs when a config is
         loaded or validated (a construction or a ``model_validate``); a ``model_copy``
         update is not validated, by pydantic's design (it trusts the data it is given).
+        Every Iridium path closes that gap: the narrowing each one calls first,
+        ``communications.iridium.iridium_dials_of``, re-validates the config whole.
         """
         if self.iridium is None:
             return self
