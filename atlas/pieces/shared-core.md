@@ -1,6 +1,6 @@
 # Shared core
 
-**Maturity.** Stable. Checked against `main` at 7ff8bc3, 2026-10-03.
+**Maturity.** Stable. Checked against `main` at 3381e25, 2026-10-12.
 
 **Role.** The code both models import (`code/src/common/`), one
 implementation per helper:
@@ -12,8 +12,8 @@ implementation per helper:
 | `provenance.py` | `ProvenanceCell`, the `FORMULAS` catalog, the `cell` factory, the strict readers `as_float` and `as_int` |
 | `input_manifest.py` | the input-cell vocabulary (`InputCell`, `SourceStatus`, `AssumptionRole`) and the default-versus-override rule |
 | `meta.py` | the meta-block types: validation checks and results, data dictionary, query examples, formula definitions |
-| `file_io.py` | the file boundary: `load_yaml_mapping`, `render_artifact_json`, `write_files_with_rollback`, `locate_source_checkout`, `ModelFileError` |
-| `cli.py` | the command conventions: product on stdout, status on stderr, exit status 1 for an expected failure and 2 for a usage error |
+| `file_io.py` | the file boundary: `load_yaml_mapping`, `render_artifact_json`, `artifact_write` and its `PendingWrite`, `write_files_with_rollback`, `locate_source_checkout` and its `SourceCheckout`, `ModelFileError` |
+| `cli.py` | the command conventions: product on stdout, status on stderr, exit status 1 for an expected failure and 2 for a usage error, followed by all three promotion commands |
 
 **Serves.** Keeps both applications on one spine (the same launch ramp,
 rounding and publishing rules), so they compare like for like; supports
@@ -23,9 +23,12 @@ objective 2 through the provenance cells and source statuses.
 - In: dial values from each model's config (the cadence and launch-cost
   blocks are fields of both configs).
 - Out: `data_center` uses every module. `communications` uses the cadence
-  spine, the cohort cliff, the file boundary, the command conventions,
+  spine, the cohort cliff, the file boundary and the command conventions
+  (its saturation and Iridium commands both write through the one writer),
   `SourceStatus` and the strict readers, not the provenance cells or the
-  meta types (its artifact is plain).
+  meta types (its artifacts are plain).
+- numpy enters no `common` module: it stays inside
+  `communications.saturation` (ADR 010; the communications page).
 - `common` imports neither model; callers import by submodule path
   (`from common.provenance import ...`), and the package `__init__`
   re-exports nothing.

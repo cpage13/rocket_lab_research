@@ -1,7 +1,7 @@
 # Conclusions
 
 **Maturity.** Stable discipline; the prose is reviewed by hand whenever a
-default changes. Checked against `main` at 7ff8bc3, 2026-10-03.
+default changes. Checked against `main` at 3381e25, 2026-10-12.
 
 **Role.** Each application's feasibility verdict and the public documents
 around it: static prose a person writes against the promoted JSON, never
@@ -85,13 +85,17 @@ Quality bar; these add the claim boundaries:
   never present the old large-capacity language as current. Write "SSO" or
   "sun-synchronous", never "synchronous orbit".
 - Communications: keep the three lanes exact; subscribers are people and
-  IoT are devices, never summed; frequency and bandwidth stay distinct.
+  IoT are devices, never summed; frequency and bandwidth stay distinct; the
+  engineering and product cases stand side by side, never added (ADR 012),
+  and IoT and government are never added (ADR 011).
 
 **Terms.** feasibility study, margin, device class, the three lanes,
 investor-set (see `CONTEXT.md`).
 
-**State.** Both applications have a reviewed conclusion; the data center
-also has the structural case and the AI-1 comparison.
+**State.** Both applications have a conclusion; the data center's is
+reviewed against its promoted JSON and has the structural case and the
+AI-1 comparison beside it; the communications one was reviewed against the
+model before the saturation work and is stale until its rewrite (Open).
 
 **Open.**
 - The README frames the Iridium highlights "under the same all-in
@@ -102,12 +106,19 @@ also has the structural case and the AI-1 comparison.
   satellites (under its headline table and in How It Deploys), though its
   ledger says the mature fleet frees most of the manifest. A public-document
   edit for the investor.
-- Two Iridium wordings wait for the saturation module and a deliberate
-  review: the README and the verdict call 2,000 satellites the point where
-  the spectrum saturates (in code, an inherited cap: the communications
-  page), and the verdict's aperture section argues for the 25 m^2 panel the
-  investor has replaced (the validated Flatellite research finds a
-  flat-stacked body cannot be 25 m^2; the communications page, Open).
+- The communications documents (`communications/conclusion.md`,
+  `communications/assumptions.md`, `communications/CURRENT_STATE.md`,
+  `communications/README.md`, `communications/design.md`) and the root
+  README's Iridium section still describe the model before the saturation
+  work, and wait for a deliberate rewrite to the built one: they publish a
+  25 m^2 panel (the investor's panel is 15.4 m^2, the validated Flatellite
+  body), the retired four-bucket price sheet with a government bucket, one
+  device class a run, a 340 or 2,000 satellite fleet, 2,000 satellites
+  called the point where the spectrum saturates (in code 2,000 is only a
+  reading, the retired cap, and each class's saturation number is derived:
+  the communications page), and a table row linking the retired companion
+  scenario. Until the rewrite lands, quote nothing about the Iridium model
+  from them.
 
 **Tests.** The em-dash guard covers every `*.md` in `data_center/`,
 `communications/` and `docs/`, and the root documents;
