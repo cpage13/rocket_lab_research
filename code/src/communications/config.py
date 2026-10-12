@@ -13,9 +13,12 @@ no-argument construct is fully valid, plus the ``comms_config_from_dict`` /
 number that is not finite (``allow_inf_nan=False``), and so do the cadence and launch-cost
 blocks, ``common.cadence``'s, shared with the data-center model (the launch cost's by the
 same setting, the cadence's dials being whole numbers), each at load, naming the field. The
-Iridium blocks' numeric fields (the held spectrum, the panel, the downlink share and the five
-prices) are also strict: a boolean (a YAML ``true``, ``yes`` or ``on``) is refused at load,
-naming the field, never read as 1, and so is a quoted number; an integer loads as its float.
+numeric fields of the Iridium blocks (the held spectrum, the panel, the downlink share and the
+five prices), of the comms share and satellite blocks, and of the shared cadence and
+launch-cost blocks are also strict: a boolean (a YAML ``true``, ``yes`` or ``on``) is refused
+at load, naming the field, never read as 1, and so is a quoted number; an integer loads as a
+float field's float, and a whole-number float (16.0) as an integer field's integer, as before
+(a launch count, satellites per launch and the life are :data:`common.cadence.WholeNumber`).
 Nothing here computes a cost, a coverage
 fraction, a subscriber count, or a comparison; it is the contract the engine
 (``communications.engine``), the Iridium family (``communications.iridium``), the
@@ -86,7 +89,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from common.cadence import CadenceDials, LaunchCostDials
+from common.cadence import CadenceDials, LaunchCostDials, WholeNumber
 from common.file_io import load_yaml_mapping
 from communications.constants import (
     APERTURE_M2_DEFAULT,
@@ -112,6 +115,7 @@ from communications.constants import (
     REVENUE_MULTIPLE_DEFAULT,
     SATELLITE_BUILD_COST_MUSD_DEFAULT,
     SATELLITE_LIFETIME_YEARS_DEFAULT,
+    SATELLITE_LIFETIME_YEARS_MAX,
     SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
     SATELLITES_PER_LAUNCH_DEFAULT,
     SATELLITES_PER_LAUNCH_MAX,
@@ -159,15 +163,16 @@ class CommsMetadataDials(BaseModel):
 
 
 class CommsCadenceDials(BaseModel):
-    """The comms slice's SHARE of the whole-fleet cadence (variable 2's share).
+    """The comms slice's SHARE of the whole-fleet cadence.
 
     The whole-fleet cadence (:class:`CadenceDials`) ramps to 90 launches/year by
-    FY2036; the comms constellation flies a SHARE of those launches. Phase 2
+    FY2036; the comms constellation flies a SHARE of those launches. The engine
     multiplies the shared per-year integer launch count by ``share_of_fleet`` and
     re-rounds to an integer (with the shared half-up offset) to get the comms
     launches flown per year. The launch COST is still priced at the whole-fleet
     cadence (the cost-down is a Neutron-production-scale effect, shared), not at
-    the comms slice's own cadence.
+    the comms slice's own cadence. The share is strict: a YAML boolean or a quoted
+    number is refused at load, naming the field, and an integer loads as its float.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
@@ -176,6 +181,7 @@ class CommsCadenceDials(BaseModel):
         default=COMMS_SHARE_DEFAULT,
         gt=0,
         le=1.0,
+        strict=True,
         description=(
             "Comms fraction of the whole-fleet per-year launch count. INVESTOR_SET "
             "to 0.18 (~16 of the 90 FY2036 launches/year); the investor's ~15 to 20 "
@@ -185,17 +191,21 @@ class CommsCadenceDials(BaseModel):
 
 
 class SatelliteDials(BaseModel):
-    """The satellite spec both families read (variables 1, 4, 5).
+    """The satellite spec both families read; its defaults are the cellular family's.
 
     The satellite is a flat mass-manufactured Flatellite-class bird (a fixed spec,
     NOT a re-spec'd frontier generation, so the DC ``generations`` / ``slopes``
     engine is dropped). Three dials: satellites per launch (a direct input), the
     operating life (the cohort cliff), and the one flat hardware build-cost scalar.
+    The Iridium scenario sets all three. No field takes a YAML boolean or a quoted
+    number: each is refused at load, naming the field (never read as 1 satellite, a
+    1-year life or a $1M build); an integer loads as the build cost's float, and a
+    whole-number float (16.0) as a count's integer, as before.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
-    satellites_per_launch: int = Field(
+    satellites_per_launch: WholeNumber = Field(
         default=SATELLITES_PER_LAUNCH_DEFAULT,
         ge=SATELLITES_PER_LAUNCH_MIN,
         le=SATELLITES_PER_LAUNCH_MAX,
@@ -211,29 +221,32 @@ class SatelliteDials(BaseModel):
             "COMM-258 / COMM-260; 12 loads about 9,600 kg of the ~13,000 kg LEO envelope."
         ),
     )
-    satellite_lifetime_years: int = Field(
+    satellite_lifetime_years: WholeNumber = Field(
         default=SATELLITE_LIFETIME_YEARS_DEFAULT,
         ge=1,
-        le=20,
+        le=SATELLITE_LIFETIME_YEARS_MAX,
         description=(
             "Satellite operating life in years, the cohort cliff: after this a "
             "cohort retires and contributes zero coverage. ~5-year Starlink "
             "depreciation and replacement-treadmill anchor (COMM-088; the "
             "separate COMM-091 is the per-subscriber cost split that lineage "
-            "feeds), a design assumption not a certified field life."
+            "feeds), a design assumption not a certified field life. At most "
+            f"{SATELLITE_LIFETIME_YEARS_MAX}, a sanity bound, not a sourced life."
         ),
     )
     satellite_build_cost_musd: float = Field(
         default=SATELLITE_BUILD_COST_MUSD_DEFAULT,
         gt=0,
+        strict=True,
         description=(
-            "The flat MASS-MANUFACTURED CELLULAR-SATELLITE HARDWARE cost, ONE "
-            "scalar, ~$1.0 to 1.1M (INVESTOR_SET 1.05). A V3-class hardware analogy "
-            "(Starlink V3 ~$1.2M, the upper anchor, COMM-080) for a direct-to-cell "
-            "payload (bigger antenna and more power than a broadband panel, far "
-            "smaller than AST's giant array, so AST ~$19 to 21M is the WRONG "
-            "anchor). A hardware build-cost analogy, NOT a broadband-product claim. "
-            "Configurable."
+            "The flat mass-manufactured hardware cost of one satellite, $M, ONE scalar, "
+            "read by both families. The default, "
+            f"{SATELLITE_BUILD_COST_MUSD_DEFAULT:g}, is the cellular family's (INVESTOR_SET, "
+            "~$1.0 to 1.1M): a V3-class hardware analogy (Starlink V3 ~$1.2M, the upper "
+            "anchor, COMM-080) for a direct-to-cell payload (bigger antenna and more power "
+            "than a broadband panel, far smaller than AST's giant array, so AST ~$19 to 21M "
+            "is the WRONG anchor), a hardware build-cost analogy, NOT a broadband-product "
+            "claim. The Iridium scenario sets its own Flatellite's build cost. Configurable."
         ),
     )
 
@@ -285,7 +298,8 @@ class CoverageDials(BaseModel):
             "spread, low-density servable base is exhausted and more satellites stop "
             "buying servable subscribers (a dense cell saturates). INVESTOR_SET to 2,000: "
             "the ~100M ambitious target (1,334 satellites at 75,000/sat) sits just under "
-            "it. Source COMM-535..560. Configurable on a cellular config; an Iridium "
+            "it. Source: the attached-subscribers answer (COMM-545) and the fleet-sizing rule "
+            "(COMM-560). Configurable on a cellular config; an Iridium "
             "config, whose fleet has no cap, leaves it at this default (another value "
             "there is refused at load)."
         ),
@@ -354,7 +368,8 @@ class SubscriberDials(BaseModel):
             "into the CAPACITY fleet need (ceil(target / this)). ~50x a Starlink "
             "BROADBAND satellite because a cellular subscriber sips data. On 25 MHz "
             "the spectrum binds first, the antenna power past ~50 to 100 MHz, the "
-            "onboard chip last. Source COMM-535..560. Configurable."
+            "onboard chip last. DERIVED: the attached-subscribers answer's central band "
+            "(COMM-545), sized by the fleet-sizing rule (COMM-560). Configurable."
         ),
     )
     subscribers_served_override: int | None = Field(
@@ -373,7 +388,7 @@ class SubscriberDials(BaseModel):
 
 
 class RevenueDials(BaseModel):
-    """The two REVENUE cases that ride the cohort treadmill (revenue + gross margin).
+    """The two REVENUE cases that ride the cohort treadmill (revenue and margin).
 
     The engine computes BOTH cases on every run (they are not mutually exclusive
     dials; each is a separate lens on the same fleet), mirroring the data-center
@@ -381,12 +396,12 @@ class RevenueDials(BaseModel):
     single-value (no R-band) style:
 
     * COST-PLUS / MARGIN-TARGET (``revenue_multiple``): annual revenue = annual cost
-      x the multiple, the same owner-operator basis as the DC central R (1.5 -> 33.3%
-      gross margin). A cost-coupled case (revenue tracks the cost basis).
+      x the multiple, the same owner-operator basis as the DC central R (1.5 -> a 33.3%
+      margin). A cost-coupled case (revenue tracks the cost basis).
     * PRICES-TODAY / ARPU (``arpu_usd_per_month``): annual revenue = served
       subscribers x the monthly ARPU x 12, a retail price applied to the served base.
 
-    Gross margin in BOTH cases is ``(revenue - cost) / revenue`` against the same
+    The margin in BOTH cases is ``(revenue - cost) / revenue`` against the same
     annualized cost basis the engine carries per cohort (the per-satellite lifetime
     cost spread over the satellite life, matching the DC annualized convention). The
     revenue is a cost-coupled multiple or a price-times-served-base figure, NEVER a
@@ -402,7 +417,7 @@ class RevenueDials(BaseModel):
         description=(
             "The COST-PLUS / MARGIN-TARGET revenue multiple: annual revenue = annual "
             "cost x this. INVESTOR_SET to 1.5 (cost+50%, an implied (1.5 - 1) / 1.5 = "
-            "33.3% gross margin), mirroring the data-center central R = 1.5 "
+            "33.3% margin), mirroring the data-center central R = 1.5 "
             "(research/SOURCE_INDEX.md, RLDC-REVENUE-MULTIPLE-1_5X). Each 5-year "
             "cohort earns this margin "
             "across its life. Configurable."

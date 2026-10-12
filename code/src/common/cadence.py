@@ -21,9 +21,9 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Final
+from typing import Annotated, Final
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 from common.provenance import FieldPath, ProvenanceCell, cell
 
@@ -91,6 +91,28 @@ its own float tolerance on top)."""
 # ---------------------------------------------------------------------------
 
 
+def _refuse_a_boolean_or_text(value: object) -> object:
+    """Refuse a boolean or a string where a dial takes a whole number, before pydantic reads it.
+
+    Pydantic's lax integer reads a YAML ``true`` as 1 and a quoted ``"16"`` as 16; this refuses
+    both at load, so the error names the field. Every other input goes on to pydantic's own
+    integer check unchanged: an integer, and a float with no fractional part (``14.0`` reads as
+    14, as before), load; any other float is refused there.
+
+    Raises:
+        ValueError: For a boolean or a string.
+    """
+    if isinstance(value, bool | str):
+        raise ValueError(f"a whole number is required, not a {type(value).__name__} ({value!r})")
+    return value
+
+
+WholeNumber = Annotated[int, BeforeValidator(_refuse_a_boolean_or_text)]
+"""A dial that takes a whole number (a launch count, satellites per launch, a life in years):
+pydantic's integer, refusing a boolean or a quoted number at load (strict numbers, the
+investor's yes of 2026-10-12), so neither is ever read as a count."""
+
+
 class CadenceDials(BaseModel):
     """Whole-fleet launch-cadence dials feeding the logistic launches-per-year ramp.
 
@@ -104,12 +126,14 @@ class CadenceDials(BaseModel):
     The logistic fit needs ``0 < launches_at_year_5 < launches_at_year_10 <
     cadence_ceiling`` (the condition :func:`compute_launches_per_year` raises
     on); :meth:`_anchors_inside_logistic_range` rejects any other combination
-    at load instead of letting a model fail mid-run.
+    at load instead of letting a model fail mid-run. Every field is a
+    :data:`WholeNumber` (launches are whole missions): a YAML boolean or a
+    quoted number is refused at load, naming the field, for both models.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    cadence_ceiling: int = Field(
+    cadence_ceiling: WholeNumber = Field(
         default=CADENCE_CEILING_DEFAULT,
         gt=0,
         description=(
@@ -120,17 +144,17 @@ class CadenceDials(BaseModel):
             "are clamped to it inside the window; a longer-horizon run re-sets it."
         ),
     )
-    launches_at_year_5: int = Field(
+    launches_at_year_5: WholeNumber = Field(
         default=LAUNCHES_AT_YEAR_5_DEFAULT,
         ge=0,
         description="Integer logistic anchor: launches per year at model year 5.",
     )
-    launches_at_year_10: int = Field(
+    launches_at_year_10: WholeNumber = Field(
         default=LAUNCHES_AT_YEAR_10_DEFAULT,
         ge=0,
         description="Integer logistic anchor: launches per year at model year 10.",
     )
-    first_launch_year: int = Field(
+    first_launch_year: WholeNumber = Field(
         default=FIRST_LAUNCH_YEAR_DEFAULT,
         ge=0,
         description="Model-year index before which launch count is clamped to zero.",
@@ -162,7 +186,9 @@ class LaunchCostDials(BaseModel):
     reversed anchors would flat-clamp every year to the low-cadence cost and
     silently switch the cost-down off. Every number is finite: a NaN or an
     infinity is refused at load, naming the field (``allow_inf_nan=False``), so
-    no run of either model starts from one.
+    no run of either model starts from one. Every field is strict: a YAML
+    boolean or a quoted number is refused at load, naming the field, never read
+    as 1; an integer loads as its float.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
@@ -170,21 +196,25 @@ class LaunchCostDials(BaseModel):
     low_cadence_cost_musd: float = Field(
         default=LOW_CADENCE_COST_MUSD_DEFAULT,
         gt=0,
+        strict=True,
         description="Launch cost at the low-cadence anchor, $M.",
     )
     high_cadence_cost_musd: float = Field(
         default=HIGH_CADENCE_COST_MUSD_DEFAULT,
         gt=0,
+        strict=True,
         description="Launch cost at the high-cadence anchor, $M.",
     )
     low_cadence_launches: float = Field(
         default=LOW_CADENCE_LAUNCHES_DEFAULT,
         gt=0,
+        strict=True,
         description="Cadence (launches/yr) at the low-cost anchor.",
     )
     high_cadence_launches: float = Field(
         default=HIGH_CADENCE_LAUNCHES_DEFAULT,
         gt=0,
+        strict=True,
         description="Cadence (launches/yr) at the high-cost anchor.",
     )
 

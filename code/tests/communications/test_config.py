@@ -545,8 +545,9 @@ def test_the_iridium_dials_refuse_a_number_that_is_not_finite_naming_the_field(
 def test_the_iridium_dials_refuse_a_boolean_naming_the_field(tmp_path: Path) -> None:
     """Objective: a YAML boolean never loads as a number in the Iridium dials (before the fix
     pydantic's lax mode read ``true`` as 1.0: a price of $1, a 1 m^2 panel, d = 1, a 1 MHz
-    spectrum), while an integer still loads as its float. The shared satellite and comms-share
-    blocks are not in this test: making them strict changes how cellular configs load.
+    spectrum), while an integer still loads as its float. The comms share and satellite blocks
+    have their own test below, and the shared cadence and launch-cost blocks theirs in
+    ``tests/common/test_cadence_move.py``.
 
     Sample: every float field of the Iridium dials and of the blocks nested in them (the
     spectrum, the panel, the downlink share and the five prices), walked from the model's own
@@ -581,6 +582,81 @@ def test_the_iridium_dials_refuse_a_boolean_naming_the_field(tmp_path: Path) -> 
     assert loaded is not None
     assert isinstance(loaded.aperture_m2, float)
     assert loaded.aperture_m2 == 15.0
+
+
+def _nested(path: tuple[str, ...], value: object) -> object:
+    """A value written at a dotted path: ``("a", "b"), 1`` gives ``{"a": {"b": 1}}``."""
+    nested = value
+    for key in reversed(path):
+        nested = {key: nested}
+    return nested
+
+
+def _located(refused: pytest.ExceptionInfo[ValidationError]) -> list[str]:
+    """Each error's location in a refused load, as a dotted path."""
+    return [".".join(map(str, error["loc"])) for error in refused.value.errors()]
+
+
+STRICT_DEPLOYMENT_BLOCKS: tuple[tuple[str, type[BaseModel]], ...] = (
+    ("comms_cadence", CommsCadenceDials),
+    ("satellite", SatelliteDials),
+)
+"""The comms-owned blocks of deployment and cost settings, both families' (the Iridium path
+reads them all): strict since the review since the push (code_config m2)."""
+
+
+def test_the_comms_share_and_satellite_blocks_refuse_a_boolean_or_a_quoted_number(
+    tmp_path: Path,
+) -> None:
+    """Objective: a YAML boolean or a quoted number never loads as a number in the comms share
+    and satellite blocks (before the fix ``share_of_fleet: yes`` loaded as the all-in share 1.0,
+    ``satellites_per_launch: on`` as 1, ``satellite_lifetime_years: true`` as a 1-year life and
+    ``satellites_per_launch: '16'`` as 16), on either family's config.
+
+    Sample: every field of the two blocks, walked from the models' own fields, written in a
+    cellular scenario YAML as ``true`` and as its default quoted; the share and the build cost
+    as the integer ``1``; satellites per launch as the float ``16.0`` and ``16.5``.
+
+    Expected outcome: the walk finds the share, satellites per launch, the life and the build
+    cost; each boolean and each quoted number fails at load with one ValidationError located at
+    that field; the integer share and build cost load as the floats 1.0; the whole-number float
+    count loads as the integer 16, as before, and the fractional one is refused.
+    """
+    scenario = tmp_path / "strict.yaml"
+    walked: list[str] = []
+    for block_name, block in STRICT_DEPLOYMENT_BLOCKS:
+        for field_name in block.model_fields:
+            path = (block_name, field_name)
+            for written in (True, str(getattr(block(), field_name))):
+                scenario.write_text(yaml.safe_dump(_nested(path, written)), encoding="utf-8")
+                with pytest.raises(ValidationError) as refused:
+                    load_comms_config(scenario)
+                assert _located(refused) == [".".join(path)], (path, written)
+            walked.append(".".join(path))
+    assert walked == [
+        "comms_cadence.share_of_fleet",
+        "satellite.satellites_per_launch",
+        "satellite.satellite_lifetime_years",
+        "satellite.satellite_build_cost_musd",
+    ]
+    scenario.write_text(
+        "comms_cadence:\n  share_of_fleet: 1\nsatellite:\n  satellite_build_cost_musd: 1\n",
+        encoding="utf-8",
+    )
+    loaded = load_comms_config(scenario)
+    assert isinstance(loaded.comms_cadence.share_of_fleet, float)
+    assert isinstance(loaded.satellite.satellite_build_cost_musd, float)
+    assert (loaded.comms_cadence.share_of_fleet, loaded.satellite.satellite_build_cost_musd) == (
+        1.0,
+        1.0,
+    )
+    scenario.write_text("satellite:\n  satellites_per_launch: 16.0\n", encoding="utf-8")
+    count = load_comms_config(scenario).satellite.satellites_per_launch
+    assert (type(count), count) == (int, 16)
+    scenario.write_text("satellite:\n  satellites_per_launch: 16.5\n", encoding="utf-8")
+    with pytest.raises(ValidationError) as refused:
+        load_comms_config(scenario)
+    assert _located(refused) == ["satellite.satellites_per_launch"]
 
 
 COMMON_CADENCE_BLOCKS = ("cadence", "launch_cost")
