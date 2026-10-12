@@ -122,8 +122,11 @@ tripwire, engineering case, product case (see `CONTEXT.md`).
   JSON and this page are the truth.
 - Each class's usage is a named constant the curve is computed at, so a
   seat's service is the same in every year while each added satellite
-  reaches fewer people; how the conclusions present that is the investor's
-  call.
+  reaches fewer people and the fleet's cost a seat rises. The investor ruled
+  (2026-10-12) that the conclusions state this plainly beside each class's
+  revenue rising every year, and that the product case (ADR 012) carries
+  the service that improves; both wait for the documents' rewrite and the
+  product case's code.
 - Whether the small and mounted terminals' upload carries every seat is an
   open local research wiki, `.agent/other/wiki_terminal_uplink/` (local).
 - The phone class needs the band in standard phone chipsets (the stated

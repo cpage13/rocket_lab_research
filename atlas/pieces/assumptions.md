@@ -107,7 +107,7 @@ public source-status taxonomy (`CONTEXT.md`, Ambiguities).
    Update the claim and rationale in the input spec tables when the basis
    changes. A cadence default also moves the Iridium run, whose scenario
    inherits the cadence, and any shared default moves the communications
-   tests on config defaults: follow the Iridium steps 3 and 4 too.
+   tests on config defaults: follow the Iridium steps 4 and 5 too.
 3. Check the default guards (the data-center page, `validation.py`):
    promotion refuses while one fails; move a guard only on purpose, and
    rename a check ID that names the old value.
@@ -161,7 +161,7 @@ public source-status taxonomy (`CONTEXT.md`, Ambiguities).
   center) or a row in the register's modeling-posture table (communications).
 - The Neutron block upgrade sets a scenario value in both applications:
   the data center's mass envelope (`RLDC-PAYLOAD-SSO-UPGRADE`) and the
-  Iridium scenario's 16 satellites per launch (15 without it; `COMM-713`,
+  Iridium scenario's 16 satellites per launch (`COMM-713`; 15 without it,
   `COMM-712`), stated in the Iridium artifact.
 - A data-center scenario value that differs from the default publishes as a
   scenario override (the map's invariants).

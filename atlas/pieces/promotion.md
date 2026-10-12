@@ -54,18 +54,22 @@ to `scenarios/default.yaml`; any other scenario needs a lowercase
 `--output-name`; the artifact role (`promoted_default` or
 `promoted_named`) follows the scenario, never the name.
 
-**The communications commands.** No reserved name and no gate of results.
-Each loads its scenario and refuses one without an `iridium:` block before
-anything else runs. The saturation command then refuses a destination the
-writer would refuse before it computes, and writes only a curve that passes
-its completeness check. The Iridium command refuses a curve it cannot read,
-an incomplete or altered curve, a curve computed for other inputs (the
-identity check), a fleet past a class's last computed row and a run holding
-a number that is not finite, besides a symbolic-link or non-regular
-destination and a failed write. Each refusal is one `ERROR:` line and exit
-status 1. No ignore rule keeps a communications artifact local, so a trial
-run never targets a committed path except with that file's own stamp, to
-reproduce it.
+**The communications commands.** No reserved name and no gate of results;
+this is the one list of their refusals. Each loads its scenario and refuses
+one it cannot read, an invalid one or one without an `iridium:` block
+before anything else runs, and each refuses a destination the writer would
+refuse (a symbolic link or not a regular file) and a failed write. The
+saturation command checks its destination before it computes, refuses a
+population grid whose digest is not the expected one, a failed check and a
+failed sweep (a worker out of memory, say), and writes only a curve that
+passes its completeness check. The Iridium command refuses a curve it
+cannot read, one of another schema, an altered or incomplete curve, a curve
+computed for other inputs (the identity check), a fleet past a class's last
+computed row, a value the model cannot compute and a run holding a number
+that is not finite. Each refusal is one `ERROR:` line and exit status 1. No
+ignore rule keeps a communications artifact local, so a trial run never
+targets a committed path except with that file's own stamp, to reproduce
+it.
 
 **The writer.** The two data-center artifacts are written as a pair with
 backup and rollback (`common.file_io.write_files_with_rollback`); each
@@ -80,7 +84,7 @@ the ground artifact carries its own (`ground_anchor`, `ground_assumptions`,
 input map: `jq '.inputs.assumption_index["inputs.config.cadence.launches_at_year_10"]' data_center/models/space/default.json`.
 A ground `uses` path prefixed `space:` points into the space artifact. The
 Iridium artifact carries no worked queries; read it by block, for example
-`jq '.classes[] | {device_class, saturation_number, binding_limit_at_horizon_end}' communications/models/iridium/default.json`.
+`jq '.classes[] | {device_class, saturation_number, saturation_not_reached_by, binding_limit_at_horizon_end}' communications/models/iridium/default.json`.
 
 **The headline reads.**
 - Data center: the space artifact's worked queries

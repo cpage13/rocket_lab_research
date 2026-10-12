@@ -235,16 +235,15 @@ curve's or the current Iridium schema (the promotion page, Open).
   independent revenue dial exists
   (`test_compute_year_revenue_band_is_cost_times_r` in `test_engine.py`;
   `test_naming.py` keeps the revenue and profit fields apart).
-- Data-center promotion writes nothing when any check fails. The two
-  communications commands have no gate of results: the saturation command
-  writes only a curve that passes its completeness check
-  (`check_curve_complete`), and the Iridium command refuses an invalid
-  config or one without an `iridium:` block, a curve it cannot read or that
-  is incomplete or altered, a curve computed for other inputs, a fleet past
-  a class's last computed row and a run holding a number that is not
-  finite. The regeneration test guards the
-  Iridium artifact and the drift tests the curve (the promotion page;
-  `test_cli_promote.py`, `test_regenerated_default_artifact_matches_committed`).
+- Data-center promotion writes nothing when any check fails
+  (`test_cli_promote.py`). The two communications commands have no gate of
+  results, and their refusals are listed once, on the promotion page: the
+  saturation command writes only a curve that passes its completeness
+  check (`check_curve_complete`), and the Iridium command runs only on a
+  curve computed for its own inputs (the identity check, below). The
+  regeneration test guards the Iridium artifact
+  (`test_regenerated_default_artifact_matches_committed`) and the drift
+  tests the curve (the frozen baselines, below).
 - A people class's saturation number, where its rows reach one, is a
   spectrum bound reported beside the launch cadence, never a build target
   or a cap on the build, and a fleet past a class's last computed row is
@@ -306,9 +305,11 @@ curve's or the current Iridium schema (the promotion page, Open).
   the committed saturation curve (the drift tests
   `test_committed_curve_has_not_drifted`,
   `test_committed_curve_has_not_drifted_in_its_band_rows` and
-  `test_committed_curve_has_not_drifted_in_its_derived_fields`, and
-  `test_a_second_promotion_at_the_coarse_setting_is_byte_identical`). The
-  equality tripwire
+  `test_committed_curve_has_not_drifted_in_its_derived_fields`). Beside
+  them, `test_a_second_promotion_at_the_coarse_setting_is_byte_identical`
+  guards the saturation command's determinism (two coarse promotions write
+  the same bytes but for the run's own measurement), not the committed
+  curve. The equality tripwire
   (`test_iridium_and_cellular_runs_share_the_fleet_and_cost_records`; HB
   is the on-hold High-Bandwidth Cellular family) locks the shared fleet
   loop: on config defaults, with the cellular subscriber target raised so
