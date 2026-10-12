@@ -90,9 +90,10 @@ study (see `CONTEXT.md`).
 ledgers (`code/tests/test_no_em_dashes.py`). The data-center suite checks
 that each `RLDC`-cited input carries the ledger's status
 (`code/tests/data_center/test_input_manifest.py`,
-`code/tests/data_center/test_provenance_uses.py`). Missed: links inside
-`research/` and the catalog's coverage of every file (lint passes are agent
-runs); the unchecked `COMM-*` citations are on the communications page.
+`code/tests/data_center/test_provenance_uses.py`), and the documents guard
+that every claim ID the agent pages cite is a ledger row
+(`code/tests/test_agent_docs_resolve.py`). Missed: links inside `research/`
+and the catalog's coverage of every file (lint passes are agent runs).
 
 **If this changes, update here.** A topic folder, claim family, ledger or
 rule added or retired; a change in what may live in `research/`.
