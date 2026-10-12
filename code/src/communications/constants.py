@@ -510,8 +510,10 @@ the curve and the satellite's peak linearly by the scenario's ``aperture_m2`` ov
 the panel factor (0.616 at the default :data:`APERTURE_M2_DEFAULT`). What the linear rule
 gives against a curve computed at the panel itself, measured, is
 :data:`PANEL_RULE_LIMITS_NOTE`: below this panel every class carries at least what the rule
-gives (the mounted terminal exactly), above it the rule gives more useful beams than the panel
-would, and each beam's rate is held at its value here."""
+gives (the mounted terminal's useful beams exactly), above it the rule gives at least what the
+panel would, in useful beams and in maximum use, and the measured gaps are wider farther from
+this panel for the small terminal below it and for every class's maximum use above it; each
+beam's rate is held at its value here."""
 
 APERTURE_M2_DEFAULT: Final[float] = 15.4
 """DERIVED (COMM-711; the investor's approved default, 2026-10-03). The Iridium model's
@@ -524,29 +526,52 @@ validation D, 15.42 m^2). An upper bound: the body's corners touch the envelope 
 PANEL_RULE_LIMITS_NOTE: Final[str] = (
     "Below the reference panel every class carries at least what the rule gives, because a "
     "cell's people cap does not shrink with the panel: computed at 15.4 m^2 instead (one "
-    "snapshot of the shipped grid, 340 to 40,000 satellites), the small terminal carries up to "
+    "snapshot of the shipped grid, 342 to 40,000 satellites), the small terminal carries up to "
     "about 1.8 percent more capacity and people (2.0 percent more useful beams), the phone "
     "class up to about 1.1 percent more, and the mounted terminal exactly what the rule gives; "
     "each class's maximum use is up to about 4.6 percent above the rule's. Above the reference "
-    "panel the people caps do not grow with the panel, so the rule gives more useful beams than "
-    "the panel would (at 40 m^2 up to about 3 percent for the small terminal, 340 to 10,000 "
-    "satellites), and it ignores the per-link SNR lift a larger panel also gives. Each beam's "
+    "panel the people caps do not grow with the panel, so the rule gives at least what the "
+    "panel would: computed at 40 m^2 (342 to 10,000 satellites), useful beams up to about 3.0 "
+    "percent below the rule's and maximum use up to about 5.6 percent below (each the small "
+    "terminal's), and the rule ignores the per-link SNR lift a larger panel also gives. Farther "
+    "from the reference, as measured: at 10 m^2 the small terminal's gaps are wider than at "
+    "15.4 m^2 (its maximum use about 7.2 percent above the rule's), while the phone class's and "
+    "the mounted terminal's equal those at 15.4 m^2 at the same fleets; at 60 m^2 every class's "
+    "maximum use is further below the rule's than at 40 m^2, up to about 11.3 percent, and "
+    "useful beams fall up to about 6.4 percent below (each the small terminal's). Each beam's "
     "rate is held at its reference-panel value: the link effect of another panel is not "
     "modeled."
 )
 """DERIVED (measured 2026-10-12 on the saturation module as built). What the linear panel rule
 (the curve at :data:`APERTURE_REFERENCE_M2` times the panel factor, ADR 005) gives against the
-curve's inputs computed at the panel itself: the curve's own parameters with the shell's
-reference panel set to the panel (which moves the beams per satellite, the beam and its
-footprints together), one snapshot (the draw's first time) on the shipped grid, the useful
-beams and capacity over the panel factor times their reference-panel values, and each class's
-maximum use the same way. At 15.4 m^2, from 340 to 40,000 satellites: the phone class 0.02 to
-1.14 percent above the rule, rising with the fleet; the small terminal 0.09 to 2.01 percent in
-useful beams and 0.08 to 1.84 percent in capacity; the mounted terminal at the rule to float
-rounding; maximum use 4.56 percent (small terminal), 0.16 (mounted terminal) and 1.27 (phone
-class) above. At 40 m^2, from 340 to 10,000 satellites: the small terminal 0.30 to 2.99
-percent below the rule in useful beams, the phone class 0.16 to 2.37 below, the mounted terminal
-at most 0.013 below. Stated with the run's assumptions, after the panel line."""
+curve's inputs computed at the panel itself. The method: the committed curve's parameters with
+the shell's reference panel set to the panel (which moves the beams per satellite, the beam and
+its footprints together), one snapshot (the draw's first time, t = 45,702.2 s) on the shipped
+grid, each class allocated at both panels; the useful beams and the capacity at the panel over
+the panel factor times their reference-panel values, and each class's maximum use the same way
+(a ratio of 1 is exactly the rule). The fleets are the realized ones, P x S.
+
+- At 15.4 m^2, the model's panel (342 to 40,000 satellites): the phone class 0.02 to 1.14
+  percent above the rule in useful beams and capacity alike, rising with the fleet; the small
+  terminal 0.09 to 2.01 percent in useful beams and 0.08 to 1.84 percent in capacity; the
+  mounted terminal at the rule to float rounding; maximum use 4.56 percent (small terminal),
+  0.16 (mounted terminal) and 1.27 (phone class) above.
+- At 10 m^2 (342 to 10,000 satellites): the small terminal 0.09 to 1.84 percent in useful beams
+  and 0.08 to 1.45 percent in capacity, wider than at 15.4 m^2 at each of these fleets, and its
+  maximum use 7.19 percent above; the phone class 0.02 to 0.74 percent with maximum use 1.27
+  percent above, and the mounted terminal at the rule with maximum use 0.16 percent above, each
+  equal to its 15.4 m^2 values at these fleets.
+- At 40 m^2 (342 to 10,000 satellites): the small terminal 0.30 to 2.99 percent below the rule
+  in useful beams and 0.27 to 2.86 percent in capacity; the phone class 0.16 to 2.37 below; the
+  mounted terminal at most 0.013 below; maximum use 5.63 percent (small terminal), 1.94
+  (mounted terminal) and 3.18 (phone class) below.
+- At 60 m^2 (342 to 10,000 satellites): the small terminal 0.78 to 6.40 percent below in useful
+  beams and 0.75 to 6.25 percent in capacity; the phone class 0.54 to 5.45 below; the mounted
+  terminal at most 0.46 below (0.19 in capacity); maximum use 11.30 percent (small terminal),
+  4.99 (mounted terminal) and 7.04 (phone class) below, each further below than at 40 m^2.
+
+Each magnitude holds at its panel and fleets as measured, not at every panel. Stated with the
+run's assumptions, after the panel line."""
 
 APERTURE_VALIDATED_STACK_LIMIT_M2: Final[float] = 15.4
 """DERIVED (COMM-711, COMM-713). The largest flat panel the validated 16-satellite
