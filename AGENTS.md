@@ -14,10 +14,11 @@ check the reasoning: what new orbital business could Rocket Lab build with
 the rockets and spacecraft it already makes? Two applications are modeled,
 both on Neutron: an orbital AI-inference data center, and, because Rocket Lab
 has agreed to acquire Iridium (`COMM-601`, `COMM-606`), communications: the
-most Iridium's owned L-band can carry on a next-generation fleet. Each is a
-feasibility study: the investor's hypothesis is an append-only thesis in
-`research/vision/`, research waves hunt the hard barriers first, the model
-answers the all-in question, and the conclusion gives the verdict.
+most Iridium's owned L-band can carry on a next-generation fleet and, beside
+it, the product case: what that network would sell at the investor's prices.
+Each is a feasibility study: the investor's hypothesis is an append-only
+thesis in `research/vision/`, research waves hunt the hard barriers first,
+the model answers the all-in question, and the conclusion gives the verdict.
 
 ## Why
 
@@ -43,12 +44,17 @@ everything a knob, it's just absolutely overwhelming."
 
 ## Goals
 
-- **Communications, saturation.** Today's published baseline is the phone class
-  at the coverage floor (the fewest satellites for coverage), sized to a
-  subscriber target. Derive in code how many satellites the owned spectrum can
-  serve per device class, replacing the inherited cap, under the investor's
-  approved rules (every seat sold, growth at the all-in launch rate, every class
-  side by side); the investor approves the plan before any code.
+- **Communications, saturation.** Built: the Iridium model derives in code how
+  many satellites the owned spectrum can serve per device class (each class's
+  saturation number, a knee on the promoted saturation curve), in place of the
+  inherited cap, and sells every seat of every class side by side on the fleet
+  the all-in launch cadence builds (ADRs 005 to 010). Open until the public
+  documents tell the built model and the work is accepted.
+- **Communications, IoT and the product case.** IoT as capacity in the
+  engineering model, which carries no IoT count, price or revenue (ADR 011),
+  and the product case as its own model on the engineering artifact, selling
+  the terminals and the two IoT classes at the investor's prices held flat
+  (ADR 012); approved 2026-10-07, not yet built.
 - **Agent documentation.** The charter, atlas and glossary are true to the
   code; the older agent guides are folded in and retired.
 - **Data center.** Rename the space artifact's `gross_profit_*` fields, which
@@ -65,12 +71,17 @@ everything a knob, it's just absolutely overwhelming."
   existing value and is stated with it: the Neutron block upgrade is the data
   center's 12.5 t envelope (`RLDC-PAYLOAD-SSO-UPGRADE`) and the approved Iridium
   count of 16 per launch.
-- **One model, one maximum.** Each model optimizes one thing (the data
-  center, the most GPU packages each launch carries; communications, the
-  most the owned spectrum carries) at the full cadence (the ramp, never a
-  flat rate: "pedal to the metal") with every seat sold, so revenue rises
-  with the fleet. A market or price haircut is a linear division in the
-  conclusion ("You just take the final numbers and divide them in two").
+- **One model, one maximum.** Each engineering model optimizes one thing (the
+  data center, the most GPU packages each launch carries; communications, the
+  most the owned spectrum carries) at the full cadence (the ramp, never a flat
+  rate: "pedal to the metal") with every seat sold, so revenue rises with the
+  fleet. A haircut of an engineering case is a linear division in the
+  conclusion ("You just take the final numbers and divide them in two"). The
+  market view is the product case, a separate model on the engineering artifact
+  that optimizes one thing too (the most median revenue at the investor's
+  prices in at least three quarters of the markets, or, when none is, the most
+  usable, warned), read beside the engineering case and never added to it
+  (ADR 012).
 - **Only what exists.** Neutron is the only vehicle modeled (no Starship, heavy vehicle or Electron).
 - **The investor's values.** Never invent an assumption: name the grounded
   range and ask the investor to set it. Only the investor moves a settled
@@ -85,8 +96,10 @@ everything a knob, it's just absolutely overwhelming."
   or devices), from the owner-operator's view, in cohorts at representative
   years; never EV, DCF or net-of-capital. The percentage is the margin (a
   full-cost margin); a dollar figure is the profit, never gross profit. Show
-  the four device classes (the small terminal, the mounted terminal, the phone
-  class and IoT) side by side, never phone-first.
+  the device classes side by side, never phone-first: in the engineering case
+  the small terminal, the mounted terminal and the phone class, with IoT's
+  capacity; in the product case the small terminal, the mounted terminal,
+  minimal-packet IoT and data IoT.
 - **Public documents.** Story first, upside explicit, one hedge at the end;
   the conservative floor stays visible but never leads, and the tone is
   never promotional (more rules and guardrails on the conclusions page).
@@ -105,7 +118,7 @@ treatment on the same spine, and no agent needs the repository explained twice.
 - [Research wiki](atlas/pieces/research-wiki.md): `research/`, the evidence, the theses and the source ledger.
 - [Assumptions](atlas/pieces/assumptions.md): the scenario files, the two ledgers, the stated assumptions.
 - [Data-center model](atlas/pieces/data-center-model.md): `code/src/data_center/`, the space model and ground reference.
-- [Communications model](atlas/pieces/communications-model.md): `code/src/communications/`, the Iridium model.
+- [Communications model](atlas/pieces/communications-model.md): `code/src/communications/`, the Iridium model on its saturation curve.
 - [Shared core](atlas/pieces/shared-core.md): `code/src/common/`, the cadence spine, cells, file boundary, commands.
 - [Promotion](atlas/pieces/promotion.md): the commands, gate and writer that publish the promoted JSON.
 - [Conclusions](atlas/pieces/conclusions.md): each application's verdict and public documents, reviewed by hand.
@@ -129,6 +142,10 @@ row); a model run makes promoted JSON; a person reviews it into the conclusion.
 - **Python** 3.14 under `uv`, from `code/`. Test command:
   `uv run ruff check . && uv run ruff format --check . && uv run mypy --strict src && uv run pytest -q`;
   from the root, `uv run --project code pytest code/tests -q`.
+- **Heavy runs.** The saturation command
+  (`python -m communications.saturation`, about 47 minutes and a 12 GB memory
+  bound on its measured run, the curve's `provenance.run_measurement`) runs one
+  at a time, detached, from an isolated worktree.
 
 ## Where next
 
