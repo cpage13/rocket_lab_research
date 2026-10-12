@@ -28,8 +28,7 @@ gives its own):
   writes a named space artifact (local only, no ground artifact).
 - `uv run python -m communications.saturation scenarios/iridium.yaml communications/models/iridium/saturation_curve.json --version-stamp <stamp>`
   writes the saturation curve. It is a heavy run (the charter's Project
-  rules: one at a time, detached, from an isolated worktree), and it reads
-  no curve, so a stale curve never blocks it. It runs first whenever an
+  rules), and it reads no curve, so a stale curve never blocks it. It runs first whenever an
   input of the curve moves (the assumptions page's Iridium checklist).
 - `uv run python -m communications.json_output scenarios/iridium.yaml communications/models/iridium/default.json --version-stamp <stamp>`
   writes the Iridium artifact from the scenario and the curve its

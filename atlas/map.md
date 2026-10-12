@@ -275,8 +275,9 @@ curve's or the current Iridium schema (the promotion page, Open).
 - IoT: ADR 011 (`docs/adr/011-iot-is-capacity-in-the-engineering-model.md`)
   supersedes ADR 007 and is not yet built, so the Iridium artifact still
   carries ADR 007's two IoT lines, each outside every class's margin
-  (`test_the_two_iot_lines_are_fixed_books_frozen_exactly`); government
-  stays out of revenue under both. The product case
+  (`test_the_two_iot_lines_are_fixed_books_frozen_exactly`,
+  `test_each_class_revenue_is_its_people_times_its_price_and_the_books_stay_out`);
+  government stays out of revenue under both. The product case
   (`docs/adr/012-product-case-is-its-own-model.md`) has no code or guard
   yet.
 - `common` imports neither model, and `communications` never imports
