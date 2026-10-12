@@ -1,16 +1,20 @@
 """Promoted JSON artifact writer for the Iridium model (formerly Model B).
 
 Runs an Iridium scenario through the Iridium entry,
-:func:`communications.iridium.run_iridium_model`, on its saturation curve, and
-writes the promoted JSON artifact: a small provenance header, the shared
-trajectory summary (the headline fields every comms run reports), the Iridium
-physics block (the :class:`~communications.engine.IridiumResult` fields), and
-the stated-assumptions lines from
-:func:`~communications.engine.iridium_assumptions`. It mirrors the data-center
-promotion pattern (``data_center.json_output`` + the ``rklb-value --promote``
-path): a typed Pydantic artifact serialized by the shared
-:func:`common.file_io.render_artifact_json`, written into the repo-root
-``communications/models/`` folder.
+:func:`communications.iridium.run_iridium_model`, on its saturation curve, and writes the
+promoted JSON artifact, schema :data:`IRIDIUM_SCHEMA_VERSION`: a small provenance header,
+the trajectory summary (the shared fleet-and-cost record's totals beside the Iridium
+record's floor year and cost per satellite-year), the orbit scenario, the Iridium physics,
+every device class's block (its price, usage, physics, markers, limit and marginal
+intervals), every model year's lines (the shared fleet and cost beside each class's people,
+revenue and own margin, and the two IoT lines), the fixed books, the saturation block (the
+curve's identity, the downlink share and the panel factor, the readings at the reported
+fleets, the phone class's band saturation numbers, the IoT check and the curve's limits)
+and the stated assumptions. Every block that lists the classes lists them small terminal,
+mounted terminal, phone class, never phone-first. It mirrors the data-center promotion
+pattern (``data_center.json_output`` + the ``rklb-value --promote`` path): a typed Pydantic
+artifact serialized by the shared :func:`common.file_io.render_artifact_json`, written into
+the repo-root ``communications/models/`` folder.
 
 The command is the Iridium promotion command only. It loads the scenario and
 narrows it to its Iridium dials first
@@ -40,11 +44,11 @@ output); it defaults to today's ISO date.
 The command follows the shared CLI conventions (:mod:`common.cli`): the status
 line and any error are log records on stderr; an unreadable or invalid
 scenario, a scenario of the cellular family, a saturation curve that cannot be
-read or was computed for other inputs, a scenario the model cannot run (a
-value the model cannot compute among them), an artifact that would hold a number
-that is not finite (the artifact's models refuse one, so no cost is ever written
-as null), or a failed write is one ``ERROR:`` line and exit status 1, never a
-traceback; a usage error exits with status 2.
+read, was computed for other inputs or ends before a fleet the run reads, a
+scenario the model cannot run (a value the model cannot compute among them), an
+artifact that would hold a number that is not finite (the artifact's models refuse
+one, so no value is ever written as null in its place), or a failed write is one
+``ERROR:`` line and exit status 1, never a traceback; a usage error exits with status 2.
 The one artifact is written through
 :func:`common.file_io.write_files_with_rollback`: staged in full beside its
 destination, then renamed over it in one atomic rename, so a failure leaves
@@ -77,64 +81,66 @@ from common.file_io import (
     write_files_with_rollback,
 )
 from common.input_manifest import SourceStatus
-from communications.config import CommsConfig, load_comms_config
+from communications.config import load_comms_config
 from communications.constants import (
     ORBIT_ALTITUDE_KM_SCENARIO,
     ORBIT_INCLINATION_DEG_SCENARIO,
     ORBIT_SCENARIO_BASIS,
     ORBIT_SCENARIO_SOURCE_STATUS,
-    BindingRegime,
     DeviceClass,
 )
-from communications.engine import (
-    ZERO_MARGIN_PCT,
-    CellularRun,
-    IridiumArpuBucket,
-    IridiumArpuResult,
-    arpu_stated_assumptions,
-    iridium_assumptions,
-    margin_pct,
-    usd_per_person,
+from communications.engine import FleetTrajectory
+from communications.iridium import (
+    BindingLimit,
+    ClassReadingRecord,
+    ClassRecord,
+    ClassYearRecord,
+    FixedBooksRecord,
+    IotCheckRowRecord,
+    IridiumRecord,
+    MarginalIntervalRecord,
+    ReadingRecord,
+    SaturationRecord,
+    iridium_dials_of,
+    run_iridium_model,
 )
-from communications.iridium import iridium_dials_of, run_iridium_model
-from communications.saturation_curve import SaturationCurveMismatchError, load_saturation_curve
+from communications.saturation_curve import (
+    BandName,
+    SaturationCurveMismatchError,
+    load_saturation_curve,
+)
 
 logger = logging.getLogger(__name__)
 
 MODEL_NAME: Final[str] = "iridium"
 """The promoted artifact's model name (the provenance header's fixed identity)."""
 
-IRIDIUM_SCHEMA_VERSION: Final[str] = "iridium-v5"
-"""The promoted Iridium artifact's schema version tag. ``iridium-v5`` (2026-09-23)
-makes the edge cases honest: the trajectory summary adds
-``build_completes_in_horizon`` and ``built_fleet_annual_cost_musd`` (the published
-ARPU margin's cost basis, now the built fleet's annualized cost so the margin pairs
-revenue and cost on the same fleet); ``final_year_replacement_cost_musd``,
-``final_year_cash_cost_per_subscriber_usd``, and
-``cost_per_subscriber_annualized_usd`` become nullable (the two final-year figures are
-``None`` when the final year replaced no retiring cohort; the annualized figure is
-``None`` when nobody is served; never a 0.0 published as a real figure); the
-final-year replacement never includes a build tranche; the served base is capped
-at the fleet target's people capacity; and the cash per-person figure divides by
-the served base. The promoted default's values are unchanged.
-``iridium-v4`` (2026-07-14) made the trajectory summary's cost bases honest and its
-denominators complete:
-the two final-year cash fields are renamed to say what they are
-(``final_year_replacement_cost_musd`` and ``final_year_cash_cost_per_subscriber_usd``,
-previously published under steady-state-flavored names although they are the
-cohort-timed final-model-year cash), the annualized per-person basis is published
-beside them (``cost_per_subscriber_annualized_usd``), the fleet, launch, and
-capacity denominators the prose quotes are exposed (final-year living fleet,
-cumulative launches to completion and through the final year, target-fleet and
-final-year living-fleet people capacity), and the published orbit posture rides
-as the labeled ``orbit_scenario`` block with its limitations attached. The prior
-``iridium-v3`` (2026-07-10) removed the two cost-plus revenue fields from the
-trajectory summary (the Iridium model has a real published revenue case, the
-four-bucket ARPU block; cost-plus stays the cellular family's shared-engine
-convention), and ``iridium-v2`` (2026-07-09) removed the two inherited
-placeholder ARPU fields and added the published four-bucket
-``revenue_arpu_buckets`` block with the published ARPU margin against the
-fleet's steady-state annual cost."""
+IRIDIUM_SCHEMA_VERSION: Final[str] = "iridium-v6"
+"""The promoted Iridium artifact's schema version tag. ``iridium-v6`` (2026-10-06, the
+saturation module's switch, approved 2026-10-04) publishes the Iridium model on the promoted
+saturation curve and the launch cadence: every device class side by side (``classes``, each
+with its price, usage, physics, markers, binding limit and marginal intervals), each model
+year's people, revenue and own margin per class beside the shared fleet and cost and the two
+IoT lines (``years``), the two IoT lines' fixed books (``fixed_books``), and the curve's
+identity, readings, band saturation numbers, IoT check and limits (``saturation``). The
+trajectory summary renames ``total_build_and_hold_cost_musd`` to
+``total_cost_through_final_year_musd`` and ``steady_state_annual_cost_musd`` to
+``final_year_annual_cost_musd``, replaces ``full_coverage_reached_year`` with
+``coverage_floor_reached_year`` and adds ``cost_per_satellite_year_musd``; the physics block
+keeps the spectrum, the panel, the operations cost and the ecosystem assumption and renames
+``effective_satellites_per_launch`` to ``satellites_per_launch``. Removed: the target,
+regime, completion and built-fleet fields, the per-person cost fields, the density and the
+fleet aggregate, the IoT passthrough, the one device class and its physics (each class's now
+in ``classes``), and the four-bucket ``revenue_arpu_buckets`` block. Earlier versions, in
+brief: ``iridium-v5`` (2026-09-23) made the edge cases honest (nullable final-year cash
+figures, the built fleet's annualized cost as the ARPU margin's basis); ``iridium-v4``
+(2026-07-14) named the cost bases and exposed the denominators the prose quoted, and added
+the orbit scenario block; ``iridium-v3`` (2026-07-10) removed the cost-plus revenue fields;
+``iridium-v2`` (2026-07-09) added the four-bucket ARPU block."""
+
+_BLOCK_CONFIG: Final[ConfigDict] = ConfigDict(frozen=True, allow_inf_nan=False)
+"""Every artifact block's configuration: frozen, and only finite numbers, so the artifact
+never holds an infinity or a NaN (a quantity that does not exist is a null instead)."""
 
 
 class IridiumProvenance(BaseModel):
@@ -145,7 +151,7 @@ class IridiumProvenance(BaseModel):
     git-describe string or a date).
     """
 
-    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
+    model_config = _BLOCK_CONFIG
 
     model_name: str = Field(description="The model this artifact belongs to: 'iridium'.")
     schema_version: str = Field(description="The promoted Iridium artifact schema version.")
@@ -160,210 +166,69 @@ class IridiumProvenance(BaseModel):
     )
 
 
-class IridiumPhysicsBlock(BaseModel):
-    """The Iridium physics result block (the ``IridiumResult`` fields, one for one).
-
-    All derived quantities are estimate-tier. Subscribers are PEOPLE;
-    ``iot_devices`` is a separate DEVICE count, never folded into the people count:
-    with the ARPU case on it carries the revenue mix's IoT bucket count (the one IoT
-    truth per artifact), otherwise the fixed passthrough dial.
-    """
-
-    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
-
-    spectrum_mhz: float = Field(description="The held L-band width used, MHz (a width).")
-    aperture_m2: float = Field(description="The satellite flat-array area used, m^2.")
-    device_class: DeviceClass = Field(
-        description="The device class that set the spectral-efficiency tier."
-    )
-    spectral_efficiency_bps_per_hz: float = Field(
-        description="The resolved spectral efficiency used, bps/Hz."
-    )
-    per_satellite_capacity_gbps: float = Field(
-        description="The derived per-satellite capacity, Gbps."
-    )
-    fleet_aggregate_capacity_gbps: float = Field(
-        description="Per-satellite capacity times the fleet target, Gbps."
-    )
-    subscribers_per_satellite: int = Field(
-        description="The derived per-satellite density (people) that sized the fleet."
-    )
-    effective_satellites_per_launch: int = Field(
-        description="The aperture-coupled per-launch count the deployment used."
-    )
-    active_user_rate_mbps: float = Field(
-        description="The per-subscriber active data rate, Mbps (the service tier)."
-    )
-    concurrency_peak: float = Field(description="The busy-hour peak concurrency fraction.")
-    concurrency_offpeak: float = Field(description="The off-peak concurrency fraction.")
-    beam_pool_mbps: float = Field(
-        description="The single-beam Shannon pool (spectrum times SE), Mbps."
-    )
-    per_user_rate_peak_mbps: float = Field(
-        description="The peak per-user rate, Mbps (the active rate by construction)."
-    )
-    per_user_rate_offpeak_mbps: float = Field(
-        description="The off-peak per-user rate, Mbps (capped by the beam pool)."
-    )
-    iot_devices: int = Field(
-        description=(
-            "The published IoT DEVICE count (not people; zero sizing effect): the ARPU "
-            "IoT bucket count when the ARPU case is on, else the passthrough dial."
-        )
-    )
-    operations_cost_musd: float = Field(
-        description="The Iridium model's operations cost, $M (0.0, an explicit assumption)."
-    )
-    ecosystem_assumption: str = Field(
-        description="The stated ecosystem assumption behind the phone-class tier."
-    )
-
-
 class TrajectorySummaryBlock(BaseModel):
-    """The trajectory headline fields: the run's shared fleet-and-cost record and its
-    cellular record, summarized.
+    """The trajectory's headline fields: the shared fleet-and-cost record's totals and final
+    year, with the year the coverage floor is reached and the cost per satellite-year.
 
-    These are the fields every comms run reports (the fleet machinery the
-    Iridium model shares with the High-Bandwidth Cellular Pure Play model):
-    the build-and-hold cost, the fleet sizing and its binding regime, and the
-    cost bases. Schema iridium-v4 (2026-07-14) named the two cost bases
-    honestly and exposed the denominators the prose quotes: the final-year
-    cash pair carries ``final_year_`` names (the engine carries the same names),
-    the annualized per-person basis is published beside the final-year cash one,
-    and the living-fleet, launch, and people-capacity denominators ride as
-    first-class fields. Schema iridium-v5 (2026-09-23) publishes whether the build
-    completes inside the horizon and the built fleet's annualized cost (the ARPU
-    margin's cost basis), and makes the per-person and final-year cash fields
-    nullable: ``None`` marks an undefined figure instead of a 0.0 that reads as a
-    real cost. After schema iridium-v3 this block carries the cost and fleet story
-    ONLY, no revenue case: the published Iridium revenue is the four-bucket
-    ``revenue_arpu_buckets`` block on the artifact.
+    The fleet is every comms launch the cadence share allows: there is no fleet target, no
+    hold and no completion year. People, revenue and margins are per class, in ``years`` and
+    the readings.
     """
 
-    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
+    model_config = _BLOCK_CONFIG
 
-    total_build_and_hold_cost_musd: float = Field(
-        description="Cumulative build-and-hold cost over the trajectory, $M."
+    total_cost_through_final_year_musd: float = Field(
+        description="The cumulative deployment cash (build and launch) over the horizon, $M."
     )
-    fleet_target: int = Field(
-        description="The capacity-sized fleet the build-out fills toward (satellites)."
-    )
-    subscribers_per_satellite: int = Field(
-        description="The per-satellite density that sized the fleet (people)."
-    )
-    binding_regime: BindingRegime = Field(
-        description="Which constraint set the fleet target: coverage, capacity, or saturated."
-    )
-    full_coverage_reached_year: int | None = Field(
-        description="First fiscal year the living fleet hit the target; None if never."
-    )
-    build_completes_in_horizon: bool = Field(
+    final_year_annual_cost_musd: float = Field(
         description=(
-            "Whether the build reaches the fleet target inside the horizon (added in "
-            "schema iridium-v5). When false, the revenue case and its margin describe "
-            "the completed fleet the horizon never reaches (the built-fleet convention)."
-        )
-    )
-    subscribers_served: int = Field(
-        description=(
-            "Served people at the final year's buildout fraction: the subscriber "
-            "target (or the served override), capped at the fleet target's people "
-            "capacity (the cap binds in the saturated regime)."
-        )
-    )
-    steady_state_annual_cost_musd: float = Field(
-        description=(
-            "The FINAL model year's ANNUALIZED fleet cost, $M/yr: the living fleet's "
-            "build, launch, and replacement cost spread over the satellite lifetime "
-            "(0.0 with nothing on orbit)."
-        )
-    )
-    built_fleet_annual_cost_musd: float = Field(
-        description=(
-            "The BUILT fleet's annualized cost, $M/yr, the ARPU margin's cost basis "
-            "(added in schema iridium-v5): equal to steady_state_annual_cost_musd when "
-            "the final-year living fleet is at or above the fleet target, else the "
-            "whole-launch built fleet at the final year's per-satellite annual cost."
-        )
-    )
-    cost_per_subscriber_annualized_usd: float | None = Field(
-        description=(
-            "The ANNUALIZED cost per person, USD/yr: steady_state_annual_cost_musd "
-            "over the served-people base (the honest per-person headline). None when "
-            "nobody is served (nullable since schema iridium-v5)."
+            "The final model year's annualized fleet cost, $M a year: each living cohort's "
+            "build and launch cost spread over the satellite life, at its launch year's price "
+            "(0.0 with nothing on orbit). Not the steady state, which is a reading."
         )
     )
     final_year_replacement_cost_musd: float | None = Field(
         description=(
-            "The FINAL model year's cash replacement cost, $M: cohort-timed and "
-            "lumpy (the final year replaces whatever cohort expires then), never a "
-            "build tranche, NOT an annualized or steady-state basis. None when the "
-            "final year replaced no retiring cohort (nullable since schema iridium-v5)."
-        )
-    )
-    final_year_cash_cost_per_subscriber_usd: float | None = Field(
-        description=(
-            "The FINAL model year's cash replacement over the served-people base, "
-            "USD: the lumpy cash figure, NOT the annualized per-person basis "
-            "(published beside it as cost_per_subscriber_annualized_usd). None when "
-            "the final-year replacement is None or nobody is served (nullable since "
-            "schema iridium-v5)."
+            "The final model year's cash replacement cost, $M: the satellites that replace "
+            "that year's retiring cohort, at their build cost plus their launches at the "
+            "year's price; cohort-timed and lumpy, not an annualized basis. None when the "
+            "final year replaced no retiring cohort."
         )
     )
     living_fleet_final_year: int = Field(
-        description=(
-            "Living satellites at the final model year (whole-launch build minus "
-            "retired cohorts): the annualized cost's fleet basis."
-        )
-    )
-    cumulative_launches_to_completion: int | None = Field(
-        description=(
-            "Cumulative launches flown through the first full-coverage year "
-            "(replacements included); None if the target was never reached."
-        )
+        description="Living satellites at the final model year (the horizon-end reach)."
     )
     cumulative_launches_final_year: int = Field(
-        description="Cumulative launches flown through the final model year."
+        description="Cumulative comms launches flown through the final model year."
     )
-    people_capacity_target_fleet: int = Field(
+    coverage_floor_reached_year: int | None = Field(
         description=(
-            "The target fleet's people capacity: fleet_target times "
-            "subscribers_per_satellite (the revenue case's capacity anchor)."
+            "The first fiscal year the living fleet is at or above the coverage floor, when "
+            "every class and both IoT lines start selling; None when the floor is never "
+            "reached."
         )
     )
-    people_capacity_living_fleet_final_year: int = Field(
+    cost_per_satellite_year_musd: float = Field(
         description=(
-            "The final-year living fleet's people capacity: living satellites "
-            "times subscribers_per_satellite (physical capacity, above the "
-            "configured served target when whole launches overshoot)."
+            "One satellite's annualized cost at the final year's launch price, $M a year: what "
+            "a final-year cohort would lock in (defined even when no cohort flies). The basis "
+            "of the marginal intervals and of the readings at fleets the trajectory does not "
+            "hold."
         )
     )
-    # Two families of engine fields are computed-but-unpublished for Iridium:
-    # removed from this block but KEPT on the engine's cellular record, CellularTrajectory
-    # (the cellular family reads them, and the equality tripwire compares that record
-    # across the two entries), so they must NOT be removed from the engine path:
-    #   - the cost-plus revenue case (steady_state_revenue_cost_plus_musd,
-    #     steady_state_gross_margin_cost_plus_pct), REMOVED here in schema iridium-v3
-    #     (investor direction 2026-07-10): the Iridium model now has a real published
-    #     revenue case, so the synthetic cost-plus line is off every Iridium-facing
-    #     surface, while it stays the cellular family's cost-recovery convention;
-    #   - the two inherited placeholder ARPU fields (steady_state_revenue_arpu_musd,
-    #     steady_state_gross_margin_arpu_pct), REMOVED in schema iridium-v2: computed
-    #     from the cellular family's $50/month default, they never described Iridium.
-    # The published Iridium revenue is the revenue_arpu_buckets block below.
 
 
 class OrbitScenarioBlock(BaseModel):
     """The published orbit posture, carried as a labeled SCENARIO block.
 
-    Not an engine derivation: nothing in the model computes from these values,
-    and no config dial sets them. The block exists (schema iridium-v4) so the
-    public orbit claim in the conclusion and the assumptions ledger has a typed
-    model-contract anchor that travels with its limitations. Values and basis
-    text come from the named constants in :mod:`communications.constants`.
+    No config dial sets these values: they are named constants, and the saturation curve's
+    shell is computed at them (450 km, 53 degrees, the 25 degree mask), so the readings rest
+    on this posture. The block (schema iridium-v4) gives the public orbit claim in the
+    conclusion and the assumptions ledger a typed model-contract anchor that travels with its
+    limitations. Values and basis text come from :mod:`communications.constants`.
     """
 
-    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
+    model_config = _BLOCK_CONFIG
 
     altitude_km: float = Field(
         description="The published fleet altitude, km (a stated scenario, not derived)."
@@ -382,187 +247,486 @@ class OrbitScenarioBlock(BaseModel):
     )
 
 
-class ArpuBucketBlock(BaseModel):
-    """One published ARPU revenue bucket (a mix slice of the billable-connection pool).
+class IridiumPhysicsBlock(BaseModel):
+    """The run's Iridium settings and the two stated physics notes; each class's physics is in
+    its own block in ``classes``."""
 
-    Counts are people for standard/premium, DEVICES for IoT, contracts for
-    government: never summed as one population (the pool is an accounting frame).
-    """
+    model_config = _BLOCK_CONFIG
 
-    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
-
-    mix_pct: float = Field(
-        description="The bucket's share of the billable-connection pool, percent."
+    spectrum_mhz: float = Field(description="The held L-band width, MHz (a width).")
+    aperture_m2: float = Field(
+        description="The satellite's flat panel, m^2, applied linearly on the curve."
     )
-    price_usd_per_month: float = Field(
-        description="The bucket's monthly price, USD per connection per month."
+    satellites_per_launch: int = Field(
+        description="The satellites one launch carries, the scenario's direct value."
     )
-    count: int = Field(
-        description="The derived connection count (people, IoT devices, or contracts)."
+    operations_cost_musd: float = Field(
+        description="The Iridium model's operations cost, $M (0.0, an explicit assumption)."
     )
-    annual_revenue_musd: float = Field(description="The bucket's annual revenue, $M/yr.")
+    ecosystem_assumption: str = Field(
+        description="The stated ecosystem assumption behind the phone class."
+    )
 
 
-class RevenueArpuBucketsBlock(BaseModel):
-    """The published four-bucket ARPU revenue case (a top-level artifact block).
+class MarginalIntervalBlock(BaseModel):
+    """One interval of a class's curve rows and what one more satellite adds across it."""
 
-    Present only when the scenario carries an ``arpu`` block; the whole block is
-    omitted (the artifact field is None) on the no-ARPU path. The four buckets
-    partition ONE pool anchored to fleet capacity, so every count scales with the
-    satellite count. Subscribers are PEOPLE (standard, premium); IoT are DEVICES;
-    government is a contract line: ``total_connections`` is a billable-connections
-    accounting total, NOT one summed people population.
-    """
+    model_config = _BLOCK_CONFIG
 
-    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
-
-    standard: ArpuBucketBlock = Field(
-        description="The standard personal (phone-class) people bucket."
-    )
-    premium: ArpuBucketBlock = Field(
-        description="The premium terminal (gain-antenna) people bucket."
-    )
-    iot: ArpuBucketBlock = Field(description="The IoT DEVICE bucket (the mix residual to 100).")
-    government: ArpuBucketBlock = Field(description="The government contract bucket.")
-    total_connections: int = Field(
-        description="The billable-connection pool size (people + devices + contracts)."
-    )
-    arpu_revenue_total_musd: float = Field(
-        description="The summed annual revenue across the four buckets, $M/yr."
-    )
-    arpu_margin_vs_steady_state_cost_pct: float = Field(
+    lower_fleet: int = Field(description="The interval's lower fleet (0 for the first).")
+    upper_fleet: int = Field(description="Its upper fleet, a row of the class's curve.")
+    people_added_per_satellite: float = Field(
         description=(
-            "The published ARPU margin: ARPU revenue less the built fleet's annualized "
-            "cost (build, launch, replacement; the trajectory summary's "
-            "built_fleet_annual_cost_musd, so revenue and cost describe the same "
-            "fleet), over ARPU revenue, percent. Operations is the explicit zero and "
-            "corporate overhead is excluded: an operating-style margin, not a gross "
-            "margin and not a net margin."
+            "The people one more satellite adds across the interval, at the downlink share "
+            "and the panel factor: the chord of the class's people between the two fleets."
         )
     )
-    stated_assumptions: tuple[str, ...] = Field(
+    revenue_per_satellite_year_musd: float = Field(
+        description="Those people at the class's price for a year, $M."
+    )
+    pays: bool = Field(
         description=(
-            "The ARPU case's four stated-assumption strings (full sell-through, the "
-            "mix posture, the built-fleet convention, the margin definition), from "
-            "arpu_stated_assumptions()."
+            "Whether that revenue is at least the cost per satellite-year (full price; a "
+            "haircut moves every stop earlier)."
         )
     )
+
+
+class ClassBlock(BaseModel):
+    """One device class: its price, usage, physics, markers, binding limit and intervals.
+
+    The class's column is the whole fleet sold to that class alone. Its markers are the
+    curve's own (fleets on the curve's basis; the maximum use times the panel factor).
+    """
+
+    model_config = _BLOCK_CONFIG
+
+    device_class: DeviceClass = Field(description="The class.")
+    price_usd_per_month: float = Field(description="Its flat monthly price, dollars.")
+    active_user_rate_mbps: float = Field(description="Its rate while active, Mbps (its usage).")
+    concurrency_peak: float = Field(description="Its busy-hour share of users active at once.")
+    concurrency_offpeak: float = Field(description="Its off-peak share of users active.")
+    spectral_efficiency_bps_per_hz: float = Field(
+        description="Its central spectral efficiency, bps/Hz."
+    )
+    per_satellite_capacity_gbps: float = Field(
+        description=(
+            "The satellite's peak for the class, every beam lit and used and the band full "
+            "time, times the panel factor, Gbps."
+        )
+    )
+    beam_pool_mbps: float = Field(description="One beam's downlink pool, W x SE x d, Mbps.")
+    per_user_rate_peak_mbps: float = Field(
+        description="The peak per-user rate, Mbps (the rate while active)."
+    )
+    per_user_rate_offpeak_mbps: float = Field(
+        description=(
+            "The off-peak per-user rate, Mbps: the lower of the pool and the rate times the "
+            "busy-hour share over the off-peak share."
+        )
+    )
+    maximum_use_beams: float = Field(
+        description=(
+            "The most beams the shell could ever use for the class, times the panel factor."
+        )
+    )
+    saturation_number: int | None = Field(
+        description=(
+            "The class's spectrum bound: the fleet at which one more satellite adds less than "
+            "10 percent of an average satellite's capacity; None when not reached on the curve."
+        )
+    )
+    saturation_not_reached_by: int | None = Field(
+        description="The curve's last row when the saturation number is not reached, else None."
+    )
+    elasticity_under_0p25_fleet: int | None = Field(
+        description="The fleet at the first elasticity crossing under 0.25, or None."
+    )
+    fleet_at_90pct_of_maximum_use: int | None = Field(
+        description="The fleet at which useful beams reach 90 percent of maximum use, or None."
+    )
+    binding_limit_at_horizon_end: BindingLimit = Field(
+        description=(
+            "What bounds the class's fleet at the horizon's end: spectrum when the final "
+            "year's living fleet is at or past the saturation number, else the launch "
+            "cadence. Reported only: no saturation number caps the build."
+        )
+    )
+    marginal_intervals: tuple[MarginalIntervalBlock, ...] = Field(
+        description=(
+            "Every interval of the class's curve rows, from 0 to the first row and then "
+            "between consecutive rows."
+        )
+    )
+
+
+class ClassYearBlock(BaseModel):
+    """One class's line in one model year."""
+
+    model_config = _BLOCK_CONFIG
+
+    device_class: DeviceClass = Field(description="The class.")
+    people_served: int = Field(
+        description=(
+            "Every person the living fleet carries for the class (every seat sold); 0 below "
+            "the coverage floor."
+        )
+    )
+    revenue_musd: float = Field(
+        description="Those people at the class's price for the year, $M; 0.0 below the floor."
+    )
+    own_margin_pct: float | None = Field(
+        description=(
+            "The class's own revenue against the year's whole-fleet annualized cost, percent "
+            "(the IoT lines never inside it); null when the revenue is 0.0."
+        )
+    )
+
+
+class YearBlock(BaseModel):
+    """One model year: the shared fleet and cost, the two IoT lines and each class's line."""
+
+    model_config = _BLOCK_CONFIG
+
+    year: int = Field(description="The fiscal year.")
+    comms_launches_flown: int = Field(description="The comms launches flown this year.")
+    living_fleet: int = Field(description="The living satellites this year.")
+    annual_cost_musd: float = Field(
+        description="The year's annualized fleet cost, $M (the margins' cost basis)."
+    )
+    minimal_packet_iot_revenue_musd: float = Field(
+        description="Minimal-packet IoT's book, $M; 0.0 below the coverage floor."
+    )
+    data_iot_revenue_musd: float = Field(
+        description="Data IoT's book, $M; 0.0 below the coverage floor."
+    )
+    classes: tuple[ClassYearBlock, ...] = Field(description="Each class's line, in class order.")
+
+
+class FixedBooksBlock(BaseModel):
+    """The two IoT lines (ADR 007): fixed counts at their prices, each its own line; there is
+    no combined total and no government line."""
+
+    model_config = _BLOCK_CONFIG
+
+    minimal_packet_iot_devices: int = Field(description="Minimal-packet IoT's fixed count.")
+    minimal_packet_iot_price_usd_per_month: float = Field(
+        description="Its monthly price per device, dollars."
+    )
+    minimal_packet_iot_annual_revenue_musd: float = Field(
+        description="Its book, $M a year, from the year the coverage floor is reached."
+    )
+    data_iot_devices: int = Field(description="Data IoT's fixed count.")
+    data_iot_price_usd_per_month: float = Field(
+        description="Its monthly price per device, dollars."
+    )
+    data_iot_annual_revenue_musd: float = Field(
+        description="Its book, $M a year, from the year the coverage floor is reached."
+    )
+    basis: str = Field(description="Where the counts come from and how the lines are sold.")
+
+
+class ClassReadingBlock(BaseModel):
+    """One class at one reported fleet."""
+
+    model_config = _BLOCK_CONFIG
+
+    device_class: DeviceClass = Field(description="The class.")
+    useful_beams: float = Field(
+        description="The co-channel beams over people at the fleet, times the panel factor."
+    )
+    share_of_maximum_use: float = Field(description="Useful beams over the maximum use.")
+    ocean_factor: float | None = Field(
+        description=(
+            "U, the share of the beams offered that lie over people; null at a fleet of 0."
+        )
+    )
+    people: int = Field(description="The people the fleet carries for the class.")
+    revenue_musd: float = Field(
+        description="Those people at the class's price for a year, $M; 0.0 below the floor."
+    )
+    own_margin_pct: float | None = Field(
+        description="That revenue against the reading's fleet cost, percent; null at 0.0."
+    )
+
+
+class ReadingBlock(BaseModel):
+    """Every class at one reported fleet."""
+
+    model_config = _BLOCK_CONFIG
+
+    label: str = Field(description="What the fleet is.")
+    fleet: int = Field(description="The fleet, satellites.")
+    fleet_annual_cost_musd: float = Field(
+        description=(
+            "The reading's cost, $M a year: the final year's annualized cost at the "
+            "horizon-end reach, else the fleet times the cost per satellite-year."
+        )
+    )
+    classes: tuple[ClassReadingBlock, ...] = Field(
+        description="Each class's reading, in class order."
+    )
+
+
+class IotCheckRowBlock(BaseModel):
+    """One IoT line at one reported fleet; every field but ``fleet`` null below the floor."""
+
+    model_config = _BLOCK_CONFIG
+
+    fleet: int = Field(description="The fleet, satellites.")
+    devices_per_useful_beam: float | None = Field(
+        description="The line's devices over the phone class's useful beams."
+    )
+    uplink_bits_share: float | None = Field(
+        description=(
+            "A beam's daily bits for the line over its uplink's daily bits (the frame's "
+            "share 1 - d), a fraction; null with no uplink time."
+        )
+    )
+    uplink_bits_share_with_mac: float | None = Field(
+        description="The same over the MAC efficiency, a fraction."
+    )
+    access_attempts_per_second_per_beam: float | None = Field(
+        description="One access attempt per message or burst, a second a beam."
+    )
+    uplink_tone_share_low: float | None = Field(
+        description=(
+            "The messages' channel time over the uplink's tone time at the low airtime, a "
+            "fraction. Null for data IoT: its bursts are not single-tone messages, and the "
+            "tone time of the single-tone messages it sends beside them goes unreported."
+        )
+    )
+    uplink_tone_share_high: float | None = Field(
+        description=(
+            "The same at the high airtime, a fraction; null for data IoT, whose messages' "
+            "tone time goes unreported (as above)."
+        )
+    )
+
+
+class IotCheckBlock(BaseModel):
+    """The IoT check at the reported fleets, each line on its own."""
+
+    model_config = _BLOCK_CONFIG
+
+    minimal_packet_iot: tuple[IotCheckRowBlock, ...] = Field(
+        description="Minimal-packet IoT's rows, one per reported fleet."
+    )
+    data_iot: tuple[IotCheckRowBlock, ...] = Field(
+        description="Data IoT's rows, one per reported fleet."
+    )
+
+
+class SaturationBlock(BaseModel):
+    """The curve the run read and what it read from it."""
+
+    model_config = _BLOCK_CONFIG
+
+    curve_path: str = Field(description="The scenario's curve path (repository-relative).")
+    curve_schema_version: str = Field(description="The curve's schema version.")
+    curve_version_stamp: str = Field(description="The curve's version stamp.")
+    input_hash: str = Field(description="The curve's input hash.")
+    downlink_share: float = Field(description="The downlink share d the run read the curve at.")
+    panel_factor: float = Field(
+        description="The scenario's panel over the curve's reference panel."
+    )
+    readings: tuple[ReadingBlock, ...] = Field(
+        description=(
+            "The readings at the coverage floor, the retired cap (kept for comparison), the "
+            "horizon-end full-cadence reach and the steady state beyond the horizon."
+        )
+    )
+    band_saturation_numbers: dict[BandName, int | None] = Field(
+        description=(
+            "The phone class's band points' saturation numbers (null when not reached), in "
+            "band order."
+        )
+    )
+    iot_check: IotCheckBlock = Field(description="The IoT check.")
+    limits: tuple[str, ...] = Field(description="The curve's stated limits, carried over.")
 
 
 class IridiumModelArtifact(BaseModel):
     """The complete promoted Iridium JSON artifact (the file's top level)."""
 
-    model_config = ConfigDict(frozen=True, allow_inf_nan=False)
+    model_config = _BLOCK_CONFIG
 
     provenance: IridiumProvenance = Field(description="The small provenance header.")
     trajectory_summary: TrajectorySummaryBlock = Field(
-        description="The shared trajectory headline fields."
+        description="The trajectory's headline fields."
     )
     orbit_scenario: OrbitScenarioBlock = Field(
         description="The published orbit posture (a labeled scenario with its limitations)."
     )
     iridium_physics: IridiumPhysicsBlock = Field(
-        description="The Iridium physics result block (the IridiumResult fields)."
+        description="The run's Iridium settings and stated physics notes."
     )
-    revenue_arpu_buckets: RevenueArpuBucketsBlock | None = Field(
-        default=None,
-        description=(
-            "The published four-bucket ARPU revenue case; None (omitted) when the "
-            "scenario carries no arpu block."
+    classes: tuple[ClassBlock, ...] = Field(description="Each device class's block, in order.")
+    years: tuple[YearBlock, ...] = Field(description="Each model year's lines.")
+    fixed_books: FixedBooksBlock = Field(description="The two IoT lines' books.")
+    saturation: SaturationBlock = Field(description="The curve and its readings.")
+    assumptions: tuple[str, ...] = Field(description="The stated-assumptions lines, in order.")
+
+
+def _interval_block(interval: MarginalIntervalRecord) -> MarginalIntervalBlock:
+    """Map one marginal interval onto its block."""
+    return MarginalIntervalBlock(
+        lower_fleet=interval.lower_fleet,
+        upper_fleet=interval.upper_fleet,
+        people_added_per_satellite=interval.people_added_per_satellite,
+        revenue_per_satellite_year_musd=interval.revenue_per_satellite_year_musd,
+        pays=interval.pays,
+    )
+
+
+def _class_block(record: ClassRecord) -> ClassBlock:
+    """Map one class's record onto its block."""
+    return ClassBlock(
+        device_class=record.device_class,
+        price_usd_per_month=record.price_usd_per_month,
+        active_user_rate_mbps=record.active_user_rate_mbps,
+        concurrency_peak=record.concurrency_peak,
+        concurrency_offpeak=record.concurrency_offpeak,
+        spectral_efficiency_bps_per_hz=record.spectral_efficiency_bps_per_hz,
+        per_satellite_capacity_gbps=record.per_satellite_capacity_gbps,
+        beam_pool_mbps=record.beam_pool_mbps,
+        per_user_rate_peak_mbps=record.per_user_rate_peak_mbps,
+        per_user_rate_offpeak_mbps=record.per_user_rate_offpeak_mbps,
+        maximum_use_beams=record.maximum_use_beams,
+        saturation_number=record.saturation_number,
+        saturation_not_reached_by=record.saturation_not_reached_by,
+        elasticity_under_0p25_fleet=record.elasticity_under_0p25_fleet,
+        fleet_at_90pct_of_maximum_use=record.fleet_at_90pct_of_maximum_use,
+        binding_limit_at_horizon_end=record.binding_limit_at_horizon_end,
+        marginal_intervals=tuple(_interval_block(each) for each in record.marginal_intervals),
+    )
+
+
+def _class_year_block(line: ClassYearRecord) -> ClassYearBlock:
+    """Map one class's line in a year onto its block."""
+    return ClassYearBlock(
+        device_class=line.device_class,
+        people_served=line.people_served,
+        revenue_musd=line.revenue_musd,
+        own_margin_pct=line.own_margin_pct,
+    )
+
+
+def _year_blocks(fleet: FleetTrajectory, iridium: IridiumRecord) -> tuple[YearBlock, ...]:
+    """Each model year: the shared record's year beside the Iridium record's year of the same
+    index (both run over the same horizon, oldest first, keyed by the fiscal year).
+
+    Raises:
+        ValueError: If the two records' years do not match one for one (they always do for a
+            run of the Iridium entry; a mismatch is a caller's error, never published).
+    """
+    if [year.year for year in fleet.years] != [year.year for year in iridium.years]:
+        raise ValueError(
+            "the shared record's years and the Iridium record's years must match one for one; "
+            f"got {[year.year for year in fleet.years]} and "
+            f"{[year.year for year in iridium.years]}"
+        )
+    return tuple(
+        YearBlock(
+            year=fleet_year.year,
+            comms_launches_flown=fleet_year.comms_launches_flown_this_year,
+            living_fleet=fleet_year.living_fleet,
+            annual_cost_musd=fleet_year.annual_cost_this_year_musd,
+            minimal_packet_iot_revenue_musd=iridium_year.minimal_packet_iot_revenue_musd,
+            data_iot_revenue_musd=iridium_year.data_iot_revenue_musd,
+            classes=tuple(_class_year_block(line) for line in iridium_year.classes),
+        )
+        for fleet_year, iridium_year in zip(fleet.years, iridium.years, strict=True)
+    )
+
+
+def _fixed_books_block(books: FixedBooksRecord) -> FixedBooksBlock:
+    """Map the two IoT lines onto their block."""
+    return FixedBooksBlock(
+        minimal_packet_iot_devices=books.minimal_packet_iot_devices,
+        minimal_packet_iot_price_usd_per_month=books.minimal_packet_iot_price_usd_per_month,
+        minimal_packet_iot_annual_revenue_musd=books.minimal_packet_iot_annual_revenue_musd,
+        data_iot_devices=books.data_iot_devices,
+        data_iot_price_usd_per_month=books.data_iot_price_usd_per_month,
+        data_iot_annual_revenue_musd=books.data_iot_annual_revenue_musd,
+        basis=books.basis,
+    )
+
+
+def _class_reading_block(line: ClassReadingRecord) -> ClassReadingBlock:
+    """Map one class's reading onto its block."""
+    return ClassReadingBlock(
+        device_class=line.device_class,
+        useful_beams=line.useful_beams,
+        share_of_maximum_use=line.share_of_maximum_use,
+        ocean_factor=line.ocean_factor,
+        people=line.people,
+        revenue_musd=line.revenue_musd,
+        own_margin_pct=line.own_margin_pct,
+    )
+
+
+def _reading_block(reading: ReadingRecord) -> ReadingBlock:
+    """Map one reported fleet's readings onto its block."""
+    return ReadingBlock(
+        label=reading.label,
+        fleet=reading.fleet,
+        fleet_annual_cost_musd=reading.fleet_annual_cost_musd,
+        classes=tuple(_class_reading_block(line) for line in reading.classes),
+    )
+
+
+def _iot_row_block(row: IotCheckRowRecord) -> IotCheckRowBlock:
+    """Map one IoT check row onto its block."""
+    return IotCheckRowBlock(
+        fleet=row.fleet,
+        devices_per_useful_beam=row.devices_per_useful_beam,
+        uplink_bits_share=row.uplink_bits_share,
+        uplink_bits_share_with_mac=row.uplink_bits_share_with_mac,
+        access_attempts_per_second_per_beam=row.access_attempts_per_second_per_beam,
+        uplink_tone_share_low=row.uplink_tone_share_low,
+        uplink_tone_share_high=row.uplink_tone_share_high,
+    )
+
+
+def _saturation_block(record: SaturationRecord) -> SaturationBlock:
+    """Map the curve's identity and readings onto the saturation block."""
+    return SaturationBlock(
+        curve_path=record.curve_path,
+        curve_schema_version=record.curve_schema_version,
+        curve_version_stamp=record.curve_version_stamp,
+        input_hash=record.input_hash,
+        downlink_share=record.downlink_share,
+        panel_factor=record.panel_factor,
+        readings=tuple(_reading_block(reading) for reading in record.readings),
+        band_saturation_numbers=dict(record.band_saturation_numbers),
+        iot_check=IotCheckBlock(
+            minimal_packet_iot=tuple(
+                _iot_row_block(row) for row in record.iot_check.minimal_packet_iot
+            ),
+            data_iot=tuple(_iot_row_block(row) for row in record.iot_check.data_iot),
         ),
-    )
-    assumptions: tuple[str, ...] = Field(
-        description="The stated-assumptions lines from iridium_assumptions(), in order."
-    )
-
-
-def _cumulative_launches_to_completion(run: CellularRun) -> int | None:
-    """Cumulative launches flown through the first full-coverage year.
-
-    Counts every launch (build and replacement alike) in the shared record's years up to
-    and including the cellular record's
-    :attr:`~communications.engine.CellularTrajectory.full_coverage_reached_year`;
-    None when the run never reached the target.
-
-    Args:
-        run: The completed run.
-
-    Returns:
-        The through-completion launch count, or None if never completed.
-    """
-    completion_year = run.cellular.full_coverage_reached_year
-    if completion_year is None:
-        return None
-    return sum(
-        year.comms_launches_flown_this_year
-        for year in run.fleet.years
-        if year.year <= completion_year
-    )
-
-
-def _arpu_bucket_block(bucket: IridiumArpuBucket) -> ArpuBucketBlock:
-    """Map one engine ARPU bucket onto its promoted-artifact block."""
-    return ArpuBucketBlock(
-        mix_pct=bucket.mix_pct,
-        price_usd_per_month=bucket.price_usd_month,
-        count=bucket.count,
-        annual_revenue_musd=bucket.revenue_musd_yr,
-    )
-
-
-def _build_arpu_buckets_block(
-    result: IridiumArpuResult,
-    built_fleet_annual_cost_musd: float,
-    stated_assumptions: tuple[str, ...],
-) -> RevenueArpuBucketsBlock:
-    """Map the engine's IridiumArpuResult onto the promoted revenue_arpu_buckets block.
-
-    Args:
-        result: The engine's computed four-bucket ARPU result.
-        built_fleet_annual_cost_musd: The built fleet's annualized cost, $M/yr, the
-            margin's cost basis (the same fleet the revenue case is computed at).
-        stated_assumptions: The ARPU-case posture strings (from
-            :func:`~communications.engine.arpu_stated_assumptions`), carried inline.
-
-    Returns:
-        The populated :class:`RevenueArpuBucketsBlock`, its margin
-        :data:`~communications.engine.ZERO_MARGIN_PCT` where
-        :func:`~communications.engine.margin_pct` is None (no revenue), as the v5
-        artifact has always published it.
-    """
-    margin = margin_pct(result.arpu_revenue_total_musd_yr, built_fleet_annual_cost_musd)
-    return RevenueArpuBucketsBlock(
-        standard=_arpu_bucket_block(result.standard),
-        premium=_arpu_bucket_block(result.premium),
-        iot=_arpu_bucket_block(result.iot),
-        government=_arpu_bucket_block(result.government),
-        total_connections=result.total_connections,
-        arpu_revenue_total_musd=result.arpu_revenue_total_musd_yr,
-        arpu_margin_vs_steady_state_cost_pct=margin if margin is not None else ZERO_MARGIN_PCT,
-        stated_assumptions=stated_assumptions,
+        limits=record.limits,
     )
 
 
 def build_iridium_artifact(
     *,
-    config: CommsConfig,
-    run: CellularRun,
+    fleet: FleetTrajectory,
+    iridium: IridiumRecord,
     source_scenario_path: str,
     version_stamp: str,
 ) -> IridiumModelArtifact:
-    """Assemble the promoted artifact from a completed Iridium run.
+    """Assemble the promoted artifact from an Iridium run's two records.
 
-    Pure assembly: no IO. The caller loads the config, runs the model, and
-    passes both in (so the artifact always describes exactly the run it was
-    built from). The cost totals and the years come from the run's shared
-    fleet-and-cost record (``run.fleet``); the target-era fields, the served base,
-    the built-fleet cost and the v5 physics block from its cellular record
-    (``run.cellular``).
+    Pure assembly: no IO and no config. The cost totals, the final year and each year's
+    launches, living fleet and annualized cost come from the shared fleet-and-cost record
+    (``fleet``); everything else, the settings it publishes among it, from the Iridium
+    record (``iridium``), so the artifact always describes exactly the run it was built from.
 
     Args:
-        config: The loaded scenario config (its ``iridium`` block must be set).
-        run: The completed run for that config (the Iridium entry's
-            :class:`~communications.engine.CellularRun`).
+        fleet: The run's shared fleet-and-cost record (``IridiumRun.fleet``).
+        iridium: The run's Iridium record (``IridiumRun.iridium``).
         source_scenario_path: The provenance path string for the scenario YAML.
         version_stamp: The caller-supplied stamp (git-describe or a date string).
 
@@ -570,97 +734,47 @@ def build_iridium_artifact(
         The populated, frozen :class:`IridiumModelArtifact`.
 
     Raises:
-        ValueError: If the config or the run does not carry the Iridium
-            block (the scenario did not select the Iridium model).
+        ValueError: If a value is not finite (the artifact's models refuse one), or the two
+            records' years do not match one for one.
     """
-    fleet = run.fleet
-    cellular = run.cellular
-    if config.iridium is None or cellular.iridium is None:
-        raise ValueError(
-            "the scenario does not select the Iridium model: it needs a top-level "
-            "'iridium:' block (see scenarios/iridium.yaml)"
-        )
-    physics = cellular.iridium
-    provenance = IridiumProvenance(
-        model_name=MODEL_NAME,
-        schema_version=IRIDIUM_SCHEMA_VERSION,
-        scenario_name=config.iridium.scenario_name,
-        source_scenario_path=source_scenario_path,
-        version_stamp=version_stamp,
-    )
-    living_fleet_final_year = fleet.years[-1].living_fleet
-    trajectory_summary = TrajectorySummaryBlock(
-        total_build_and_hold_cost_musd=fleet.total_cost_through_final_year_musd,
-        fleet_target=cellular.fleet_target,
-        subscribers_per_satellite=cellular.subscribers_per_satellite,
-        binding_regime=cellular.binding_regime,
-        full_coverage_reached_year=cellular.full_coverage_reached_year,
-        build_completes_in_horizon=cellular.full_coverage_reached_year is not None,
-        subscribers_served=cellular.subscribers_served,
-        steady_state_annual_cost_musd=fleet.final_year_annual_cost_musd,
-        built_fleet_annual_cost_musd=cellular.built_fleet_annual_cost_musd,
-        cost_per_subscriber_annualized_usd=usd_per_person(
-            fleet.final_year_annual_cost_musd, cellular.subscribers_served
-        ),
-        final_year_replacement_cost_musd=fleet.final_year_replacement_cost_musd,
-        final_year_cash_cost_per_subscriber_usd=cellular.final_year_cash_cost_per_subscriber_usd,
-        living_fleet_final_year=living_fleet_final_year,
-        cumulative_launches_to_completion=_cumulative_launches_to_completion(run),
-        cumulative_launches_final_year=sum(
-            year.comms_launches_flown_this_year for year in fleet.years
-        ),
-        people_capacity_target_fleet=(cellular.fleet_target * cellular.subscribers_per_satellite),
-        people_capacity_living_fleet_final_year=(
-            living_fleet_final_year * cellular.subscribers_per_satellite
-        ),
-    )
-    orbit_scenario = OrbitScenarioBlock(
-        altitude_km=ORBIT_ALTITUDE_KM_SCENARIO,
-        inclination_deg=ORBIT_INCLINATION_DEG_SCENARIO,
-        source_status=ORBIT_SCENARIO_SOURCE_STATUS,
-        basis=ORBIT_SCENARIO_BASIS,
-    )
-    # IoT SUPERSESSION (one IoT truth): with the ARPU case on, the published IoT device
-    # count is the revenue mix's IoT bucket count; the fixed iot_devices passthrough
-    # reports only on the no-ARPU path.
-    published_iot_devices = (
-        physics.arpu.iot.count if physics.arpu is not None else physics.iot_devices
-    )
-    iridium_physics = IridiumPhysicsBlock(
-        spectrum_mhz=physics.spectrum_mhz,
-        aperture_m2=physics.aperture_m2,
-        device_class=physics.device_class,
-        spectral_efficiency_bps_per_hz=physics.spectral_efficiency_bps_per_hz,
-        per_satellite_capacity_gbps=physics.per_satellite_capacity_gbps,
-        fleet_aggregate_capacity_gbps=physics.fleet_aggregate_capacity_gbps,
-        subscribers_per_satellite=physics.subscribers_per_satellite,
-        effective_satellites_per_launch=physics.effective_satellites_per_launch,
-        active_user_rate_mbps=physics.active_user_rate_mbps,
-        concurrency_peak=physics.concurrency_peak,
-        concurrency_offpeak=physics.concurrency_offpeak,
-        beam_pool_mbps=physics.beam_pool_mbps,
-        per_user_rate_peak_mbps=physics.per_user_rate_peak_mbps,
-        per_user_rate_offpeak_mbps=physics.per_user_rate_offpeak_mbps,
-        iot_devices=published_iot_devices,
-        operations_cost_musd=physics.operations_cost_musd,
-        ecosystem_assumption=physics.ecosystem_assumption,
-    )
-    revenue_arpu_buckets = (
-        _build_arpu_buckets_block(
-            physics.arpu,
-            cellular.built_fleet_annual_cost_musd,
-            arpu_stated_assumptions(config.iridium.arpu),
-        )
-        if physics.arpu is not None and config.iridium.arpu is not None
-        else None
-    )
+    final_year = fleet.years[-1]
     return IridiumModelArtifact(
-        provenance=provenance,
-        trajectory_summary=trajectory_summary,
-        orbit_scenario=orbit_scenario,
-        iridium_physics=iridium_physics,
-        revenue_arpu_buckets=revenue_arpu_buckets,
-        assumptions=iridium_assumptions(config.iridium),
+        provenance=IridiumProvenance(
+            model_name=MODEL_NAME,
+            schema_version=IRIDIUM_SCHEMA_VERSION,
+            scenario_name=iridium.scenario_name,
+            source_scenario_path=source_scenario_path,
+            version_stamp=version_stamp,
+        ),
+        trajectory_summary=TrajectorySummaryBlock(
+            total_cost_through_final_year_musd=fleet.total_cost_through_final_year_musd,
+            final_year_annual_cost_musd=fleet.final_year_annual_cost_musd,
+            final_year_replacement_cost_musd=fleet.final_year_replacement_cost_musd,
+            living_fleet_final_year=final_year.living_fleet,
+            cumulative_launches_final_year=sum(
+                year.comms_launches_flown_this_year for year in fleet.years
+            ),
+            coverage_floor_reached_year=iridium.coverage_floor_reached_year,
+            cost_per_satellite_year_musd=iridium.cost_per_satellite_year_musd,
+        ),
+        orbit_scenario=OrbitScenarioBlock(
+            altitude_km=ORBIT_ALTITUDE_KM_SCENARIO,
+            inclination_deg=ORBIT_INCLINATION_DEG_SCENARIO,
+            source_status=ORBIT_SCENARIO_SOURCE_STATUS,
+            basis=ORBIT_SCENARIO_BASIS,
+        ),
+        iridium_physics=IridiumPhysicsBlock(
+            spectrum_mhz=iridium.spectrum_mhz,
+            aperture_m2=iridium.aperture_m2,
+            satellites_per_launch=iridium.satellites_per_launch,
+            operations_cost_musd=iridium.operations_cost_musd,
+            ecosystem_assumption=iridium.ecosystem_assumption,
+        ),
+        classes=tuple(_class_block(record) for record in iridium.classes),
+        years=_year_blocks(fleet, iridium),
+        fixed_books=_fixed_books_block(iridium.fixed_books),
+        saturation=_saturation_block(iridium.saturation),
+        assumptions=iridium.assumptions,
     )
 
 
@@ -686,7 +800,7 @@ def export_iridium_json(
     Iridium entry, :func:`~communications.iridium.run_iridium_model`, which first
     checks that the curve was computed for the scenario's own inputs (a refusal
     names the curve file the path resolved to, as the loader's refusals do);
-    assembles the artifact, and writes it through
+    assembles the artifact from the run's two records, and writes it through
     :func:`common.file_io.write_files_with_rollback` (staged in full, then one
     atomic rename, so a failed write leaves any existing file as it was; an
     output path that is a symbolic link or not a regular file is refused). A
@@ -717,7 +831,10 @@ def export_iridium_json(
             saturation curve is refused (a
             :class:`~communications.saturation_curve.SaturationCurveError`:
             another schema, altered, incomplete, or computed for other inputs,
-            each naming the curve file), or it cannot be run.
+            each naming the curve file; or a fleet the run reads past a class's
+            last row), or it cannot be run.
+        ArithmeticError: If a value the model cannot compute arises (an
+            ``OverflowError``, say).
     """
     checkout = locate_source_checkout(__file__)
     scenario = Path(scenario_path)
@@ -731,8 +848,8 @@ def export_iridium_json(
         raise SaturationCurveMismatchError(f"{curve_path}: {exc}") from exc
     stamp = version_stamp if version_stamp is not None else date.today().isoformat()
     artifact = build_iridium_artifact(
-        config=config,
-        run=run,
+        fleet=run.fleet,
+        iridium=run.iridium,
         source_scenario_path=checkout.repo_relative(scenario),
         version_stamp=stamp,
     )
@@ -782,9 +899,9 @@ def main(argv: list[str] | None = None) -> int:
         :data:`~common.cli.EXIT_OK` on success; :data:`~common.cli.EXIT_ERROR`
         (after one ``ERROR:`` log line, no traceback) when the scenario cannot
         be read, is invalid, or does not select the Iridium model, its
-        saturation curve cannot be read or was computed for other inputs, the
-        model cannot run (a value it cannot compute among them: an ``ArithmeticError``,
-        such as an overflow or a division by a value that underflowed to zero), the
+        saturation curve cannot be read, was computed for other inputs or ends
+        before a fleet the run reads, the model cannot run (a value it cannot
+        compute among them: an ``ArithmeticError``, such as an overflow), the
         artifact would hold a number that is not finite (its models refuse one), or the
         artifact cannot be written. Usage errors exit through
         :class:`~common.cli.CliArgumentParser` with :data:`~common.cli.EXIT_USAGE`.

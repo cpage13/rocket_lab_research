@@ -12,17 +12,20 @@ no-argument construct is fully valid, plus the ``comms_config_from_dict`` /
 ``load_comms_config`` YAML loader pair. Every block this module defines refuses a
 number that is not finite (``allow_inf_nan=False``), and so do the cadence and launch-cost
 blocks, ``common.cadence``'s, shared with the data-center model (the launch cost's by the
-same setting, the cadence's dials being whole numbers), each at load, naming the field.
+same setting, the cadence's dials being whole numbers), each at load, naming the field. The
+Iridium blocks' numeric fields (the held spectrum, the panel, the downlink share and the five
+prices) are also strict: a boolean (a YAML ``true``, ``yes`` or ``on``) is refused at load,
+naming the field, never read as 1, and so is a quoted number; an integer loads as its float.
 Nothing here computes a cost, a coverage
 fraction, a subscriber count, or a comparison; it is the contract the engine
-(``communications.engine``), the ground comparison (``communications.ground``), and
-the Iridium artifact writer (``communications.json_output``) consume. Cross-field
-rules are model validators: the coverage floor may not exceed the saturation cap,
-an Iridium config keeps the fleet cap at its default (the cap is a setting of the
-cellular family only; its default still caps the Iridium model's fleet until that
-model sizes its own), the off-peak concurrency may not exceed the peak, the four ARPU
-mixes must sum to 100, and (the shared dial blocks' own validators) the cadence
-anchors must satisfy
+(``communications.engine``), the Iridium family (``communications.iridium``), the
+ground comparison (``communications.ground``), and the Iridium artifact writer
+(``communications.json_output``) consume. Cross-field rules are model validators: the
+coverage floor may not exceed the cellular fleet cap; on an Iridium config every field of
+the ``coverage``, ``subscribers`` and ``revenue`` blocks keeps its default and ``ground``
+stays unset (the Iridium path reads none of the cellular family's sizing and revenue dials,
+and pins the coverage floor at 340); and (the shared dial blocks' own validators) the
+cadence anchors must satisfy
 ``0 < launches_at_year_5 < launches_at_year_10 < cadence_ceiling`` and the
 launch-cost anchors ``low_cadence_launches < high_cadence_launches``.
 
@@ -40,29 +43,33 @@ cost-coupled multiple or a price applied to a sized base. The blocks:
 * ``launch_cost: LaunchCostDials`` -- the cadence-indexed log-linear launch-cost
   curve (:class:`common.cadence.LaunchCostDials`, the data-center block itself:
   25.0 / 13.5 / 5.0 / 100.0, with its anchor-order validator) (variable 6).
-* ``satellite: SatelliteDials`` -- the fixed CELLULAR-satellite spec: satellites
+* ``satellite: SatelliteDials`` -- the satellite spec both families read: satellites
   per launch (variable 1), lifetime (variable 4, the cohort cliff), and the flat
   mass-manufactured hardware build cost (variable 5).
-* ``coverage: CoverageDials`` -- the fleet-sizing bounds (variable 3): the coverage
-  FLOOR the fleet must at least reach, and the saturation CAP it may not exceed.
-* ``subscribers: SubscriberDials`` -- the CAPACITY dimension (the engine consumes
-  this): the subscriber TARGET (the base to serve, the INPUT), the attached
+* ``coverage: CoverageDials`` -- the cellular family's fleet-sizing bounds (variable 3):
+  the coverage FLOOR the fleet must at least reach, and the fleet CAP it may not exceed.
+  The Iridium path pins the floor at its default and has no cap.
+* ``subscribers: SubscriberDials`` -- the cellular family's CAPACITY dimension: the
+  subscriber TARGET (the base to serve, the INPUT), the attached
   subscribers-per-satellite density that divides the target into the capacity fleet
   need, plus an optional direct served-base override.
-* ``revenue: RevenueDials`` -- the two REVENUE cases the engine computes on every
-  run: the COST-PLUS multiple (revenue = cost x multiple, mirroring the DC R) and the
-  PRICES-TODAY ARPU (revenue = served base x monthly ARPU x 12). Both yield revenue +
-  gross margin per cohort and per year.
+* ``revenue: RevenueDials`` -- the cellular family's two REVENUE cases: the COST-PLUS
+  multiple (revenue = cost x multiple, mirroring the DC R) and the PRICES-TODAY ARPU
+  (revenue = served base x monthly ARPU x 12), each with its margin per cohort and per
+  year.
 * ``ground: GroundInterfaceDials | None`` -- the marked, TWO-REGIME ground
   INTERFACE (Phase 4), default ``None`` so the cost side never blocks on a ground
-  number. The dense + sparse baselines are individually None-able caller inputs.
+  number. The dense + sparse baselines are individually None-able caller inputs. No
+  Iridium run reads it, so an Iridium config refuses one.
 * ``iridium: IridiumDials | None`` -- the optional Iridium model (formerly Model B;
   L-band max-outcome) MSS dials, default ``None`` so the config stays the
-  High-Bandwidth Cellular Pure Play model (formerly Model A). Present, it selects
-  the Iridium derivation (the per-satellite density is derived from L-band physics
-  instead of read from the High-Bandwidth Cellular Pure Play model's fixed dial). Its
-  ``saturation`` block (:class:`SaturationDials`, defaulted) holds the downlink time share
-  and the promoted saturation curve's path.
+  High-Bandwidth Cellular Pure Play model (formerly Model A). Present, it selects the
+  Iridium model, which reads every device class's people from the promoted saturation
+  curve: the held spectrum, the panel, the label, the ``saturation`` block
+  (:class:`SaturationDials`: the downlink time share and the curve's path) and the
+  ``arpu`` block (:class:`IridiumArpuDials`: the five monthly prices). Each class's usage,
+  its spectral efficiency and the two IoT lines' counts are named constants
+  (:mod:`communications.constants`), not settings.
 
 This model imports only from ``common.*`` and ``communications.*`` (never
 ``data_center``, per the cross-import guard) and uses none of the forbidden
@@ -82,44 +89,36 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from common.cadence import CadenceDials, LaunchCostDials
 from common.file_io import load_yaml_mapping
 from communications.constants import (
-    ACTIVE_USER_RATE_MBPS_DEFAULT,
+    APERTURE_M2_DEFAULT,
     APERTURE_REFERENCE_M2,
-    ARPU_GOVERNMENT_MIX_PCT_DEFAULT,
-    ARPU_GOVERNMENT_PRICE_USD_MONTH_DEFAULT,
-    ARPU_IOT_MIX_PCT_DEFAULT,
-    ARPU_IOT_PRICE_USD_MONTH_DEFAULT,
-    ARPU_MIX_SUM_EPSILON,
-    ARPU_MIX_TOTAL_PCT,
-    ARPU_PREMIUM_MIX_PCT_DEFAULT,
-    ARPU_PREMIUM_PRICE_USD_MONTH_DEFAULT,
+    APERTURE_VALIDATED_STACK_LIMIT_M2,
     ARPU_PRICE_CEILING_USD_MONTH,
-    ARPU_STANDARD_MIX_PCT_DEFAULT,
-    ARPU_STANDARD_PRICE_USD_MONTH_DEFAULT,
     ARPU_USD_PER_MONTH_DEFAULT,
     BASE_YEAR_DEFAULT,
     COMMS_SHARE_DEFAULT,
-    CONCURRENCY_OFFPEAK_DEFAULT,
-    CONCURRENCY_PEAK_DEFAULT,
+    DATA_IOT_PRICE_USD_MONTH_DEFAULT,
     DOWNLINK_SHARE_DEFAULT,
     GROUND_BASIS_DEFAULT,
     HORIZON_YEARS_DEFAULT,
-    IOT_DEVICES_DEFAULT,
     IRIDIUM_SCENARIO_NAME_DEFAULT,
     MAX_FLEET_SATELLITES_DEFAULT,
     MAX_FY,
     MAX_HORIZON_YEARS,
     MIN_FY,
     MIN_HORIZON_YEARS,
+    MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT,
+    MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT,
+    PHONE_CLASS_PRICE_USD_MONTH_DEFAULT,
     REVENUE_MULTIPLE_DEFAULT,
     SATELLITE_BUILD_COST_MUSD_DEFAULT,
     SATELLITE_LIFETIME_YEARS_DEFAULT,
     SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
     SATELLITES_PER_LAUNCH_DEFAULT,
     SATURATION_CURVE_PATH_DEFAULT,
+    SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT,
     SPECTRUM_MHZ_DEFAULT,
     SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT,
     SUBSCRIBERS_PER_SATELLITE_DEFAULT,
-    DeviceClass,
 )
 
 logger = logging.getLogger(__name__)
@@ -184,13 +183,12 @@ class CommsCadenceDials(BaseModel):
 
 
 class SatelliteDials(BaseModel):
-    """The fixed CELLULAR direct-to-cell satellite spec (variables 1, 4, 5).
+    """The satellite spec both families read (variables 1, 4, 5).
 
-    The satellite is a flat mass-manufactured satellite-to-phone bird (a fixed
-    spec, NOT a re-spec'd frontier generation, so the DC ``generations`` /
-    ``slopes`` engine is dropped). Three dials: satellites per launch (a direct
-    input), the operating life (the cohort cliff), and the one flat hardware
-    build-cost scalar.
+    The satellite is a flat mass-manufactured Flatellite-class bird (a fixed spec,
+    NOT a re-spec'd frontier generation, so the DC ``generations`` / ``slopes``
+    engine is dropped). Three dials: satellites per launch (a direct input), the
+    operating life (the cohort cliff), and the one flat hardware build-cost scalar.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
@@ -200,10 +198,13 @@ class SatelliteDials(BaseModel):
         ge=1,
         le=16,
         description=(
-            "Satellites per Neutron launch, a DIRECT input scalar (12 default, up "
-            "to 16). Mass-bound count for a ~800 kg Flatellite-class bird on the "
-            "mission LEO basis: 12 loads ~9,600 kg, 73.8 percent of the ~13,000 kg "
-            "LEO envelope; 16 is the upper bound. Source COMM-258 / COMM-260."
+            "Satellites per Neutron launch, a DIRECT input scalar (default 12, the "
+            "cellular family's; bounds 1 to 16). The Iridium scenario sets 16, on the "
+            "bound: the validated Flatellite stack with the Neutron block upgrade assumed "
+            "from the first launch, for the stack kept in the fairing's cylinder at "
+            "calculation C's pitch on a rod-held base (COMM-713); 15 is the mass-bound "
+            "count today without the upgrade (COMM-712). The older render-read ~16 is "
+            "COMM-258 / COMM-260; 12 loads about 9,600 kg of the ~13,000 kg LEO envelope."
         ),
     )
     satellite_lifetime_years: int = Field(
@@ -234,18 +235,22 @@ class SatelliteDials(BaseModel):
 
 
 class CoverageDials(BaseModel):
-    """The fleet-sizing bounds: the coverage FLOOR and the saturation CAP (variable 3).
+    """The fleet-sizing bounds: the coverage FLOOR and the cellular fleet CAP (variable 3).
 
-    The fleet target the build-out fills toward is the CAPACITY need (the subscriber
-    target divided by the per-satellite density, see :class:`SubscriberDials`),
-    FLOORED by ``satellites_for_full_coverage`` (everyone must be able to see a
-    satellite) and CAPPED by ``max_fleet_satellites`` (past which the spread servable
-    base is exhausted). At a small base the floor binds (the engine reports the
-    coverage regime); at a large base the capacity need binds; at an enormous base
-    the cap binds. The floor may not exceed the cap (a model validator rejects it at
+    In the cellular family the fleet target the build-out fills toward is the CAPACITY
+    need (the subscriber target divided by the per-satellite density, see
+    :class:`SubscriberDials`), FLOORED by ``satellites_for_full_coverage`` (everyone must
+    be able to see a satellite) and CAPPED by ``max_fleet_satellites`` (past which the
+    spread servable base is exhausted). At a small base the floor binds (the engine
+    reports the coverage regime); at a large base the capacity need binds; at an enormous
+    base the cap binds. The floor may not exceed the cap (a model validator rejects it at
     load), so the three regime labels stay consistent with the fleet the engine sizes.
     The ELEVATION MASK is the underlying physical dial behind the floor (this default
     is the 25-degree quality-link, populated-band, 95%-coverage figure).
+
+    On an Iridium config both fields keep their defaults (:class:`CommsConfig` refuses
+    another value): the Iridium path pins the floor (nothing is sold in a year whose living
+    fleet is below it) and has no cap.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
@@ -262,26 +267,29 @@ class CoverageDials(BaseModel):
             "project coverage simulation (341, rounded to 340; the coverage-floor row "
             "of communications/assumptions.md carries the result and its honest "
             "bounds) plus COMM-209 / COMM-216 / COMM-217 and COMM-386..COMM-405. "
-            "Configurable."
+            "Configurable on a cellular config; pinned at this default on an Iridium "
+            "config, where nothing is sold in a year whose living fleet is below it "
+            "(another value there is refused at load)."
         ),
     )
     max_fleet_satellites: int = Field(
         default=MAX_FLEET_SATELLITES_DEFAULT,
         ge=1,
         description=(
-            "The saturation CAP: the largest fleet the model sizes to (the upper "
-            "bound on the fleet target). Past this the spread, low-density servable "
-            "base is exhausted and more satellites stop buying servable subscribers "
-            "(a dense cell saturates). INVESTOR_SET to 2,000: the ~100M ambitious "
-            "target (1,334 satellites at 75,000/sat) sits just under it. Source "
-            "COMM-535..560. Configurable on a cellular config; an Iridium config "
-            "leaves it at this default (another value there is refused at load)."
+            "The cellular family's fleet CAP: the largest fleet that family sizes to (the "
+            "upper bound on its fleet target), never a saturation cap. Past this the "
+            "spread, low-density servable base is exhausted and more satellites stop "
+            "buying servable subscribers (a dense cell saturates). INVESTOR_SET to 2,000: "
+            "the ~100M ambitious target (1,334 satellites at 75,000/sat) sits just under "
+            "it. Source COMM-535..560. Configurable on a cellular config; an Iridium "
+            "config, whose fleet has no cap, leaves it at this default (another value "
+            "there is refused at load)."
         ),
     )
 
     @model_validator(mode="after")
     def _floor_at_or_below_cap(self) -> CoverageDials:
-        """Reject a coverage floor above the saturation cap.
+        """Reject a coverage floor above the fleet cap.
 
         The fleet target is ``min(cap, max(floor, capacity_need))``: with the floor
         above the cap the target silently becomes the cap while the binding regime
@@ -294,19 +302,19 @@ class CoverageDials(BaseModel):
                 f"({self.satellites_for_full_coverage}) must not exceed "
                 f"coverage.max_fleet_satellites ({self.max_fleet_satellites}): the "
                 "coverage floor is the lower bound on the fleet target and the "
-                "saturation cap the upper bound"
+                "fleet cap the upper bound"
             )
         return self
 
 
 class SubscriberDials(BaseModel):
-    """The CAPACITY dimension: the subscriber TARGET and the per-satellite density.
+    """The cellular family's CAPACITY dimension: the subscriber TARGET and the density.
 
     The unit is a PERSON (a phone subscriber), NOT a household (cellular is
     per-person). The subscriber TARGET (``subscribers_at_full_coverage``) is the
     INPUT, the base to SERVE; the engine sizes the fleet to serve it at
     ``subscribers_per_satellite`` attached subscribers per satellite (the capacity
-    need), then floors by the coverage floor and caps by the saturation cap. The
+    need), then floors by the coverage floor and caps by the fleet cap. The
     served count then RAMPS with the buildout (target x living-fleet / fleet-target),
     reaching the target at full deployment, and never exceeds the fleet target's
     people capacity (the cap binds in the saturated regime, and on an override larger
@@ -469,138 +477,82 @@ class GroundInterfaceDials(BaseModel):
 
 
 class IridiumArpuDials(BaseModel):
-    """The Iridium four-bucket ARPU revenue case dials (investor-set, Sheet A).
+    """The Iridium model's five monthly prices, held flat (investor-set; the YAML's ``arpu:``).
 
-    The PUBLISHED Iridium ARPU case: four billable-connection buckets (standard
-    personal / premium terminal / IoT devices / government), each a PERCENTAGE mix of
-    ONE pool anchored to fleet CAPACITY (``fleet_target x subscribers_per_satellite``),
-    so every bucket scales with the satellite count (the investor's requirement: a mix
-    cannot be half absolute numbers and half percentages). The four mixes and four
-    monthly prices are the investor-set dials here; the counts are DERIVED
-    (:func:`communications.engine.derive_arpu_buckets`, the residual rule for standard
-    so the people identity is exact). Subscribers are PEOPLE (standard and premium);
-    IoT are DEVICES; government is a contract line: the pool is a BILLABLE-CONNECTIONS
-    accounting frame (Iridium's own reporting convention folds IoT devices into
-    "billable subscribers", COMM-617), NOT one summed people population.
+    Each device class sells every seat its living fleet carries at its own price, and each
+    of the two IoT lines is a fixed book at its own (their device counts are named constants,
+    :data:`~communications.constants.MINIMAL_PACKET_IOT_DEVICES` and
+    :data:`~communications.constants.DATA_IOT_DEVICES`, ADR 007, not settings). The classes
+    run small terminal, mounted terminal, phone class, never phone-first. Every price is
+    above 0 and at most :data:`~communications.constants.ARPU_PRICE_CEILING_USD_MONTH`, and
+    a number, never a boolean (each field is strict: a YAML ``true`` is refused, not read as
+    a price of 1).
+    Government is left out of revenue (2026-10-04): there is no government price. A lower
+    price or a smaller market is a division in the conclusions, never a setting here.
 
-    Nested as the OPTIONAL ``arpu`` field on :class:`IridiumDials` (None = no bucket
-    case). The two people mixes carry a strictly-positive lower bound so
-    ``people_share`` (their sum) can never be zero; a model validator enforces the
-    four mixes sum to :data:`~communications.constants.ARPU_MIX_TOTAL_PCT` within
-    :data:`~communications.constants.ARPU_MIX_SUM_EPSILON`. Sheet A is the blessed
-    default; Sheet B (18.7 / 2.5 / 78.55 / 0.25 at the same prices) is the documented
-    alternative in ``scenarios/iridium.yaml``.
+    Nested as the ``arpu`` field of :class:`IridiumDials`, defaulted, so every Iridium
+    config carries the prices and the model has one shape.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
-    standard_mix_pct: float = Field(
-        default=ARPU_STANDARD_MIX_PCT_DEFAULT,
-        gt=0,
-        le=ARPU_MIX_TOTAL_PCT,
-        description=(
-            "The STANDARD personal bucket's share of the billable-connection "
-            "pool, percent. A PEOPLE bucket: a person on a small self-orienting "
-            "antenna today, or a phone if the band enters chipsets (the capacity "
-            "math sizes at the weakest class either way). INVESTOR_SET to 15.0 "
-            "(Sheet A). Strictly positive so people_share (standard + premium) is never "
-            "zero. Configurable."
-        ),
-    )
-    premium_mix_pct: float = Field(
-        default=ARPU_PREMIUM_MIX_PCT_DEFAULT,
-        gt=0,
-        le=ARPU_MIX_TOTAL_PCT,
-        description=(
-            "The PREMIUM terminal (gain-antenna) bucket's share of the pool, percent. A "
-            "PEOPLE bucket. INVESTOR_SET to 2.0 (Sheet A). Strictly positive (the second "
-            "people mix). Configurable."
-        ),
-    )
-    iot_mix_pct: float = Field(
-        default=ARPU_IOT_MIX_PCT_DEFAULT,
-        ge=0,
-        le=ARPU_MIX_TOTAL_PCT,
-        description=(
-            "The IoT DEVICE bucket's share of the pool, percent: the residual that "
-            "closes the mix to 100. DEVICES, never folded into the people count. "
-            "INVESTOR_SET to 82.805 (Sheet A). Configurable."
-        ),
-    )
-    government_mix_pct: float = Field(
-        default=ARPU_GOVERNMENT_MIX_PCT_DEFAULT,
-        ge=0,
-        le=ARPU_MIX_TOTAL_PCT,
-        description=(
-            "The GOVERNMENT bucket's share of the pool, percent. INVESTOR_SET to 0.195 "
-            "(Sheet A), calibrated so the baseline government line reproduces today's "
-            "fixed EMSS contract (COMM-619) rather than scaling a 4.8 percent share. "
-            "Configurable."
-        ),
-    )
-    standard_price_usd_month: float = Field(
-        default=ARPU_STANDARD_PRICE_USD_MONTH_DEFAULT,
+    small_terminal_class_price_usd_month: float = Field(
+        default=SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT,
         gt=0,
         le=ARPU_PRICE_CEILING_USD_MONTH,
+        strict=True,
         description=(
-            "The STANDARD personal monthly price, dollars. INVESTOR_SET to 15.0 (Sheet A), "
-            "the midpoint of the investor's 10-to-20 mass-market range (COMM-618 context). "
-            "Configurable."
+            "The small terminal's monthly price, dollars, held flat. INVESTOR_SET to "
+            f"{SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-07; it was 15, set "
+            "2026-10-03), the low end of the investor's 10-to-20 mass-market range (COMM-618 "
+            "context). Configurable."
         ),
     )
-    premium_price_usd_month: float = Field(
-        default=ARPU_PREMIUM_PRICE_USD_MONTH_DEFAULT,
+    mounted_terminal_class_price_usd_month: float = Field(
+        default=MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT,
         gt=0,
         le=ARPU_PRICE_CEILING_USD_MONTH,
+        strict=True,
         description=(
-            "The PREMIUM terminal monthly price, dollars. INVESTOR_SET to 100.0 (Sheet A), "
-            "between Iridium voice/data 47 and Certus 259 for 0.7 Mbps-class (COMM-618). "
-            "Configurable."
+            "The mounted terminal's monthly price, dollars, held flat. INVESTOR_SET to "
+            f"{MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-07; it was 100, set "
+            "2026-10-03), near Iridium's voice and data $47 and well under Certus $259 "
+            "(COMM-618). Configurable."
         ),
     )
-    iot_price_usd_month: float = Field(
-        default=ARPU_IOT_PRICE_USD_MONTH_DEFAULT,
+    phone_class_price_usd_month: float = Field(
+        default=PHONE_CLASS_PRICE_USD_MONTH_DEFAULT,
         gt=0,
         le=ARPU_PRICE_CEILING_USD_MONTH,
+        strict=True,
         description=(
-            "The IoT DEVICE monthly price, dollars. INVESTOR_SET to 8.0 (Sheet A), the "
-            "investor's confirmed about-8 (Iridium IoT ARPU is 7.78 today, COMM-618). "
-            "Configurable."
+            "The phone class's monthly price, dollars, held flat. INVESTOR_SET to "
+            f"{PHONE_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-03), its floor: no price "
+            "haircut takes it lower. Configurable."
         ),
     )
-    government_price_usd_month: float = Field(
-        default=ARPU_GOVERNMENT_PRICE_USD_MONTH_DEFAULT,
+    minimal_packet_iot_price_usd_month: float = Field(
+        default=MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT,
         gt=0,
         le=ARPU_PRICE_CEILING_USD_MONTH,
+        strict=True,
         description=(
-            "The GOVERNMENT monthly price, dollars. INVESTOR_SET to 74.0 (Sheet A), "
-            "today's per-connection EMSS equivalent (COMM-619). Configurable."
+            "Minimal-packet IoT's monthly price per device, dollars. INVESTOR_SET to "
+            f"{MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT:g} (the investor's trial price, "
+            "2026-10-04). Configurable."
         ),
     )
-
-    @model_validator(mode="after")
-    def _mixes_sum_to_total(self) -> IridiumArpuDials:
-        """Enforce the four bucket mixes sum to 100 percent (within the epsilon).
-
-        The pool algebra (``total_connections = people_capacity / people_share``) is
-        only well-defined when the mixes partition the pool, so a sheet that does not
-        sum to :data:`~communications.constants.ARPU_MIX_TOTAL_PCT` (within
-        :data:`~communications.constants.ARPU_MIX_SUM_EPSILON`, absorbing float
-        representation error) is rejected at config load.
-        """
-        total = (
-            self.standard_mix_pct
-            + self.premium_mix_pct
-            + self.iot_mix_pct
-            + self.government_mix_pct
-        )
-        if abs(total - ARPU_MIX_TOTAL_PCT) > ARPU_MIX_SUM_EPSILON:
-            raise ValueError(
-                "the four ARPU bucket mixes (standard, premium, iot, government) must "
-                f"sum to {ARPU_MIX_TOTAL_PCT} percent within {ARPU_MIX_SUM_EPSILON}; "
-                f"got {total}"
-            )
-        return self
+    data_iot_price_usd_month: float = Field(
+        default=DATA_IOT_PRICE_USD_MONTH_DEFAULT,
+        gt=0,
+        le=ARPU_PRICE_CEILING_USD_MONTH,
+        strict=True,
+        description=(
+            "Data IoT's monthly price per device, dollars. INVESTOR_SET to "
+            f"{DATA_IOT_PRICE_USD_MONTH_DEFAULT:g} (the investor's trial price, 2026-10-04; "
+            "Iridium's IoT ARPU is 7.78 today, COMM-618). Configurable."
+        ),
+    )
 
 
 class SaturationDials(BaseModel):
@@ -620,6 +572,7 @@ class SaturationDials(BaseModel):
         default=DOWNLINK_SHARE_DEFAULT,
         gt=0,
         le=1.0,
+        strict=True,
         description=(
             "The downlink time share d of Iridium's time-division duplex band, a fraction "
             "above 0 and at most 1 (ADR 008). Default 0.67, Certus 700's 2 : 1 down-to-up rate "
@@ -642,22 +595,26 @@ class SaturationDials(BaseModel):
 class IridiumDials(BaseModel):
     """The Iridium model's (L-band max-outcome) input dials: the MSS lane.
 
-    Present (non-None on :class:`CommsConfig`) selects the Iridium derivation: the
-    engine DERIVES the per-satellite subscriber density from L-band physics (held
-    spectrum, device spectral efficiency, active rate, busy-hour concurrency) instead
-    of reading the High-Bandwidth Cellular Pure Play model's fixed
-    ``subscribers_per_satellite`` dial, then feeds the SAME ``compute_fleet_target``.
-    The subscriber TARGET is the existing ``subscribers.subscribers_at_full_coverage``
-    dial (not duplicated here). Subscribers are PEOPLE; ``iot_devices`` is a separate
-    DEVICE passthrough. ``spectrum_mhz`` is a WIDTH held (not a frequency). See the
-    ecosystem assumption: this is the MSS lane (purpose-built or in-chipset devices on
-    owned L-band), never an unmodified phone (that is the cellular lane, the
-    High-Bandwidth Cellular Pure Play model).
+    Present (non-None on :class:`CommsConfig`) selects the Iridium model. It reads every
+    device class's people from the promoted saturation curve, side by side in one run, on
+    the fleet the comms share of the launch cadence builds, and sells every seat at each
+    class's flat price. Its settings are the held spectrum (``spectrum_mhz``, a WIDTH, not a
+    frequency, which the curve's identity check pins), the panel (``aperture_m2``, applied
+    linearly on the curve), the label, the ``saturation`` block (the downlink time share and
+    the curve's path) and the ``arpu`` block (the five monthly prices). Each class's usage,
+    its central spectral efficiency and the two IoT lines' device counts are named constants
+    (:mod:`communications.constants`), not settings; a scenario still setting a retired one
+    fails at load, naming it (``extra="forbid"``). The Iridium model is the MSS lane
+    (purpose-built or in-chipset devices on owned L-band), never an unmodified phone (that is
+    the cellular lane, the High-Bandwidth Cellular Pure Play model).
 
     Every number here is finite: a NaN or an infinity is refused at load, naming the field
     (``allow_inf_nan=False``, as the saturation curve's contract models refuse them), so no
     run starts from one. The nested ``saturation`` and ``arpu`` blocks refuse them the same
-    way.
+    way. No number here or in those blocks is a boolean: each numeric field is strict, so a
+    YAML ``true`` (or ``yes``, ``on``) is refused at load, naming the field, rather than read
+    as 1 (a 1 m^2 panel, d = 1, a price of 1), and so is a quoted number; an integer still
+    loads as its float.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
@@ -665,85 +622,31 @@ class IridiumDials(BaseModel):
     spectrum_mhz: float = Field(
         default=SPECTRUM_MHZ_DEFAULT,
         gt=0,
+        strict=True,
         description=(
             "The L-band WIDTH held in MHz (a width, NOT a frequency; the frequency is "
             "the ~1.6 GHz dial position). INVESTOR_SET to 8.0, the Iridium exclusive "
-            "holding (~7.775 rounded); 10.5 is the coordinated-span variant. Flagged. "
-            "Configurable."
+            "holding (~7.775 rounded). The saturation curve is computed at it: another "
+            "width runs only on a curve computed for it (the identity check). The "
+            "coordinated 10.5 MHz span is not modeled (a conclusions note)."
         ),
     )
     aperture_m2: float = Field(
-        default=APERTURE_REFERENCE_M2,
+        default=APERTURE_M2_DEFAULT,
         gt=0,
+        strict=True,
         description=(
-            "The satellite flat phased-array AREA in m^2. Default 25.0, which by design "
-            "IS the calibration reference (APERTURE_REFERENCE_M2) AND the no-fold stow "
-            "limit (APERTURE_NO_FOLD_LIMIT_M2). Capacity scales linearly with it "
-            "(conservative: it ignores the per-link SNR lift a larger aperture also "
-            "gives); satellites-per-launch couples inversely (fewer, bigger satellites "
-            "per launch). Above APERTURE_NO_FOLD_LIMIT_M2 the assumptions output carries "
-            "the fold caveat, deliberately NOT a bound so the what-if stays computable. "
-            "INVESTOR-DIRECTED. Configurable."
-        ),
-    )
-    device_class: DeviceClass = Field(
-        default=DeviceClass.PHONE_CLASS,
-        description=(
-            "The device class that sets the spectral-efficiency tier: PHONE_CLASS "
-            "(0 dBi in-chipset, the ecosystem-assumption baseline, SE ~0.65), "
-            "SMALL_TERMINAL_CLASS (paperback/puck ~10 dBi purpose-built, SE ~2.0), or "
-            "MOUNTED_TERMINAL_CLASS (large boosted / custom antenna, 15+ dBi, SE ~2.5). Default "
-            "PHONE_CLASS; one class per run in v1 (no mixed fleet). Flagged. "
-            "Configurable."
-        ),
-    )
-    spectral_efficiency_bps_per_hz: float | None = Field(
-        default=None,
-        gt=0,
-        description=(
-            "OPTIONAL spectral-efficiency override in bps/Hz. None (default) resolves to "
-            "the device_class central tier; set it to sweep within the class band "
-            "(phone 0.5 to 0.8, small terminal 1.5 to 2.5, large terminal 2.0 to 3.0). "
-            "Configurable."
-        ),
-    )
-    active_user_rate_mbps: float = Field(
-        default=ACTIVE_USER_RATE_MBPS_DEFAULT,
-        gt=0,
-        description=(
-            "The per-subscriber active data rate in Mbps (the service tier; also the "
-            "peak per-user rate by construction). INVESTOR_SET to 1.0 (standard "
-            "smartphone activity); 2.5 is the rich variant. Flagged. Configurable."
-        ),
-    )
-    concurrency_peak: float = Field(
-        default=CONCURRENCY_PEAK_DEFAULT,
-        gt=0,
-        le=1.0,
-        description=(
-            "The busy-hour PEAK concurrency fraction (share of subscribers "
-            "simultaneously active at peak). INVESTOR_SET to 0.025 (2.5%). Flagged as "
-            "the pair with concurrency_offpeak. Configurable."
-        ),
-    )
-    concurrency_offpeak: float = Field(
-        default=CONCURRENCY_OFFPEAK_DEFAULT,
-        gt=0,
-        le=1.0,
-        description=(
-            "The OFF-PEAK concurrency fraction, at most concurrency_peak (off peak is "
-            "the quieter hour by definition). INVESTOR_SET to 0.005 (0.5%). Flagged as "
-            "the pair with concurrency_peak. Configurable."
-        ),
-    )
-    iot_devices: int = Field(
-        default=IOT_DEVICES_DEFAULT,
-        ge=0,
-        description=(
-            "A separate DEVICE passthrough counter (NOT people, NOT folded into the "
-            "subscriber count): IoT is negligible-load and does NOT affect fleet "
-            "sizing. ESTIMATE 10,000,000 (low end of tens of millions); investor-owned. "
-            "Configurable."
+            f"The satellite's flat panel area in m^2. Default {APERTURE_M2_DEFAULT:g}, the "
+            "validated Flatellite body (COMM-711, the investor's approved default of "
+            "2026-10-03), an upper bound. The saturation curve is computed at the "
+            f"{APERTURE_REFERENCE_M2:g} m^2 reference panel and applied linearly: people, "
+            "useful beams, capacity and maximum use scale with this over the reference (the "
+            "panel factor), while the saturation numbers, the ocean factor and satellites per "
+            "launch do not move. The linear rule is conservative only above the reference "
+            "panel; below it the curve's stated limits apply. Above "
+            f"{APERTURE_VALIDATED_STACK_LIMIT_M2:g} m^2, the largest flat panel the validated "
+            "stack holds, the assumptions carry the stack caveat, deliberately NOT a bound, "
+            "so a larger panel stays computable. INVESTOR-DIRECTED. Configurable."
         ),
     )
     scenario_name: str = Field(
@@ -762,33 +665,15 @@ class IridiumDials(BaseModel):
             "promoted saturation curve's path. Defaulted, so every Iridium config carries it."
         ),
     )
-    arpu: IridiumArpuDials | None = Field(
-        default=None,
+    arpu: IridiumArpuDials = Field(
+        default_factory=IridiumArpuDials,
         description=(
-            "The OPTIONAL four-bucket ARPU revenue case (:class:`IridiumArpuDials`). "
-            "None by default, so every bare-dials construction (including the equality "
-            "tripwire test) sees no buckets and the ARPU case is simply absent from the "
-            "result; set it (the promoted scenario does) to publish the four-bucket "
-            "revenue case. The first two-level-deep dial block in the config tree, "
-            "deliberate: the ARPU case belongs to the Iridium family."
+            "The five monthly prices (:class:`IridiumArpuDials`): the small terminal's, the "
+            "mounted terminal's, the phone class's, minimal-packet IoT's and data IoT's. "
+            "Defaulted, so every Iridium config carries the prices and the two IoT lines, "
+            "and every consumer reads one shape."
         ),
     )
-
-    @model_validator(mode="after")
-    def _offpeak_at_or_below_peak(self) -> IridiumDials:
-        """Reject an off-peak concurrency above the busy-hour peak.
-
-        Off peak is the quieter hour by definition; an off-peak concurrency above the
-        peak would make the off-peak per-user rate fall below the peak rate, so the
-        pair is rejected at config load.
-        """
-        if self.concurrency_offpeak > self.concurrency_peak:
-            raise ValueError(
-                f"iridium.concurrency_offpeak ({self.concurrency_offpeak}) must not "
-                f"exceed iridium.concurrency_peak ({self.concurrency_peak}): off peak "
-                "is the quieter hour"
-            )
-        return self
 
 
 # ===========================================================================
@@ -804,17 +689,17 @@ class CommsConfig(BaseModel):
     cellular config to the cellular entry, ``communications.engine.run_comms_model``,
     and an Iridium config, with its saturation curve, to the Iridium entry,
     ``communications.iridium.run_iridium_model``; the Iridium artifact writer
-    (``communications.json_output``) assembles the promoted JSON from the config and
-    the run. On an Iridium config the fleet cap, ``coverage.max_fleet_satellites``,
-    stays at its default (:meth:`_iridium_keeps_the_default_fleet_cap`).
+    (``communications.json_output``) assembles the promoted JSON from the run. On an
+    Iridium config every field of the ``coverage``, ``subscribers`` and ``revenue`` blocks
+    keeps its default and ``ground`` stays None
+    (:meth:`_iridium_keeps_the_cellular_dials_at_their_defaults`).
 
     Every block defaults via ``default_factory`` (or, for ``ground`` and ``iridium``,
     a plain None) so a config constructed with no arguments, or a YAML omitting a
     block, gets a fully valid all-default block. The ``ground`` field is ``None`` by
     default, which is what makes the cost side run with no ground number; the
     ``iridium`` field is ``None`` by default, which selects the High-Bandwidth
-    Cellular Pure Play path (a non-None ``iridium`` selects the Iridium MSS
-    derivation).
+    Cellular Pure Play path (a non-None ``iridium`` selects the Iridium model).
     """
 
     model_config = ConfigDict(
@@ -839,25 +724,35 @@ class CommsConfig(BaseModel):
     )
     satellite: SatelliteDials = Field(
         default_factory=SatelliteDials,
-        description="The fixed cellular-satellite spec: per-launch count, lifetime, build cost.",
+        description="The satellite spec both families read: per-launch count, life, build cost.",
     )
     coverage: CoverageDials = Field(
         default_factory=CoverageDials,
-        description="The fleet-sizing bounds: the coverage floor and the saturation cap.",
+        description=(
+            "The cellular family's fleet-sizing bounds: the coverage floor (pinned on the "
+            "Iridium path) and the fleet cap."
+        ),
     )
     subscribers: SubscriberDials = Field(
         default_factory=SubscriberDials,
-        description="The capacity dimension: subscriber target, per-satellite density, override.",
+        description=(
+            "The cellular family's capacity dimension: subscriber target, per-satellite "
+            "density, override."
+        ),
     )
     revenue: RevenueDials = Field(
         default_factory=RevenueDials,
-        description="The two revenue cases: the cost-plus multiple and the prices-today ARPU.",
+        description=(
+            "The cellular family's two revenue cases: the cost-plus multiple and the "
+            "prices-today ARPU."
+        ),
     )
     ground: GroundInterfaceDials | None = Field(
         default=None,
         description=(
             "The marked, TWO-REGIME ground interface (Phase 4). None by default so "
-            "the cost side runs with no ground number; supply it per-scenario."
+            "the cost side runs with no ground number; supply it per-scenario on a "
+            "cellular config (an Iridium config refuses one)."
         ),
     )
     iridium: IridiumDials | None = Field(
@@ -865,33 +760,54 @@ class CommsConfig(BaseModel):
         description=(
             "The Iridium model's (L-band max-outcome) dials. None by default so the "
             "config is the High-Bandwidth Cellular Pure Play model (cellular "
-            "direct-to-cell); set it to select the Iridium MSS derivation."
+            "direct-to-cell); set it to select the Iridium model."
         ),
     )
 
     @model_validator(mode="after")
-    def _iridium_keeps_the_default_fleet_cap(self) -> CommsConfig:
-        """Refuse a fleet cap other than its default on an Iridium config.
+    def _iridium_keeps_the_cellular_dials_at_their_defaults(self) -> CommsConfig:
+        """Refuse, on an Iridium config, a cellular sizing or revenue dial off its default, and
+        a ground block.
 
-        ``coverage.max_fleet_satellites`` is the cellular family's investor-set cap, not an
-        Iridium setting, so an Iridium config keeps :data:`MAX_FLEET_SATELLITES_DEFAULT`. That
-        default still caps the Iridium model's fleet: the interim shared path both entries call
-        sizes it with the cellular family's fleet target, cap included, until the Iridium model
-        sizes its own fleet.
+        The Iridium path reads none of the cellular family's sizing and revenue dials (its
+        fleet is the cadence's, its people the saturation curve's, its prices the ``arpu``
+        block's) and pins the coverage floor (one shell, one floor; the IoT counts are sized
+        at it, ADR 007). So on an Iridium config every field of the ``coverage``,
+        ``subscribers`` and ``revenue`` blocks keeps its default, and ``ground``, which no
+        Iridium run reads, stays None. The check walks each block's own fields against a
+        block built with its defaults, so a field added later is refused with no edit here;
+        each refusal names the field, its default and the value.
 
-        The cap is refused when an Iridium config is loaded or validated (a construction or a
-        ``model_validate``). A ``model_copy`` update is not validated, by pydantic's design (it
-        trusts the data it is given), so a value set that way is not refused. The test is on
-        the value, not on whether the field was written: the test helpers round-trip configs
-        through ``model_dump`` and ``model_validate``, which marks every field as set.
+        The check is on the value, not on whether the field was written: the test helpers
+        round-trip configs through ``model_dump`` and ``model_validate``, which marks every
+        field as set, so a config written out whole still loads. It runs when a config is
+        loaded or validated (a construction or a ``model_validate``); a ``model_copy``
+        update is not validated, by pydantic's design (it trusts the data it is given).
         """
-        cap = self.coverage.max_fleet_satellites
-        if self.iridium is not None and cap != MAX_FLEET_SATELLITES_DEFAULT:
+        if self.iridium is None:
+            return self
+        blocks: tuple[tuple[str, BaseModel], ...] = (
+            ("coverage", self.coverage),
+            ("subscribers", self.subscribers),
+            ("revenue", self.revenue),
+        )
+        for block_name, block in blocks:
+            defaults = type(block)()
+            for field_name in type(block).model_fields:
+                value = getattr(block, field_name)
+                default = getattr(defaults, field_name)
+                if value != default:
+                    raise ValueError(
+                        f"{block_name}.{field_name} is not a setting on an Iridium config (one "
+                        "with an 'iridium:' block): the Iridium path reads none of the cellular "
+                        "family's sizing and revenue dials and pins the coverage floor, so it "
+                        f"keeps its default, {default!r}; got {value!r}"
+                    )
+        if self.ground is not None:
             raise ValueError(
-                "coverage.max_fleet_satellites is not a setting on an Iridium config (one with "
-                f"an 'iridium:' block): it keeps its default, {MAX_FLEET_SATELLITES_DEFAULT}, the "
-                "cellular family's fleet cap, which also caps the Iridium model's fleet until "
-                f"that model sizes its own; got {cap}"
+                "ground is not a setting on an Iridium config (one with an 'iridium:' block): "
+                "no Iridium run reads the cellular ground interface, so it stays unset; got a "
+                "ground block"
             )
         return self
 
@@ -922,8 +838,8 @@ def comms_config_from_dict(data: dict[str, object]) -> CommsConfig:
 
     Top-level keys are the block names (``metadata``, ``cadence``,
     ``comms_cadence``, ``launch_cost``, ``satellite``, ``coverage``,
-    ``subscribers``, ``revenue``, ``ground``), all optional (omitted = defaults). An
-    empty dict yields an all-defaults config.
+    ``subscribers``, ``revenue``, ``ground``, ``iridium``), all optional (omitted =
+    defaults). An empty dict yields an all-defaults config.
 
     Validation is Pydantic's: an unknown key, a wrong type, an out-of-bounds value,
     or a missing required field raises :class:`pydantic.ValidationError` with a

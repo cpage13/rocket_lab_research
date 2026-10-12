@@ -7,7 +7,9 @@ the shared writer (``common.file_io.write_files_with_rollback``). The contract:
 1. a malformed scenario, an unwritable destination, a value the model cannot
    compute or an artifact that would hold a number that is not finite is one
    error record and exit status 1, never a traceback (and never a promoted
-   artifact with a null cost);
+   artifact with a null cost); a run that would hold such a number is refused
+   by the Iridium entry, the error naming the first such field and the
+   settings behind it;
 2. a failed write (a read-only directory, a failed rename) leaves the existing
    artifact exactly as it was, with no staged or backup file left behind, and
    the error says no destination was changed;
@@ -39,7 +41,7 @@ import pytest
 from common.cli import EXIT_ERROR, EXIT_OK
 from common.file_io import ARTIFACT_FILE_END, render_artifact_json
 from communications import json_output
-from communications.config import IridiumDials
+from communications.config import IridiumArpuDials, IridiumDials
 from communications.constants import SATURATION_CURVE_PATH_DEFAULT
 from communications.json_output import main
 from communications.saturation_curve import SaturationCurve
@@ -171,25 +173,33 @@ def test_a_successful_promotion_logs_its_status_and_prints_nothing(
 
 
 @pytest.mark.parametrize(
-    "iridium_dials",
-    ["aperture_m2: 1.0e+308", "active_user_rate_mbps: 5.0e-324"],
-    ids=["a panel too large", "a rate that underflows to zero"],
+    ("iridium_dials", "reason"),
+    [
+        ("aperture_m2: 1.0e+308", "a value the model cannot compute ("),
+        (
+            "aperture_m2: 1.0e-323",
+            "iridium.aperture_m2 (1e-323 m^2) over the saturation curve's reference panel (25.0 "
+            "m^2) gives a panel factor of 0.0; it must be a positive finite number",
+        ),
+    ],
+    ids=["a panel too large", "a panel so small its factor underflows to zero"],
 )
 def test_a_value_the_model_cannot_compute_is_one_error_line(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture, iridium_dials: str
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, iridium_dials: str, reason: str
 ) -> None:
     """Objective: a finite dial the model cannot compute with ends the command in one error
     record, never a traceback (before the fix the run's ``OverflowError``, and a
     ``ZeroDivisionError``, escaped as one).
 
-    Sample: a scenario selecting the Iridium model with a panel of 1.0e308 m^2 (the run
-    overflows), and one with an active rate of 5.0e-324 Mbps (the rate times the concurrency
-    underflows to zero, and the run divides by it); both finite, so both load, and neither is an
-    input of the curve, so the identity check passes.
+    Sample: a scenario selecting the Iridium model with a panel of 1.0e308 m^2 (the people at a
+    fleet overflow to infinity and cannot become a count), and one with a panel of 1.0e-323 m^2
+    (its ratio to the reference panel underflows to zero, which the Iridium entry refuses,
+    naming the setting); both finite, so both load, and neither is an input of the curve, so
+    the identity check passes. (The one-usage dial whose product underflowed is retired.)
 
     Expected outcome: exit 1; exactly one ERROR record, on one line and with no exception
-    attached, naming the scenario and saying a value is one the model cannot compute; no
-    artifact written.
+    attached, naming the scenario and the reason (a value the model cannot compute; the panel
+    factor named with ``iridium.aperture_m2``); no artifact written.
     """
     scenario = tmp_path / "cannot_compute.yaml"
     scenario.write_text(f"iridium:\n  {iridium_dials}\n", encoding="utf-8")
@@ -201,33 +211,43 @@ def test_a_value_the_model_cannot_compute_is_one_error_line(
     assert len(records) == 1
     message = records[0].getMessage()
     assert "\n" not in message
-    assert message.startswith(f"could not promote {scenario}: a value the model cannot compute (")
+    assert message.startswith(f"could not promote {scenario}: {reason}")
     assert records[0].exc_info is None
     assert not out_path.exists()
 
 
 @pytest.mark.parametrize(
-    "shared_block",
+    ("shared_block", "named"),
     [
-        "satellite:\n  satellite_build_cost_musd: 1.0e+308",
-        "launch_cost:\n  high_cadence_cost_musd: .inf",
+        (
+            "satellite:\n  satellite_build_cost_musd: 1.0e+308",
+            "the run's fleet.years[2].build_cost_this_year_musd is inf, not a finite number: "
+            "the fleet-and-cost record scales with satellite.satellite_build_cost_musd (1e+308)",
+        ),
+        (
+            "launch_cost:\n  high_cadence_cost_musd: .inf",
+            "launch_cost.high_cadence_cost_musd: Input should be a finite number",
+        ),
     ],
     ids=["a build cost that overflows", "an infinite launch cost in the common block"],
 )
 def test_an_artifact_never_holds_a_number_that_is_not_finite(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture, shared_block: str
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, shared_block: str, named: str
 ) -> None:
     """Objective: the command never writes an artifact whose numbers are not finite (before the
-    fix such a run promoted, exit 0, with its cost fields written as null): the artifact's
-    models refuse a number that is not finite, whatever route made it.
+    fix such a run promoted, exit 0, with its cost fields written as null), and its one error
+    line names the setting: the Iridium entry refuses a run that would hold one, naming the
+    first such field and the settings behind it (the artifact's models refuse one too, whatever
+    route made it).
 
     Sample: an Iridium scenario with a satellite build cost of 1.0e308 $M (finite, so it loads;
-    the run's costs overflow to infinity, which the artifact refuses), and one with an infinite
+    the run's costs overflow to infinity, which the entry refuses), and one with an infinite
     launch cost in the ``launch_cost`` block, which ``common.cadence`` defines and the
     data-center model shares (refused at load, naming the field, before any run).
 
     Expected outcome: exit 1; exactly one ERROR record, on one line, naming the scenario and a
-    number that is not finite; no artifact written.
+    number that is not finite: for the build cost, the fleet-and-cost record's first such field
+    and the build cost with its value; for the launch cost, the field; no artifact written.
     """
     scenario = tmp_path / "not_finite_artifact.yaml"
     scenario.write_text(f"{shared_block}\niridium: {{}}\n", encoding="utf-8")
@@ -240,7 +260,44 @@ def test_an_artifact_never_holds_a_number_that_is_not_finite(
     message = records[0].getMessage()
     assert "\n" not in message
     assert message.startswith(f"could not promote {scenario}: ")
-    assert "finite number" in message
+    assert named in message
+    assert not out_path.exists()
+
+
+def test_a_run_that_would_hold_a_number_that_is_not_finite_names_the_panel(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Objective: when an absurd panel puts a number that is not finite in the run, the
+    command's one error line names the setting a reader can change (before the fix it named the
+    artifact field the artifact's models refused, an invalid class-year block's
+    ``revenue_musd``, and not the setting).
+
+    Sample: an Iridium scenario with a panel of 2.5e300 m^2 (finite, so it loads; the people
+    stay finite and revenue overflows to infinity, first at the 2,000-satellite reading at the
+    defaults' 0.18 share).
+
+    Expected outcome: exit 1; exactly one ERROR record, on one line and with no exception
+    attached, naming the scenario, the first field that is not finite and
+    ``iridium.aperture_m2`` with its value beside the five prices; no artifact written.
+    """
+    scenario = tmp_path / "huge_panel.yaml"
+    scenario.write_text("iridium:\n  aperture_m2: 2.5e+300\n", encoding="utf-8")
+    out_path = tmp_path / "out.json"
+
+    assert main([str(scenario), str(out_path)]) == EXIT_ERROR
+
+    records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(records) == 1
+    message = records[0].getMessage()
+    assert "\n" not in message
+    assert message.startswith(
+        f"could not promote {scenario}: the run's "
+        "iridium.saturation.readings[1].classes[0].revenue_musd is inf, not a finite number: "
+        "the Iridium record scales with iridium.aperture_m2 (2.5e+300), "
+    )
+    for name in IridiumArpuDials.model_fields:
+        assert f"iridium.arpu.{name} (" in message
+    assert records[0].exc_info is None
     assert not out_path.exists()
 
 
@@ -373,9 +430,9 @@ def test_a_scenario_runs_on_a_curve_computed_for_its_inputs(
     promotion writes a curve to a temporary folder; a scenario at 10.5 MHz whose
     ``iridium.saturation.curve_path`` is that file's absolute path.
 
-    Expected outcome: exit 0 and the artifact written, its physics at 10.5 MHz with the frozen
-    coordinated-span density, 40,950 people per satellite (10.5 x 0.65 x 0.15 Gbps over 1.0 x
-    0.025 Mbps).
+    Expected outcome: exit 0 and the artifact written, its physics at 10.5 MHz and the phone
+    class's satellite peak at the default 15.4 m^2 panel, 0.630630 Gbps (10.5 x 0.65 x 0.15 x
+    0.616).
     """
     curve_path = tmp_path / "coordinated_curve.json"
     curve = synthetic_saturation_curve(IridiumDials(spectrum_mhz=10.5))
@@ -389,6 +446,8 @@ def test_a_scenario_runs_on_a_curve_computed_for_its_inputs(
 
     assert main([str(scenario), str(out_path), "--version-stamp", "test"]) == EXIT_OK
 
-    physics = json.loads(out_path.read_text(encoding="utf-8"))["iridium_physics"]
-    assert physics["spectrum_mhz"] == 10.5
-    assert physics["subscribers_per_satellite"] == 40_950
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["iridium_physics"]["spectrum_mhz"] == 10.5
+    phone = payload["classes"][2]
+    assert phone["device_class"] == "phone_class"
+    assert phone["per_satellite_capacity_gbps"] == pytest.approx(10.5 * 0.65 * 0.15 * 0.616)

@@ -1703,8 +1703,8 @@ contract."""
 def test_engine_imports_no_family_module(code_dir: Path) -> None:
     """Objective: ``communications.engine`` imports neither the Iridium family nor the curve's
     contract, transitive imports included, which a grep would miss: the import half of keeping
-    the shared path family-neutral (the interim path's Iridium branches go when the shared
-    fleet-and-cost loop replaces it).
+    the shared fleet-and-cost loop family-neutral (the behavior half is the tripwire, which
+    compares an Iridium run's and a cellular run's shared records whole).
 
     Sample: one fresh interpreter importing ``communications.engine`` alone; then, in the same
     interpreter, ``communications.iridium`` too, the control.
@@ -2358,32 +2358,6 @@ def test_saturation_inputs_for_reads_only_the_held_spectrum() -> None:
     assert curve_input_hash(wider) != curve_input_hash(default)
     round_trip = SaturationInputs.model_validate_json(default.model_dump_json())
     assert curve_input_hash(round_trip) == curve_input_hash(default)
-
-
-def test_the_device_class_is_not_an_input_of_the_curve(
-    committed_saturation_curve: SaturationCurve,
-) -> None:
-    """Objective: one curve serves every class: the device class a config names is not an input
-    of the curve (it holds every class), so two Iridium dials differing only in it imply the
-    same inputs and read the same promoted curve.
-
-    Sample: the Iridium dials at each class, small terminal, mounted terminal, phone class; the
-    committed curve.
-
-    Expected outcome: ``saturation_inputs_for`` gives equal inputs and one input hash for the
-    three, holding every class in the class key's order; the committed curve passes the
-    identity check for each.
-    """
-    curve = committed_saturation_curve
-    inputs = [
-        saturation_inputs_for(IridiumDials(device_class=device_class))
-        for device_class in DeviceClass
-    ]
-    assert inputs[0] == inputs[1] == inputs[2]
-    assert len({curve_input_hash(each) for each in inputs}) == 1
-    assert [entry.device_class for entry in inputs[0].classes] == list(DeviceClass)
-    for each in inputs:
-        check_curve_matches(each, curve)
 
 
 @pytest.mark.parametrize(

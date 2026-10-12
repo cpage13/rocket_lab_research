@@ -3,13 +3,15 @@
 Every scenario loader in the repository (the data-center config and the
 generations file it may reference, the ground reference, the communications
 config) reads YAML through :func:`load_yaml_mapping`. Every published JSON
-artifact (the space model, the ground reference, the Iridium model) is
-serialized by :func:`render_artifact_json`, and both promotion commands
-(``rklb-value --promote`` and ``python -m communications.json_output``) write
-theirs as :func:`artifact_write` entries through
-:func:`write_files_with_rollback` (every file is written, or the destinations
-already replaced are restored and the error says which, if any, could not be)
-and find the repository through :func:`locate_source_checkout`. All three
+artifact (the space model, the ground reference, the Iridium model, the
+saturation curve) is serialized by :func:`render_artifact_json`, and the three
+commands that publish them (``rklb-value --promote``, the Iridium promotion
+command ``python -m communications.json_output`` and the saturation command
+``python -m communications.saturation``) write theirs as :func:`artifact_write`
+entries through :func:`write_files_with_rollback` (every file is written, or
+the destinations already replaced are restored and the error says which, if
+any, could not be) and find the repository through
+:func:`locate_source_checkout`. The loader, the writer and the finder each
 report failure as one :class:`ModelFileError` carrying the path and a one-line
 reason: the single file-boundary error type every command-line entry point
 catches.

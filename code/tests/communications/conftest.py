@@ -1,9 +1,8 @@
 """Shared fixtures for the communications test suite (clean-rewrite, slim).
 
-This conftest is the slim rewrite version: it provides the default ``CommsConfig``
-fixture, built purely on the rewritten ``communications.config``, and the Iridium
-scenario and artifact paths (from the repository-anchored fixtures in
-``tests/conftest.py``, never the working directory).
+This conftest is the slim rewrite version: it provides the Iridium scenario and
+artifact paths (from the repository-anchored fixtures in ``tests/conftest.py``, never
+the working directory).
 The pre-rewrite old tree (its src modules, test files, and scenario YAML) was
 retired in the investor-directed 2026-07-07 alignment cleanup, so the whole
 ``tests/communications/`` directory now collects and runs cleanly. The live suite
@@ -36,7 +35,7 @@ import numpy as np
 import pytest
 
 from communications import saturation as sat
-from communications.config import CommsConfig, IridiumDials
+from communications.config import IridiumDials
 from communications.constants import GBPS_TO_MBPS, SATURATION_CURVE_PATH_DEFAULT, DeviceClass
 from communications.saturation import PopulationGrid
 from communications.saturation_curve import (
@@ -313,22 +312,10 @@ class SaturationInputsBuilder(Protocol):
         ...
 
 
-@pytest.fixture
-def default_comms_config() -> CommsConfig:
-    """Return the default (central-case) comms config."""
-    return CommsConfig()
-
-
 @pytest.fixture(scope="session")
 def iridium_yaml(scenarios_dir: Path) -> Path:
     """The promoted Iridium scenario, ``scenarios/iridium.yaml``."""
     return scenarios_dir / "iridium.yaml"
-
-
-@pytest.fixture(scope="session")
-def iridium_saturation_yaml(scenarios_dir: Path) -> Path:
-    """The saturation companion scenario, ``scenarios/iridium_saturation.yaml``."""
-    return scenarios_dir / "iridium_saturation.yaml"
 
 
 @pytest.fixture(scope="session")
@@ -410,8 +397,10 @@ def committed_saturation_curve(repo_dir: Path) -> SaturationCurve:
     """The committed promoted curve, ``communications/models/iridium/saturation_curve.json``,
     loaded with ``load_saturation_curve`` (its schema, input hash and completeness checked).
 
-    Its numbers are the promotion's: a test reads what it needs from the curve and freezes
-    none of them, so a re-promotion needs no test edit.
+    Its numbers are the promotion's. The curve's own tests read what they need from it and
+    freeze none of them; the Iridium model's end-to-end tests (``test_iridium_model.py``)
+    freeze the people and markers the engine reads from it, as the committed ``default.json``
+    does, so a re-promotion re-freezes those on purpose (the re-promotion rule).
     """
     return load_saturation_curve(repo_dir / SATURATION_CURVE_PATH_DEFAULT)
 
