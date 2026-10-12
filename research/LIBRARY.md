@@ -28,13 +28,24 @@ docs behind any claim you want to inspect:
   backlog.
 - Topic folders below, source research and historical review artifacts.
 
-For the communications workstream specifically (comms wave 1, ingested 2026-06-11),
-start with [synthesis/comms_baseline_synthesis.md](synthesis/comms_baseline_synthesis.md)
-(the neutral market-and-technology base) and the companion
-[vision/comms_thesis.md](vision/comms_thesis.md) (Revision 1 belief record, no verdict).
-The source docs sit under `economics/` (the `comms_*` market and deployment docs),
-`direct_communication/` (spectrum and bands/hardware), `laser_comms/` (terrestrial
-interconnect), and `competitors/` (the Falcon 9 cadence ramp).
+For communications (nine research waves, 2026-06-11 to 2026-07-08, and the saturation
+build's two notes, 2026-10-05 and 2026-10-12), start with
+[vision/comms_thesis.md](vision/comms_thesis.md), the belief record (its latest
+revision, Revision 4, covers wave 4), then the syntheses, which cover waves 1, 4, 5 and 6:
+[synthesis/comms_baseline_synthesis.md](synthesis/comms_baseline_synthesis.md) (the neutral
+market-and-technology base),
+[synthesis/comms_framework_synthesis.md](synthesis/comms_framework_synthesis.md),
+[synthesis/comms_wave5_coverage_spectrum_synthesis.md](synthesis/comms_wave5_coverage_spectrum_synthesis.md)
+and [synthesis/comms_wave6_dtc_architecture_synthesis.md](synthesis/comms_wave6_dtc_architecture_synthesis.md).
+Waves 7 to 9 have no synthesis: read their documents, the Iridium batch of wave 9 under
+`rocket_lab/` and `direct_communication/` above all, then the two notes behind the Iridium
+model's saturation module,
+[rocket_lab/flatellite_panel_and_stack.md](rocket_lab/flatellite_panel_and_stack.md) and
+[direct_communication/iridium_saturation_module.md](direct_communication/iridium_saturation_module.md).
+The other source docs sit under `economics/` (the `comms_*` market and deployment docs),
+`direct_communication/` (spectrum, bands and hardware, direct-to-cell), `laser_comms/`
+(terrestrial interconnect), and `competitors/` (the Falcon 9 cadence ramp, the Starlink
+platforms).
 
 ---
 
@@ -226,7 +237,7 @@ interconnect), and `competitors/` (the Falcon 9 cadence ramp).
 | [rocket_lab/flatellite_platform.md](rocket_lab/flatellite_platform.md) | The Rocket Lab Flatellite as the broadband/direct-to-cell satellite platform: what it is, its (mostly unpublished) specs, whether it is comms/D2C, how many ride a Neutron, and its status; the Rocket-Lab-native counterpart to the V3/Block-2 fit doc, Neutron only (comms wave 6). | Flatellite (unveiled 27 Feb 2025) is Rocket Lab's own flat, stackable, high-power satellite, comms-first and explicitly pitched at 5G-NTN/direct-to-cell as "a large-aperture system without the need for deployable antennas" (the flat body IS the aperture). Its hard specs are unpublished: ~600-800 kg mass and ~16/Neutron are a single render-read (estimate-bound), so the candidate broadband sats-per-Neutron is ~12-16 (SSO-to-LEO), the corpus's most favorable but softest per-launch count. The open question is capacity per flat satellite, not fit. Corrects the corpus bus-naming error: Flatellite is NOT the $816M SDA tracking contract (that is the Lightning bus); the comms SDA award is the $515M Transport Layer-Beta Tranche 2 (Jan 2024). Real production program, 40+ backlog, not yet flown, gated by Neutron's maiden flight. |
 | [rocket_lab/flatellite_panel_and_stack.md](rocket_lab/flatellite_panel_and_stack.md) | How large a Flatellite body Neutron's fairing holds and how many stack per launch, today and with the Neutron block upgrade: a calculation and its independent validation (2026-09-29), landed 2026-10-05 as the repo rows of the Iridium model's panel and satellites per launch; refines `flatellite_platform.md`'s render-read ~16, whose rows stay as history. | The panel is at most 15.4 m^2 (about 4.1 by 4.0 m), the largest body of Rocket Lab's drawn shape in Neutron's 4.79 m usable lower band: an upper bound, 14.0 to 15.4 m^2 with clearance. Today 15 per launch, mass-bound (11 to 20). With the block upgrade 16, the stack kept in the fairing's cylinder at the calculation's 0.3949 m pitch (6.3187 m / 16, the render's 16 layers filling the cylinder) on a rod-held base (a Lightband gives 15, an ESPA ring 14; 17 to 19 only with the stack rising into the nose). Both counts rescale one illustrative render's 16 layers, so their confidence is low. No flat 25 m^2 body fits Neutron at all: it exceeds the 24.45 m^2 full circle of the widest usable band (validation D's verdict, in Section 2 since 2026-10-12). Owns COMM-711..713. |
 | [rocket_lab/iridium_acquisition.md](rocket_lab/iridium_acquisition.md) | The Rocket Lab-Iridium acquisition (announced June 29, 2026), verified: the deal terms, Iridium as an asset (constellation, spectrum, business, services), and the factual hooks and non-hooks for the cellular thesis; comms wave 9, no verdict. | Rocket Lab agreed to acquire Iridium for ~$8.0B enterprise value ($54.00/share cash-and-stock, ~24% premium, close ~mid-2027 pending FCC transfer-of-control and other approvals). Iridium is a profitable LEO satcom operator: 66-satellite Iridium NEXT with a Ka cross-link mesh and pole-to-pole coverage, a globally coordinated L-band MSS allocation (1616-1626.5 MHz), FY2025 revenue $871.7M at a 56.8% OEBITDA margin, and 2.537M billable subscribers (mostly IoT). Owning it hands RKLB a constellation, owned spectrum, ground, ~2.5M customers, and an NB-IoT NTN foothold at ~$8.0B (versus the corpus's ~$32-90B spectrum-only cost for an owned cellular position), but NOT cellular low-band, partner-MNO spectrum, or broadband-to-unmodified-phone capability: Iridium's L-band MSS is not the cellular band a phone uses. Owns COMM-601..624. |
-| [rocket_lab/iridium_lband_capacity_and_modernization.md](rocket_lab/iridium_lband_capacity_and_modernization.md) | The capacity-physics layer for the Iridium max-outcome model: Iridium NEXT as built, when it needs replacing, how capacity scales if the same 8-10.5 MHz flies on a modern digital-beamforming satellite, the regulatory constraints on a larger fleet, and the narrowband headroom (comms wave 9, no verdict). | Iridium NEXT is capacity-small by 1990s design (~2.6 Mbps voice payload per satellite, ~174 Mbps fleet, device-full but bit-empty on 2M low-duty IoT), and its ~17.5-year life (a 2024 extension) means replacement is needed by ~2035, the natural Neutron hook. The core result: the SAME ~8 MHz of owned L-band on a modern large-aperture digital-beamforming satellite rises roughly three orders of magnitude to ~1.6-4.8 Gbps/sat (central ~2.9), because more, smaller beams reuse the fixed MHz many more times (spatial reuse is the multiplier, not raw bandwidth). Video-grade subscribers scale linearly with held MHz (~3,000 subs/sat/MHz), giving ~8M subscribers at 340 satellites, ~24M at 1,000, ~48M at 2,000 on 8 MHz; narrowband headroom is effectively unlimited (billions of devices). Regulatory: same-band replacement has direct precedent, but a much larger fleet or a different altitude opens PFD and coordination questions, and the held MHz (~8 vs 10.5 vs expanded) is a live FCC dispute (Iridium vs Globalstar). Owns COMM-635..660. |
+| [rocket_lab/iridium_lband_capacity_and_modernization.md](rocket_lab/iridium_lband_capacity_and_modernization.md) | The capacity-physics layer for the Iridium max-outcome model: Iridium NEXT as built, when it needs replacing, how capacity scales if the same 8-10.5 MHz flies on a modern digital-beamforming satellite, the regulatory constraints on a larger fleet, and the narrowband headroom (comms wave 9, no verdict). | Iridium NEXT is capacity-small by 1990s design (~2.6 Mbps voice payload per satellite, ~174 Mbps fleet, device-full but bit-empty on 2M low-duty IoT), and its ~17.5-year life (a 2024 extension) means replacement is needed by ~2035, the natural Neutron hook. The core result: the SAME ~8 MHz of owned L-band on a modern large-aperture digital-beamforming satellite rises roughly three orders of magnitude to ~1.6-4.8 Gbps/sat (central ~2.9), because more, smaller beams reuse the fixed MHz many more times (spatial reuse is the multiplier, not raw bandwidth). Video-grade subscribers scale linearly with held MHz (~3,000 subs/sat/MHz), giving ~8M subscribers at 340 satellites, ~24M at 1,000, ~48M at 2,000 on 8 MHz; narrowband headroom is effectively unlimited (billions of devices). Regulatory: same-band replacement has direct precedent, but a much larger fleet or a different altitude opens PFD and coordination questions, and the held MHz (~8 vs 10.5 vs expanded) is a live FCC dispute (Iridium vs Globalstar). Owns COMM-635..660. Dated pointer (2026-10-12): the ~1.6-4.8 Gbps a satellite and the subscribers at 340 to 2,000 satellites rest on a flat ~25 m2-class panel, which does not fit Neutron (COMM-711: a flat Flatellite body is at most 15.4 m2); the Iridium model now reads the saturation curve at a 25 m2 reference panel scaled linearly to the 15.4 m2 panel (ADR 005). |
 
 ### Strategy
 
@@ -471,3 +482,38 @@ Whether this line enters the model depends on the access mechanism: under the SC
 lease it is a near-zero wash, but if the model chooses owned spectrum (the SpaceX-
 EchoStar ~$17B/~65 MHz path) it becomes a real, sourced capital line on the order of
 tens of billions.
+
+**Interference trim:** the saturation curve's reduction of the phone class's capacity
+for the aggregate co-channel interference from every satellite in view, priced on
+sampled served cells at each fleet and reported at three far-sidelobe floors of the
+satellite's array: -0.4 dBi, the conservative edge (COMM-715), and -2 and -8 dBi, the
+calibrated-array band (COMM-716), with each beam weighted by the scan roll-off
+(COMM-717). The directional classes get none: each terminal's own pattern suppresses
+the far-sidelobe leak (`direct_communication/iridium_saturation_module.md`, 1.2 to 1.4).
+
+**Realistic-array band:** the saturation curve's three points for the ground area each
+beam takes, the design's F9: the uniform beam with footprints touching (central, the
+upper bound on the beams in use); the taper point, a tapered illumination's wider beam
+(1.0934 lambda / D, the footprint x 1.52; COMM-720); and the taper with wider
+co-channel spacing (area x 1.5, x 2.3 in all; COMM-721). The promoted curve carries the
+two non-central points as band points (`taper` and `taper_and_spacing`).
+
+**Reference panel and panel factor:** the reference panel is the 25 m^2 panel the
+saturation curve is computed at (and the per-satellite capacity chain's calibration
+anchor); the panel factor scales the curve linearly to the scenario's panel, its area
+over the reference: 15.4 / 25 = 0.616 at the validated Flatellite body (COMM-711; ADR
+005). The reference is a computation basis, not a satellite: no flat 25 m^2 body fits
+Neutron (`rocket_lab/flatellite_panel_and_stack.md`, Section 2).
+
+**Stack pitch:** the stowed thickness one flat satellite takes in a stack along the
+rocket's axis, so a stack holds its usable height over the pitch. Unpublished for
+Flatellite: 0.3949 m if the 16 layers of Rocket Lab's fairing render fill the 6.3187 m
+cylinder (calculation C's convention), 0.243 m if the 26 layers of the 2023 stack
+artwork fill it, and 0.43 to 0.49 m if the render is scaled to its own drawn fairing width
+(COMM-712, COMM-713).
+
+**Rod-held base:** a flat stack that starts at the fairing's interface plane on a base
+plate held by rods, as Starlink's stacks are held by tension rods on Falcon 9, so no
+adapter height is spent (0 m, an ESTIMATE by analogy; Rocket Lab has published no
+Neutron flat-stack dispenser). It is the base behind COMM-713's 16 a launch; a
+Lightband adapter (0.0533 m) gives 15 and an ESPA ring (0.61 m) 14.

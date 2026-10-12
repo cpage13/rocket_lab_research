@@ -3,7 +3,7 @@
 **Research date:** 2026-09-29 (a calculation and its independent validation, run locally); landed here 2026-10-05.
 **Purpose:** Give the Iridium model's panel and satellites-per-launch values their repo rows: the largest Flatellite body that Neutron's fairing holds, and how many such bodies stack per launch today and with the Neutron block upgrade. This refines [`flatellite_platform.md`](flatellite_platform.md) (COMM-249..270), whose "~16 per Neutron" is a read of one render at the 13 t reference orbit; those rows stay as history.
 **Vehicle modeled:** Neutron only.
-**Status:** Validated research. Calculation C computed the panel and the counts; validation D, a separate check that wrote none of the inputs or the calculation, re-derived them with its own code and re-read the sources. The panel is a good upper bound. The counts are low confidence.
+**Status:** Validated locally: calculation C computed the panel and the counts, and validation D, a separate check that wrote none of the inputs or the calculation, re-derived them with its own code and re-read the sources. The panel is a good upper bound. The counts are low confidence. Its status in this wiki is in `research/RESEARCH_TRACKER.md`.
 
 > **Grounds in and does not duplicate:**
 > - [`flatellite_platform.md`](flatellite_platform.md) (COMM-249..270): what Flatellite is, that Rocket Lab publishes no mass, power or dimension (COMM-252), the single render-read mass (COMM-253, COMM-256) and the render's ~16 (COMM-255, COMM-258..260).
