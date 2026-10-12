@@ -2,12 +2,18 @@
 
 This module is the single source of truth for the comms config's "no bare
 numeric literals" rule (CLAUDE.md). Every default the ``communications.config``
-Pydantic blocks read lives here, each with a docstring carrying:
+Pydantic blocks read lives here, and each sourced value's docstring opens with:
 
 - A source class tag: SOURCED_FACT / SOURCED_ESTIMATE / ESTIMATE / SCENARIO /
   INVESTOR_SET / DERIVED.
 - A citation: a global ``COMM-*`` claim id from ``research/SOURCE_INDEX.md``,
   a research-doc path, the coverage-sim findings, or an investor note.
+
+A constant that is not a sourced value carries no tag and says what it is instead: a
+unit conversion, a structural or sanity bound, a file location (the shipped grid's, and
+the saturation curve's, the one config default without a tag), the grid's hash, the
+orbit block's source status and basis text, or a mapping whose values keep their own
+constants' tags.
 
 The eight cadence / launch-cost defaults and their dial blocks are NOT stated
 here: they live once in ``common.cadence`` (the shared spine both ventures
@@ -26,7 +32,7 @@ cellular config. On an Iridium config the cellular sizing and revenue dials keep
 defaults (the config refuses another value) and the coverage floor is pinned at 340.
 
 CAPACITY DIMENSION, the cellular family's (investor-directed 2026-06-26, research
-COMM-535..560). The High-Bandwidth Cellular Pure Play model is sized to SERVE its
+COMM-545 and COMM-560). The High-Bandwidth Cellular Pure Play model is sized to SERVE its
 subscriber base, not merely to cover it. The subscriber TARGET
 (``subscribers_at_full_coverage``) is the INPUT; the fleet is sized to serve it at
 ``subscribers_per_satellite`` attached subscribers per satellite, floored by the
@@ -54,7 +60,7 @@ from common.input_manifest import SourceStatus
 logger = logging.getLogger(__name__)
 
 # ===========================================================================
-# Density-regime enum (the two-regime ground interface, Phase 4)
+# Density-regime enum (the two-regime ground interface)
 # ===========================================================================
 
 
@@ -62,8 +68,8 @@ class DensityRegime(StrEnum):
     """The terrestrial density regime a ground cost-per-subscriber baseline is for.
 
     Declared in this leaf ``constants`` module so both ``config.py`` (the
-    ``GroundInterfaceDials`` block, Phase 4) and ``ground.py`` (the comparison,
-    Phase 4) import it without a cycle. ``SPARSE`` is the fresh-build regime whose
+    ``GroundInterfaceDials`` block) and ``ground.py`` (the comparison) import it
+    without a cycle. ``SPARSE`` is the fresh-build regime whose
     cost the headline verdict reads (space below it is the niche); ``DENSE`` is the
     incumbent-marginal served regime.
     """
@@ -105,8 +111,9 @@ class DeviceClass(StrEnum):
     """The Iridium model's device classes: the key that names each class (never a setting).
 
     The investor's three device categories (2026-07-07; the 9c device ladder). The
-    member order is the order every list of classes takes (E11: small terminal, mounted
-    terminal, phone class), so every block that lists the classes iterates this enum.
+    member order is the order every list of classes takes (the charter's Presentation rule:
+    small terminal, mounted terminal, phone class, never phone-first), so every block that
+    lists the classes iterates this enum.
     ``SMALL_TERMINAL_CLASS`` is the small boosted antenna: paperback/puck size, ~20 cm
     integrated patch, ~10 dBi on a self-orienting mount (a fixed tilt or switched
     elements; no user pointing, no moving parts; investor decision 2026-07-10),
@@ -164,7 +171,7 @@ HORIZON_YEARS_DEFAULT: Final[int] = 10
 year), matching the DC model's 10-year horizon."""
 
 # ===========================================================================
-# Satellite spec dials (the fixed CELLULAR direct-to-cell bird)
+# Satellite spec dials (both families read them; the defaults are the cellular family's)
 # ===========================================================================
 
 SATELLITES_PER_LAUNCH_DEFAULT: Final[int] = 12
@@ -181,6 +188,30 @@ default; the Iridium scenario sets 16 on the bound, the validated Flatellite sta
 Neutron block upgrade assumed (COMM-713; 15 without it, COMM-712), which the
 ``satellites_per_launch`` field's description states."""
 
+SATELLITES_PER_LAUNCH_BLOCK_UPGRADE: Final[int] = 16
+"""DERIVED (COMM-713). The validated Flatellite count per Neutron launch with the Neutron block
+upgrade assumed (an assumed +15 to +30 percent lift, the envelope unchanged): the stack kept in
+the fairing's cylinder at calculation C's pitch on a rod-held base, where the fairing binds before
+the extra lift is used. 17 to 19 fit only with the stack rising into the nose, which the model
+does not take. The Iridium scenario's value, from the first launch."""
+
+SATELLITES_PER_LAUNCH_NO_UPGRADE: Final[int] = 15
+"""DERIVED (COMM-712). The validated Flatellite count per Neutron launch today, without the block
+upgrade: mass-bound (range 11 to 20). The no-upgrade bracket's value."""
+
+SATELLITES_PER_LAUNCH_MIN: Final[int] = 1
+"""The fewest satellites per launch, one: the bound the config's ``satellites_per_launch`` field
+accepts and the shared fleet-and-cost loop (``communications.engine.run_fleet_loop``) checks. The
+loop deploys and costs whole launches (a cohort is a multiple of the satellites per launch, and
+the launches flown are its quotient), so a count below one has no launch to divide into; the loop
+refuses it with a clear error instead. A structural bound, not a tunable."""
+
+SATELLITES_PER_LAUNCH_MAX: Final[int] = SATELLITES_PER_LAUNCH_BLOCK_UPGRADE
+"""DERIVED (COMM-713). The most satellites per launch a config accepts: the validated count with
+the block upgrade, :data:`SATELLITES_PER_LAUNCH_BLOCK_UPGRADE`, the stack kept in the fairing's
+cylinder. A larger count needs the stack to rise into the nose (17 to 19, COMM-713) or a lighter,
+thinner satellite, neither of which the model takes, so the bound refuses it."""
+
 SATELLITE_LIFETIME_YEARS_DEFAULT: Final[int] = 5
 """ESTIMATE (COMM-088, the Starlink ~5-year depreciation and replacement
 treadmill; the ~$200 to 260/sub/yr split that lineage feeds is COMM-091. The
@@ -189,6 +220,15 @@ are offset from the global index; corrected 2026-07-09). Satellite operating
 life, the cohort cliff: after this many years a cohort retires and contributes
 zero coverage. A design/depreciation assumption (the Starlink replacement-capex
 anchor), not a certified field life."""
+
+SATELLITE_LIFETIME_YEARS_MAX: Final[int] = 20
+"""The longest satellite life a config accepts, years: a sanity bound on the cohort cliff, not
+a sourced life, at four times the 5-year default (COMM-088). The research records L-band lives
+on both sides of it: Iridium NEXT's 12.5-year design life (COMM-642), extended to about 17.5
+years by a 2024 engineering reassessment, and Iridium's first-generation satellites of the
+1990s, which lasted more than 20 years (COMM-643). A life near it gives a steady state (the final
+year's comms launches x satellites per launch x the life) that can pass the saturation curve's
+last row, which the Iridium run refuses."""
 
 ORBIT_ALTITUDE_KM_SCENARIO: Final[float] = 450.0
 """SCENARIO (Part 7 physics loop, 2026-07-10). The published fleet altitude, km.
@@ -199,7 +239,7 @@ latency. A stated scenario input to the published orbit posture, set by no confi
 dial: the saturation curve's shell is computed at it (the default of
 ``SaturationInputs.shell.altitude_km``), so the readings the Iridium model takes from
 the curve rest on it; nothing else computes from it. The promoted artifact carries it
-in the labeled ``orbit_scenario`` block (schema iridium-v4) so the public orbit claim
+in the labeled ``orbit_scenario`` block (introduced in iridium-v4) so the public orbit claim
 has a typed model-contract anchor with its limitations attached."""
 
 ORBIT_INCLINATION_DEG_SCENARIO: Final[float] = 53.0
@@ -238,9 +278,10 @@ bound recorded by the 2026-07-14 calculation audit, carried verbatim on the
 promoted artifact so the limitations travel with the numbers."""
 
 SATELLITE_BUILD_COST_MUSD_DEFAULT: Final[float] = 1.05
-"""INVESTOR_SET (in-band; round 4, 2026-06-25). The flat MASS-MANUFACTURED
-CELLULAR-SATELLITE HARDWARE cost, ONE scalar, ~$1.0 to 1.1M (1.05 is the in-band
-default). This is a V3-CLASS HARDWARE analogy: the Starlink V3 per-satellite
+"""INVESTOR_SET (in-band; round 4, 2026-06-25). The cellular family's default for the
+satellite build cost both families read (the Iridium scenario sets its own Flatellite's): the
+flat MASS-MANUFACTURED CELLULAR-SATELLITE HARDWARE cost, ONE scalar, ~$1.0 to 1.1M (1.05 is
+the in-band default). This is a V3-CLASS HARDWARE analogy: the Starlink V3 per-satellite
 hardware cost is ~$1.2M (~1,500 kg), the upper hardware anchor (COMM-080, the
 consolidated unit-cost trajectory row). A
 CELLULAR direct-to-cell payload is a bigger antenna and more power than a
@@ -249,7 +290,7 @@ broadband panel, but FAR smaller than AST's giant phased array (so AST's
 build-cost analogy ONLY, NOT a broadband-product cost claim. CONFIGURABLE."""
 
 # ===========================================================================
-# Coverage target dial (the NEW constellation-size target, variable 3)
+# The coverage floor (the constellation-size dial)
 # ===========================================================================
 
 SATELLITES_FOR_FULL_COVERAGE_DEFAULT: Final[int] = 340
@@ -279,7 +320,8 @@ largest constellation the High-Bandwidth Cellular Pure Play model will size to, 
 bound on its fleet target, never a saturation cap. Past this the spread, low-density
 servable base is exhausted and adding satellites stops buying servable subscribers (a
 dense cell saturates and cannot be served by adding more satellites, the density caveat in
-research/direct_communication/dtc_subscribers_per_satellite.md, COMM-535..560). The
+research/direct_communication/dtc_subscribers_per_satellite.md: the fleet-sizing rule,
+COMM-560, at the attached density, COMM-545). The
 implied capacity fleets are ~1,000 to 2,000 satellites at 50M to 100M attached, so 2,000
 is the cap the ~100M ambitious target sits just under (1,334 at the 75,000 density).
 CONFIGURABLE on a cellular config. The Iridium path has no cap: an Iridium config keeps
@@ -288,7 +330,7 @@ reading kept for comparison (:data:`RETIRED_CAP_READING_FLEET`), and each device
 spectrum bound is its saturation number (ADR 005)."""
 
 # ===========================================================================
-# Comms cadence share (variable 2's share of the whole-fleet ramp)
+# Comms cadence share (the comms slice of the whole-fleet ramp)
 # ===========================================================================
 
 COMMS_SHARE_DEFAULT: Final[float] = 0.18
@@ -296,7 +338,7 @@ COMMS_SHARE_DEFAULT: Final[float] = 0.18
 Neutron cadence: ~16 of the 90 FY2036 launches/year (the 90/year is the shared
 whole-fleet cadence; comms flies a share of it). The investor's ~15 to 20 band maps
 to a share of ~0.167 to ~0.222; 0.18 (~16/90) is the in-band default. CONFIGURABLE.
-Phase 2 applies this as a multiplier on the shared per-year integer launch count,
+The engine applies this as a multiplier on the shared per-year integer launch count,
 re-rounded to an integer with the shared half-up offset."""
 
 # ===========================================================================
@@ -319,26 +361,31 @@ investor's starting baseline. Note the served base GROWS over time. CONFIGURABLE
 This dial most moves cost-per-subscriber, so surface it as the swing dial."""
 
 SUBSCRIBERS_PER_SATELLITE_DEFAULT: Final[int] = 75_000
-"""SOURCED_ESTIMATE (COMM-535..560, research/direct_communication/
-dtc_subscribers_per_satellite.md). ATTACHED subscribers per flat ~25 m^2 cellular
-satellite: the central of the grounded ~50,000 to 100,000 range (with ~250 to 2,000
+"""DERIVED (COMM-545, the attached-subscribers answer; COMM-560, the fleet-sizing rule;
+research/direct_communication/dtc_subscribers_per_satellite.md). ATTACHED subscribers per
+cellular satellite, on the research's flat ~25 m^2-class satellite on 25 MHz (COMM-559; the
+cellular family's premise, not the Iridium model's panel): the central of the grounded
+~50,000 to 100,000 range (with ~250 to 2,000
 simultaneously ACTIVE at ~2-3% busy-hour concurrency). ~50x a Starlink BROADBAND
 satellite (~1,260/sat) because a cellular subscriber sips data versus a broadband
 household (Starlink's own V3 D2C plan implies ~70,000 attached/sat). On 25 MHz the
 SPECTRUM binds first; the antenna POWER binds past ~50 to 100 MHz; the onboard
 COMPUTATION binds last (>100 to 200 MHz), so the chip is the LEAST binding. This
 density divides the subscriber target into the CAPACITY fleet need. Only the SPREAD,
-low-density subscriber is servable (a dense cell saturates). CONFIGURABLE."""
+low-density subscriber is servable (a dense cell saturates). CONFIGURABLE. Dated 2026-10-12:
+a flat ~25 m^2 body does not fit Neutron flat (the validated bound is 15.4 m^2, COMM-711), so
+this density rests on a premise the validated Flatellite does not meet; the cellular family is
+on hold, and its value is unchanged."""
 
 # ===========================================================================
-# Revenue + gross-margin dials (the two revenue cases; mirrors the DC R multiple)
+# Revenue and margin dials (the two revenue cases; mirrors the DC R multiple)
 # ===========================================================================
 
 REVENUE_MULTIPLE_DEFAULT: Final[float] = 1.5
 """INVESTOR_SET (mirrors the DC central R = 1.5, research/SOURCE_INDEX.md
 RLDC-REVENUE-MULTIPLE-1_5X).
 The COST-PLUS / MARGIN-TARGET revenue case: annual revenue = annual cost x this
-multiple. 1.5 is cost+50%, an implied gross margin of (1.5 - 1) / 1.5 = 33.3%, the
+multiple. 1.5 is cost+50%, an implied margin of (1.5 - 1) / 1.5 = 33.3%, the
 same owner-operator margin the data-center model carries as its central R. Each
 5-year cohort earns this margin across its life (the multiple is flat, no taper).
 A cost-coupled revenue case (revenue tracks the cost basis), NOT a market estimate.
@@ -359,15 +406,15 @@ MONTHS_PER_YEAR: Final[int] = 12
 annual revenue per subscriber). A fixed unit-conversion constant, not a tunable."""
 
 # ===========================================================================
-# Ground interface basis label (the two-regime ground interface, Phase 4)
+# Ground interface basis label (the two-regime ground interface)
 # ===========================================================================
 
 GROUND_BASIS_DEFAULT: Final[str] = "annual_cost_per_subscriber"
-"""SCENARIO. The like-for-like basis label for the two-regime ground interface
-(Phase 4), matching the settled primary unit (cost per subscriber per year). The
-Phase 4 comparison asserts the space and ground bases match before computing a
-ratio, so a build-and-hold space cost is never compared against an annual ground
-cost."""
+"""SCENARIO. The like-for-like basis label for the two-regime ground interface,
+matching the settled primary unit (cost per subscriber per year). The ground
+comparison (``communications.ground``) asserts the space and ground bases match before
+computing a ratio, so a build-and-hold space cost is never compared against an annual
+ground cost."""
 
 # ===========================================================================
 # The Iridium model: L-band max-outcome scenario (the MSS lane) dials + physics
@@ -427,17 +474,19 @@ spectral-efficiency sweep band (it meets the large tier's central; the bands ove
 the centrals are ordered 0.65 < 2.0 < 2.5)."""
 
 MOUNTED_TERMINAL_CLASS_SE_CENTRAL: Final[float] = 2.5
-"""SOURCED_ESTIMATE (COMM-650). Central of the 2.0 to 3.0 bps/Hz band for the LARGE
+"""SOURCED_ESTIMATE (COMM-409 and COMM-428: the data-grade direct-to-device band, about 2 to 3
+bps/Hz, AST's about 3 claimed; COMM-650 states when it holds, a purpose-built MSS terminal and
+power and reuse that can keep it). Central of the 2.0 to 3.0 bps/Hz band for the LARGE
 boosted / custom-antenna tier: mounted or pointed, 15+ dBi (drones, fixed sites,
 vehicles; the AST-class anchor). Value untouched from the corpus; wording updated for
 the three-tier device ladder."""
 
 MOUNTED_TERMINAL_CLASS_SE_LOW: Final[float] = 2.0
-"""SOURCED_ESTIMATE (COMM-650). Low edge of the documented large-tier
+"""SOURCED_ESTIMATE (COMM-409, COMM-428). Low edge of the documented large-tier
 spectral-efficiency sweep band."""
 
 MOUNTED_TERMINAL_CLASS_SE_HIGH: Final[float] = 3.0
-"""SOURCED_ESTIMATE (COMM-650). High edge of the documented large-tier
+"""SOURCED_ESTIMATE (COMM-409, COMM-428). High edge of the documented large-tier
 spectral-efficiency sweep band."""
 
 REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE: Final[float] = 0.15
@@ -456,18 +505,20 @@ time) is this x spectrum_mhz x SE x the panel factor (``aperture_m2`` /
 (``SaturationInputs.shell``)."""
 
 APERTURE_REFERENCE_M2: Final[float] = 25.0
-"""SOURCED_ESTIMATE (COMM-408 / COMM-410, the corpus flat ~25 m^2-class array;
+"""DERIVED (COMM-408 / COMM-410 / COMM-559, the corpus flat ~25 m^2-class array;
 official Flatellite dimensions are unpublished, and the ~800 kg MASS read is
 COMM-253 / COMM-256, which do not state an area). The CALIBRATION ANCHOR and the
 saturation curve's computation basis: the corpus per-satellite capacity chain (COMM-410,
 :data:`REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE`) is calibrated AT this panel, and the curve is
 computed at it (``SaturationInputs.shell.reference_aperture_m2``). The Iridium model scales
 the curve and the satellite's peak linearly by the scenario's ``aperture_m2`` over this,
-the panel factor (0.616 at the default :data:`APERTURE_M2_DEFAULT`). The linear rule is
-conservative only above this panel, where it ignores the per-link SNR lift a larger panel
-also gives; below it the curve's stated limits apply (the directional classes carry more
-than the rule gives, the rule is exact in beams for the phone class, and each beam's rate
-is held at its value here)."""
+the panel factor (0.616 at the default :data:`APERTURE_M2_DEFAULT`). What the linear rule
+gives against a curve computed at the panel itself, measured, is
+:data:`PANEL_RULE_LIMITS_NOTE`: below this panel every class carries at least what the rule
+gives (the mounted terminal's useful beams exactly), above it the rule gives at least what the
+panel would, in useful beams and in maximum use, and the gaps measured wider at 10 m^2 than at
+15.4 m^2 for the small terminal, and at 60 m^2 than at 40 m^2 for every class's maximum use;
+each beam's rate is held at its value here."""
 
 APERTURE_M2_DEFAULT: Final[float] = 15.4
 """DERIVED (COMM-711; the investor's approved default, 2026-10-03). The Iridium model's
@@ -476,6 +527,56 @@ panel, m^2: the validated Flatellite body, a chamfered near-square octagon about
 validation D, 15.42 m^2). An upper bound: the body's corners touch the envelope (14.0 to
 15.4 m^2 with clearance). Applied linearly on the curve, a panel factor of 15.4 / 25 =
 0.616."""
+
+PANEL_RULE_LIMITS_NOTE: Final[str] = (
+    "Below the reference panel every class carries at least what the rule gives, because a "
+    "cell's people cap does not shrink with the panel: computed at 15.4 m^2 instead (one "
+    "snapshot of the shipped grid, 342 to 40,000 satellites), the small terminal carries up to "
+    "about 1.8 percent more capacity and people (2.0 percent more useful beams), the phone "
+    "class up to about 1.1 percent more, and the mounted terminal exactly what the rule gives; "
+    "each class's maximum use is up to about 4.6 percent above the rule's. Above the reference "
+    "panel the people caps do not grow with the panel, so the rule gives at least what the "
+    "panel would: computed at 40 m^2 (342 to 10,000 satellites), useful beams up to about 3.0 "
+    "percent below the rule's and maximum use up to about 5.6 percent below (each the small "
+    "terminal's), and the rule ignores the per-link SNR lift a larger panel also gives. Farther "
+    "from the reference, as measured: at 10 m^2 the small terminal's gaps are wider than at "
+    "15.4 m^2 (its maximum use about 7.2 percent above the rule's), while the phone class's and "
+    "the mounted terminal's equal those at 15.4 m^2 at the same fleets; at 60 m^2 every class's "
+    "maximum use is further below the rule's than at 40 m^2, up to about 11.3 percent, and "
+    "useful beams fall up to about 6.4 percent below (each the small terminal's). Each beam's "
+    "rate is held at its reference-panel value: the link effect of another panel is not "
+    "modeled."
+)
+"""DERIVED (measured 2026-10-12 on the saturation module as built). What the linear panel rule
+(the curve at :data:`APERTURE_REFERENCE_M2` times the panel factor, ADR 005) gives against the
+curve's inputs computed at the panel itself. The method: the committed curve's parameters with
+the shell's reference panel set to the panel (which moves the beams per satellite, the beam and
+its footprints together), one snapshot (the draw's first time, t = 45,702.2 s) on the shipped
+grid, each class allocated at both panels; the useful beams and the capacity at the panel over
+the panel factor times their reference-panel values, and each class's maximum use the same way
+(a ratio of 1 is exactly the rule). The fleets are the realized ones, P x S.
+
+- At 15.4 m^2, the model's panel (342 to 40,000 satellites): the phone class 0.02 to 1.14
+  percent above the rule in useful beams and capacity alike, rising with the fleet; the small
+  terminal 0.09 to 2.01 percent in useful beams and 0.08 to 1.84 percent in capacity; the
+  mounted terminal at the rule to float rounding; maximum use 4.56 percent (small terminal),
+  0.16 (mounted terminal) and 1.27 (phone class) above.
+- At 10 m^2 (342 to 10,000 satellites): the small terminal 0.09 to 1.84 percent in useful beams
+  and 0.08 to 1.45 percent in capacity, wider than at 15.4 m^2 at each of these fleets, and its
+  maximum use 7.19 percent above; the phone class 0.02 to 0.74 percent with maximum use 1.27
+  percent above, and the mounted terminal at the rule with maximum use 0.16 percent above, each
+  equal to its 15.4 m^2 values at these fleets.
+- At 40 m^2 (342 to 10,000 satellites): the small terminal 0.30 to 2.99 percent below the rule
+  in useful beams and 0.27 to 2.86 percent in capacity; the phone class 0.16 to 2.37 below; the
+  mounted terminal at most 0.013 below; maximum use 5.63 percent (small terminal), 1.94
+  (mounted terminal) and 3.18 (phone class) below.
+- At 60 m^2 (342 to 10,000 satellites): the small terminal 0.78 to 6.40 percent below in useful
+  beams and 0.75 to 6.25 percent in capacity; the phone class 0.54 to 5.45 below; the mounted
+  terminal at most 0.46 below (0.19 in capacity); maximum use 11.30 percent (small terminal),
+  4.99 (mounted terminal) and 7.04 (phone class) below, each further below than at 40 m^2.
+
+Each magnitude holds at its panel and fleets as measured, not at every panel. Stated in the
+run's panel line, after its first sentence."""
 
 APERTURE_VALIDATED_STACK_LIMIT_M2: Final[float] = 15.4
 """DERIVED (COMM-711, COMM-713). The largest flat panel the validated 16-satellite
@@ -527,7 +628,7 @@ ECOSYSTEM_ASSUMPTION_NOTE: Final[str] = (
     "phone class's data-grade service (its own usage, a named constant) is therefore a "
     "forward assumption: a future where standard chipsets include the band grown up from the "
     "Stardust path, 0 dBi, no external antenna, at the cost of the low phone-class SE "
-    "tier (a knowingly-taken ~4x capacity haircut versus a gain terminal). "
+    "tier (a knowingly-taken capacity haircut of about 3x to 4x versus the gain terminals). "
     "Boosted-antenna devices are purpose-built (our hardware, no chipset assumption). "
     "The Iridium model is the MSS lane and never claims to reach an unmodified handset; "
     "the unmodified-phone lane stays on cellular spectrum (the High-Bandwidth Cellular "
@@ -572,23 +673,30 @@ never moves this historical reading."""
 # line.
 
 SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = 10.0
-"""INVESTOR_SET (the investor, 2026-10-07 (A14): "Yes, let's use the $10 and $50"; it was $15, the
+"""INVESTOR_SET (the investor, 2026-10-07: "Yes, let's use the $10 and $50"; it was $15, the
 midpoint of the investor's 10-to-20 mass-market range set 2026-10-03, Sheet A's standard
 price of 2026-07-09 renamed for the small terminal). The small terminal's monthly price,
 dollars: $10, the low end of that range (COMM-618 context), held flat in every year."""
 
 MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = 50.0
-"""INVESTOR_SET (the investor, 2026-10-07 (A14): "Yes, let's use the $10 and $50"; it was $100, set
+"""INVESTOR_SET (the investor, 2026-10-07: "Yes, let's use the $10 and $50"; it was $100, set
 2026-10-03, Sheet A's premium price of 2026-07-09 renamed for the mounted terminal). The
 mounted terminal's monthly price, dollars: $50, near Iridium's reported voice and data $47
 and well under Certus $259 for a 0.7 Mbps-class service (COMM-618), held flat in every
 year."""
 
-PHONE_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = 15.0
+PHONE_CLASS_PRICE_FLOOR_USD_MONTH: Final[float] = 15.0
 """INVESTOR_SET (the investor, 2026-10-03; corrected 2026-10-04 from an unapproved $5). The
-phone class's monthly price, dollars: Sheet A's standard $15 and the investor's floor, held
-flat; no price haircut takes it lower. Its own constant, since Sheet A's standard price went
-to the small terminal, whose own price is now the investor's $10 (2026-10-07)."""
+phone class's floor, dollars a month: the lowest price the investor states the phone class at,
+which no price haircut goes below. A stated value, not a config bound: the configured price is
+the ``arpu.phone_class_price_usd_month`` setting, and the stated assumptions name both, and say
+so when a run sets the phone class below this floor."""
+
+PHONE_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = PHONE_CLASS_PRICE_FLOOR_USD_MONTH
+"""INVESTOR_SET (the investor, 2026-10-03; corrected 2026-10-04 from an unapproved $5). The
+phone class's monthly price, dollars: set at its floor, :data:`PHONE_CLASS_PRICE_FLOOR_USD_MONTH`
+(Sheet A's standard $15), held flat. Its own constant, since Sheet A's standard price went to
+the small terminal, whose own price is now the investor's $10 (2026-10-07)."""
 
 MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT: Final[float] = 4.0
 """INVESTOR_SET (the investor's trial price, 2026-10-04). Minimal-packet IoT's monthly price
@@ -612,16 +720,28 @@ tunable."""
 # IoT is two fixed books, each its own revenue line, never inside a device class's margin,
 # sold from the first year the living fleet reaches the coverage floor. Their counts are
 # named constants, not settings, and never move with the fleet, the class, the downlink
-# share, the panel or satellites per launch. The IoT reading (the saturation strategy's E8)
+# share, the panel or satellites per launch. The IoT reading (ADR 007's IoT check)
 # spreads each line's count over the phone class's useful beams (IoT devices are low gain,
 # so their reuse follows the phone rule) and reports its share of a beam's uplink.
 
 MINIMAL_PACKET_IOT_DEVICES: Final[int] = 51_670_320
 """INVESTOR_SET (the investor, 2026-10-04; held as a stated assumption, ADR 007).
-Minimal-packet IoT's fixed device count, the capable count: today's model's Sheet A IoT
-count at the 340-satellite coverage floor, not Iridium's own IoT book of 1,998,000 devices
-(COMM-617). Nothing physical caps the count short of billions of devices (COMM-659), so any
-count is a stated assumption."""
+Minimal-packet IoT's fixed device count, the capable count: the iridium-v5 model's Sheet A IoT
+count at the :data:`MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES`-satellite coverage floor, not
+Iridium's own IoT book (:data:`IRIDIUM_IOT_BOOK_DEVICES`, COMM-617). Nothing physical caps the
+count short of billions of devices (COMM-659), so any count is a stated assumption."""
+
+MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES: Final[int] = 340
+"""INVESTOR_SET (2026-10-04, ADR 007). The coverage floor, satellites, at which the iridium-v5
+model's Sheet A IoT count was read for :data:`MINIMAL_PACKET_IOT_DEVICES`: the count's stated
+basis, its own constant (not :data:`SATELLITES_FOR_FULL_COVERAGE_DEFAULT`, the floor the
+Iridium path pins), so a later change to the pinned floor never rewrites where the count came
+from."""
+
+IRIDIUM_IOT_BOOK_DEVICES: Final[int] = 1_998_000
+"""SOURCED_FACT (COMM-617, certified: Iridium's billable IoT subscribers at year-end 2025).
+Iridium's own IoT book, devices: named beside the model's minimal-packet IoT count, which is a
+stated assumption and not this book."""
 
 DATA_IOT_DEVICES: Final[int] = 25_835_160
 """INVESTOR_SET (the investor, 2026-10-04: "somewhere in proportion"; held as a stated
@@ -642,7 +762,8 @@ bits a second for a low-duty narrowband device. Data IoT sends them too, beside 
 DATA_IOT_BURSTS_PER_DAY: Final[int] = 4
 """INVESTOR_SET (the investor's usage, 2026-10-04, an assumption). Data IoT's bursts a day per
 device, each :data:`DATA_IOT_BURST_BYTES`, beside its 48 messages. The line's rate of about
-88 kbps describes it and enters no computation."""
+88 kbps, the top of Certus mid's 22 to 88 kbps (COMM-674), describes it and enters no
+computation."""
 
 DATA_IOT_BURST_BYTES: Final[int] = 100_000
 """INVESTOR_SET (the investor's usage, 2026-10-04, an assumption). One data IoT burst, bytes
@@ -658,8 +779,9 @@ IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH: Final[int] = 1_650
 serves, by mode."""
 
 IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND: Final[int] = 1
-"""ESTIMATE (an assumption, the saturation strategy's E8). The random-access windows a beam
-offers a second, against which the access attempts a second a beam are read."""
+"""ESTIMATE (an assumption with no source: COMM-654 gives the devices one random-access window
+serves, not how often a window opens). The random-access windows a beam offers a second,
+against which the access attempts a second a beam are read."""
 
 IOT_MAC_EFFICIENCY: Final[float] = 0.20
 """ESTIMATE (COMM-659). The share of a beam's uplink bits that carry payload after the MAC
@@ -816,21 +938,21 @@ PHONE_CLASS_DIRECTIVITY_DBI: Final[float] = 0.0
 serves a place."""
 
 SMALL_TERMINAL_CLASS_SECTOR_WEDGES_PER_RING: Final[tuple[int, ...]] = (1, 2)
-"""DERIVED (the saturation strategy's rule D1, the sky sectors, from
+"""DERIVED (the sky-sector rule, D1 in the saturation module's docstring, from
 :data:`SMALL_TERMINAL_CLASS_DIRECTIVITY_DBI`). The small terminal's sky above the
 elevation mask in sectors of equal solid angle, ring by ring from the zenith: a zenith cap,
 then one ring in two azimuth halves. A beam of directivity D spans about 4 pi / D sr, so
 about 3 such beams fit in the sky above the mask, one per sector."""
 
 MOUNTED_TERMINAL_CLASS_SECTOR_WEDGES_PER_RING: Final[tuple[int, ...]] = (1, 3, 5)
-"""DERIVED (the saturation strategy's rule D1, the sky sectors, from
+"""DERIVED (the sky-sector rule, D1 in the saturation module's docstring, from
 :data:`MOUNTED_TERMINAL_CLASS_DIRECTIVITY_DBI`). The mounted terminal's sky above the
 elevation mask in sectors of equal solid angle, ring by ring from the zenith: a zenith cap,
 a ring of 3, then a ring of 5 down to the mask. About 9 of its beams fit in the sky above
 the mask, one per sector."""
 
 PHONE_CLASS_SECTOR_WEDGES_PER_RING: Final[tuple[int, ...]] = ()
-"""DERIVED (the saturation strategy's rule D1, the sky sectors, from
+"""DERIVED (the sky-sector rule, D1 in the saturation module's docstring, from
 :data:`PHONE_CLASS_DIRECTIVITY_DBI`). No sky sectors: a 0 dBi device takes one co-channel
 layer, so co-channel footprints on the same ground must not overlap."""
 
@@ -933,8 +1055,9 @@ satellite-cell pairs in this many geometric footprint bands, committing each ban
 next. The count is a numerical convention the fill converges in. Why 160: the fill shares a
 cell's first layer among every satellite of its smallest occupied band, so a wide band lets
 several near-zenith satellites reach the serving share and serve the cell, and each serving
-satellite keeps another sector's stacked layers a beamwidth away (rule D3's serving set). The
-numerics review of the directional classes (its finding B1) measured the mounted terminal's
+satellite keeps another sector's stacked layers a beamwidth away (the serving rule, D3 in the
+saturation module's docstring). The measurement behind the ruling (recorded with the curve's
+re-promotion at 160 bands, commit 9edcfa5) found the mounted terminal's
 saturation number moving with the count at 40 bands, and 160 near converged: 320 bands adds
 0.3 to 0.5 percent of the mounted terminal's capacity over 160 (at 40,000 and 64,009
 satellites, at one shared usage of 1 Mbps x 2.5 percent). On the promoted curves of 2026-10-06,
@@ -1041,6 +1164,7 @@ A scenario may name an absolute path instead (a test's temporary curve). A fixed
 not a tunable."""
 
 __all__ = [
+    # The cellular family's dials and the shared bounds.
     "ARPU_USD_PER_MONTH_DEFAULT",
     "BASE_YEAR_DEFAULT",
     "COMMS_SHARE_DEFAULT",
@@ -1061,7 +1185,18 @@ __all__ = [
     "SATELLITE_LIFETIME_YEARS_DEFAULT",
     "SUBSCRIBERS_AT_FULL_COVERAGE_DEFAULT",
     "SUBSCRIBERS_PER_SATELLITE_DEFAULT",
-    # Iridium-model (L-band max-outcome) additions.
+    # The satellite spec's bounds and validated counts (both families).
+    "SATELLITES_PER_LAUNCH_BLOCK_UPGRADE",
+    "SATELLITES_PER_LAUNCH_MAX",
+    "SATELLITES_PER_LAUNCH_MIN",
+    "SATELLITES_PER_LAUNCH_NO_UPGRADE",
+    "SATELLITE_LIFETIME_YEARS_MAX",
+    # The published orbit posture (the artifact's orbit block; the curve's shell).
+    "ORBIT_ALTITUDE_KM_SCENARIO",
+    "ORBIT_INCLINATION_DEG_SCENARIO",
+    "ORBIT_SCENARIO_BASIS",
+    "ORBIT_SCENARIO_SOURCE_STATUS",
+    # The Iridium model (L-band max-outcome): its settings, physics and notes.
     "APERTURE_M2_DEFAULT",
     "APERTURE_REFERENCE_M2",
     "APERTURE_STACK_CAVEAT_NOTE",
@@ -1073,13 +1208,26 @@ __all__ = [
     "HZ_PER_MHZ",
     "IRIDIUM_OPERATIONS_COST_MUSD",
     "IRIDIUM_SCENARIO_NAME_DEFAULT",
+    "MOUNTED_TERMINAL_CLASS_SE_CENTRAL",
+    "MOUNTED_TERMINAL_CLASS_SE_HIGH",
+    "MOUNTED_TERMINAL_CLASS_SE_LOW",
+    "PANEL_RULE_LIMITS_NOTE",
+    "PHONE_CLASS_SE_CENTRAL",
+    "PHONE_CLASS_SE_HIGH",
+    "PHONE_CLASS_SE_LOW",
     "RETIRED_CAP_READING_FLEET",
+    "REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE",
     "SECONDS_PER_DAY",
+    "SMALL_TERMINAL_CLASS_SE_CENTRAL",
+    "SMALL_TERMINAL_CLASS_SE_HIGH",
+    "SMALL_TERMINAL_CLASS_SE_LOW",
+    "SPECTRUM_MHZ_DEFAULT",
     # The Iridium model's prices (2026-10-03 and 2026-10-04; the two terminal prices 2026-10-07).
     "ARPU_PRICE_CEILING_USD_MONTH",
     "DATA_IOT_PRICE_USD_MONTH_DEFAULT",
     "MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT",
     "MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT",
+    "PHONE_CLASS_PRICE_FLOOR_USD_MONTH",
     "PHONE_CLASS_PRICE_USD_MONTH_DEFAULT",
     "SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT",
     # The two IoT lines and the IoT reading (ADR 007).
@@ -1092,21 +1240,12 @@ __all__ = [
     "IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND",
     "IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH",
     "IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW",
+    "IRIDIUM_IOT_BOOK_DEVICES",
+    "MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES",
     "MINIMAL_PACKET_IOT_DEVICES",
     "MINIMAL_PACKET_IOT_MESSAGES_PER_DAY",
     "MINIMAL_PACKET_IOT_MESSAGE_BYTES",
     "NB_IOT_TONE_HZ",
-    "MOUNTED_TERMINAL_CLASS_SE_CENTRAL",
-    "MOUNTED_TERMINAL_CLASS_SE_HIGH",
-    "MOUNTED_TERMINAL_CLASS_SE_LOW",
-    "PHONE_CLASS_SE_CENTRAL",
-    "PHONE_CLASS_SE_HIGH",
-    "PHONE_CLASS_SE_LOW",
-    "REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE",
-    "SMALL_TERMINAL_CLASS_SE_CENTRAL",
-    "SMALL_TERMINAL_CLASS_SE_HIGH",
-    "SMALL_TERMINAL_CLASS_SE_LOW",
-    "SPECTRUM_MHZ_DEFAULT",
     # The shipped population grid (ADR 009).
     "POPULATION_GRID_PATH",
     "POPULATION_GRID_SHA256",

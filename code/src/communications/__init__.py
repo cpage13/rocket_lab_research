@@ -18,8 +18,11 @@ constellation, with two families sharing one fleet-and-cost loop:
   family and the config default (no ``iridium`` block): CELLULAR direct-to-cell on
   partner cellular spectrum, with a fixed subscriber-density dial, its fleet sized
   to a subscriber target, floored by coverage and capped by its fleet cap, then held.
-  It has no scenario file or promoted artifact; the equality tripwire test rides its
-  defaults.
+  It has no scenario file or promoted artifact. The equality tripwire test runs it on
+  its defaults with the subscriber target raised to 150,000,000 (a fleet target the
+  horizon never reaches, so it flies every launch the cadence allows) and requires its
+  shared fleet-and-cost record to equal that of an Iridium run on the config defaults with
+  a default ``iridium`` block, not the shipped Iridium scenario.
 
 The package mirrors the data-center model's shape and reuses the shared spine in
 ``common`` unchanged. Each family's record sits beside the shared fleet-and-cost

@@ -70,6 +70,13 @@ EXPECTED_FLEET_TARGET_10M = 340
 EXPECTED_FLEET_TARGET_50M = 667
 EXPECTED_FLEET_TARGET_100M = 1_334
 
+# The default run's final-year cash cost a served person, USD, frozen: the FY2036 replacement
+# of the FY2031 cohort (36 satellites at $1.05M plus 3 launches at the FY2036 whole-fleet
+# cadence's price on the default launch-cost curve, $79.51M) over the 10,000,000 served. An
+# absolute pin on the shared loop's cadence-indexed launch price: a launch priced at another
+# year's cadence moves it.
+DEFAULT_FINAL_YEAR_CASH_COST_PER_SUBSCRIBER_USD = 7.951337204338448
+
 
 # The same forbidden config-time / demand-lever tokens the architecture guard
 # locks out (kept in sync with tests/communications/test_no_venture_cross_import.py),
@@ -347,7 +354,8 @@ def test_default_run_cash_cost_per_subscriber_is_final_year_over_served() -> Non
 
     Objective: the cash per-person figure on the default run. Expected: the final-year
     replacement (USD) over the 10M served base, a positive figure (the final year
-    replaces a retiring cohort).
+    replaces a retiring cohort), and that figure frozen exactly, $7.951337204338448 a
+    person (``DEFAULT_FINAL_YEAR_CASH_COST_PER_SUBSCRIBER_USD``).
     """
     run = run_comms_model(CommsConfig())
     assert run.cellular.subscribers_served == BASELINE_TARGET
@@ -355,6 +363,10 @@ def test_default_run_cash_cost_per_subscriber_is_final_year_over_served() -> Non
     expected_usd = run.fleet.final_year_replacement_cost_musd * MUSD_TO_USD / BASELINE_TARGET
     assert run.cellular.final_year_cash_cost_per_subscriber_usd == pytest.approx(expected_usd)
     assert expected_usd > 0.0
+    assert (
+        run.cellular.final_year_cash_cost_per_subscriber_usd
+        == DEFAULT_FINAL_YEAR_CASH_COST_PER_SUBSCRIBER_USD
+    )
 
 
 def test_override_drives_the_reported_subscribers_at_full_deployment() -> None:

@@ -15,7 +15,10 @@ The contract every loader and both promotion commands rely on:
    create (a random name that collides is skipped); and a symbolic link or
    other non-regular destination is refused before anything is written;
 3. :func:`locate_source_checkout` finds the checkout from a module under
-   ``code/src/`` and refuses a module installed anywhere else.
+   ``code/src/`` and refuses a module installed anywhere else; the checkout
+   anchors a relative path at the repository root, whatever the working
+   directory, and keeps an absolute one as given
+   (:meth:`SourceCheckout.anchored`).
 """
 
 from __future__ import annotations
@@ -462,6 +465,29 @@ def test_the_checkout_is_found_from_a_module_under_code_src(code_dir: Path, repo
     )
     outside = Path("/") / "elsewhere" / "x.yaml"
     assert checkout.repo_relative(outside) == outside.as_posix()
+
+
+def test_a_relative_path_anchors_at_the_repository_root_and_an_absolute_one_is_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, repo_dir: Path
+) -> None:
+    """Objective: the one anchoring rule the commands share: a promoted file named by a
+    relative path is read or written under the repository root, never the working directory.
+
+    Sample: the checkout found from a real source module, the working directory moved to a
+    temporary folder; the relative path ``communications/models/iridium/default.json``, given
+    as a string and as a ``Path``; an absolute path outside the repository, given both ways.
+
+    Expected: the relative path, either way, is the repository root joined with it (not the
+    working directory's); the absolute path comes back unchanged.
+    """
+    checkout = locate_source_checkout(file_io.__file__)
+    monkeypatch.chdir(tmp_path)
+    relative = "communications/models/iridium/default.json"
+    assert checkout.anchored(relative) == repo_dir / relative
+    assert checkout.anchored(Path(relative)) == repo_dir / relative
+    outside = Path("/") / "elsewhere" / "x.json"
+    assert checkout.anchored(outside) == outside
+    assert checkout.anchored(str(outside)) == outside
 
 
 def test_an_installed_module_is_not_a_source_checkout(tmp_path: Path) -> None:

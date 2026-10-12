@@ -13,9 +13,13 @@ no-argument construct is fully valid, plus the ``comms_config_from_dict`` /
 number that is not finite (``allow_inf_nan=False``), and so do the cadence and launch-cost
 blocks, ``common.cadence``'s, shared with the data-center model (the launch cost's by the
 same setting, the cadence's dials being whole numbers), each at load, naming the field. The
-Iridium blocks' numeric fields (the held spectrum, the panel, the downlink share and the five
-prices) are also strict: a boolean (a YAML ``true``, ``yes`` or ``on``) is refused at load,
-naming the field, never read as 1, and so is a quoted number; an integer loads as its float.
+numeric fields of the Iridium blocks (the held spectrum, the panel, the downlink share and the
+five prices), of the metadata, comms share and satellite blocks, and of the shared cadence and
+launch-cost blocks are also strict: a boolean (a YAML ``true``, ``yes`` or ``on``) is refused
+at load, naming the field, never read as 1, and so is a quoted number; an integer loads as a
+float field's float, and a whole-number float (16.0) as an integer field's integer, as before
+(a launch count, satellites per launch, the life, the base year and the horizon are
+:data:`common.cadence.WholeNumber`).
 Nothing here computes a cost, a coverage
 fraction, a subscriber count, or a comparison; it is the contract the engine
 (``communications.engine``), the Iridium family (``communications.iridium``), the
@@ -37,16 +41,16 @@ cost-coupled multiple or a price applied to a sized base. The blocks:
 * ``cadence: CadenceDials`` -- the shared whole-fleet logistic launch ramp
   (:class:`common.cadence.CadenceDials`, the data-center block itself: ceiling
   150, year-5 14, year-10 90, first 1, with its load-time anchor validator).
-  This prices the launch cost at the whole-fleet cadence (variable 2's ramp).
+  The launch cost is priced at this whole-fleet cadence.
 * ``comms_cadence: CommsCadenceDials`` -- the comms slice's SHARE of the fleet
-  cadence (variable 2's share); how many launches comms flies.
+  cadence: how many launches comms flies.
 * ``launch_cost: LaunchCostDials`` -- the cadence-indexed log-linear launch-cost
   curve (:class:`common.cadence.LaunchCostDials`, the data-center block itself:
-  25.0 / 13.5 / 5.0 / 100.0, with its anchor-order validator) (variable 6).
+  25.0 / 13.5 / 5.0 / 100.0, with its anchor-order validator).
 * ``satellite: SatelliteDials`` -- the satellite spec both families read: satellites
-  per launch (variable 1), lifetime (variable 4, the cohort cliff), and the flat
-  mass-manufactured hardware build cost (variable 5).
-* ``coverage: CoverageDials`` -- the cellular family's fleet-sizing bounds (variable 3):
+  per launch, the operating life (the cohort cliff), and the flat
+  mass-manufactured hardware build cost.
+* ``coverage: CoverageDials`` -- the cellular family's fleet-sizing bounds:
   the coverage FLOOR the fleet must at least reach, and the fleet CAP it may not exceed.
   The Iridium path pins the floor at its default and has no cap.
 * ``subscribers: SubscriberDials`` -- the cellular family's CAPACITY dimension: the
@@ -58,9 +62,10 @@ cost-coupled multiple or a price applied to a sized base. The blocks:
   (revenue = served base x monthly ARPU x 12), each with its margin per cohort and per
   year.
 * ``ground: GroundInterfaceDials | None`` -- the marked, TWO-REGIME ground
-  INTERFACE (Phase 4), default ``None`` so the cost side never blocks on a ground
-  number. The dense + sparse baselines are individually None-able caller inputs. No
-  Iridium run reads it, so an Iridium config refuses one.
+  INTERFACE the ground comparison reads (``communications.ground``), default ``None``
+  so the cost side never blocks on a ground number. The dense + sparse baselines are
+  individually None-able caller inputs. No Iridium run reads it, so an Iridium config
+  refuses one.
 * ``iridium: IridiumDials | None`` -- the optional Iridium model (formerly Model B;
   L-band max-outcome) MSS dials, default ``None`` so the config stays the
   High-Bandwidth Cellular Pure Play model (formerly Model A). Present, it selects the
@@ -86,7 +91,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from common.cadence import CadenceDials, LaunchCostDials
+from common.cadence import CadenceDials, LaunchCostDials, WholeNumber
 from common.file_io import load_yaml_mapping
 from communications.constants import (
     APERTURE_M2_DEFAULT,
@@ -112,8 +117,11 @@ from communications.constants import (
     REVENUE_MULTIPLE_DEFAULT,
     SATELLITE_BUILD_COST_MUSD_DEFAULT,
     SATELLITE_LIFETIME_YEARS_DEFAULT,
+    SATELLITE_LIFETIME_YEARS_MAX,
     SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
     SATELLITES_PER_LAUNCH_DEFAULT,
+    SATELLITES_PER_LAUNCH_MAX,
+    SATELLITES_PER_LAUNCH_MIN,
     SATURATION_CURVE_PATH_DEFAULT,
     SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT,
     SPECTRUM_MHZ_DEFAULT,
@@ -135,17 +143,20 @@ class CommsMetadataDials(BaseModel):
     no field default; the all-defaults construct supplies them via the
     :func:`_default_comms_metadata` factory). The DC-specific enums (workload,
     operator, radiator architecture) are DROPPED: the satellite is a fixed spec
-    with no workload/operator/radiator taxonomy.
+    with no workload/operator/radiator taxonomy. The base year and the horizon are
+    whole numbers (:data:`common.cadence.WholeNumber`): a YAML boolean or a quoted
+    number is refused at load, naming the field (never read as a 1-year horizon), and
+    a whole-number float (10.0) loads as its integer, as before.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
-    base_year: int = Field(
+    base_year: WholeNumber = Field(
         ge=MIN_FY,
         le=MAX_FY,
         description="Calendar year corresponding to model year 0 (Neutron first-flight year).",
     )
-    horizon_years: int = Field(
+    horizon_years: WholeNumber = Field(
         ge=MIN_HORIZON_YEARS,
         le=MAX_HORIZON_YEARS,
         description="Number of fiscal-year steps after year 0 (base_year + horizon = final year).",
@@ -157,15 +168,16 @@ class CommsMetadataDials(BaseModel):
 
 
 class CommsCadenceDials(BaseModel):
-    """The comms slice's SHARE of the whole-fleet cadence (variable 2's share).
+    """The comms slice's SHARE of the whole-fleet cadence.
 
     The whole-fleet cadence (:class:`CadenceDials`) ramps to 90 launches/year by
-    FY2036; the comms constellation flies a SHARE of those launches. Phase 2
+    FY2036; the comms constellation flies a SHARE of those launches. The engine
     multiplies the shared per-year integer launch count by ``share_of_fleet`` and
     re-rounds to an integer (with the shared half-up offset) to get the comms
     launches flown per year. The launch COST is still priced at the whole-fleet
     cadence (the cost-down is a Neutron-production-scale effect, shared), not at
-    the comms slice's own cadence.
+    the comms slice's own cadence. The share is strict: a YAML boolean or a quoted
+    number is refused at load, naming the field, and an integer loads as its float.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
@@ -174,6 +186,7 @@ class CommsCadenceDials(BaseModel):
         default=COMMS_SHARE_DEFAULT,
         gt=0,
         le=1.0,
+        strict=True,
         description=(
             "Comms fraction of the whole-fleet per-year launch count. INVESTOR_SET "
             "to 0.18 (~16 of the 90 FY2036 launches/year); the investor's ~15 to 20 "
@@ -183,59 +196,68 @@ class CommsCadenceDials(BaseModel):
 
 
 class SatelliteDials(BaseModel):
-    """The satellite spec both families read (variables 1, 4, 5).
+    """The satellite spec both families read; its defaults are the cellular family's.
 
     The satellite is a flat mass-manufactured Flatellite-class bird (a fixed spec,
     NOT a re-spec'd frontier generation, so the DC ``generations`` / ``slopes``
     engine is dropped). Three dials: satellites per launch (a direct input), the
     operating life (the cohort cliff), and the one flat hardware build-cost scalar.
+    The Iridium scenario sets all three. No field takes a YAML boolean or a quoted
+    number: each is refused at load, naming the field (never read as 1 satellite, a
+    1-year life or a $1M build); an integer loads as the build cost's float, and a
+    whole-number float (16.0) as a count's integer, as before.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
-    satellites_per_launch: int = Field(
+    satellites_per_launch: WholeNumber = Field(
         default=SATELLITES_PER_LAUNCH_DEFAULT,
-        ge=1,
-        le=16,
+        ge=SATELLITES_PER_LAUNCH_MIN,
+        le=SATELLITES_PER_LAUNCH_MAX,
         description=(
-            "Satellites per Neutron launch, a DIRECT input scalar (default 12, the "
-            "cellular family's; bounds 1 to 16). The Iridium scenario sets 16, on the "
-            "bound: the validated Flatellite stack with the Neutron block upgrade assumed "
-            "from the first launch, for the stack kept in the fairing's cylinder at "
+            "Satellites per Neutron launch, a DIRECT input scalar (default "
+            f"{SATELLITES_PER_LAUNCH_DEFAULT}, the cellular family's; bounds "
+            f"{SATELLITES_PER_LAUNCH_MIN} to {SATELLITES_PER_LAUNCH_MAX}, the upper bound the "
+            "validated stack with the block upgrade, COMM-713). The Iridium scenario sets 16, "
+            "on the bound: the validated Flatellite stack with the Neutron block upgrade "
+            "assumed from the first launch, for the stack kept in the fairing's cylinder at "
             "calculation C's pitch on a rod-held base (COMM-713); 15 is the mass-bound "
             "count today without the upgrade (COMM-712). The older render-read ~16 is "
             "COMM-258 / COMM-260; 12 loads about 9,600 kg of the ~13,000 kg LEO envelope."
         ),
     )
-    satellite_lifetime_years: int = Field(
+    satellite_lifetime_years: WholeNumber = Field(
         default=SATELLITE_LIFETIME_YEARS_DEFAULT,
         ge=1,
-        le=20,
+        le=SATELLITE_LIFETIME_YEARS_MAX,
         description=(
             "Satellite operating life in years, the cohort cliff: after this a "
             "cohort retires and contributes zero coverage. ~5-year Starlink "
             "depreciation and replacement-treadmill anchor (COMM-088; the "
             "separate COMM-091 is the per-subscriber cost split that lineage "
-            "feeds), a design assumption not a certified field life."
+            "feeds), a design assumption not a certified field life. At most "
+            f"{SATELLITE_LIFETIME_YEARS_MAX}, a sanity bound, not a sourced life."
         ),
     )
     satellite_build_cost_musd: float = Field(
         default=SATELLITE_BUILD_COST_MUSD_DEFAULT,
         gt=0,
+        strict=True,
         description=(
-            "The flat MASS-MANUFACTURED CELLULAR-SATELLITE HARDWARE cost, ONE "
-            "scalar, ~$1.0 to 1.1M (INVESTOR_SET 1.05). A V3-class hardware analogy "
-            "(Starlink V3 ~$1.2M, the upper anchor, COMM-080) for a direct-to-cell "
-            "payload (bigger antenna and more power than a broadband panel, far "
-            "smaller than AST's giant array, so AST ~$19 to 21M is the WRONG "
-            "anchor). A hardware build-cost analogy, NOT a broadband-product claim. "
-            "Configurable."
+            "The flat mass-manufactured hardware cost of one satellite, $M, ONE scalar, "
+            "read by both families. The default, "
+            f"{SATELLITE_BUILD_COST_MUSD_DEFAULT:g}, is the cellular family's (INVESTOR_SET, "
+            "~$1.0 to 1.1M): a V3-class hardware analogy (Starlink V3 ~$1.2M, the upper "
+            "anchor, COMM-080) for a direct-to-cell payload (bigger antenna and more power "
+            "than a broadband panel, far smaller than AST's giant array, so AST ~$19 to 21M "
+            "is the WRONG anchor), a hardware build-cost analogy, NOT a broadband-product "
+            "claim. The Iridium scenario sets its own Flatellite's build cost. Configurable."
         ),
     )
 
 
 class CoverageDials(BaseModel):
-    """The fleet-sizing bounds: the coverage FLOOR and the cellular fleet CAP (variable 3).
+    """The fleet-sizing bounds: the coverage FLOOR and the cellular fleet CAP.
 
     In the cellular family the fleet target the build-out fills toward is the CAPACITY
     need (the subscriber target divided by the per-satellite density, see
@@ -281,7 +303,8 @@ class CoverageDials(BaseModel):
             "spread, low-density servable base is exhausted and more satellites stop "
             "buying servable subscribers (a dense cell saturates). INVESTOR_SET to 2,000: "
             "the ~100M ambitious target (1,334 satellites at 75,000/sat) sits just under "
-            "it. Source COMM-535..560. Configurable on a cellular config; an Iridium "
+            "it. Source: the attached-subscribers answer (COMM-545) and the fleet-sizing rule "
+            "(COMM-560). Configurable on a cellular config; an Iridium "
             "config, whose fleet has no cap, leaves it at this default (another value "
             "there is refused at load)."
         ),
@@ -350,7 +373,8 @@ class SubscriberDials(BaseModel):
             "into the CAPACITY fleet need (ceil(target / this)). ~50x a Starlink "
             "BROADBAND satellite because a cellular subscriber sips data. On 25 MHz "
             "the spectrum binds first, the antenna power past ~50 to 100 MHz, the "
-            "onboard chip last. Source COMM-535..560. Configurable."
+            "onboard chip last. DERIVED: the attached-subscribers answer's central band "
+            "(COMM-545), sized by the fleet-sizing rule (COMM-560). Configurable."
         ),
     )
     subscribers_served_override: int | None = Field(
@@ -369,7 +393,7 @@ class SubscriberDials(BaseModel):
 
 
 class RevenueDials(BaseModel):
-    """The two REVENUE cases that ride the cohort treadmill (revenue + gross margin).
+    """The two REVENUE cases that ride the cohort treadmill (revenue and margin).
 
     The engine computes BOTH cases on every run (they are not mutually exclusive
     dials; each is a separate lens on the same fleet), mirroring the data-center
@@ -377,12 +401,12 @@ class RevenueDials(BaseModel):
     single-value (no R-band) style:
 
     * COST-PLUS / MARGIN-TARGET (``revenue_multiple``): annual revenue = annual cost
-      x the multiple, the same owner-operator basis as the DC central R (1.5 -> 33.3%
-      gross margin). A cost-coupled case (revenue tracks the cost basis).
+      x the multiple, the same owner-operator basis as the DC central R (1.5 -> a 33.3%
+      margin). A cost-coupled case (revenue tracks the cost basis).
     * PRICES-TODAY / ARPU (``arpu_usd_per_month``): annual revenue = served
       subscribers x the monthly ARPU x 12, a retail price applied to the served base.
 
-    Gross margin in BOTH cases is ``(revenue - cost) / revenue`` against the same
+    The margin in BOTH cases is ``(revenue - cost) / revenue`` against the same
     annualized cost basis the engine carries per cohort (the per-satellite lifetime
     cost spread over the satellite life, matching the DC annualized convention). The
     revenue is a cost-coupled multiple or a price-times-served-base figure, NEVER a
@@ -398,7 +422,7 @@ class RevenueDials(BaseModel):
         description=(
             "The COST-PLUS / MARGIN-TARGET revenue multiple: annual revenue = annual "
             "cost x this. INVESTOR_SET to 1.5 (cost+50%, an implied (1.5 - 1) / 1.5 = "
-            "33.3% gross margin), mirroring the data-center central R = 1.5 "
+            "33.3% margin), mirroring the data-center central R = 1.5 "
             "(research/SOURCE_INDEX.md, RLDC-REVENUE-MULTIPLE-1_5X). Each 5-year "
             "cohort earns this margin "
             "across its life. Configurable."
@@ -420,7 +444,7 @@ class RevenueDials(BaseModel):
 
 
 class GroundInterfaceDials(BaseModel):
-    """The marked, TWO-REGIME CELLULAR-ground cost INTERFACE (Phase 4).
+    """The marked, TWO-REGIME CELLULAR-ground cost INTERFACE the ground comparison reads.
 
     INTERFACE INPUTS. These two ground baselines (dense-served incumbent-marginal
     and sparse fresh-build) come from the ground research wave; the investor owns the
@@ -430,9 +454,9 @@ class GroundInterfaceDials(BaseModel):
     the space cost per subscriber.
 
     The space side of the comparison is the model's OWN COMPUTED cellular annual
-    cost-per-subscriber (Phase 3), NEVER Starlink's disclosed broadband per-sub
-    number. This block is declared in Phase 1 (the ``ground`` field defaults to
-    None on :class:`CommsConfig`); Phase 4 consumes it in ``ground.py``.
+    cost-per-subscriber, NEVER Starlink's disclosed broadband per-sub number. The
+    ``ground`` field defaults to None on :class:`CommsConfig`; the ground comparison
+    (``communications.ground``) consumes the block.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
@@ -462,7 +486,7 @@ class GroundInterfaceDials(BaseModel):
         default=GROUND_BASIS_DEFAULT,
         description=(
             "Label stating which basis the ground numbers are on (default "
-            "'annual_cost_per_subscriber'), so the Phase 4 comparison matches "
+            "'annual_cost_per_subscriber'), so the ground comparison matches "
             "like-for-like with the space side (it asserts the bases match)."
         ),
     )
@@ -528,7 +552,8 @@ class IridiumArpuDials(BaseModel):
         description=(
             "The phone class's monthly price, dollars, held flat. INVESTOR_SET to "
             f"{PHONE_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-03), its floor: no price "
-            "haircut takes it lower. Configurable."
+            "haircut takes it lower. Configurable; a run priced below the floor says so in its "
+            "stated assumptions."
         ),
     )
     minimal_packet_iot_price_usd_month: float = Field(
@@ -642,8 +667,12 @@ class IridiumDials(BaseModel):
             f"{APERTURE_REFERENCE_M2:g} m^2 reference panel and applied linearly: people, "
             "useful beams, capacity and maximum use scale with this over the reference (the "
             "panel factor), while the saturation numbers, the ocean factor and satellites per "
-            "launch do not move. The linear rule is conservative only above the reference "
-            "panel; below it the curve's stated limits apply. Above "
+            "launch do not move. What the linear rule gives against the panel computed "
+            "outright, measured, is stated with the run's assumptions (below the reference "
+            "panel every class carries at least what the rule gives; above it the rule gives "
+            "at least what the panel would, in useful beams and in maximum use; the gaps "
+            "measured wider at 10 m^2 than at 15.4 m^2 for the small terminal, and at 60 m^2 "
+            "than at 40 m^2 for every class's maximum use). Above "
             f"{APERTURE_VALIDATED_STACK_LIMIT_M2:g} m^2, the largest flat panel the validated "
             "stack holds, the assumptions carry the stack caveat, deliberately NOT a bound, "
             "so a larger panel stays computable. INVESTOR-DIRECTED. Configurable."
@@ -750,7 +779,8 @@ class CommsConfig(BaseModel):
     ground: GroundInterfaceDials | None = Field(
         default=None,
         description=(
-            "The marked, TWO-REGIME ground interface (Phase 4). None by default so "
+            "The marked, TWO-REGIME ground interface the ground comparison reads. None by "
+            "default so "
             "the cost side runs with no ground number; supply it per-scenario on a "
             "cellular config (an Iridium config refuses one)."
         ),
@@ -783,6 +813,8 @@ class CommsConfig(BaseModel):
         field as set, so a config written out whole still loads. It runs when a config is
         loaded or validated (a construction or a ``model_validate``); a ``model_copy``
         update is not validated, by pydantic's design (it trusts the data it is given).
+        Every Iridium path closes that gap: the narrowing each one calls first,
+        ``communications.iridium.iridium_dials_of``, re-validates the config whole.
         """
         if self.iridium is None:
             return self
