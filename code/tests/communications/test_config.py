@@ -615,11 +615,14 @@ def test_the_metadata_share_and_satellite_blocks_refuse_a_boolean_or_a_quoted_nu
     required field at its default); the share and the build cost as the integer ``1``; satellites
     per launch as the float ``16.0`` and ``16.5``; the horizon as the float ``10.0``.
 
+    Also on an Iridium config (an ``iridium:`` block beside): the share written ``yes``,
+    satellites per launch ``on`` and the horizon ``yes``, the review's own cases.
+
     Expected outcome: the walk finds the share, satellites per launch, the life, the build cost,
     the base year and the horizon; each boolean and each quoted number fails at load with one
-    ValidationError located at that field; the integer share and build cost load as the floats
-    1.0; the whole-number float count and horizon load as the integers 16 and 10, as before, and
-    the fractional count is refused.
+    ValidationError located at that field, on the cellular and the Iridium config alike; the
+    integer share and build cost load as the floats 1.0; the whole-number float count and horizon
+    load as the integers 16 and 10, as before, and the fractional count is refused.
     """
     scenario = tmp_path / "strict.yaml"
     walked: list[str] = []
@@ -652,6 +655,16 @@ def test_the_metadata_share_and_satellite_blocks_refuse_a_boolean_or_a_quoted_nu
         "metadata.base_year",
         "metadata.horizon_years",
     ]
+    on_an_iridium_config = {
+        "comms_cadence.share_of_fleet": "comms_cadence:\n  share_of_fleet: yes\n",
+        "satellite.satellites_per_launch": "satellite:\n  satellites_per_launch: on\n",
+        "metadata.horizon_years": "metadata:\n  base_year: 2026\n  horizon_years: yes\n",
+    }
+    for located, written in on_an_iridium_config.items():
+        scenario.write_text(f"{written}iridium:\n  spectrum_mhz: 8.0\n", encoding="utf-8")
+        with pytest.raises(ValidationError) as refused:
+            load_comms_config(scenario)
+        assert _located(refused) == [located], located
     scenario.write_text("metadata:\n  base_year: 2026\n  horizon_years: 10.0\n", encoding="utf-8")
     horizon = load_comms_config(scenario).metadata.horizon_years
     assert (type(horizon), horizon) == (int, 10)

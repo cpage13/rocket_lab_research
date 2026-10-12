@@ -254,8 +254,10 @@ BRACKET_COST_PER_SATELLITE_YEAR_MUSD = (1.0 + 13.0 / 15) / 5  # 0.3733...
 # (a 2,000-satellite fleet target the 0.18 share never reaches), flying every launch the cadence
 # allows at 12 a launch on the default launch-cost curve, whose price moves with the whole-fleet
 # cadence: the absolute pin on the shared loop's cadence-indexed launch price (the Iridium
-# scenario flies a flat $13.0M launch, which would hide it). Frozen from the code as the review
-# of 2026-10-12 found it, the values the tripwire held before its rewrite.
+# scenario flies a flat $13.0M launch, which would hide it). The values the review of 2026-10-12
+# measured on the code, frozen here as new pins; before its rewrite the tripwire froze one value
+# only, the cellular default's cash cost a person ($7.951337204338448, on the 10,000,000 target),
+# which ``test_subscribers.py`` pins again.
 # ---------------------------------------------------------------------------
 TRIPWIRE_LIVING_FLEET = (0, 0, 12, 24, 48, 84, 132, 192, 288, 420, 576)
 TRIPWIRE_TOTAL_COST_MUSD = 1594.5941525706626  # cumulative build and launch cash through FY2036.
