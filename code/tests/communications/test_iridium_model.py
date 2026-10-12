@@ -42,7 +42,14 @@ from pydantic import ValidationError
 from common.cli import EXIT_ERROR
 from common.file_io import render_artifact_json
 from communications import json_output
-from communications.config import CommsConfig, IridiumArpuDials, IridiumDials, load_comms_config
+from communications.config import (
+    CommsConfig,
+    CoverageDials,
+    IridiumArpuDials,
+    IridiumDials,
+    SatelliteDials,
+    load_comms_config,
+)
 from communications.constants import (
     APERTURE_STACK_CAVEAT_NOTE,
     BASE_YEAR_DEFAULT,
@@ -57,7 +64,10 @@ from communications.constants import (
     ORBIT_INCLINATION_DEG_SCENARIO,
     ORBIT_SCENARIO_BASIS,
     ORBIT_SCENARIO_SOURCE_STATUS,
+    PANEL_RULE_LIMITS_NOTE,
     RETIRED_CAP_READING_FLEET,
+    SATELLITES_PER_LAUNCH_MAX,
+    SATELLITES_PER_LAUNCH_MIN,
     DeviceClass,
 )
 from communications.engine import (
@@ -78,6 +88,7 @@ from communications.iridium import (
     NotAnIridiumConfigError,
     derive_iridium_per_user_rates,
     derive_per_satellite_capacity_gbps,
+    iridium_dials_of,
     run_iridium_model,
 )
 from communications.json_output import (
@@ -472,6 +483,40 @@ def test_the_iridium_entry_refuses_a_cellular_config_with_the_familys_message(
         "'iridium:' block (see scenarios/iridium.yaml)"
     )
     assert isinstance(refused.value, ValueError)
+
+
+def test_every_iridium_path_refuses_a_setting_a_model_copy_slipped_past_the_validators(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
+    """Objective: pydantic's ``model_copy`` does not validate, so the narrowing every Iridium
+    path calls (``iridium_dials_of``) re-validates the config whole and a copied config cannot
+    carry a setting the validators refuse into a run (code_config m1).
+
+    Sample: the shipped scenario; a copy whose coverage floor is 500 (the Iridium path pins it
+    at 340); a copy whose phone class price is -1.0 (built without validation).
+
+    Expected outcome: the shipped config narrows to its own dials; each slipped copy raises a
+    ValidationError naming the field, from the narrowing and from the Iridium entry alike.
+    """
+    config = load_comms_config(iridium_yaml)
+    assert config.iridium is not None
+    assert iridium_dials_of(config) == config.iridium
+    floor = config.model_copy(update={"coverage": CoverageDials(satellites_for_full_coverage=500)})
+    assert floor.coverage.satellites_for_full_coverage == 500
+    negative = IridiumArpuDials.model_construct(
+        **{**config.iridium.arpu.model_dump(), "phone_class_price_usd_month": -1.0}
+    )
+    price = config.model_copy(
+        update={"iridium": config.iridium.model_copy(update={"arpu": negative})}
+    )
+    for slipped, field in (
+        (floor, "coverage.satellites_for_full_coverage"),
+        (price, "phone_class_price_usd_month"),
+    ):
+        with pytest.raises(ValidationError, match=field):
+            iridium_dials_of(slipped)
+        with pytest.raises(ValidationError, match=field):
+            run_iridium_model(slipped, committed_saturation_curve)
 
 
 def test_the_iridium_entry_runs_only_on_a_curve_computed_for_its_inputs(
@@ -1057,6 +1102,41 @@ def test_a_fleet_past_a_class_last_row_fails_naming_the_year_the_class_and_the_l
         assert named in errors[0]
 
 
+def test_a_reading_past_a_class_last_row_fails_naming_the_reading_and_its_settings(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
+    """Objective: a reported fleet past a class's last row is refused (a curve is never
+    extrapolated), and the refusal names the reading, its fleet and the settings that set it, as
+    a year's refusal names its year (code_switch m1): every modeled year can read while the
+    steady state beyond the horizon lies past the curve.
+
+    Sample: the shipped scenario with a 20-year life (its bound) and the cadence's year-10 anchor
+    at 126 launches, both in bounds: FY2036 flies 126 comms launches and its living fleet reads,
+    while the steady state, 126 x 16 x 20 = 40,320 satellites, lies past the small terminal's
+    last committed row, 40,000.
+
+    Expected outcome: the Iridium entry raises CurveBeyondLastRowError naming the reading's label
+    (the steady state beyond the 10-year horizon), its fleet, FY2036's 126 comms launches, the 16
+    satellites per launch and the 20-year life with the settings behind each, and then the
+    reading's own message (the small terminal and its last row).
+    """
+    data = load_comms_config(iridium_yaml).model_dump()
+    data["satellite"]["satellite_lifetime_years"] = 20
+    data["cadence"]["launches_at_year_10"] = 126
+    config = CommsConfig.model_validate(data)
+    with pytest.raises(CurveBeyondLastRowError) as refused:
+        run_iridium_model(config, committed_saturation_curve)
+    message = str(refused.value)
+    assert message.startswith(
+        f"the steady state, beyond the {HORIZON_YEARS_DEFAULT}-year horizon (40320 satellites, "
+        "FY2036's 126 comms launches (set by cadence.* and comms_cadence.share_of_fleet) x 16 "
+        "satellites per launch (satellite.satellites_per_launch) x the 20-year life "
+        "(satellite.satellite_lifetime_years)): "
+    ), message
+    for named in ("small_terminal_class", "last row is at 40000", "at 40320 satellites"):
+        assert named in message
+
+
 @pytest.mark.parametrize(
     ("setting", "value", "first_field"),
     [
@@ -1442,30 +1522,40 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
     """Objective: the stated assumptions, rewritten for the switch (the strategy's § 3 row).
 
     Expected outcome: the lines state the ecosystem assumption and operations at zero; the curve,
-    d and the panel and its limits as the rule (no measured magnitude); the cadence fleet with no
-    target and no cap; the block upgrade with its two conditions and the 15 without it; every
-    seat sold; the class prices held flat (the small terminal $10, the mounted terminal $50 and
-    the phone class $15 a month), a haircut as a division with every margin re-derived;
-    each class's usage; the two IoT lines and the floor rule; government left out of revenue;
-    the readings; the limits; no line calls the margin gross; no stack caveat at the default.
+    the reuse calibration (0.15 at the 25 m^2 reference panel, an estimate, COMM-410 and
+    COMM-411), d, and the panel with the rule's measured limits (``PANEL_RULE_LIMITS_NOTE``:
+    every class carries at least what the rule gives below the reference panel); the cadence
+    fleet with no target and no cap; this run's 16 per launch beside the validated counts (16
+    with the block upgrade and its two conditions, 15 without it); every seat sold; the class
+    prices held flat (the small terminal $10, the mounted terminal $50 and the phone class $15 a
+    month) and the phone class's floor, $15, apart from its price; a haircut as a division with
+    every margin re-derived; each class's usage; the two IoT lines (data IoT's price a month)
+    and the floor rule; government left out of revenue; the readings; the limits; no line calls
+    the margin gross; no stack caveat at the default.
     """
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
     lines = run.iridium.assumptions
     assert lines[0] == ECOSYSTEM_ASSUMPTION_NOTE
+    assert any(PANEL_RULE_LIMITS_NOTE in line for line in lines)
     joined = " ".join(lines).lower()
     for statement in (
         "operations cost is assumed zero",
         "promoted saturation curve (saturation-v1)",
+        "the reuse calibration is 0.15 gbps per mhz per unit of spectral efficiency at the 25 "
+        "m^2 reference panel, an estimate (comm-410, comm-411)",
         "the downlink share d is 0.67",
         "a panel factor of 0.616",
-        "conservative",
+        "every class carries at least what the rule gives",
         "no fleet target and no cap",
-        "block upgrade",
+        "this run flies 16",
+        "16 with the neutron block upgrade",
         "rod-held base",
-        "without the upgrade it is 15",
+        "15 without the upgrade",
         "every seat is sold",
         "the small terminal $10, the mounted terminal $50 and the phone class $15 a month",
+        "the phone class's floor is the investor's $15 a month",
         "re-derived against the same fleet cost, never divided or averaged",
+        "data iot, 25,835,160 devices at $8 a month",
         "the small terminal 2 mbps while active",
         "the mounted terminal 5 mbps",
         "the phone class 0.75 mbps",
@@ -1478,7 +1568,68 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
     ):
         assert statement in joined, statement
     assert "gross" not in joined
+    assert "(its floor)" not in joined
+    assert "exact in beams" not in joined
     assert APERTURE_STACK_CAVEAT_NOTE not in lines
+
+
+def _line_with(lines: tuple[str, ...], opening: str) -> str:
+    """The one stated assumption that opens with the given words."""
+    found = [line for line in lines if line.startswith(opening)]
+    assert len(found) == 1, (opening, found)
+    return found[0]
+
+
+def test_the_per_launch_and_price_lines_state_the_run_beside_the_validated_values(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
+    """Objective: the stated per-launch and price lines are built from the run, so a setting the
+    config accepts never publishes a line written for the shipped values (code_switch M1): the
+    run's own satellites per launch beside the validated counts and the bounds' one home, and
+    the run's own phone price beside the investor's floor, never the price called the floor.
+
+    Sample: the shipped scenario, then the same at 15 satellites per launch (the no-upgrade
+    bracket) and a phone class price of $20 a month (above its floor, a value the config
+    accepts).
+
+    Expected outcome: the shipped run's per-launch line says it flies 16 and the variant's 15,
+    each beside the bounds 1 to 16 (the config's own bounds, the named constants) and the
+    validated counts, 16 with the block upgrade (COMM-713) and 15 without (COMM-712); the
+    variant's price line states the phone class at $20 a month and its floor at the investor's
+    $15, and no line says "(its floor)" of a configured price.
+    """
+    shipped = load_comms_config(iridium_yaml)
+    data = shipped.model_dump()
+    data["satellite"]["satellites_per_launch"] = 15
+    data["iridium"]["arpu"]["phone_class_price_usd_month"] = 20.0
+    variant = CommsConfig.model_validate(data)
+    assert (SATELLITES_PER_LAUNCH_MIN, SATELLITES_PER_LAUNCH_MAX) == (1, 16)
+    for accepted in (SATELLITES_PER_LAUNCH_MIN, SATELLITES_PER_LAUNCH_MAX):
+        assert SatelliteDials(satellites_per_launch=accepted).satellites_per_launch == accepted
+    for refused in (SATELLITES_PER_LAUNCH_MIN - 1, SATELLITES_PER_LAUNCH_MAX + 1):
+        with pytest.raises(ValidationError, match="satellites_per_launch"):
+            SatelliteDials(satellites_per_launch=refused)
+    validated = (
+        "The validated counts are 16 with the Neutron block upgrade assumed from the first "
+        "launch, for the stack kept in the fairing's cylinder at calculation C's pitch on a "
+        "rod-held base (COMM-713), and 15 without the upgrade, the mass-bound count today "
+        "(COMM-712)."
+    )
+    for config, flies in ((shipped, 16), (variant, 15)):
+        lines = run_iridium_model(config, committed_saturation_curve).iridium.assumptions
+        per_launch = _line_with(lines, "Satellites per launch is a direct scenario setting")
+        assert per_launch == (
+            "Satellites per launch is a direct scenario setting (bounds 1 to 16); this run "
+            f"flies {flies}. {validated}"
+        )
+    lines = run_iridium_model(variant, committed_saturation_curve).iridium.assumptions
+    prices = _line_with(lines, "Each class's price is held flat")
+    assert prices.startswith(
+        "Each class's price is held flat: the small terminal $10, the mounted terminal $50 and "
+        "the phone class $20 a month. The phone class's floor is the investor's $15 a month, "
+        "which no price haircut goes below."
+    )
+    assert "(its floor)" not in " ".join(lines)
 
 
 def test_promoted_json_export_writes_frozen_baseline(

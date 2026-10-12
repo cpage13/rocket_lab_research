@@ -114,6 +114,8 @@ from communications.constants import (
     SATELLITE_LIFETIME_YEARS_DEFAULT,
     SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
     SATELLITES_PER_LAUNCH_DEFAULT,
+    SATELLITES_PER_LAUNCH_MAX,
+    SATELLITES_PER_LAUNCH_MIN,
     SATURATION_CURVE_PATH_DEFAULT,
     SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT,
     SPECTRUM_MHZ_DEFAULT,
@@ -195,13 +197,15 @@ class SatelliteDials(BaseModel):
 
     satellites_per_launch: int = Field(
         default=SATELLITES_PER_LAUNCH_DEFAULT,
-        ge=1,
-        le=16,
+        ge=SATELLITES_PER_LAUNCH_MIN,
+        le=SATELLITES_PER_LAUNCH_MAX,
         description=(
-            "Satellites per Neutron launch, a DIRECT input scalar (default 12, the "
-            "cellular family's; bounds 1 to 16). The Iridium scenario sets 16, on the "
-            "bound: the validated Flatellite stack with the Neutron block upgrade assumed "
-            "from the first launch, for the stack kept in the fairing's cylinder at "
+            "Satellites per Neutron launch, a DIRECT input scalar (default "
+            f"{SATELLITES_PER_LAUNCH_DEFAULT}, the cellular family's; bounds "
+            f"{SATELLITES_PER_LAUNCH_MIN} to {SATELLITES_PER_LAUNCH_MAX}, the upper bound the "
+            "validated stack with the block upgrade, COMM-713). The Iridium scenario sets 16, "
+            "on the bound: the validated Flatellite stack with the Neutron block upgrade "
+            "assumed from the first launch, for the stack kept in the fairing's cylinder at "
             "calculation C's pitch on a rod-held base (COMM-713); 15 is the mass-bound "
             "count today without the upgrade (COMM-712). The older render-read ~16 is "
             "COMM-258 / COMM-260; 12 loads about 9,600 kg of the ~13,000 kg LEO envelope."
@@ -642,8 +646,10 @@ class IridiumDials(BaseModel):
             f"{APERTURE_REFERENCE_M2:g} m^2 reference panel and applied linearly: people, "
             "useful beams, capacity and maximum use scale with this over the reference (the "
             "panel factor), while the saturation numbers, the ocean factor and satellites per "
-            "launch do not move. The linear rule is conservative only above the reference "
-            "panel; below it the curve's stated limits apply. Above "
+            "launch do not move. What the linear rule gives against the panel computed "
+            "outright, measured, is stated with the run's assumptions (below the reference "
+            "panel every class carries at least what the rule gives; above it the rule gives "
+            "more useful beams than the panel would). Above "
             f"{APERTURE_VALIDATED_STACK_LIMIT_M2:g} m^2, the largest flat panel the validated "
             "stack holds, the assumptions carry the stack caveat, deliberately NOT a bound, "
             "so a larger panel stays computable. INVESTOR-DIRECTED. Configurable."

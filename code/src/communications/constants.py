@@ -181,6 +181,27 @@ default; the Iridium scenario sets 16 on the bound, the validated Flatellite sta
 Neutron block upgrade assumed (COMM-713; 15 without it, COMM-712), which the
 ``satellites_per_launch`` field's description states."""
 
+SATELLITES_PER_LAUNCH_BLOCK_UPGRADE: Final[int] = 16
+"""DERIVED (COMM-713). The validated Flatellite count per Neutron launch with the Neutron block
+upgrade assumed (an assumed +15 to +30 percent lift, the envelope unchanged): the stack kept in
+the fairing's cylinder at calculation C's pitch on a rod-held base, where the fairing binds before
+the extra lift is used. 17 to 19 fit only with the stack rising into the nose, which the model
+does not take. The Iridium scenario's value, from the first launch."""
+
+SATELLITES_PER_LAUNCH_NO_UPGRADE: Final[int] = 15
+"""DERIVED (COMM-712). The validated Flatellite count per Neutron launch today, without the block
+upgrade: mass-bound (range 11 to 20). The no-upgrade bracket's value."""
+
+SATELLITES_PER_LAUNCH_MIN: Final[int] = 1
+"""The fewest satellites per launch a config accepts: a launch carries at least one. A
+structural bound, not a tunable."""
+
+SATELLITES_PER_LAUNCH_MAX: Final[int] = SATELLITES_PER_LAUNCH_BLOCK_UPGRADE
+"""DERIVED (COMM-713). The most satellites per launch a config accepts: the validated count with
+the block upgrade, :data:`SATELLITES_PER_LAUNCH_BLOCK_UPGRADE`, the stack kept in the fairing's
+cylinder. A larger count needs the stack to rise into the nose (17 to 19, COMM-713) or a lighter,
+thinner satellite, neither of which the model takes, so the bound refuses it."""
+
 SATELLITE_LIFETIME_YEARS_DEFAULT: Final[int] = 5
 """ESTIMATE (COMM-088, the Starlink ~5-year depreciation and replacement
 treadmill; the ~$200 to 260/sub/yr split that lineage feeds is COMM-091. The
@@ -189,6 +210,13 @@ are offset from the global index; corrected 2026-07-09). Satellite operating
 life, the cohort cliff: after this many years a cohort retires and contributes
 zero coverage. A design/depreciation assumption (the Starlink replacement-capex
 anchor), not a certified field life."""
+
+SATELLITE_LIFETIME_YEARS_MAX: Final[int] = 20
+"""The longest satellite life a config accepts, years: a sanity bound on the cohort cliff, not
+a sourced life. It sits above the longest design life the research records for an L-band
+satellite (Iridium NEXT's 12.5 years, COMM-642) and at four times the 5-year default (COMM-088).
+A life near it gives a steady state (the final year's comms launches x satellites per launch x
+the life) that can pass the saturation curve's last row, which the Iridium run refuses."""
 
 ORBIT_ALTITUDE_KM_SCENARIO: Final[float] = 450.0
 """SCENARIO (Part 7 physics loop, 2026-07-10). The published fleet altitude, km.
@@ -463,11 +491,11 @@ saturation curve's computation basis: the corpus per-satellite capacity chain (C
 :data:`REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE`) is calibrated AT this panel, and the curve is
 computed at it (``SaturationInputs.shell.reference_aperture_m2``). The Iridium model scales
 the curve and the satellite's peak linearly by the scenario's ``aperture_m2`` over this,
-the panel factor (0.616 at the default :data:`APERTURE_M2_DEFAULT`). The linear rule is
-conservative only above this panel, where it ignores the per-link SNR lift a larger panel
-also gives; below it the curve's stated limits apply (the directional classes carry more
-than the rule gives, the rule is exact in beams for the phone class, and each beam's rate
-is held at its value here)."""
+the panel factor (0.616 at the default :data:`APERTURE_M2_DEFAULT`). What the linear rule
+gives against a curve computed at the panel itself, measured, is
+:data:`PANEL_RULE_LIMITS_NOTE`: below this panel every class carries at least what the rule
+gives (the mounted terminal exactly), above it the rule gives more useful beams than the panel
+would, and each beam's rate is held at its value here."""
 
 APERTURE_M2_DEFAULT: Final[float] = 15.4
 """DERIVED (COMM-711; the investor's approved default, 2026-10-03). The Iridium model's
@@ -476,6 +504,33 @@ panel, m^2: the validated Flatellite body, a chamfered near-square octagon about
 validation D, 15.42 m^2). An upper bound: the body's corners touch the envelope (14.0 to
 15.4 m^2 with clearance). Applied linearly on the curve, a panel factor of 15.4 / 25 =
 0.616."""
+
+PANEL_RULE_LIMITS_NOTE: Final[str] = (
+    "Below the reference panel every class carries at least what the rule gives, because a "
+    "cell's people cap does not shrink with the panel: computed at 15.4 m^2 instead (one "
+    "snapshot of the shipped grid, 340 to 40,000 satellites), the small terminal carries up to "
+    "about 1.8 percent more capacity and people (2.0 percent more useful beams), the phone "
+    "class up to about 1.1 percent more, and the mounted terminal exactly what the rule gives; "
+    "each class's maximum use is up to about 4.6 percent above the rule's. Above the reference "
+    "panel the people caps do not grow with the panel, so the rule gives more useful beams than "
+    "the panel would (at 40 m^2 up to about 3 percent for the small terminal, 340 to 10,000 "
+    "satellites), and it ignores the per-link SNR lift a larger panel also gives. Each beam's "
+    "rate is held at its reference-panel value: the link effect of another panel is not "
+    "modeled."
+)
+"""DERIVED (measured 2026-10-12 on the saturation module as built). What the linear panel rule
+(the curve at :data:`APERTURE_REFERENCE_M2` times the panel factor, ADR 005) gives against the
+curve's inputs computed at the panel itself: the curve's own parameters with the shell's
+reference panel set to the panel (which moves the beams per satellite, the beam and its
+footprints together), one snapshot (the draw's first time) on the shipped grid, the useful
+beams and capacity over the panel factor times their reference-panel values, and each class's
+maximum use the same way. At 15.4 m^2, from 340 to 40,000 satellites: the phone class 0.02 to
+1.14 percent above the rule, rising with the fleet; the small terminal 0.09 to 2.01 percent in
+useful beams and 0.08 to 1.84 percent in capacity; the mounted terminal at the rule to float
+rounding; maximum use 4.56 percent (small terminal), 0.16 (mounted terminal) and 1.27 (phone
+class) above. At 40 m^2, from 340 to 10,000 satellites: the small terminal 0.30 to 2.99
+percent below the rule in useful beams, the phone class 0.16 to 2.37 below, the mounted terminal
+at most 0.013 below. Stated with the run's assumptions, after the panel line."""
 
 APERTURE_VALIDATED_STACK_LIMIT_M2: Final[float] = 15.4
 """DERIVED (COMM-711, COMM-713). The largest flat panel the validated 16-satellite
@@ -584,11 +639,17 @@ mounted terminal's monthly price, dollars: $50, near Iridium's reported voice an
 and well under Certus $259 for a 0.7 Mbps-class service (COMM-618), held flat in every
 year."""
 
-PHONE_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = 15.0
+PHONE_CLASS_PRICE_FLOOR_USD_MONTH: Final[float] = 15.0
 """INVESTOR_SET (the investor, 2026-10-03; corrected 2026-10-04 from an unapproved $5). The
-phone class's monthly price, dollars: Sheet A's standard $15 and the investor's floor, held
-flat; no price haircut takes it lower. Its own constant, since Sheet A's standard price went
-to the small terminal, whose own price is now the investor's $10 (2026-10-07)."""
+phone class's floor, dollars a month: the lowest price the phone class is ever stated at, which
+no price haircut goes below. A stated value, not a config bound: the configured price is the
+``arpu.phone_class_price_usd_month`` setting, and the stated assumptions name both."""
+
+PHONE_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = PHONE_CLASS_PRICE_FLOOR_USD_MONTH
+"""INVESTOR_SET (the investor, 2026-10-03; corrected 2026-10-04 from an unapproved $5). The
+phone class's monthly price, dollars: set at its floor, :data:`PHONE_CLASS_PRICE_FLOOR_USD_MONTH`
+(Sheet A's standard $15), held flat. Its own constant, since Sheet A's standard price went to
+the small terminal, whose own price is now the investor's $10 (2026-10-07)."""
 
 MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT: Final[float] = 4.0
 """INVESTOR_SET (the investor's trial price, 2026-10-04). Minimal-packet IoT's monthly price
@@ -618,10 +679,22 @@ tunable."""
 
 MINIMAL_PACKET_IOT_DEVICES: Final[int] = 51_670_320
 """INVESTOR_SET (the investor, 2026-10-04; held as a stated assumption, ADR 007).
-Minimal-packet IoT's fixed device count, the capable count: today's model's Sheet A IoT
-count at the 340-satellite coverage floor, not Iridium's own IoT book of 1,998,000 devices
-(COMM-617). Nothing physical caps the count short of billions of devices (COMM-659), so any
-count is a stated assumption."""
+Minimal-packet IoT's fixed device count, the capable count: the iridium-v5 model's Sheet A IoT
+count at the :data:`MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES`-satellite coverage floor, not
+Iridium's own IoT book (:data:`IRIDIUM_IOT_BOOK_DEVICES`, COMM-617). Nothing physical caps the
+count short of billions of devices (COMM-659), so any count is a stated assumption."""
+
+MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES: Final[int] = 340
+"""INVESTOR_SET (2026-10-04, ADR 007). The coverage floor, satellites, at which the iridium-v5
+model's Sheet A IoT count was read for :data:`MINIMAL_PACKET_IOT_DEVICES`: the count's stated
+basis, its own constant (not :data:`SATELLITES_FOR_FULL_COVERAGE_DEFAULT`, the floor the
+Iridium path pins), so a later change to the pinned floor never rewrites where the count came
+from."""
+
+IRIDIUM_IOT_BOOK_DEVICES: Final[int] = 1_998_000
+"""SOURCED_FACT (COMM-617, certified: Iridium's billable IoT subscribers at year-end 2025).
+Iridium's own IoT book, devices: named beside the model's minimal-packet IoT count, which is a
+stated assumption and not this book."""
 
 DATA_IOT_DEVICES: Final[int] = 25_835_160
 """INVESTOR_SET (the investor, 2026-10-04: "somewhere in proportion"; held as a stated
