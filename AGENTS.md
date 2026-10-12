@@ -45,11 +45,13 @@ everything a knob, it's just absolutely overwhelming."
 ## Goals
 
 - **Communications, saturation.** Built: the Iridium model derives in code how
-  many satellites the owned spectrum can serve per device class (each class's
-  saturation number, a knee on the promoted saturation curve), in place of the
-  inherited cap, and sells every seat of every class side by side on the fleet
-  the all-in launch cadence builds (ADRs 005 to 010). Open until the public
-  documents tell the built model and the work is accepted.
+  many satellites the owned spectrum can serve for each of its people classes
+  (the small terminal, the mounted terminal and the phone class: the class's
+  saturation number where its rows reach one, a knee on the promoted
+  saturation curve), in place of the inherited cap, and sells every seat of
+  the three side by side on the fleet the all-in launch cadence builds (ADRs
+  005 to 010). Open until the public documents tell the built model and the
+  work is accepted.
 - **Communications, IoT and the product case.** IoT as capacity in the
   engineering model, which carries no IoT count, price or revenue (ADR 011),
   and the product case as its own model on the engineering artifact, selling

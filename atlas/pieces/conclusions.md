@@ -85,9 +85,13 @@ Quality bar; these add the claim boundaries:
   never present the old large-capacity language as current. Write "SSO" or
   "sun-synchronous", never "synchronous orbit".
 - Communications: keep the three lanes exact; subscribers are people and
-  IoT are devices, never summed; frequency and bandwidth stay distinct; the
-  engineering and product cases stand side by side, never added (ADR 012),
-  and IoT and government are never added (ADR 011).
+  IoT are devices, never summed; frequency and bandwidth stay distinct;
+  each people class's column is the whole fleet sold to that class alone,
+  so the columns are never summed, and a business view weights them by
+  shares of the fleet's beams the investor names, each margin re-derived,
+  never averaged (ADR 006); the engineering and product cases stand side by
+  side, never added (ADR 012), and IoT and government are never added (ADR
+  011).
 
 **Terms.** feasibility study, margin, device class, the three lanes,
 investor-set (see `CONTEXT.md`).

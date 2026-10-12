@@ -11,16 +11,19 @@ families on one shared fleet-and-cost loop: each family hands the loop its
 deployment rule (how many satellites a year adds, and how many of them
 replace retiring cohorts) and builds its own record beside the shared one.
 The Iridium model, the published family in the MSS lane, flies every comms
-launch the cadence share allows, with no target and no cap; reads every
-device class's people from the promoted saturation curve (the useful
-co-channel beams a shell keeps lit over the places people live, computed
-once at the 25 m^2 reference panel with the band in full-time use) times the
-downlink share and the panel factor, over each class's busy-hour load per
-person; and sells every seat of each class at its flat price, side by side
-in one run, each class's own margin against the year's whole-fleet
-annualized cost. Beside the cadence it reports each class's saturation
-number, its spectrum bound, never a cap. The saturation module computes the
-curve; the cellular family runs the treadmill.
+launch the cadence share allows, with no target and no cap; reads the people
+of its three people classes (the small terminal, the mounted terminal and
+the phone class) from the promoted saturation curve (the useful co-channel
+beams a shell keeps lit over the places people live, computed once at the
+25 m^2 reference panel with the band in full-time use) times the downlink
+share and the panel factor, over each class's busy-hour load per person;
+and sells every seat of each of the three at its flat price, side by side in
+one run. Each class's column is the whole fleet sold to that class alone,
+with its own margin against the year's whole-fleet annualized cost, so the
+columns are never summed (ADR 006; the map's invariants). Beside the
+cadence it reports each class's saturation number where its rows reach one,
+its spectrum bound, never a cap. The saturation module computes the curve;
+the cellular family runs the treadmill.
 
 **Serves.** Objective 1 (the all-in question for communications) and
 objective 2 (`COMM-*` claims behind the defaults; the artifact states its
@@ -78,8 +81,9 @@ IoT books, treadmill, full sell-through, all-in deployment, equality
 tripwire, engineering case, product case (see `CONTEXT.md`).
 
 **State.**
-- The published artifact carries every class side by side (the small
-  terminal, the mounted terminal, the phone class): each class's price,
+- The published artifact carries the three people classes side by side
+  (the small terminal, the mounted terminal, the phone class), each column
+  the whole fleet sold to that class alone (Role): each class's price,
   usage and physics, its markers from the curve and the limit that binds at
   the horizon's end, and per year the shared fleet and cost beside each
   class's people, revenue and own margin; then the readings at four fleets
@@ -97,8 +101,8 @@ tripwire, engineering case, product case (see `CONTEXT.md`).
   spectral efficiency are named constants, not settings, and the curve is
   computed at them (the assumptions page's Iridium checklist).
 - IoT is still ADR 007's two IoT lines (`fixed_books`), each its own revenue
-  line outside every class's margin, until ADR 011's code replaces them with
-  IoT's capacity. Government is left out of revenue.
+  line outside every people class's margin, until ADR 011's code replaces
+  them with IoT's capacity. Government is left out of revenue.
 - One beam's data pool caps one person's rate; beam reuse multiplies the
   people served, not that rate.
 - Operations cost is an explicit zero, stated in the artifact.

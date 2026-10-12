@@ -92,10 +92,13 @@ Iridium artifact carries no worked queries; read it by block, for example
   `data_center/models/ground/default.json`; its worked query
   `ground_space_ratio` reads the inverse, ground over orbit.
 - Communications: `communications/models/iridium/default.json` is long, so
-  read it by block: each class's markers and binding limit (`classes`),
-  each year's fleet, cost and every class's people, revenue and own margin
-  (`years`), the readings (`saturation.readings`) and the stated
-  assumptions (`assumptions`).
+  read it by block: each people class's markers and binding limit
+  (`classes`); each year's fleet and cost, each class's people, revenue and
+  own margin, and the two IoT lines (`years`); the readings
+  (`saturation.readings`); the stated assumptions (`assumptions`). Each
+  class's column is the whole fleet sold to that class alone, so the
+  columns are never summed into a fleet revenue (ADR 006; the map's
+  invariants).
 
 **Terms.** promoted JSON, provenance cell, default scenario, saturation
 curve (see `CONTEXT.md`).

@@ -177,7 +177,7 @@ a communications family's steps, as they stood before the saturation work.
   `comparison`, `meta`), built from the space output in the same promotion.
 - `communications/models/iridium/saturation_curve.json`: the saturation
   curve (`schema_version`, `version_stamp`, `parameters`, `input_hash`,
-  `provenance`, `classes`, `bands`, `limits`), every class's rows and
+  `provenance`, `classes`, `bands`, `limits`), each people class's rows and
   markers and the phone class's band points, computed by the saturation
   command and read back by the Iridium command.
 - `communications/models/iridium/default.json`: the Iridium artifact
@@ -245,36 +245,46 @@ curve's or the current Iridium schema (the promotion page, Open).
   finite. The regeneration test guards the
   Iridium artifact and the drift tests the curve (the promotion page;
   `test_cli_promote.py`, `test_regenerated_default_artifact_matches_committed`).
-- A device class's saturation number is a spectrum bound reported beside
-  the launch cadence, never a build target or a cap on the build, and a
-  fleet past a class's last computed row is refused, never extrapolated or
-  clamped (`docs/adr/005-iridium-spectrum-bound-from-saturation.md`). Guards:
+- A people class's saturation number, where its rows reach one, is a
+  spectrum bound reported beside the launch cadence, never a build target
+  or a cap on the build, and a fleet past a class's last computed row is
+  refused, never extrapolated or clamped
+  (`docs/adr/005-iridium-spectrum-bound-from-saturation.md`). Guards:
   `test_a_saturation_number_is_reported_beside_the_cadence_never_a_cap`,
   `test_a_fleet_past_a_class_last_row_fails_naming_the_year_the_class_and_the_last_row`.
 - A run reads only a curve computed for its own inputs: the identity check
   refuses any other, naming the first field that differs
   (`test_the_iridium_entry_runs_only_on_a_curve_computed_for_its_inputs`,
   `test_the_identity_check_names_the_first_field_that_differs`).
-- Every class's people come from the curve in one run, times the downlink
-  share and the panel factor; every seat is sold at each class's flat price
-  on the fleet the cadence builds, with no target and no cap; nothing is
-  sold below the coverage floor; each class's own margin is its own revenue
-  against the year's whole-fleet annualized cost
-  (`docs/adr/006-people-from-the-curve-every-seat-sold.md`,
+- The people of the small terminal, the mounted terminal and the phone
+  class come from the curve in one run, times the downlink share and the
+  panel factor; every seat is sold at each class's flat price on the fleet
+  the cadence builds, with no target and no cap; nothing is sold below the
+  coverage floor. Each class's column is the whole fleet sold to that class
+  alone, so the columns are never summed: a business view weights them by
+  shares of the fleet's beams the investor names, in the conclusions. Each
+  class's own margin is its own revenue against the year's whole-fleet
+  annualized cost, re-derived after a haircut or a mix, never divided or
+  averaged (`docs/adr/006-people-from-the-curve-every-seat-sold.md`,
   `docs/adr/008-downlink-time-share-scales-people.md`). Guards:
+  `test_the_headline_every_class_alone_side_by_side`,
   `test_every_class_revenue_rises_every_year_from_the_floor_year`,
   `test_below_the_floor_nothing_is_sold_and_the_cost_accrues`,
   `test_halving_the_downlink_share_halves_people_capacity_and_the_pool_only`,
-  `test_the_panel_setting_scales_people_beams_capacity_and_maximum_use_linearly`.
-- Every list of classes runs small terminal, mounted terminal, phone class,
-  the order of `DeviceClass` (`test_every_class_in_one_run_in_class_order`).
+  `test_the_panel_setting_scales_people_beams_capacity_and_maximum_use_linearly`;
+  no test reads the conclusions, so the columns' never-summed rule is held
+  by review.
+- Every list of the Iridium model's classes runs small terminal, mounted
+  terminal, phone class, the order of `DeviceClass`
+  (`test_every_class_in_one_run_in_class_order`); the charter's
+  Presentation line gives each case's order.
 - Demand is every resident of an inhabited cell of the shipped grid, which
   is refused unless its digest matches
   (`docs/adr/009-demand-every-resident-on-a-shipped-grid.md`;
   `test_load_population_grid_refuses_a_file_it_cannot_trust`).
 - IoT: ADR 011 (`docs/adr/011-iot-is-capacity-in-the-engineering-model.md`)
   supersedes ADR 007 and is not yet built, so the Iridium artifact still
-  carries ADR 007's two IoT lines, each outside every class's margin
+  carries ADR 007's two IoT lines, each outside every people class's margin
   (`test_the_two_iot_lines_are_fixed_books_frozen_exactly`,
   `test_each_class_revenue_is_its_people_times_its_price_and_the_books_stay_out`);
   government stays out of revenue under both. The product case
