@@ -51,6 +51,7 @@ from communications.saturation_curve import (
     ShellInputs,
     SweepInputs,
     TrimAtFloor,
+    beams_per_satellite,
     curve_input_hash,
     load_saturation_curve,
     saturation_inputs_for,
@@ -177,7 +178,7 @@ def build_synthetic_curve(dials: IridiumDials) -> SaturationCurve:
     """
     parameters = saturation_inputs_for(dials)
     sweep = parameters.sweep
-    central_beams = sat._beams_per_satellite(parameters.shell)
+    central_beams = beams_per_satellite(parameters.shell)
     sectored = {
         entry.device_class: bool(entry.sector_wedges_per_ring) for entry in parameters.classes
     }
@@ -214,7 +215,7 @@ def build_synthetic_curve(dials: IridiumDials) -> SaturationCurve:
     for point in parameters.bands:
         rows = _synthetic_rows(
             sweep.fleets,
-            central_beams if point.beams_per_satellite is None else point.beams_per_satellite,
+            beams_per_satellite(parameters.shell, point),
             gbps_per_beam[DeviceClass.PHONE_CLASS],
             sectored=sectored[DeviceClass.PHONE_CLASS],
             trim_floors_dbi=None,
@@ -230,7 +231,7 @@ def build_synthetic_curve(dials: IridiumDials) -> SaturationCurve:
         provenance=CurveProvenance(
             grid_file_name=Path(parameters.demand.grid_path).name,
             grid_sha256=parameters.demand.grid_sha256,
-            citations=(),
+            citations=("none (synthetic): a test curve built from no grid",),
             licence="none (synthetic)",
             method=(
                 "synthetic, built by the test suite, never computed: L = N x B at every row "

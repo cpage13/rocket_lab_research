@@ -82,8 +82,8 @@ from common.file_io import (
     render_artifact_json,
     write_files_with_rollback,
 )
+from communications import iridium, saturation_curve
 from communications import saturation as sat
-from communications import saturation_curve
 from communications.config import CommsConfig, IridiumDials, load_comms_config
 from communications.constants import (
     CLASS_SE_CENTRAL,
@@ -2214,16 +2214,22 @@ def test_each_class_off_peak_share_is_at_most_its_busy_hour_share() -> None:
         assert 0 < usage.concurrency_offpeak <= usage.concurrency_peak <= 1
 
 
+ROW_BEAMS_PER_SATELLITE = 150.0
+"""B at the default inputs (1,000 x the 0.15 calibration at the 25 m^2 reference panel), at
+which a hand-built row's ocean factor is U = L / (N x B), as the computation writes it."""
+
+
 def _row(fleet: int, useful: float, capacity: float) -> CurveRow:
     """A bare curve row for the checks' refusals, requested at its own realized fleet (each
-    fleet used here realizes as itself when requested)."""
+    fleet used here realizes as itself when requested), its ceiling and supply equal to L and its
+    ocean factor L / (N x B) at the default B."""
     return CurveRow(
         fleet=fleet,
         requested_fleet=fleet,
         useful_beams=useful,
         useful_beams_spread=0.0,
         capacity_gbps=capacity,
-        ocean_factor=0.1,
+        ocean_factor=useful / (fleet * ROW_BEAMS_PER_SATELLITE),
         ceiling_beams=useful,
         supply_beams=useful,
         directional=None,
@@ -2870,11 +2876,25 @@ NO_STACK = DirectionalDiagnostics(
 """A directional row's diagnostics when it keeps no stacked beam."""
 
 
+def band_rows(point: BandPoint) -> tuple[CurveRow, ...]:
+    """The bare rows for a band point: its ocean factor at the point's own B when it sets one
+    (the 48-beam point), else the bare rows as they are."""
+    if point.beams_per_satellite is None:
+        return BARE_ROWS
+    return tuple(
+        row.model_copy(
+            update={"ocean_factor": row.useful_beams / (row.fleet * point.beams_per_satellite)}
+        )
+        for row in BARE_ROWS
+    )
+
+
 def complete_bare_curve() -> SaturationCurve:
     """A complete curve on hand-built rows: the default inputs but for the sweep (fleets 342
-    and 992, no mounted extension), every class and every band point on the two bare rows, the
-    directional classes' rows with their diagnostics, the phone class's rows with a trim at the
-    default floors, one stated limit and one check passed."""
+    and 992, no mounted extension), every class and every band point on the two bare rows (the
+    48-beam point's ocean factor at its own B), the directional classes' rows with their
+    diagnostics, the phone class's rows with a trim at the default floors, one citation, one
+    stated limit and one check passed."""
     inputs = SaturationInputs(
         sweep=SweepInputs(fleets=COMPLETE_FLEETS, mounted_terminal_extension=())
     )
@@ -2891,14 +2911,17 @@ def complete_bare_curve() -> SaturationCurve:
             for device_class in DeviceClass
         ),
         tuple(
-            BandCurve(point=point, rows=BARE_ROWS, markers=bare_markers()) for point in inputs.bands
+            BandCurve(point=point, rows=band_rows(point), markers=bare_markers())
+            for point in inputs.bands
         ),
     )
     return curve.model_copy(
         update={
             "parameters": inputs,
             "input_hash": curve_input_hash(inputs),
-            "provenance": curve.provenance.model_copy(update={"checks_passed": ("a check",)}),
+            "provenance": curve.provenance.model_copy(
+                update={"checks_passed": ("a check",), "citations": ("a citation",)}
+            ),
             "limits": ("a stated limit",),
         }
     )
@@ -3294,6 +3317,31 @@ def _phone_trim_json() -> list[dict[str, float]]:
             lambda d: d["classes"][2]["markers"].update(maximum_use_beams=15.0),
             "phone_class row at 992 satellites has a ceiling of 20.0 beams, above its maximum use",
         ),
+        (
+            lambda d: d["classes"][2]["rows"][1].update(useful_beams=40.0),
+            r"phone_class row at 992 satellites has useful beams of 40.0, above min\(ceiling 20.0, "
+            r"supply 20.0\)",
+        ),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(ocean_factor=0.9),
+            "phone_class row at 342 satellites has an ocean factor of 0.9, not its useful beams "
+            "over its fleet's beams",
+        ),
+        (
+            lambda d: d["bands"][5]["rows"][0].update(ocean_factor=10.0 / (342 * 150.0)),
+            r"band point beams_48 row at 342 satellites has an ocean factor of .*, not its useful "
+            r"beams over its fleet's beams, .* \(U = L / \(N x B\), B 48\)",
+        ),
+        (
+            lambda d: d["provenance"].update(citations=[]),
+            "the curve's provenance names no citation, or a blank one",
+        ),
+        (
+            lambda d: d["provenance"].update(citations=["a citation", " "]),
+            "the curve's provenance names no citation, or a blank one",
+        ),
+        (lambda d: d["provenance"].update(licence=" "), "the curve's provenance states no licence"),
+        (lambda d: d["provenance"].update(method=""), "the curve's provenance states no method"),
     ],
     ids=[
         "an altered input hash",
@@ -3328,6 +3376,13 @@ def _phone_trim_json() -> list[dict[str, float]]:
         "a 0.25 crossing past the last midpoint",
         "a 90 percent fleet past the last row",
         "maximum use under a row's ceiling",
+        "useful beams above min(ceiling, supply)",
+        "an ocean factor not L / (N x B)",
+        "the 48-beam point's ocean factor at the central B",
+        "no citation",
+        "a blank citation",
+        "a blank licence",
+        "no method",
     ],
 )
 def test_the_loader_refuses_a_curve_the_engine_must_not_read(
@@ -3336,9 +3391,11 @@ def test_the_loader_refuses_a_curve_the_engine_must_not_read(
     """Objective: ``load_saturation_curve`` refuses a promoted curve whose parameters or hash
     were altered, one of another schema, one the contract refuses (a value of another JSON type
     than the contract writes, a NaN or an infinity, a number out of range), an incomplete one
-    (diagnostics or a trim misplaced, no limits or checks, a grid not the parameters') and one
-    whose markers its rows cannot give, each with a SaturationCurveError (a ValueError, so both
-    commands catch it) naming the file.
+    (diagnostics or a trim misplaced, no limits or checks, no citation, licence or method, a grid
+    not the parameters'), one whose rows break what every computed row holds (useful beams above
+    min(ceiling, supply), so possibly above maximum use; an ocean factor not L / (N x B) at the
+    curve's B, the 48-beam point's own) and one whose markers its rows cannot give, each with a
+    SaturationCurveError (a ValueError, so both commands catch it) naming the file.
 
     Sample: the complete bare curve's JSON with one change each.
 
@@ -3525,6 +3582,42 @@ def test_a_code_defect_in_validation_is_never_reported_as_a_data_problem(
         load_saturation_curve(path)
 
 
+def test_fleets_too_large_for_their_midpoint_are_the_curves_error_naming_the_file(
+    tmp_path: Path,
+) -> None:
+    """Objective: the loader's one rule holds for every number out of range: two neighbouring
+    rows' fleets whose product (the geometric midpoint's) a float cannot hold are the curve's error
+    naming the file, never a raw OverflowError, though the contract admits each fleet (each one's
+    shell builds).
+
+    Sample: the complete bare curve's JSON with the sweep's requests moved to 10^160 and 4 x
+    10^160, every row's request and realized fleet moved with them, each row's ocean factor L / (N
+    x B) at its new fleet (B 150, or 48 for the 48-beam point), the input hash recomputed.
+
+    Expected outcome: SaturationCurveError naming the file and a number out of range, the two
+    neighbouring fleets' product.
+    """
+    requests = (10**160, 4 * 10**160)
+    realized = [math.prod(walker_shape(request)) for request in requests]
+    data = json.loads(render_artifact_json(complete_bare_curve()))
+    data["parameters"]["sweep"]["fleets"] = list(requests)
+    data["input_hash"] = curve_input_hash(SaturationInputs.model_validate(data["parameters"]))
+    for entry in (*data["classes"], *data["bands"]):
+        beams = 48.0 if entry.get("point", {}).get("beams_per_satellite") == 48 else 150.0
+        for row, request, fleet in zip(entry["rows"], requests, realized, strict=True):
+            row.update(
+                requested_fleet=request,
+                fleet=fleet,
+                ocean_factor=row["useful_beams"] / (fleet * beams),
+            )
+    path = write_curve_json(tmp_path / "huge_fleets.json", data)
+    with pytest.raises(
+        SaturationCurveError, match="a number out of range: two neighbouring rows' fleets"
+    ) as refused:
+        load_saturation_curve(path)
+    assert str(refused.value).startswith(f"{path}: not a saturation curve")
+
+
 @pytest.mark.parametrize(
     ("content", "message"),
     [
@@ -3553,20 +3646,38 @@ def test_the_loader_refuses_a_file_it_cannot_read_as_a_curve(
     assert refused.value.path == path
 
 
+@pytest.mark.parametrize(
+    ("fleets", "extension", "named"),
+    [
+        ((992, 993), (), r"\[992, 993\] realize as \[992, 992\]"),
+        ((1_000, 3_969), (3_970,), r"\[1000, 3969, 3970\] realize as \[992, 3969, 3969\]"),
+    ],
+    ids=["two of the sweep's fleets", "the mounted extension's first and the sweep's last"],
+)
 def test_compute_saturation_refuses_requests_that_realize_one_row(
-    uniform_band: PopulationGrid, synthetic_saturation_inputs: SaturationInputsBuilder
+    uniform_band: PopulationGrid,
+    synthetic_saturation_inputs: SaturationInputsBuilder,
+    fleets: tuple[int, ...],
+    extension: tuple[int, ...],
+    named: str,
 ) -> None:
     """Objective: requests that strictly increase but realize the same P x S are refused
-    before any computation, since each row is keyed by its realized fleet.
+    before any computation, since each row is keyed by its realized fleet; one check covers the
+    sweep's fleets and the mounted terminal's extension after them.
 
-    Sample: the uniform band's inputs at the requests 992 and 993, both 31 x 32 = 992.
+    Sample: the uniform band's inputs at the requests 992 and 993, both 31 x 32 = 992; then at
+    1,000 and 3,969 with the mounted extension 3,970, which realizes as 63 x 63 = 3,969, the
+    sweep's last row.
 
-    Expected outcome: SaturationInvariantError naming both, the realized fleets not strictly
-    increasing.
+    Expected outcome: SaturationInvariantError naming the requests and the realized fleets, which
+    do not strictly increase.
     """
-    inputs = synthetic_saturation_inputs(uniform_band, fleets=(992, 993))
-    with pytest.raises(SaturationInvariantError, match="do not strictly increase"):
-        compute_saturation(inputs, uniform_band, version_stamp=STAMP)
+    inputs = synthetic_saturation_inputs(uniform_band, fleets=fleets)
+    sweep = inputs.sweep.model_copy(update={"mounted_terminal_extension": extension})
+    with pytest.raises(SaturationInvariantError, match=named):
+        compute_saturation(
+            inputs.model_copy(update={"sweep": sweep}), uniform_band, version_stamp=STAMP
+        )
 
 
 def test_compute_saturation_refuses_a_grid_that_is_not_global(
@@ -5067,6 +5178,54 @@ def test_a_reading_the_curve_cannot_give_is_refused_with_a_typed_error() -> None
         read_fleet(
             power_law_curve(maximum_use=0.0), PHONE, 342, downlink_share=1.0, panel_factor=1.0
         )
+
+
+@pytest.mark.parametrize(
+    ("low_beams", "high_beams", "fleet"),
+    [(5e-324, 1e300, 582), (1e300, 5e-324, 582), (1.5e308, 1.5e308, 341)],
+    ids=["a ratio past a float's range", "a ratio under a float's range", "below the first row"],
+)
+def test_a_reading_past_a_floats_range_is_refused_with_a_typed_error(
+    low_beams: float, high_beams: float, fleet: int
+) -> None:
+    """Objective: a reading a float cannot hold is the curve's typed error, never an infinity
+    published as a number or a bare arithmetic ValueError, whatever finite values the rows hold.
+
+    Sample: a phone-class curve of two rows, 342 and 992 satellites, its useful beams 5e-324 and
+    1e300 (their ratio past a float's range), then 1e300 and 5e-324 (their ratio under it, 0),
+    each read at 582 between the rows; then 1.5e308 at the first row, read at 341 below it (341 x
+    1.5e308 past a float's range).
+
+    Expected outcome: SaturationCurveError naming the class's useful beams, the fleet and a
+    float's range; at each row the row's own value still reads.
+    """
+    low, high = _row(342, low_beams, 1.0), _row(992, high_beams, 2.0)
+    curve = power_law_curve((low, high))
+    with pytest.raises(
+        SaturationCurveError,
+        match=f"the phone_class curve's useful beams at {fleet} satellites, .* float's range",
+    ):
+        useful_beams_at(curve, PHONE, fleet)
+    assert useful_beams_at(curve, PHONE, 342) == low_beams
+    assert useful_beams_at(curve, PHONE, 992) == high_beams
+
+
+def test_the_readings_and_the_iridium_family_find_a_class_curve_by_one_lookup() -> None:
+    """Objective: one lookup finds a class's central curve, for the readings and for the Iridium
+    family's class blocks, which keeps no copy of its own.
+
+    Sample: the power-law curve (the phone class only); the Iridium module.
+
+    Expected outcome: the contract's ``class_curve_of`` returns the phone class's curve and
+    refuses the small terminal naming it; the Iridium module's lookup is that very function, and
+    it holds no ``_class_curve``.
+    """
+    curve = power_law_curve()
+    assert saturation_curve.class_curve_of(curve, PHONE) is curve.classes[0]
+    with pytest.raises(SaturationCurveError, match="holds no small_terminal_class curve to read"):
+        saturation_curve.class_curve_of(curve, DeviceClass.SMALL_TERMINAL_CLASS)
+    assert iridium.class_curve_of is saturation_curve.class_curve_of
+    assert not hasattr(iridium, "_class_curve")
 
 
 def test_the_synthetic_curve_fixture_matches_its_dials_and_loads_as_promoted(

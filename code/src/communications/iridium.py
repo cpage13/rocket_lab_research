@@ -124,8 +124,8 @@ from communications.saturation_curve import (
     ClassCurve,
     CurveBeyondLastRowError,
     SaturationCurve,
-    SaturationCurveError,
     check_curve_matches,
+    class_curve_of,
     people_at,
     read_fleet,
     saturation_inputs_for,
@@ -1085,18 +1085,6 @@ def _marginal_intervals(
     return tuple(intervals)
 
 
-def _class_curve(curve: SaturationCurve, device_class: DeviceClass) -> ClassCurve:
-    """Return a class's central curve.
-
-    Raises:
-        SaturationCurveError: If the curve holds no curve for the class.
-    """
-    for entry in curve.classes:
-        if entry.device_class is device_class:
-            return entry
-    raise SaturationCurveError(f"the saturation curve holds no {device_class.value} curve to read")
-
-
 def _class_record(
     curve: SaturationCurve,
     device_class: DeviceClass,
@@ -1108,7 +1096,7 @@ def _class_record(
     cost_per_satellite_year_musd: float,
 ) -> ClassRecord:
     """One class's block: its price, usage and physics, its markers, its limit, its intervals."""
-    class_curve = _class_curve(curve, device_class)
+    class_curve = class_curve_of(curve, device_class)
     usage = CLASS_USAGE[device_class]
     spectral_efficiency = CLASS_SE_CENTRAL[device_class]
     downlink_share = dials.saturation.downlink_share

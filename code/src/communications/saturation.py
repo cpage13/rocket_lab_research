@@ -210,7 +210,6 @@ from common.file_io import (
 )
 from communications.config import load_comms_config
 from communications.constants import (
-    APERTURE_REFERENCE_M2,
     GBPS_TO_MBPS,
     GRID_AGGREGATION_SHIPPED,
     PANEL_RULE_LIMITS_NOTE,
@@ -238,6 +237,7 @@ from communications.saturation_curve import (
     SweepInputs,
     TrimAtFloor,
     TrimInputs,
+    beams_per_satellite,
     check_curve_complete,
     curve_input_hash,
     exceeds_bound,
@@ -878,20 +878,6 @@ def _beam_model(shell: ShellInputs) -> _BeamModel:
         max_central_angle_rad=limit_rad,
         central_angle_rad=central_angle,
         footprint_km2=_ELLIPSE_AREA_FACTOR * across_km * along_km,
-    )
-
-
-def _beams_per_satellite(shell: ShellInputs) -> float:
-    """Return B: the calibration in effective reuses (x 1000), scaled to the curve's panel.
-
-    The calibration's 0.15 Gbps per (MHz x bps/Hz) is 150 effective full-band reuses at
-    :data:`~communications.constants.APERTURE_REFERENCE_M2`, linear in the panel's area.
-    """
-    return (
-        GBPS_TO_MBPS
-        * shell.reuse_calibration_gbps_per_mhz_per_se
-        * shell.reference_aperture_m2
-        / APERTURE_REFERENCE_M2
     )
 
 
@@ -1707,10 +1693,14 @@ def _maximum_use(cells: _DemandCells, limits: _AllocationLimits, inclination_deg
 class _ServingRule(StrEnum):
     """Which satellites serve a cell: the reference set of the pairwise admission (rule D3).
 
-    The module allocates at :attr:`AT_SERVING_SHARE`. The other two exist for the mounted
-    terminal's diagnostic (the saturation strategy's reproduction protocol), which reruns the
-    module's allocation with the set at the cell's main satellite only and at any positive
-    share.
+    The module allocates at :attr:`AT_SERVING_SHARE` (:func:`_directional_rules` always sets
+    it, so no curve number depends on the other two). The other two are the mounted terminal's
+    diagnostic (the saturation strategy's reproduction protocol), which reruns the module's own
+    allocation with the set at the cell's main satellite only and at any positive share, so a
+    difference from the design's prototype can be traced to rule D3's serving set rather than a
+    defect. They stay in the module because the serving set is read inside stage 2's band loop
+    (:func:`_stacked_layers`), where no caller can swap it without copying the stage; the seam
+    test of rule D3 runs all three.
     """
 
     AT_SERVING_SHARE = "at_serving_share"
@@ -3320,7 +3310,7 @@ def _class_limits(inputs: SaturationInputs, device_class: DeviceClass) -> _Alloc
     """
     entry = next(entry for entry in inputs.classes if entry.device_class is device_class)
     return _AllocationLimits(
-        beams_per_satellite=_beams_per_satellite(inputs.shell),
+        beams_per_satellite=beams_per_satellite(inputs.shell),
         people_per_beam=_people_per_beam(inputs.spectrum_mhz, entry),
         take_up=inputs.demand.take_up,
         beam=_beam_model(inputs.shell),
@@ -3352,11 +3342,7 @@ def _band_limits(inputs: SaturationInputs, point: BandPoint) -> _AllocationLimit
     beam = _beam_model(inputs.shell.model_copy(update={"beamwidth_factor": point.beamwidth_factor}))
     return replace(
         phone,
-        beams_per_satellite=(
-            _beams_per_satellite(inputs.shell)
-            if point.beams_per_satellite is None
-            else float(point.beams_per_satellite)
-        ),
+        beams_per_satellite=beams_per_satellite(inputs.shell, point),
         beam=replace(beam, footprint_km2=beam.footprint_km2 * point.spacing_area_factor),
     )
 
@@ -3742,7 +3728,6 @@ def compute_saturation(
             f"phone class's central curve, which computes {sweep.snapshots_phone_central}: "
             "sweep.snapshots_trim must not exceed sweep.snapshots_phone_central"
         )
-    _check_realized_fleets(sweep.fleets)
     _check_realized_fleets(sweep.fleets + sweep.mounted_terminal_extension)
     cells = _demand_cells(population, inputs.demand.density_threshold_per_km2)
     plans = _curve_plans(inputs, population, cells)
@@ -3842,7 +3827,7 @@ def _inputs_grid(checkout: SourceCheckout, inputs: SaturationInputs) -> Populati
         PopulationGridError: If the grid is not the one the inputs name.
     """
     return load_population_grid(
-        _anchored(checkout, inputs.demand.grid_path), inputs.demand.grid_sha256
+        checkout.anchored(inputs.demand.grid_path), inputs.demand.grid_sha256
     )
 
 
@@ -3944,12 +3929,6 @@ def _band_row(
 # ===========================================================================
 # The command: compute the curve a scenario implies and promote it
 # ===========================================================================
-
-
-def _anchored(checkout: SourceCheckout, path: str | Path) -> Path:
-    """Return a path anchored at the repository root when it is relative, else as given."""
-    candidate = Path(path)
-    return candidate if candidate.is_absolute() else checkout.repo_dir / candidate
 
 
 def _own_mode(path: Path, destination: Path) -> int | None:
@@ -4070,7 +4049,7 @@ def promote_saturation_curve(
     checkout = locate_source_checkout(__file__)
     config = load_comms_config(Path(scenario_path))
     inputs = saturation_inputs_for(iridium_dials_of(config))
-    out = _anchored(checkout, output_path)
+    out = checkout.anchored(output_path)
     _check_destination(out)
     population = _inputs_grid(checkout, inputs)
     stamp = version_stamp if version_stamp is not None else date.today().isoformat()

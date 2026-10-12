@@ -17,11 +17,17 @@ family can read a curve without importing numpy:
   spectrum), and :func:`curve_input_hash`, the SHA-256 of the inputs' canonical JSON;
 * :func:`walker_shape`, the shell's pinned planes and satellites per plane for a requested
   fleet, which the module builds every shell with and the contract checks every row by;
+* :func:`beams_per_satellite`, B for a class's curve or a band point's, which the module sizes
+  every curve's beams by and the completeness check reads every row's ocean factor by;
+* :func:`class_curve_of`, the one lookup of a class's central curve, for the readings and the
+  Iridium family;
 * :func:`exceeds_bound` at :data:`BOUNDS_RELATIVE_TOLERANCE`, the one test of the curve's
   bounds, which the computation and the completeness check share;
 * :func:`check_curve_complete`, what a promoted curve must carry (every row's useful beams,
-  capacity and ocean factor and every maximum use above 0 among it, and necessary conditions
-  on the markers its rows can give), and :func:`load_saturation_curve`, which reads a promoted
+  capacity and ocean factor and every maximum use above 0 among it, every row's useful beams
+  within min(ceiling, supply) and its ocean factor L / (N x B), the grid's citations, licence
+  and method, and necessary conditions on the markers its rows can give), and
+  :func:`load_saturation_curve`, which reads a promoted
   curve and refuses one with a repeated key, a number out of range, another schema, a value
   pydantic's strict mode refuses (an integer field given a string, a float or a boolean; a
   float field given a string or a boolean, while a JSON integer there reads as the same
@@ -438,6 +444,33 @@ class BandPoint(BaseModel):
     density_threshold_per_km2: float = Field(gt=0)
     grid_aggregation: PositiveInt
     beams_per_satellite: PositiveInt | None
+
+
+def beams_per_satellite(shell: ShellInputs, point: BandPoint | None = None) -> float:
+    """Return B, the beams each satellite can light on a curve: a band point's own count when
+    it sets one, else the capacity calibration in effective full-band reuses (x 1000), scaled to
+    the shell's reference panel.
+
+    The calibration's 0.15 Gbps per (MHz x bps/Hz) is 150 effective full-band reuses at
+    :data:`~communications.constants.APERTURE_REFERENCE_M2`, linear in the panel's area. The one
+    rule the computation sizes every curve's beams by and the completeness check reads every
+    row's ocean factor, U = L / (N x B), by.
+
+    Args:
+        shell: The shell and the beam (the calibration and the reference panel).
+        point: A band point, or None for a class's central curve.
+
+    Returns:
+        B, beams per satellite.
+    """
+    if point is not None and point.beams_per_satellite is not None:
+        return float(point.beams_per_satellite)
+    return (
+        GBPS_TO_MBPS
+        * shell.reuse_calibration_gbps_per_mhz_per_se
+        * shell.reference_aperture_m2
+        / APERTURE_REFERENCE_M2
+    )
 
 
 _CLASS_DIRECTIVITY_DBI: Final[Mapping[DeviceClass, float]] = MappingProxyType(
@@ -993,6 +1026,36 @@ def _check_positive(name: str, rows: Sequence[CurveRow], markers: ClassMarkers) 
                 )
 
 
+def _check_rows_bounded(name: str, rows: Sequence[CurveRow], beams_per_satellite: float) -> None:
+    """Refuse a row whose useful beams exceed min(ceiling, supply), or whose ocean factor is not
+    its useful beams over its fleet's beams, U = L / (N x B).
+
+    A computed row holds both: L is at most min(ceiling, supply) at every snapshot (the
+    computation's bounds check), so in the snapshot means too, and the ceiling is at most
+    maximum use (:func:`_check_markers_on_rows`), so L is too; U is written as L / (N x B), at
+    the curve's B (:func:`beams_per_satellite`). A file that breaks either would read a share of
+    maximum use, or an ocean factor, the computation never gave.
+
+    Raises:
+        SaturationCurveError: Naming the curve, the row and the values.
+    """
+    for row in rows:
+        bound = min(row.ceiling_beams, row.supply_beams)
+        if exceeds_bound(row.useful_beams, bound):
+            raise SaturationCurveError(
+                f"the {name} row at {row.fleet} satellites has useful beams of "
+                f"{row.useful_beams}, above min(ceiling {row.ceiling_beams}, supply "
+                f"{row.supply_beams})"
+            )
+        offered = row.useful_beams / (row.fleet * beams_per_satellite)
+        if not math.isclose(row.ocean_factor, offered, rel_tol=BOUNDS_RELATIVE_TOLERANCE):
+            raise SaturationCurveError(
+                f"the {name} row at {row.fleet} satellites has an ocean factor of "
+                f"{row.ocean_factor}, not its useful beams over its fleet's beams, {offered} "
+                f"(U = L / (N x B), B {beams_per_satellite:g})"
+            )
+
+
 def _check_row_placement(name: str, row: CurveRow, *, directional: bool, trim: bool) -> None:
     """Refuse a row whose stacking diagnostics or trim are not where the contract puts them.
 
@@ -1023,24 +1086,30 @@ def check_curve_complete(curve: SaturationCurve) -> None:
 
     A promoted curve carries every class, in :class:`~communications.constants.DeviceClass`
     order, and every band point, in :class:`BandName` order, each band point the one its
-    parameters name; its stated limits and the checks it passed (neither empty), and the grid
-    its parameters name (the provenance's digest, the grid's identity; its file name is a label
-    the parameters' path already gives); each curve's rows at exactly the sweep's requested
+    parameters name; its stated limits and the checks it passed (neither empty), the grid's
+    citations (none blank), licence and method (neither blank), and the grid its parameters
+    name (the provenance's digest, the grid's identity; its file name is a label the
+    parameters' path already gives); each curve's rows at exactly the sweep's requested
     fleets (the mounted terminal's with its extension); the stacking diagnostics on every row of
     a class whose parameters give it sky sectors (a band point's rows by the phone class's) and
     on no other row, as the computation places them; the interference trim, at the parameters'
     floors, on every row of the phone class's central curve and on no other row; every row's
     useful beams, capacity and ocean factor, and every class's and band point's maximum use,
-    above 0, as a computed curve's always are (:func:`_check_positive`); and markers that meet
-    the necessary conditions of :func:`_check_markers_on_rows`.
+    above 0, as a computed curve's always are (:func:`_check_positive`); every row's useful
+    beams at most min(ceiling, supply) and its ocean factor L / (N x B) at the curve's B
+    (:func:`_check_rows_bounded`); and markers that meet the necessary conditions of
+    :func:`_check_markers_on_rows` (with the first, every row's ceiling at most maximum use, so
+    no row's useful beams exceed maximum use).
 
     Args:
         curve: The curve.
 
     Raises:
         SaturationCurveError: Naming the curve and what is missing or misplaced (a class, a band
-            point, the limits, the checks, the grid's digest, a row, its diagnostics or its
-            trim), a quantity not above 0, or a marker its rows cannot give.
+            point, the limits, the checks, the citations, the licence, the method, the grid's
+            digest, a row, its diagnostics or its trim), a quantity not above 0, a row's useful
+            beams above its bound or an ocean factor not L / (N x B), or a marker its rows
+            cannot give.
     """
     parameters = curve.parameters
     sweep = parameters.sweep
@@ -1057,6 +1126,14 @@ def check_curve_complete(curve: SaturationCurve) -> None:
     provenance = curve.provenance
     if not provenance.checks_passed:
         raise SaturationCurveError("the curve's provenance names no checks passed")
+    if not provenance.citations or not all(citation.strip() for citation in provenance.citations):
+        raise SaturationCurveError(
+            "the curve's provenance names no citation, or a blank one: the grid's credit rides "
+            "on its citations"
+        )
+    for text, value in (("licence", provenance.licence), ("method", provenance.method)):
+        if not value.strip():
+            raise SaturationCurveError(f"the curve's provenance states no {text}")
     if provenance.grid_sha256 != parameters.demand.grid_sha256:
         raise SaturationCurveError(
             f"the provenance's grid digest {provenance.grid_sha256} is not the parameters' "
@@ -1085,6 +1162,7 @@ def check_curve_complete(curve: SaturationCurve) -> None:
                     f"{floors}"
                 )
         _check_positive(name, entry.rows, entry.markers)
+        _check_rows_bounded(name, entry.rows, beams_per_satellite(parameters.shell))
         _check_markers_on_rows(name, entry.rows, entry.markers)
     for band, point in zip(curve.bands, parameters.bands, strict=True):
         name = f"band point {band.point.name.value}"
@@ -1098,6 +1176,7 @@ def check_curve_complete(curve: SaturationCurve) -> None:
                 name, row, directional=sectored[DeviceClass.PHONE_CLASS], trim=False
             )
         _check_positive(name, band.rows, band.markers)
+        _check_rows_bounded(name, band.rows, beams_per_satellite(parameters.shell, point))
         _check_markers_on_rows(name, band.rows, band.markers)
 
 
@@ -1169,8 +1248,9 @@ def load_saturation_curve(path: Path) -> SaturationCurve:
     :class:`~common.file_io.ModelFileError`; every other refusal is a
     :class:`SaturationCurveError`, Python's parser's own for a repeated key or an integer past
     its limit on digits included, and so is any other number out of range (a requested fleet
-    too large to build its shell from, a float past a float's range) and text pydantic's
-    parser refuses where Python's read it (a lone surrogate, nesting past pydantic's depth).
+    too large to build its shell from, two neighbouring fleets whose product, the geometric
+    midpoint's, a float cannot hold, a float past a float's range) and text pydantic's parser
+    refuses where Python's read it (a lone surrogate, nesting past pydantic's depth).
 
     Args:
         path: The curve's JSON file.
@@ -1243,6 +1323,11 @@ def load_saturation_curve(path: Path) -> SaturationCurve:
         check_curve_complete(curve)
     except SaturationCurveError as exc:
         raise SaturationCurveError(f"{path}: {exc}") from exc
+    except OverflowError as exc:
+        raise SaturationCurveError(
+            f"{path}: not a saturation curve (a number out of range: two neighbouring rows' "
+            f"fleets too large for a float to hold their product, the geometric midpoint's, {exc})"
+        ) from exc
     logger.debug("loaded the saturation curve %s (input hash %s)", path, curve.input_hash)
     return curve
 
@@ -1445,28 +1530,59 @@ class _Bracket:
 
         Raises:
             SaturationCurveError: Between two rows at which the quantity is not positive at
-                both (its logarithm does not exist). A loaded curve's rows never are (the
-                completeness check refuses one), so this guards a curve built in Python.
+                both (its logarithm does not exist), or for a reading a float cannot hold: the
+                two rows' ratio past a float's range either way, or a result too large (never
+                on a computed curve, whose values lie within a few orders of magnitude). A
+                loaded curve's rows are never 0 (the completeness check refuses one), so the
+                first guards a curve built in Python; the second, any curve whose values span
+                too far.
         """
         high, low = self.high, self.low
+        name = f"the {self.curve.device_class.value} curve's {quantity.name}"
         if high.fleet == self.fleet:
             return quantity.value_of(high)
         if low is None:
             if quantity.below_first_row is _BelowFirstRow.FLAT:
                 return quantity.value_of(high)
-            return self.fleet * quantity.value_of(high) / high.fleet
+            reading = self.fleet * quantity.value_of(high) / high.fleet
+            if not math.isfinite(reading):
+                raise SaturationCurveError(
+                    f"{name} at {self.fleet} satellites, below the first row's "
+                    f"{quantity.value_of(high)} at {high.fleet}, lies past a float's range"
+                )
+            return reading
         low_value, high_value = quantity.value_of(low), quantity.value_of(high)
         if low_value <= 0 or high_value <= 0:
             raise SaturationCurveError(
-                f"the {self.curve.device_class.value} curve's {quantity.name} must be positive "
-                f"at both rows around {self.fleet} satellites to read between them log-log; got "
-                f"{low_value} at {low.fleet} satellites and {high_value} at {high.fleet}"
+                f"{name} must be positive at both rows around {self.fleet} satellites to read "
+                f"between them log-log; got {low_value} at {low.fleet} satellites and "
+                f"{high_value} at {high.fleet}"
             )
-        return math.exp(math.log(low_value) + self.fraction * math.log(high_value / low_value))
+        ratio = high_value / low_value
+        out_of_range = SaturationCurveError(
+            f"{name} at {self.fleet} satellites, between {low_value} at {low.fleet} satellites "
+            f"and {high_value} at {high.fleet}, lies past a float's range"
+        )
+        if not (math.isfinite(ratio) and ratio > 0):
+            raise out_of_range
+        try:
+            return math.exp(math.log(low_value) + self.fraction * math.log(ratio))
+        except OverflowError as exc:
+            raise out_of_range from exc
 
 
-def _class_curve_of(curve: SaturationCurve, device_class: DeviceClass) -> ClassCurve:
+def class_curve_of(curve: SaturationCurve, device_class: DeviceClass) -> ClassCurve:
     """Return a class's curve: the central one, which the engine reads (never a band point's).
+
+    The one lookup of a class's curve, for the readings here and the Iridium family's class
+    blocks (:mod:`communications.iridium`).
+
+    Args:
+        curve: The curve.
+        device_class: The class.
+
+    Returns:
+        The class's central curve.
 
     Raises:
         SaturationCurveError: If the curve holds no curve for the class.
@@ -1494,7 +1610,7 @@ def _bracket(curve: SaturationCurve, device_class: DeviceClass, fleet: int) -> _
         CurveBeyondLastRowError: For a fleet past the class's last row (a curve is never
             extrapolated or clamped).
     """
-    entry = _class_curve_of(curve, device_class)
+    entry = class_curve_of(curve, device_class)
     if fleet < _EMPTY_FLEET:
         raise ValueError(f"a fleet is a count of satellites, at least 0; got {fleet}")
     if fleet == _EMPTY_FLEET:
@@ -1745,9 +1861,11 @@ __all__ = [
     "SweepInputs",
     "TrimAtFloor",
     "TrimInputs",
+    "beams_per_satellite",
     "capacity_gbps_at",
     "check_curve_complete",
     "check_curve_matches",
+    "class_curve_of",
     "curve_input_hash",
     "exceeds_bound",
     "load_saturation_curve",
