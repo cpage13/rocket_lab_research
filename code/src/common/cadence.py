@@ -160,10 +160,12 @@ class LaunchCostDials(BaseModel):
     :func:`compute_launch_cost_musd`. The low-cost anchor must sit at a lower
     cadence than the high-cadence anchor (:meth:`_cadence_anchors_ordered`):
     reversed anchors would flat-clamp every year to the low-cadence cost and
-    silently switch the cost-down off.
+    silently switch the cost-down off. Every number is finite: a NaN or an
+    infinity is refused at load, naming the field (``allow_inf_nan=False``), so
+    no run of either model starts from one.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
     low_cadence_cost_musd: float = Field(
         default=LOW_CADENCE_COST_MUSD_DEFAULT,
