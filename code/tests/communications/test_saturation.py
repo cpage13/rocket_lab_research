@@ -423,7 +423,7 @@ def test_a_class_whose_crossing_is_not_reached_reports_its_last_measured_midpoin
 ) -> None:
     """Objective: a curve whose elasticity has not fallen under 0.10 at any midpoint reports no
     saturation number, and names as the fleet it is not reached by the last fleet its rows
-    measure the elasticity at, never the last row's fleet (foundation v3, amendment A17).
+    measure the elasticity at, never the last row's fleet (ADR 005).
 
     Sample: the uniform band's curve (fleets 992 and 10,000), whose capacity still grows
     with an elasticity well above 0.10 between its two rows.
@@ -2312,7 +2312,7 @@ def test_each_check_refuses_a_curve_that_breaks_it(
     midpoint (the saturation number cannot be placed); rows at 342, 992, 1,980 and 3,969
     whose elasticity runs 0.60, 0.09, 0.40 (under 0.10 at the midpoint 1,401, back over it at
     2,803), 0.60, 0.24, 0.40 (the same for 0.25, on a band point) and 0.60, -0.10, 0.40 (capacity
-    falling from 992 to 1,980 satellites); the review's code_sat_b m1.
+    falling from 992 to 1,980 satellites).
 
     Expected outcome: SaturationInvariantError, its message naming the breach: the curve, and
     for a crossing that does not hold the threshold, both midpoints and both elasticities, or
@@ -2734,7 +2734,7 @@ def test_a_saturation_number_not_reached_names_the_last_midpoint_the_rows_measur
     """Objective: when the elasticity of capacity is under 0.10 at no midpoint, the curve has no
     saturation number, and the fleet it is not reached by is the last midpoint at which its rows
     measure the elasticity, never the last row's fleet: past that midpoint the rows measure
-    nothing (foundation v3, amendment A17; the review's code_sat_b M1).
+    nothing (ADR 005).
 
     Sample: hand-built rows at 342, 992, 1,980 and 3,969 satellites whose capacity's elasticity is
     0.60, 0.40 and 0.30 over the three intervals (never under 0.10, nor under 0.25), with L far

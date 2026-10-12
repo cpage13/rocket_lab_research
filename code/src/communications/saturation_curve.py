@@ -1,4 +1,4 @@
-"""The saturation curve's contract (foundation v2): its inputs, its result and its hash.
+"""The saturation curve's contract: its inputs, its result and its hash.
 
 The saturation module (:mod:`communications.saturation`, the one module that imports
 numpy, ADR 010) computes, for each device class, how many co-channel beams a Walker shell
@@ -31,11 +31,12 @@ family can read a curve without importing numpy:
 * :func:`check_curve_matches`, the identity check: a run reads only a curve computed for its
   own inputs, and a curve computed for others is refused with a
   :class:`SaturationCurveMismatchError` naming the first field that differs;
-* the readings the engine takes from a class's curve at any fleet: :func:`useful_beams_at`
-  and :func:`capacity_gbps_at` on the curve's own basis (d = 1, the reference panel),
-  :func:`people_at` at a downlink share and a panel factor (the scenario's panel area over the
-  curve's reference panel area), and :func:`read_fleet`, all of a fleet's readings at once (a
-  :class:`FleetReading`), each fleet placed on the rows once. They follow the edge rules: at a
+* the readings of a class's curve at any fleet: the two the engine takes, :func:`people_at` at
+  a downlink share and a panel factor (the scenario's panel area over the curve's reference
+  panel area) and :func:`read_fleet`, all of a fleet's readings at once (a
+  :class:`FleetReading`); and :func:`useful_beams_at` and :func:`capacity_gbps_at` on the
+  curve's own basis (d = 1, the reference panel), which no engine path calls (the tests read L
+  and capacity through them). Each places a fleet on the rows once. They follow the edge rules: at a
   row its own values; between rows log-log; below the first row linear through the origin (so
   U is flat there); at a fleet of 0 no beams and no U; past the class's last row a
   :class:`CurveBeyondLastRowError`, never an extrapolation or a clamp.
@@ -48,9 +49,9 @@ increase, as strict integers, and the mounted terminal's extension starts above 
 them; a curve carries each class and each band point at most once, in its enum's order;
 every tuple of rows strictly increases in fleet; each row's fleet is the realized P x S of
 its requested fleet; and a directional row's two stacking statistics exist exactly when it
-keeps stacked beams. A curve may lack classes, band points or trims while
-it is being built (the phone class first, the directional classes, then the bands and the
-trim); the promotion's completeness check is what a promoted curve must pass.
+keeps stacked beams. The contract admits a curve that lacks classes, band points or trims
+(the tests build such curves); ``compute_saturation`` returns a complete one, and
+:func:`check_curve_complete` is what a promoted curve must pass.
 
 This module imports :mod:`communications.config`; ``config.py`` does not import it.
 """
@@ -415,7 +416,8 @@ class TrimInputs(BaseModel):
 
 
 class BandPoint(BaseModel):
-    """One band point: the central values but its one changed input.
+    """One band point: the central values but its one changed input (two for the taper with
+    wider spacing: the beam's width and the spacing area factor).
 
     Attributes:
         name: Which point.
@@ -623,7 +625,9 @@ class CurveRow(BaseModel):
         requested_fleet: The requested fleet N the row's shell is built from
             (:func:`walker_shape`). A reader rebuilds a row from it, never from ``fleet``.
         useful_beams: L, the snapshot mean of the co-channel beams placed over demand.
-        useful_beams_spread: The snapshot spread of L (the standard deviation).
+        useful_beams_spread: The snapshot spread of L: the population standard deviation
+            (ddof 0) over the row's snapshots (2 or 4 on the promoted curve), so it reads
+            lower than a sample deviation, by a factor of sqrt(n / (n - 1)).
         capacity_gbps: The snapshot mean of the beams' capacity, Gbps.
         ocean_factor: U = L / (fleet x beams per satellite).
         ceiling_beams: The snapshot mean of the most the cells in view could use.
@@ -659,7 +663,8 @@ class CurveRow(BaseModel):
 
 
 class ClassMarkers(BaseModel):
-    """A curve's markers, each read on the rows against the N-independent maximum use.
+    """A curve's markers, each read on the rows. The N-independent maximum use is reported
+    beside them, the 90 percent fleet's denominator; the elasticity markers never read it.
 
     Attributes:
         maximum_use_beams: The most the shell could ever use: every cell served by the best

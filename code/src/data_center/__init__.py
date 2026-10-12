@@ -1,14 +1,14 @@
-"""rklb-value: a YAML-driven valuation calculator for Rocket Lab's orbital
-AI-inference data-center venture, valued **standalone** (the data-center play
-on its own, NOT Rocket Lab the whole company).
+"""rklb-value: the YAML-driven data-center model of Rocket Lab's orbital
+AI-inference data center, the space model and its ground reference, modeled
+**standalone** (the data-center application on its own, NOT Rocket Lab the
+whole company).
 
 The GPU-first model drops the rack abstraction entirely and is built
 around the GPU PACKAGE (NVIDIA's "as sold" unit):
 each fiscal year picks a frontier generation, derives N packages that fit
 under the selected Neutron SSO mass-envelope scenario, and computes per-node
-economics from the package's all-in kW/kg/$/PF figures. The cycle-2 model
-rolls the living fleet up by cohort (service-life cliff) and prices revenue as an
-R band.
+economics from the package's all-in kW/kg/$/PF figures. The model rolls the
+living fleet up by cohort (service-life cliff) and prices revenue as an R band.
 
 The GPU-first per-node formulas (the heart of the model):
 
@@ -22,7 +22,8 @@ The GPU-first per-node formulas (the heart of the model):
 
 The public surface:
 
-* :mod:`data_center.config`: Pydantic config (gospel + slopes + v8 dial blocks).
+* :mod:`data_center.config`: the Pydantic config (the locked anchors, the generation
+  slopes and the fleet, volume, cadence and revenue-band dial blocks).
 * :mod:`data_center.generations`: `KNOWN_GENS`, `extend_generations`, `frontier_at`.
 * :mod:`data_center.engine`: the GPU-first engine + `run_valuation`.
 * :mod:`data_center.output`: the typed Pydantic models of the space artifact.

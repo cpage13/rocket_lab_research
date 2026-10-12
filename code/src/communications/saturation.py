@@ -2,13 +2,15 @@
 
 The one module that imports numpy (ADR 010). For each device class on one set of inputs
 (:class:`~communications.saturation_curve.SaturationInputs`) it computes, at each fleet of
-the sweep, L: the most co-channel beams the shell can keep lit over the places people live,
+the sweep, L: the co-channel beams the allocation keeps lit over the places people live,
 and their capacity. A 0 dBi phone-class device cannot tell satellites apart, so its
 co-channel footprints must not overlap on the same ground; a directional terminal can, so
 its class stacks further layers from satellites its beam separates (the small terminal and
 the mounted terminal, by the saturation strategy's sky-sector rules D1 to D6). L rises with
-the fleet, then flattens as every inhabited place is served by its best satellites; the
-knee is the class's spectrum bound (ADR 005). Everything is computed with the band in
+the fleet, then flattens as every inhabited place is served by its best satellites (for a
+directional class it can fall slightly, since rule D6's dropped beams stay spent, while its
+capacity still rises); the knee of capacity is the class's spectrum bound (ADR 005).
+Everything is computed with the band in
 full-time use (d = 1, ADR 008) at the reference panel; the engine applies d and the
 scenario's panel when it reads the curve.
 
@@ -44,9 +46,14 @@ for one class on one set of inputs; this version runs stages 2 to 11 for every c
    satellite's beams left, then by every cell's area and people left; the band is committed
    before the next. Limits: B beams per satellite; one co-channel layer per cell (its area);
    the cell's people cap; one layer per satellite per cell. Small overhead footprints fit
-   the most beams into the same land, so this order maximizes capacity; a proportional
-   fill stalls near saturation. At a directional class's own people cap it is that class's
-   first layer (rule D2).
+   the most beams into the same land, so this order puts the most beams into it first: a
+   heuristic, not the exact maximum (on the saturation design's prototype, at its settings,
+   it reached 95.6 to 97.8 percent of the exact fluid linear program's optimum at 992 to
+   10,000 satellites: ADR 010, and Section 2.3 of
+   ``research/direct_communication/iridium_saturation_module.md``), and the stall floor holds
+   the phone class within 2 percent of its upper bound, min(ceiling, supply), from 20,000
+   satellites up; a proportional fill stalls near saturation. At a directional class's own
+   people cap it is that class's first layer (rule D2).
 7. **The allocation, directional classes** (the strategy's rules D1 to D6). D1: the
    terminal's sky above the mask splits into sectors of equal solid angle, ring by ring from
    the zenith, each ring in equal azimuth wedges from north. D3: a satellite serves a cell
@@ -99,10 +106,11 @@ for one class on one set of inputs; this version runs stages 2 to 11 for every c
     the leak (a stated limit).
 
 **The band points.** Beside the phone class's central curve, one curve per band point, each
-the central curve but for one changed input, at the bands' snapshots over the same fleets,
-with its own rows, maximum use and markers: the taper (the beam's half-power width); the
-taper with wider co-channel spacing (the ground a co-channel beam occupies over its 3 dB
-footprint, scaling the area per beam in the fill, the two bounds and maximum use alike); 10
+the central curve but for one changed input (two for the taper with wider spacing), at the
+bands' snapshots over the same fleets, with its own rows, maximum use and markers: the taper
+(the beam's half-power width); the taper with wider co-channel spacing (that width and the
+ground a co-channel beam occupies over its 3 dB footprint, the spacing scaling the area per
+beam in the fill, the two bounds and maximum use alike); 10
 and 100 people per km^2 (the demand threshold); the 0.5 degree grid (the shipped cells summed
 2 x 2); and 48 beams per satellite. They carry no trim.
 
@@ -205,6 +213,7 @@ from communications.constants import (
     APERTURE_REFERENCE_M2,
     GBPS_TO_MBPS,
     GRID_AGGREGATION_SHIPPED,
+    PANEL_RULE_LIMITS_NOTE,
     DeviceClass,
 )
 from communications.iridium import iridium_dials_of
@@ -999,8 +1008,9 @@ def _search_chunks(
     fewer when the chunk's windows would hold more than :data:`_PAIR_SEARCH_CHUNK_ELEMENTS`
     elements (never fewer than :data:`_MIN_CHUNK_SATELLITES`). Every satellite of a chunk
     searches the chunk's widest window: the columns its view spans at its poleward edge plus
-    the margin, or one full turn when the view reaches :data:`_WINDOW_LATITUDE_CAP_DEG`, never
-    more.
+    the margin, or a full turn when the view reaches :data:`_WINDOW_LATITUDE_CAP_DEG`, at most
+    one turn of longitude and one column (2 x ceil(columns / 2) + 1, which repeats one column
+    on an even grid; :func:`_pairs_in_view` keeps each pair once).
 
     Args:
         satellites: The satellites.
@@ -1051,7 +1061,7 @@ def _pairs_in_view(
     Each satellite searches a window of grid cells around the cell under it: every row the
     view reaches, and the columns the view spans at the window's poleward edge, plus a
     margin; when the view reaches :data:`_WINDOW_LATITUDE_CAP_DEG`, every column. A window
-    never spans more than one turn of longitude, and every satellite of a chunk searches the
+    spans at most one turn of longitude and one column, and every satellite of a chunk searches the
     chunk's widest window; a chunk holds at most :data:`_PAIR_SEARCH_CHUNK_SATELLITES`
     satellites, and fewer when their windows would hold more than
     :data:`_PAIR_SEARCH_CHUNK_ELEMENTS` elements (at least one satellite). The demand cells
@@ -1880,7 +1890,9 @@ class _ServingIndex:
     """The serving pairs grouped by cell, for the pairwise admission's lookups.
 
     Attributes:
-        pairs: The serving pairs, ordered by cell (by pair index within a cell).
+        pairs: The serving pairs, ordered by cell; within a cell, in the order they joined (the
+            initial serving set by pair index, then each band's joins by pair index), an order
+            the admission never reads (it tests every server of a cell at once).
         counts: Each cell's number of serving pairs.
         starts: Where each cell's serving pairs start in ``pairs``.
     """
@@ -2130,8 +2142,10 @@ class _Pricing:
         beams: Its beams.
         interference: Its full-sum interference over its own signal: the sum over the cell's
             other sub-pairs p it counts of p's share of the cell x the gain toward p.
-        nearest_cosine: The cosine of the angle to the nearest served sub-pair of its cell in
-            another sector (:data:`_NO_NEIGHBOUR_COSINE` when there is none).
+        nearest_cosine: The cosine of the angle to the nearest other sub-pair its full sum
+            counts: in another sector of its cell, and, for a first-layer sub-pair, not a
+            first-layer one (:data:`_NO_NEIGHBOUR_COSINE` when there is none). Only stacked
+            sub-pairs' values are read (their separation statistic).
         spectral_efficiency: Its SE, anchor x log2(1 + SINR), SINR = 1 / (1 / SINR_1 +
             interference), bps/Hz.
         stacked_capacity: Each cell's sum of beams x SE over its sub-pairs (beams x bps/Hz;
@@ -3176,7 +3190,8 @@ def _reached_at_first_row(useful_beams: Sequence[float], target: float) -> bool:
 
 
 def _markers(curve: _CurveKey, rows: Sequence[CurveRow], maximum_use: float) -> ClassMarkers:
-    """Return a curve's markers, read on its rows against maximum use.
+    """Return a curve's markers, read on its rows; maximum use is the 90 percent fleet's
+    denominator, reported beside the others, never a term of the elasticity.
 
     The saturation number, placed first, is the first crossing of the elasticity under 0.10,
     rounded half up. When the elasticity is under 0.10 at no midpoint there is none, and
@@ -3235,10 +3250,9 @@ def _unplaced_marker_limits(
     the class or the band point.
     """
     _, elasticity = _elasticity(curve, rows)
-    name = _curve_label(curve)
+    curve_in_prose = _curve_label(curve).replace("_", " ")
     limits = []
     if _crosses_before_first_midpoint(elasticity, _SUPPORTING_ELASTICITY):
-        curve_in_prose = name.replace("_", " ")
         limits.append(
             f"The {curve_in_prose}'s crossing under {_SUPPORTING_ELASTICITY:g} lies before the "
             "first midpoint (the geometric mean of the first two rows), where the rows cannot "
@@ -3248,9 +3262,9 @@ def _unplaced_marker_limits(
         [row.useful_beams for row in rows], _MAXIMUM_USE_MARKER_SHARE * maximum_use
     ):
         limits.append(
-            f"The {name} useful beams already reach {_MAXIMUM_USE_MARKER_SHARE:g} of maximum "
-            "use at the first row, so the fleet at which they reach it lies at or before the "
-            "first row and is not reported; a sweep starting lower would place it."
+            f"The {curve_in_prose}'s useful beams already reach {_MAXIMUM_USE_MARKER_SHARE:g} of "
+            "maximum use at the first row, so the fleet at which they reach it lies at or before "
+            "the first row and is not reported; a sweep starting lower would place it."
         )
     return tuple(limits)
 
@@ -3589,16 +3603,21 @@ def _method(inputs: SaturationInputs) -> str:
         "measured against the cell's main satellite alone. A circular Walker Delta shell at "
         f"{shell.altitude_km:g} km and {shell.inclination_deg:g} degrees (P = round(sqrt(N)) "
         "planes of S = round(N / P), the realized N = P x S, phasing F = 1) with a "
-        f"{shell.elevation_mask_deg:g} degree mask; a square {shell.reference_aperture_m2:g} "
-        f"m^2 aperture at {shell.carrier_hz / _HZ_PER_GHZ:g} GHz, half-power beamwidth "
-        f"{shell.beamwidth_factor:g} wavelengths over its side, the beams per satellite "
-        "derived from the capacity calibration and the panel. Each fleet's row averages its "
+        f"{shell.elevation_mask_deg:g} degree mask; a square aperture at the "
+        f"{shell.reference_aperture_m2:g} m^2 reference panel (the engine scales the curve to the "
+        f"scenario's panel, a stated limit) at {shell.carrier_hz / _HZ_PER_GHZ:g} GHz, half-power "
+        f"beamwidth {shell.beamwidth_factor:g} wavelengths over its side, the beams per satellite "
+        "derived from the capacity calibration and that panel. Each fleet's row averages its "
         "snapshots, drawn once over a sidereal day from seed "
         f"{sweep.seed}. Maximum use in closed form (every cell served by the best satellite "
         "the shell can ever offer it; for a directional class one layer per sky sector, each "
-        "at the best its ring allows, whether its azimuth is reachable ignored); the markers "
-        "on the elasticity of capacity at the geometric midpoints of the rows, interpolated "
-        "in ln N. The phone class's central rows carry the interference trim, priced on the "
+        "at the best its ring allows, whether its azimuth is reachable ignored). The markers, "
+        "each rounded half up: the saturation number and the crossing under "
+        f"{_SUPPORTING_ELASTICITY:g} on the elasticity of capacity at the geometric midpoints of "
+        "the rows, interpolated in ln N between the two midpoints that straddle each; the fleet "
+        f"at which the useful beams reach {_MAXIMUM_USE_MARKER_SHARE:g} of maximum use, read "
+        "between two rows, log-log. The phone class's central rows carry the "
+        "interference trim, priced on the "
         f"first {sweep.snapshots_trim} snapshot(s) of each row: power control gives every beam "
         "equal flux at its target, so a beam's power goes as its slant range squared over g, "
         f"g = cos^{trim.scan_exponent:g} of its scan angle; a victim cell's aggregate "
@@ -3610,11 +3629,13 @@ def _method(inputs: SaturationInputs) -> str:
         f"proportion to their beams, a fresh draw from seed {trim.seed} at each row; the trim "
         "is 1 - the victims' mean of log2(1 + 1 / (1 + x)), at each floor gamma of "
         f"{floors} dBi. Each band point of the phone class is its central curve but for one "
-        f"changed input, at {sweep.snapshots_bands} snapshot(s) a row over the same fleets, "
-        "with its own rows and markers: the beam's half-power width (the taper), the ground a "
-        "co-channel beam occupies over its 3 dB footprint (wider co-channel spacing, scaling "
-        "the area per beam in the fill, the bounds and maximum use alike), the demand "
-        "threshold, the grid (the shipped cells summed k x k), or the beams per satellite."
+        "changed input (two for the taper with wider spacing), at "
+        f"{sweep.snapshots_bands} snapshot(s) a row over the same fleets, with its own rows and "
+        "markers: the beam's half-power width (the taper); the taper with wider co-channel "
+        "spacing, the beam's width and the ground a co-channel beam occupies over its 3 dB "
+        "footprint together (the spacing scaling the area per beam in the fill, the bounds and "
+        "maximum use alike); the demand threshold; the grid (the shipped cells summed k x k); "
+        "or the beams per satellite."
     )
 
 
@@ -3638,7 +3659,11 @@ def _checks_passed(inputs: SaturationInputs) -> tuple[str, ...]:
 
 
 def _curve_limits(inputs: SaturationInputs) -> tuple[str, ...]:
-    """Return the curve's stated limits, each stated as its rule, never a magnitude."""
+    """Return the curve's stated limits, each stated as its rule. The panel rule's limit takes
+    the measured note whole (:data:`~communications.constants.PANEL_RULE_LIMITS_NOTE`, which the
+    Iridium run's panel line states too): what the rule gives against the curve computed at the
+    panel itself, below and above the reference, with the magnitudes measured at four panels and
+    the link effect it leaves out."""
     return (
         "Fluid (fractional) beams, idealized 3 dB footprints and one circular shell.",
         "Residential (night-time) population, every place at its busy hour at once.",
@@ -3657,11 +3682,8 @@ def _curve_limits(inputs: SaturationInputs) -> tuple[str, ...]:
         f"The directional terminals' pattern floor ({inputs.sidelobe_floor_db:g} dB) is an "
         "estimate, optimistic for the small terminal.",
         f"Computed at the {inputs.shell.reference_aperture_m2:g} m^2 reference panel. The "
-        "engine scales the curve linearly by the scenario's panel over it: below it the "
-        "directional classes carry more than the rule gives, because their people caps do "
-        "not shrink with the panel; the rule is exact in beams for the phone class; and each "
-        "beam's rate is held at its reference-panel value, so the link effect of another "
-        "array size is not modeled.",
+        "engine scales the curve linearly by the scenario's panel over it (the panel rule). "
+        f"{PANEL_RULE_LIMITS_NOTE}",
         "A null marker is one the rows do not place: the saturation number when the elasticity "
         f"of capacity is under {_SATURATION_ELASTICITY:g} at no midpoint "
         "(saturation_not_reached_by then names the last midpoint, the geometric mean of the last "
@@ -3685,14 +3707,14 @@ def compute_saturation(
     mounted terminal by rules D1 to D6 at the sweep's directional snapshots (the mounted
     terminal over its extension too) and the phone class at its central snapshots, and stage
     12, the interference trim, on the phone class's central rows; then each band point of
-    the phone class, the central curve but for its one changed input, at the bands'
-    snapshots. Every curve's tasks share one sweep. Checks the bounds and capacity per
-    satellite for every class and band point and the stall floor for the phone class's
-    central curve; reads each curve's markers against its own maximum use, states any
-    supporting marker the rows cannot place among the limits, and records the run's wall
-    time and peak-memory bound. Logs, once each, every curve's maximum use and its saturation
-    number (or the last measured fleet it is not reached by), then the run's workers,
-    peak-memory bound and wall time: the command's summary.
+    the phone class, the central curve but for its one changed input (two for the taper with
+    wider spacing), at the bands' snapshots. Every curve's tasks share one sweep. Checks the
+    bounds and capacity per satellite for every class and band point and the stall floor for
+    the phone class's central curve; reads each curve's markers on its rows (the 90 percent
+    fleet against its own maximum use), states any supporting marker the rows cannot place
+    among the limits, and records the run's wall time and peak-memory bound. Logs, once each,
+    every curve's maximum use and its saturation number (or the last measured fleet it is not
+    reached by), then the run's workers, peak-memory bound and wall time: the command's summary.
 
     Args:
         inputs: The curve's inputs.
@@ -4067,7 +4089,7 @@ def _build_parser() -> CliArgumentParser:
         description=(
             "Compute the saturation curve a scenario's Iridium dials imply (every class and "
             "band point) and write it, promoted, into the repo-root communications/models/ "
-            "workstream."
+            "folder."
         ),
     )
     parser.add_argument(

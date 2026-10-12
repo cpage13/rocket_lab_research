@@ -16,7 +16,7 @@ wall. The Iridium fleet grows at the comms share of the launch cadence
 The 2,000-satellite cap is retired for Iridium. Each device class's spectrum
 bound is its saturation number: the fleet at which one more satellite adds
 less than 10 percent of an average satellite's capacity (the elasticity of
-capacity under 0.10), measured against the N-independent maximum use,
+capacity under 0.10), reported beside the N-independent maximum use,
 computed per class by the `saturation` module at the 25 m^2 reference panel
 and the exclusive 8 MHz, with the band in full-time use (ADR 008). It is
 reported beside the launch cadence in every run, never a build target and
