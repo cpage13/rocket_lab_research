@@ -2,12 +2,18 @@
 
 This module is the single source of truth for the comms config's "no bare
 numeric literals" rule (CLAUDE.md). Every default the ``communications.config``
-Pydantic blocks read lives here, each with a docstring carrying:
+Pydantic blocks read lives here, and each sourced value's docstring opens with:
 
 - A source class tag: SOURCED_FACT / SOURCED_ESTIMATE / ESTIMATE / SCENARIO /
   INVESTOR_SET / DERIVED.
 - A citation: a global ``COMM-*`` claim id from ``research/SOURCE_INDEX.md``,
   a research-doc path, the coverage-sim findings, or an investor note.
+
+A constant that is not a sourced value carries no tag and says what it is instead: a
+unit conversion, a structural or sanity bound, a file location (the shipped grid's, and
+the saturation curve's, the one config default without a tag), the grid's hash, the
+orbit block's source status and basis text, or a mapping whose values keep their own
+constants' tags.
 
 The eight cadence / launch-cost defaults and their dial blocks are NOT stated
 here: they live once in ``common.cadence`` (the shared spine both ventures
@@ -54,7 +60,7 @@ from common.input_manifest import SourceStatus
 logger = logging.getLogger(__name__)
 
 # ===========================================================================
-# Density-regime enum (the two-regime ground interface, Phase 4)
+# Density-regime enum (the two-regime ground interface)
 # ===========================================================================
 
 
@@ -62,8 +68,8 @@ class DensityRegime(StrEnum):
     """The terrestrial density regime a ground cost-per-subscriber baseline is for.
 
     Declared in this leaf ``constants`` module so both ``config.py`` (the
-    ``GroundInterfaceDials`` block, Phase 4) and ``ground.py`` (the comparison,
-    Phase 4) import it without a cycle. ``SPARSE`` is the fresh-build regime whose
+    ``GroundInterfaceDials`` block) and ``ground.py`` (the comparison) import it
+    without a cycle. ``SPARSE`` is the fresh-build regime whose
     cost the headline verdict reads (space below it is the niche); ``DENSE`` is the
     incumbent-marginal served regime.
     """
@@ -279,7 +285,7 @@ broadband panel, but FAR smaller than AST's giant phased array (so AST's
 build-cost analogy ONLY, NOT a broadband-product cost claim. CONFIGURABLE."""
 
 # ===========================================================================
-# Coverage target dial (the NEW constellation-size target, variable 3)
+# The coverage floor (the constellation-size dial)
 # ===========================================================================
 
 SATELLITES_FOR_FULL_COVERAGE_DEFAULT: Final[int] = 340
@@ -319,7 +325,7 @@ reading kept for comparison (:data:`RETIRED_CAP_READING_FLEET`), and each device
 spectrum bound is its saturation number (ADR 005)."""
 
 # ===========================================================================
-# Comms cadence share (variable 2's share of the whole-fleet ramp)
+# Comms cadence share (the comms slice of the whole-fleet ramp)
 # ===========================================================================
 
 COMMS_SHARE_DEFAULT: Final[float] = 0.18
@@ -327,7 +333,7 @@ COMMS_SHARE_DEFAULT: Final[float] = 0.18
 Neutron cadence: ~16 of the 90 FY2036 launches/year (the 90/year is the shared
 whole-fleet cadence; comms flies a share of it). The investor's ~15 to 20 band maps
 to a share of ~0.167 to ~0.222; 0.18 (~16/90) is the in-band default. CONFIGURABLE.
-Phase 2 applies this as a multiplier on the shared per-year integer launch count,
+The engine applies this as a multiplier on the shared per-year integer launch count,
 re-rounded to an integer with the shared half-up offset."""
 
 # ===========================================================================
@@ -395,15 +401,15 @@ MONTHS_PER_YEAR: Final[int] = 12
 annual revenue per subscriber). A fixed unit-conversion constant, not a tunable."""
 
 # ===========================================================================
-# Ground interface basis label (the two-regime ground interface, Phase 4)
+# Ground interface basis label (the two-regime ground interface)
 # ===========================================================================
 
 GROUND_BASIS_DEFAULT: Final[str] = "annual_cost_per_subscriber"
-"""SCENARIO. The like-for-like basis label for the two-regime ground interface
-(Phase 4), matching the settled primary unit (cost per subscriber per year). The
-Phase 4 comparison asserts the space and ground bases match before computing a
-ratio, so a build-and-hold space cost is never compared against an annual ground
-cost."""
+"""SCENARIO. The like-for-like basis label for the two-regime ground interface,
+matching the settled primary unit (cost per subscriber per year). The ground
+comparison (``communications.ground``) asserts the space and ground bases match before
+computing a ratio, so a build-and-hold space cost is never compared against an annual
+ground cost."""
 
 # ===========================================================================
 # The Iridium model: L-band max-outcome scenario (the MSS lane) dials + physics

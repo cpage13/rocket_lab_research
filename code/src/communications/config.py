@@ -40,16 +40,16 @@ cost-coupled multiple or a price applied to a sized base. The blocks:
 * ``cadence: CadenceDials`` -- the shared whole-fleet logistic launch ramp
   (:class:`common.cadence.CadenceDials`, the data-center block itself: ceiling
   150, year-5 14, year-10 90, first 1, with its load-time anchor validator).
-  This prices the launch cost at the whole-fleet cadence (variable 2's ramp).
+  The launch cost is priced at this whole-fleet cadence.
 * ``comms_cadence: CommsCadenceDials`` -- the comms slice's SHARE of the fleet
-  cadence (variable 2's share); how many launches comms flies.
+  cadence: how many launches comms flies.
 * ``launch_cost: LaunchCostDials`` -- the cadence-indexed log-linear launch-cost
   curve (:class:`common.cadence.LaunchCostDials`, the data-center block itself:
-  25.0 / 13.5 / 5.0 / 100.0, with its anchor-order validator) (variable 6).
+  25.0 / 13.5 / 5.0 / 100.0, with its anchor-order validator).
 * ``satellite: SatelliteDials`` -- the satellite spec both families read: satellites
-  per launch (variable 1), lifetime (variable 4, the cohort cliff), and the flat
-  mass-manufactured hardware build cost (variable 5).
-* ``coverage: CoverageDials`` -- the cellular family's fleet-sizing bounds (variable 3):
+  per launch, the operating life (the cohort cliff), and the flat
+  mass-manufactured hardware build cost.
+* ``coverage: CoverageDials`` -- the cellular family's fleet-sizing bounds:
   the coverage FLOOR the fleet must at least reach, and the fleet CAP it may not exceed.
   The Iridium path pins the floor at its default and has no cap.
 * ``subscribers: SubscriberDials`` -- the cellular family's CAPACITY dimension: the
@@ -61,9 +61,10 @@ cost-coupled multiple or a price applied to a sized base. The blocks:
   (revenue = served base x monthly ARPU x 12), each with its margin per cohort and per
   year.
 * ``ground: GroundInterfaceDials | None`` -- the marked, TWO-REGIME ground
-  INTERFACE (Phase 4), default ``None`` so the cost side never blocks on a ground
-  number. The dense + sparse baselines are individually None-able caller inputs. No
-  Iridium run reads it, so an Iridium config refuses one.
+  INTERFACE the ground comparison reads (``communications.ground``), default ``None``
+  so the cost side never blocks on a ground number. The dense + sparse baselines are
+  individually None-able caller inputs. No Iridium run reads it, so an Iridium config
+  refuses one.
 * ``iridium: IridiumDials | None`` -- the optional Iridium model (formerly Model B;
   L-band max-outcome) MSS dials, default ``None`` so the config stays the
   High-Bandwidth Cellular Pure Play model (formerly Model A). Present, it selects the
@@ -252,7 +253,7 @@ class SatelliteDials(BaseModel):
 
 
 class CoverageDials(BaseModel):
-    """The fleet-sizing bounds: the coverage FLOOR and the cellular fleet CAP (variable 3).
+    """The fleet-sizing bounds: the coverage FLOOR and the cellular fleet CAP.
 
     In the cellular family the fleet target the build-out fills toward is the CAPACITY
     need (the subscriber target divided by the per-satellite density, see
@@ -439,7 +440,7 @@ class RevenueDials(BaseModel):
 
 
 class GroundInterfaceDials(BaseModel):
-    """The marked, TWO-REGIME CELLULAR-ground cost INTERFACE (Phase 4).
+    """The marked, TWO-REGIME CELLULAR-ground cost INTERFACE the ground comparison reads.
 
     INTERFACE INPUTS. These two ground baselines (dense-served incumbent-marginal
     and sparse fresh-build) come from the ground research wave; the investor owns the
@@ -449,9 +450,9 @@ class GroundInterfaceDials(BaseModel):
     the space cost per subscriber.
 
     The space side of the comparison is the model's OWN COMPUTED cellular annual
-    cost-per-subscriber (Phase 3), NEVER Starlink's disclosed broadband per-sub
-    number. This block is declared in Phase 1 (the ``ground`` field defaults to
-    None on :class:`CommsConfig`); Phase 4 consumes it in ``ground.py``.
+    cost-per-subscriber, NEVER Starlink's disclosed broadband per-sub number. The
+    ``ground`` field defaults to None on :class:`CommsConfig`; the ground comparison
+    (``communications.ground``) consumes the block.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
@@ -481,7 +482,7 @@ class GroundInterfaceDials(BaseModel):
         default=GROUND_BASIS_DEFAULT,
         description=(
             "Label stating which basis the ground numbers are on (default "
-            "'annual_cost_per_subscriber'), so the Phase 4 comparison matches "
+            "'annual_cost_per_subscriber'), so the ground comparison matches "
             "like-for-like with the space side (it asserts the bases match)."
         ),
     )
@@ -771,7 +772,8 @@ class CommsConfig(BaseModel):
     ground: GroundInterfaceDials | None = Field(
         default=None,
         description=(
-            "The marked, TWO-REGIME ground interface (Phase 4). None by default so "
+            "The marked, TWO-REGIME ground interface the ground comparison reads. None by "
+            "default so "
             "the cost side runs with no ground number; supply it per-scenario on a "
             "cellular config (an Iridium config refuses one)."
         ),

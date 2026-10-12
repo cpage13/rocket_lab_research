@@ -15,12 +15,12 @@ required, so the curve's presence is a type fact. On every run it narrows the co
 that the curve was computed for the config's own inputs (the identity check,
 :func:`communications.saturation_curve.check_curve_matches`), and only then runs:
 
-1. **The fleet** (E2): the shared fleet-and-cost loop
+1. **The fleet**: the shared fleet-and-cost loop
    (:func:`communications.engine.run_fleet_loop`) under :func:`full_cadence_rule`, which flies
    every comms launch the cadence share allows at the scenario's satellites per launch and
    counts as replacement only what matches the year's retirements. There is no fleet target,
    no hold and no cap: no saturation number sizes, caps, stops or slows the build.
-2. **The years** (E4, E5): in every year whose living fleet is at or above the coverage floor
+2. **The years**: in every year whose living fleet is at or above the coverage floor
    (pinned at 340 on the Iridium path), each device class serves every person its living fleet
    carries (the curve's people, read at the downlink share d and the panel factor, rounded half
    up) at its own flat price, and the two IoT lines earn their fixed books; below the floor
@@ -28,10 +28,10 @@ that the curve was computed for the config's own inputs (the identity check,
    annualized cost, null with no revenue; the IoT lines are never inside it. The years are
    read before anything else, so a year's fleet past a class's last computed row raises
    :class:`~communications.saturation_curve.CurveBeyondLastRowError` naming that year.
-3. **The readings** (E6, E7): every class at four reported fleets (the coverage floor; 2,000,
-   the retired cap, kept for comparison; the horizon-end full-cadence reach; the steady state
-   beyond the horizon), each priced by its reading cost, and the IoT check (E8) at each.
-4. **Each class's block** (E3, E12): its price, usage and physics (the satellite's peak at the
+3. **The readings**: every class at four reported fleets (the coverage floor; 2,000, the
+   retired cap, kept for comparison; the horizon-end full-cadence reach; the steady state
+   beyond the horizon), each priced by its reading cost, and the IoT check at each.
+4. **Each class's block**: its price, usage and physics (the satellite's peak at the
    panel, the downlink pool and the per-user rates), its markers from the curve, the limit
    that binds at the horizon's end, and its marginal intervals on the curve's own rows.
 5. **The record**, :class:`IridiumRecord`: everything the ``iridium-v6`` artifact publishes
@@ -181,7 +181,8 @@ class NotAnIridiumConfigError(ValueError):
 
 
 class BindingLimit(StrEnum):
-    """What bounds a device class's fleet at the horizon's end (the saturation strategy's E3)."""
+    """What bounds a device class's fleet at the horizon's end, reported beside the launch
+    cadence and never a cap on the build (ADR 005)."""
 
     LAUNCH_CADENCE = "launch_cadence"
     """The launch cadence: the final year's living fleet is below the class's saturation number,
@@ -194,7 +195,8 @@ class BindingLimit(StrEnum):
 
 @dataclass(frozen=True)
 class ClassRates:
-    """One class's downlink pool and per-user rates (the saturation strategy's § 3 rule).
+    """One class's downlink pool and per-user rates (the rule is
+    :func:`derive_iridium_per_user_rates`'s).
 
     Attributes:
         beam_pool_mbps: One beam's downlink pool, W x SE x d, Mbps.
@@ -210,7 +212,7 @@ class ClassRates:
 
 @dataclass(frozen=True)
 class MarginalIntervalRecord:
-    """One interval of a class's curve rows and what one more satellite adds across it (E12).
+    """One interval of a class's curve rows and what one more satellite adds across it.
 
     Attributes:
         lower_fleet: The interval's lower fleet (0 for the first interval).
@@ -359,7 +361,7 @@ class ClassReadingRecord:
 
 @dataclass(frozen=True)
 class ReadingRecord:
-    """Every class at one reported fleet (E7).
+    """Every class at one reported fleet.
 
     Attributes:
         label: What the fleet is (the coverage floor, the retired cap, the horizon-end reach,
@@ -378,7 +380,7 @@ class ReadingRecord:
 
 @dataclass(frozen=True)
 class IotCheckRowRecord:
-    """One IoT line at one reported fleet (E8); every field but ``fleet`` None below the floor.
+    """One IoT line at one reported fleet; every field but ``fleet`` None below the floor.
 
     Attributes:
         fleet: The fleet, satellites.
@@ -1008,7 +1010,7 @@ def _iot_check(
     *,
     coverage_floor: int,
 ) -> IotCheckRecord:
-    """The IoT check at every reported fleet, each line on its own (E8).
+    """The IoT check at every reported fleet, each line on its own.
 
     A beam's uplink is the held width at the phone class's spectral efficiency over the share of
     the frame the downlink leaves (1 - d, ADR 008), and its tones are the held width over the
@@ -1050,7 +1052,7 @@ def _marginal_intervals(
     price_usd_per_month: float,
     cost_per_satellite_year_musd: float,
 ) -> tuple[MarginalIntervalRecord, ...]:
-    """A class's marginal intervals on its curve's own rows (E12): from 0 to the first row, then
+    """A class's marginal intervals on its curve's own rows: from 0 to the first row, then
     between consecutive rows, every one listed, so an interval that pays after a first stop
     shows."""
     intervals: list[MarginalIntervalRecord] = []
