@@ -138,6 +138,37 @@ class DeviceClass(StrEnum):
     PHONE_CLASS = "phone_class"
 
 
+class IotClass(StrEnum):
+    """The engineering model's two IoT device classes: the key that names each (never a setting).
+
+    An IoT class is measured in devices, never people, and the engineering model sells no IoT
+    seat: it publishes
+    what IoT the network can carry, each class alone at its engineering usage
+    (:data:`IOT_ENGINEERING_USAGE`), never a count sold, a price or revenue (ADR 011). The member
+    order is the order every list of IoT classes takes. ``MINIMAL_PACKET_IOT`` sends short
+    messages only; ``DATA_IOT`` sends bursts of data beside the same messages.
+    """
+
+    MINIMAL_PACKET_IOT = "minimal_packet_iot"
+    DATA_IOT = "data_iot"
+
+
+class IotView(StrEnum):
+    """The three views of IoT's room, each read at its conservative end (ADR 011).
+
+    An IoT class's device capacity is the least of the devices the three views hold, and the view
+    that gives it binds; this member order breaks a tie (the earliest binds).
+    ``PAYLOAD_BITS`` is the uplink's payload bits after the MAC efficiency
+    (:data:`IOT_MAC_EFFICIENCY`); ``RANDOM_ACCESS`` the random-access attempts at the window's low
+    end (:data:`IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW`); ``SINGLE_TONE_TIME`` the single-tone time
+    at the message airtime's high end (:data:`IOT_MESSAGE_AIRTIME_HIGH_S`).
+    """
+
+    PAYLOAD_BITS = "payload_bits"
+    RANDOM_ACCESS = "random_access"
+    SINGLE_TONE_TIME = "single_tone_time"
+
+
 # ===========================================================================
 # Year-bound constants (config Field bounds)
 # ===========================================================================
@@ -753,22 +784,31 @@ COMM-617, COMM-618)."""
 
 MINIMAL_PACKET_IOT_MESSAGE_BYTES: Final[int] = 340
 """SOURCED_FACT (COMM-620, certified: Iridium's SBD IoT messages, about 340 bytes, the
-volume engine; COMM-659). One minimal-packet IoT message, bytes."""
+volume engine; COMM-659). One IoT message, bytes: the size of every message of the IoT
+capacity's reference usage (:class:`IotUsage`), each IoT class's alike."""
 
 MINIMAL_PACKET_IOT_MESSAGES_PER_DAY: Final[int] = 48
-"""INVESTOR_SET (the investor's usage table, 2026-10-04). Minimal-packet IoT's messages a day
-per device: 48 of 340 bytes is about 1.5 bits a second, the top of COMM-659's 0.03 to 1.5
-bits a second for a low-duty narrowband device. Data IoT sends them too, beside its bursts."""
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). The messages a day one IoT device of
+either class sends in the IoT capacity's reference usage (:data:`IOT_ENGINEERING_USAGE`), a
+usage and never a count of devices: 48 of 340 bytes is about 1.5 bits a second, the top of
+COMM-659's 0.03 to 1.5 bits a second for a low-duty narrowband device. Data IoT sends them too,
+beside its bursts."""
+
+MINIMAL_PACKET_IOT_BURSTS_PER_DAY: Final[int] = 0
+"""The bursts a day of a minimal-packet IoT device in the IoT capacity's reference usage: none,
+since the class sends short messages only (the bursts are data IoT's,
+:data:`DATA_IOT_BURSTS_PER_DAY`). The class's definition, not a tunable."""
 
 DATA_IOT_BURSTS_PER_DAY: Final[int] = 4
-"""INVESTOR_SET (the investor's usage, 2026-10-04, an assumption). Data IoT's bursts a day per
-device, each :data:`DATA_IOT_BURST_BYTES`, beside its 48 messages. The line's rate of about
-88 kbps, the top of Certus mid's 22 to 88 kbps (COMM-674), describes it and enters no
-computation."""
+"""INVESTOR_SET (the investor's usage, 2026-10-04, an assumption). The bursts a day one data IoT
+device sends in the IoT capacity's reference usage (:data:`IOT_ENGINEERING_USAGE`), each
+:data:`DATA_IOT_BURST_BYTES`, beside its 48 messages: a usage and never a count of devices. The
+class's rate of about 88 kbps, the top of Certus mid's 22 to 88 kbps (COMM-674), describes it
+and enters no computation."""
 
 DATA_IOT_BURST_BYTES: Final[int] = 100_000
 """INVESTOR_SET (the investor's usage, 2026-10-04, an assumption). One data IoT burst, bytes
-(100 KB)."""
+(100 KB): the burst size of the IoT capacity's reference usage (:class:`IotUsage`)."""
 
 IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW: Final[int] = 57
 """SOURCED_ESTIMATE (COMM-654). The low end of the devices one NB-IoT NTN random-access window
@@ -802,6 +842,65 @@ NB_IOT_TONE_HZ: Final[float] = 3_750.0
 """SOURCED_FACT (COMM-714, certified). NB-IoT's narrowest uplink allocation, one single-tone
 subcarrier, Hz: the held width over it counts the tones (about 2,133 in 8 MHz), and the
 uplink holds the share 1 - d of them (the downlink share d, ADR 008)."""
+
+
+@dataclass(frozen=True)
+class IotUsage:
+    """What one IoT device sends a day: an IoT class's usage, never a count of devices.
+
+    Every message is :data:`MINIMAL_PACKET_IOT_MESSAGE_BYTES` and every burst
+    :data:`DATA_IOT_BURST_BYTES` (the sizes the artifact's physics block publishes); the loads a
+    day are derived from the two counts a day, so a usage's loads cannot drift from its counts.
+
+    Attributes:
+        messages_per_day: The device's messages a day.
+        bursts_per_day: Its bursts a day, beside the messages.
+    """
+
+    messages_per_day: int
+    bursts_per_day: int
+
+    @property
+    def bytes_per_day(self) -> int:
+        """The device's daily volume, bytes: its messages and its bursts at their sizes."""
+        return (
+            self.messages_per_day * MINIMAL_PACKET_IOT_MESSAGE_BYTES
+            + self.bursts_per_day * DATA_IOT_BURST_BYTES
+        )
+
+    @property
+    def uplink_bits_per_day(self) -> int:
+        """The device's daily uplink bits: its daily volume in bits (IoT is mostly uplink)."""
+        return self.bytes_per_day * BITS_PER_BYTE
+
+    @property
+    def access_attempts_per_day(self) -> int:
+        """The device's random-access attempts a day: one per message or burst."""
+        return self.messages_per_day + self.bursts_per_day
+
+    @property
+    def single_tone_messages_per_day(self) -> int:
+        """The device's messages a day read on single tones: every message, a data IoT device's
+        included (its bursts are not single-tone messages)."""
+        return self.messages_per_day
+
+
+IOT_ENGINEERING_USAGE: Final[Mapping[IotClass, IotUsage]] = MappingProxyType(
+    {
+        IotClass.MINIMAL_PACKET_IOT: IotUsage(
+            messages_per_day=MINIMAL_PACKET_IOT_MESSAGES_PER_DAY,
+            bursts_per_day=MINIMAL_PACKET_IOT_BURSTS_PER_DAY,
+        ),
+        IotClass.DATA_IOT: IotUsage(
+            messages_per_day=MINIMAL_PACKET_IOT_MESSAGES_PER_DAY,
+            bursts_per_day=DATA_IOT_BURSTS_PER_DAY,
+        ),
+    }
+)
+"""INVESTOR_SET (the investor's usage, 2026-10-04). The IoT capacity's reference usage, one entry
+per :class:`IotClass` in its order, read-only: minimal-packet IoT 48 messages a day; data IoT 4
+bursts beside the same 48 messages. Each IoT class's device capacity is read at its entry, a day's
+average: a usage, never a count of devices, a price or a forecast (ADR 011)."""
 
 # ===========================================================================
 # The shipped population grid (the saturation curve's demand map, ADR 009)
@@ -1236,6 +1335,7 @@ __all__ = [
     "DATA_IOT_BURSTS_PER_DAY",
     "DATA_IOT_BURST_BYTES",
     "DATA_IOT_DEVICES",
+    "IOT_ENGINEERING_USAGE",
     "IOT_MAC_EFFICIENCY",
     "IOT_MESSAGE_AIRTIME_HIGH_S",
     "IOT_MESSAGE_AIRTIME_LOW_S",
@@ -1243,6 +1343,10 @@ __all__ = [
     "IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH",
     "IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW",
     "IRIDIUM_IOT_BOOK_DEVICES",
+    "IotClass",
+    "IotUsage",
+    "IotView",
+    "MINIMAL_PACKET_IOT_BURSTS_PER_DAY",
     "MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES",
     "MINIMAL_PACKET_IOT_DEVICES",
     "MINIMAL_PACKET_IOT_MESSAGES_PER_DAY",

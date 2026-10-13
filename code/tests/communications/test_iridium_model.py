@@ -71,6 +71,7 @@ from communications.constants import (
     DATA_IOT_DEVICES,
     ECOSYSTEM_ASSUMPTION_NOTE,
     HORIZON_YEARS_DEFAULT,
+    IOT_ENGINEERING_USAGE,
     IRIDIUM_SCENARIO_NAME_DEFAULT,
     MINIMAL_PACKET_IOT_DEVICES,
     ORBIT_ALTITUDE_KM_SCENARIO,
@@ -82,6 +83,7 @@ from communications.constants import (
     SATELLITES_PER_LAUNCH_MAX,
     SATELLITES_PER_LAUNCH_MIN,
     DeviceClass,
+    IotClass,
 )
 from communications.engine import (
     CellularTrajectory,
@@ -520,6 +522,42 @@ def test_per_user_offpeak_caps_at_the_beam_pool() -> None:
         )
         assert rates.per_user_rate_offpeak_mbps == pytest.approx(pool)
         assert rates.per_user_rate_offpeak_mbps < ratio_rate
+
+
+# ---------------------------------------------------------------------------
+# IoT as capacity (ADR 011): each IoT class's engineering usage, its loads a day.
+# ---------------------------------------------------------------------------
+IOT_CLASS_ORDER = [IotClass.MINIMAL_PACKET_IOT, IotClass.DATA_IOT]
+IOT_USAGE_LOADS = (
+    (IotClass.MINIMAL_PACKET_IOT, 48, 0, 16_320, 130_560, 48, 48),
+    (IotClass.DATA_IOT, 48, 4, 416_320, 3_330_560, 52, 48),
+)
+"""Each IoT class's engineering usage (the investor's, 2026-10-04) and its loads a day, worked by
+hand, IoT class order: messages, bursts, bytes (48 x 340 = 16,320; 4 x 100,000 + 16,320 =
+416,320), uplink bits (x 8), access attempts (one per message or burst) and single-tone messages
+(every message, data IoT's included)."""
+
+
+def test_each_iot_class_engineering_usage_and_its_loads_a_day() -> None:
+    """Objective: the IoT capacity's reference usage, one entry per IoT class in its order, and
+    the loads a day each derives (the bytes, the uplink bits, the access attempts and the
+    single-tone messages), so a capacity read at it cannot drift from the usage.
+
+    Sample: ``IOT_ENGINEERING_USAGE`` as shipped.
+
+    Expected outcome: minimal-packet IoT then data IoT; minimal-packet IoT 48 messages and 0
+    bursts a day, 16,320 bytes, 130,560 uplink bits, 48 access attempts and 48 single-tone
+    messages; data IoT 48 messages and 4 bursts, 416,320 bytes, 3,330,560 bits, 52 attempts and
+    48 single-tone messages.
+    """
+    assert list(IOT_ENGINEERING_USAGE) == IOT_CLASS_ORDER
+    for iot_class, messages, bursts, volume, bits, attempts, tones in IOT_USAGE_LOADS:
+        usage = IOT_ENGINEERING_USAGE[iot_class]
+        assert (usage.messages_per_day, usage.bursts_per_day) == (messages, bursts)
+        assert usage.bytes_per_day == volume
+        assert usage.uplink_bits_per_day == bits
+        assert usage.access_attempts_per_day == attempts
+        assert usage.single_tone_messages_per_day == tones
 
 
 # ---------------------------------------------------------------------------
