@@ -78,6 +78,11 @@ terms.
 - What stops the usage: the robust floor, the median's peak, or the top of an
   IoT class's usage list, where the pick then sits on an upper usage edge,
   warned. The stated line on it names this run's pick (`assumptions`).
+- IoT's room, which the usable test holds IoT's sales to, rides the phone
+  class's useful beams, the beams lit over inhabited cells, so it counts no
+  beam over oceans or empty land: a conservative basis, as in the Iridium
+  artifact. The beams there are upside the case does not count; its stated
+  line on the room says so.
 - The artifact's blocks: `metadata` (the Iridium artifact read: its path,
   schema, stamp and SHA-256), `inputs` (every input an input cell: the
   scenario's, the constants' and the values read from the Iridium artifact),
@@ -109,10 +114,6 @@ terms.
   product model (L3); every year FY2031 to FY2036, where the scenario reports
   four (L4); the terminals' upload in IoT's room, which waits on the
   terminal-uplink research (L5).
-- IoT's room, which the usable test holds IoT's sales to, rides the phone
-  class's useful beams, the beams lit over inhabited cells, so it counts no
-  beam over oceans or empty land: a conservative basis, which the Iridium
-  artifact states and the product case's stated lines do not yet name.
 - The public documents do not yet tell the product case, and
   `communications/assumptions.md` has no product-case section yet (the
   conclusions page, Open).
