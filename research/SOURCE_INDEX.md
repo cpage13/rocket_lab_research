@@ -99,9 +99,10 @@ or by topic prefix:
   `channels_aggregate_answer.md` one-pager mints no IDs (it cross-refs the primer's
   `COMM-427`/`COMM-428`/`COMM-433`/`COMM-434`). Wave 8 (the spectrum and phased-array
   fundamentals) continues at `COMM-561`..`COMM-600` (`COMM-575`..`COMM-600` reserved-unused),
-  wave 9 (the Iridium batch, ingested 2026-06-29 to 2026-07-01) at `COMM-601`..`COMM-710`, and
-  the saturation build (2026-10-05) at `COMM-711`..`COMM-721`; each one's section below gives
-  its allocation by document (this summary extended 2026-10-12).
+  wave 9 (the Iridium batch, ingested 2026-06-29 to 2026-07-01) at `COMM-601`..`COMM-710`, the
+  saturation build (2026-10-05) at `COMM-711`..`COMM-721`, and the product case (2026-10-13) at
+  `COMM-722`..`COMM-726`; each one's section below gives its allocation by document (this
+  summary extended 2026-10-12 and 2026-10-13).
 
 The topic documents remain the source of narrative reasoning. This ledger is the
 fast pass/fail layer for source quality.
