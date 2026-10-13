@@ -7,7 +7,8 @@ classes' own defaults and bounds are tested once, in
 ``tests/common/test_cadence_move.py``), the satellite / coverage / comms-share /
 ground blocks, the field bounds, the cross-field validators (the coverage floor at or
 below the fleet cap; on an Iridium config every cellular sizing and revenue dial at its
-default and no ground block), a retired Iridium setting refused at load, every float dial of
+default and no ground block), a retired Iridium setting refused at load, the config's top
+level, the Iridium block and its saturation block pinned to their settings, every float dial of
 an Iridium config finite and never a boolean, the numbers of the metadata, comms share and
 satellite blocks never a boolean or a quoted number, the YAML loader pair, and the Iridium
 saturation block (its defaults, the shipped scenario's block, its bounds). Mirrors the data-center
@@ -504,6 +505,41 @@ def test_a_retired_iridium_setting_fails_at_load_naming_it(tmp_path: Path) -> No
             load_comms_config(scenario)
         assert _located(refused) == [".".join(("iridium", *path))], path
         assert refused.value.errors()[0]["type"] == "extra_forbidden"
+
+
+def test_the_config_iridium_and_saturation_blocks_hold_exactly_their_settings() -> None:
+    """Objective: the config's top level, its Iridium block and that block's saturation block
+    hold exactly the settings the models read, in order, so no setting joins one of them unseen
+    (IoT is capacity in the engineering model, never a setting: ADR 011). The Iridium price
+    block's three fields are pinned in ``test_the_three_class_prices_and_no_government_key``.
+
+    Sample: each model's own fields.
+
+    Expected outcome: the top level is metadata, cadence, the comms share, launch cost,
+    satellite, coverage, subscribers, revenue, ground and iridium; the Iridium block the
+    spectrum, the panel, the label, the saturation block and the price block; the saturation
+    block the downlink share and the curve path; each in that order.
+    """
+    assert list(CommsConfig.model_fields) == [
+        "metadata",
+        "cadence",
+        "comms_cadence",
+        "launch_cost",
+        "satellite",
+        "coverage",
+        "subscribers",
+        "revenue",
+        "ground",
+        "iridium",
+    ]
+    assert list(IridiumDials.model_fields) == [
+        "spectrum_mhz",
+        "aperture_m2",
+        "scenario_name",
+        "saturation",
+        "arpu",
+    ]
+    assert list(SaturationDials.model_fields) == ["downlink_share", "curve_path"]
 
 
 def _float_dial_paths(block: type[BaseModel]) -> list[tuple[str, ...]]:

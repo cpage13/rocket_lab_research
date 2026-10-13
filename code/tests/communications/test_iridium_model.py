@@ -399,6 +399,13 @@ the ecosystem assumption: the message and burst sizes (COMM-620; the investor's 
 efficiency (COMM-659), the random-access window's two ends and its rate (COMM-654; an
 assumption), the NB-IoT tone (COMM-714) and the message airtime's two ends (COMM-719)."""
 
+IOT_KEYS_V7 = frozenset({"iot", "iot_class", "iot_classes", *IOT_PHYSICS_FROZEN})
+"""Every key name ``iridium-v7`` writes that holds ``iot``, at any depth: each year's and each
+reading's room (``iot``), the IoT classes and each capacity's class (``iot_classes``,
+``iot_class``) and the physics block's nine constants, twelve in all. The frozen baseline holds
+the file's such keys to exactly these, so no other IoT key (one for devices sold, a price,
+revenue or the removed check, under any name) reaches the artifact unseen."""
+
 SyntheticCurve = Callable[[IridiumDials], SaturationCurve]
 """The ``synthetic_saturation_curve`` fixture: Iridium dials in, a curve stamped for them out."""
 
@@ -2371,7 +2378,9 @@ def test_promoted_json_export_writes_frozen_baseline(
     state's frozen people; the saturation block's identity (the committed curve's path, schema,
     stamp and hash), d, the panel factor, the band saturation numbers and the curve's limits,
     its fields and each reading's in the foundation's order; none of the 28 key names the v6
-    schema removed and v7 did not bring back, at any depth (``V6_REMOVED_KEYS``).
+    schema removed and v7 did not bring back, at any depth (``V6_REMOVED_KEYS``); and every key
+    name holding ``iot``, at any depth, one of the twelve v7 writes (``IOT_KEYS_V7``), so the
+    file carries no other IoT key (none of guard N2's among them).
     """
     out_path = tmp_path / "iridium_default.json"
     written = export_iridium_json(iridium_yaml, out_path, version_stamp="test-stamp")
@@ -2491,6 +2500,8 @@ def test_promoted_json_export_writes_frozen_baseline(
     assert len(V6_REMOVED_KEYS) == 28
     returned = sorted(_keys(payload) & V6_REMOVED_KEYS)
     assert returned == [], returned
+    assert len(IOT_KEYS_V7) == 12
+    assert {key for key in _keys(payload) if "iot" in key.lower()} == IOT_KEYS_V7
 
 
 def test_regenerated_default_artifact_matches_committed(
