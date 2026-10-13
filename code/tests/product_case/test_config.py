@@ -354,6 +354,32 @@ def test_every_refusal_names_its_field(
     assert reason in message, message
 
 
+def test_the_reported_years_compare_as_integers(
+    shipped_scenario: dict[str, Any],
+    write_scenario: Callable[[dict[str, Any]], Path],
+) -> None:
+    """Objective: the reported years are compared as the integers they are, so a year beyond the
+    range of a double loads (the engineering view then refuses it as a year it does not hold)
+    and two years a double cannot tell apart keep their order (the numerics lens's m3: a year
+    of 10^400 escaped the loader as a bare ``OverflowError``).
+
+    Sample: the shipped scenario with its last reported year 10^400, written to YAML and loaded;
+    then with its last two years 10^400 + 1 and 10^400.
+
+    Expected outcome: the first loads, its last year 10^400 exactly; the second is refused,
+    naming ``reported_years`` and its order.
+    """
+    shipped_scenario["reported_years"] = [2031, 2033, 2035, 10**400]
+    config = load_product_case_config(write_scenario(shipped_scenario))
+    assert config.reported_years[-1] == 10**400
+    shipped_scenario["reported_years"] = [2031, 2033, 10**400 + 1, 10**400]
+    with pytest.raises(ValidationError) as caught:
+        load_product_case_config(write_scenario(shipped_scenario))
+    message = str(caught.value)
+    assert "reported_years" in message, message
+    assert "must be in order" in message, message
+
+
 @pytest.mark.parametrize("iot_class", ["minimal_packet_iot", "data_iot"])
 def test_an_iot_count_in_the_scenario_is_refused_naming_the_field(
     shipped_scenario: dict[str, Any],

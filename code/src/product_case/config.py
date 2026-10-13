@@ -537,7 +537,7 @@ class ProductCaseConfig(BaseModel):
                 f"at least {MIN_REPORTED_YEARS} reported years are needed (the lines run from "
                 f"the first to the last), got {list(value)}"
             )
-        if not _rises_strictly(tuple(float(year) for year in value)):
+        if not _rises_strictly(value):  # compared as the integers they are, never as floats
             raise ValueError(f"the reported years must be in order, each once, got {list(value)}")
         return value
 

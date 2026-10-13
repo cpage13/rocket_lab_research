@@ -41,6 +41,7 @@ price, path and scale comes from the config.
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from fractions import Fraction
@@ -55,8 +56,10 @@ from product_case.constants import (
     DATA_IOT_PRICE_MULTIPLE,
     DAYS_PER_MONTH,
     OFFPEAK_HOURS_PER_DAY,
+    RELATIVE_TOLERANCE,
     SECONDS_PER_DAY,
     SECONDS_PER_HOUR,
+    TERMINAL_DEVICE_CLASS,
     USAGE_SCALE_START,
     ProductClass,
 )
@@ -69,8 +72,9 @@ class OfferError(ValueError):
     """The scenario's usage cannot be offered on the engineering network.
 
     Raised when a terminal's monthly total in a reported year is below its busy-hour part (the
-    engineering usage), naming the field and the year, or when the view's years are not the
-    scenario's reported years.
+    engineering usage) by more than the invariants' tolerance, or a usage, a price or a rate is
+    not finite (a setting too large for the arithmetic), each naming the field and the year; or
+    when the view's years are not the scenario's reported years.
     """
 
 
@@ -382,41 +386,90 @@ def choice_grid(config: ProductCaseConfig) -> tuple[Choice, ...]:
     return tuple(grid)
 
 
+def _finite(value: float, quantity: str, field: str, year: int) -> float:
+    """``value`` when it is finite; else an :class:`OfferError` naming its field and the year."""
+    if not math.isfinite(value):
+        raise OfferError(
+            f"{field}: FY{year}'s {quantity} is {value!r}, not a finite number (a setting too "
+            "large for the arithmetic)"
+        )
+    return value
+
+
+def _usage_on_line(
+    path_value: int, scale: float, years: tuple[int, ...], index: int, field: str
+) -> int:
+    """The usage a choice sends a day in the reported year at ``index`` (:func:`scaled_usage`).
+
+    A product beyond the range of a double is refused, naming the field and the year.
+    """
+    year = years[index]
+    try:
+        return scaled_usage(path_value, usage_factor(scale, year, years[0], years[-1]))
+    except OverflowError as error:
+        raise OfferError(
+            f"{field}: FY{year}'s usage at the scale x{scale!r} is beyond the range of a double "
+            "(a setting too large for the arithmetic)"
+        ) from error
+
+
 def _terminal_offer(
     product_class: ProductClass,
     prices: ClassPriceDials,
     end_price: float,
     gb_per_month: tuple[float, ...],
     busy_hour_gb: float,
-    field: str,
     years: tuple[int, ...],
     index: int,
 ) -> TerminalOffer:
-    """A terminal's offer in the reported year at ``index``; a total below its busy part refused."""
+    """A terminal's offer in the reported year at ``index``.
+
+    The off-peak part is the monthly total less the busy-hour part. A total below the busy-hour
+    part by more than :data:`~product_case.constants.RELATIVE_TOLERANCE` of it is refused, naming
+    the field and the year; a smaller shortfall is the float rounding of the busy-hour part (a
+    product of the engineering usage's doubles, 0.37800000000000006 GB for 0.1 Mbps at 7
+    percent), so a total equal to it in decimals has an off-peak part of 0. A price, a service
+    or a rate that is not finite is refused, naming its field and the year.
+    """
     year, first, last = years[index], years[0], years[-1]
+    usage_field = f"usage.{product_class}.gb_per_month"
     total = gb_per_month[index]
     offpeak = total - busy_hour_gb
     if offpeak < 0:
-        raise OfferError(
-            f"{field}: FY{year}'s {total!r} GB a month is below its busy-hour part, "
-            f"{busy_hour_gb!r} GB (the engineering usage over the {BUSY_HOURS_PER_DAY} busy "
-            "hours, which the seats are sized for)"
-        )
+        if -offpeak > RELATIVE_TOLERANCE * busy_hour_gb:
+            raise OfferError(
+                f"{usage_field}: FY{year}'s {total!r} GB a month is below its busy-hour part, "
+                f"{busy_hour_gb!r} GB (the engineering usage over the {BUSY_HOURS_PER_DAY} busy "
+                "hours, which the seats are sized for)"
+            )
+        offpeak = 0.0
+    price = price_on_line(prices.start_usd_month, end_price, year, first, last)
+    busy_rate = (
+        busy_hour_gb
+        * BYTES_PER_GB
+        * BITS_PER_BYTE
+        / (BUSY_HOURS_PER_DAY * SECONDS_PER_HOUR * DAYS_PER_MONTH)
+    )
+    offpeak_rate = (
+        offpeak
+        * BYTES_PER_GB
+        * BITS_PER_BYTE
+        / (OFFPEAK_HOURS_PER_DAY * SECONDS_PER_HOUR * DAYS_PER_MONTH)
+    )
     return TerminalOffer(
         product_class=product_class,
-        price_usd_month=price_on_line(prices.start_usd_month, end_price, year, first, last),
+        price_usd_month=_finite(price, "price a month", f"prices.{product_class}", year),
         gb_per_month=total,
         busy_hour_gb_per_month=busy_hour_gb,
         offpeak_gb_per_month=offpeak,
-        service=total / gb_per_month[0],
-        busy_hour_rate_bps=busy_hour_gb
-        * BYTES_PER_GB
-        * BITS_PER_BYTE
-        / (BUSY_HOURS_PER_DAY * SECONDS_PER_HOUR * DAYS_PER_MONTH),
-        offpeak_rate_bps=offpeak
-        * BYTES_PER_GB
-        * BITS_PER_BYTE
-        / (OFFPEAK_HOURS_PER_DAY * SECONDS_PER_HOUR * DAYS_PER_MONTH),
+        service=_finite(total / gb_per_month[0], "service", usage_field, year),
+        busy_hour_rate_bps=_finite(
+            busy_rate,
+            "busy-hour rate",
+            f"the engineering usage of {TERMINAL_DEVICE_CLASS[product_class]}",
+            year,
+        ),
+        offpeak_rate_bps=_finite(offpeak_rate, "off-peak rate", usage_field, year),
     )
 
 
@@ -428,37 +481,59 @@ def _iot_offer(
     bursts_outside_busy_hours: bool,
     first_bytes_per_day: int,
     engineering: EngineeringView,
+    year: int,
 ) -> IotOffer:
-    """An IoT class's offer: its usage, bytes, service and per-device loads (round 1's order).
+    """An IoT class's offer in a reported year: its usage, bytes, service and per-device loads.
 
     Uplink bits a second: messages x 340 x 8 / 86,400, plus the bursts' bits over the day, or,
     outside the busy hours, none in the busy hours and their bits over the 20 off-peak hours;
     attempts a second the same way, one per message or burst; tone messages a second, the
-    messages over the day.
+    messages over the day (round 1's order). A usage whose loads or service are beyond the range
+    of a double, or a price that is not finite, is refused, naming the field and the year.
     """
-    message_bits = messages_per_day * engineering.message_bytes * BITS_PER_BYTE / SECONDS_PER_DAY
-    burst_bits = bursts_per_day * engineering.burst_bytes * BITS_PER_BYTE
-    message_attempts = messages_per_day / SECONDS_PER_DAY
-    offpeak_seconds = OFFPEAK_HOURS_PER_DAY * SECONDS_PER_HOUR
-    if bursts_outside_busy_hours:
-        bits_busy = message_bits
-        bits_offpeak = message_bits + burst_bits / offpeak_seconds
-        attempts_busy = message_attempts
-        attempts_offpeak = message_attempts + bursts_per_day / offpeak_seconds
-    else:
-        bits_busy = bits_offpeak = message_bits + burst_bits / SECONDS_PER_DAY
-        attempts_busy = attempts_offpeak = message_attempts + bursts_per_day / SECONDS_PER_DAY
-    bytes_per_day = (
-        messages_per_day * engineering.message_bytes + bursts_per_day * engineering.burst_bytes
-    )
+    usage_field = f"usage.{product_class}"
+    try:
+        message_bits = (
+            messages_per_day * engineering.message_bytes * BITS_PER_BYTE / SECONDS_PER_DAY
+        )
+        burst_bits = bursts_per_day * engineering.burst_bytes * BITS_PER_BYTE
+        message_attempts = messages_per_day / SECONDS_PER_DAY
+        offpeak_seconds = OFFPEAK_HOURS_PER_DAY * SECONDS_PER_HOUR
+        if bursts_outside_busy_hours:
+            bits_busy = message_bits
+            bits_offpeak = message_bits + burst_bits / offpeak_seconds
+            attempts_busy = message_attempts
+            attempts_offpeak = message_attempts + bursts_per_day / offpeak_seconds
+        else:
+            bits_busy = bits_offpeak = message_bits + burst_bits / SECONDS_PER_DAY
+            attempts_busy = attempts_offpeak = message_attempts + bursts_per_day / SECONDS_PER_DAY
+        bytes_per_day = (
+            messages_per_day * engineering.message_bytes + bursts_per_day * engineering.burst_bytes
+        )
+        service = bytes_per_day / first_bytes_per_day
+    except OverflowError as error:
+        raise OfferError(
+            f"{usage_field}: FY{year}'s messages and bursts a day are beyond the range of a "
+            "double in its loads (a setting too large for the arithmetic)"
+        ) from error
+    loads = (bits_busy, bits_offpeak, attempts_busy, attempts_offpeak, message_attempts, service)
+    for value in loads:
+        _finite(value, "per-device loads", usage_field, year)
     return IotOffer(
         product_class=product_class,
-        price_usd_month=price_usd_month,
+        price_usd_month=_finite(
+            price_usd_month,
+            "price a month"
+            if product_class is ProductClass.MINIMAL_PACKET_IOT
+            else "data IoT price a month (twice minimal-packet IoT's)",
+            "prices.minimal_packet_iot",
+            year,
+        ),
         messages_per_day=messages_per_day,
         bursts_per_day=bursts_per_day,
         bursts_outside_busy_hours=bursts_outside_busy_hours,
         bytes_per_day=bytes_per_day,
-        service=bytes_per_day / first_bytes_per_day,
+        service=service,
         uplink_bits_per_second_busy=bits_busy,
         uplink_bits_per_second_offpeak=bits_offpeak,
         access_attempts_per_second_busy=attempts_busy,
@@ -481,8 +556,10 @@ def choice_offers(
         The choice's offers, one entry per reported year.
 
     Raises:
-        OfferError: If the view's years are not the scenario's reported years, or a terminal's
-            monthly total in a reported year is below its busy-hour part (naming the field).
+        OfferError: If the view's years are not the scenario's reported years; a terminal's
+            monthly total in a reported year is below its busy-hour part by more than the
+            invariants' tolerance; or a usage, a price or a rate is not finite (each naming the
+            field and the year).
     """
     years = config.reported_years
     viewed = tuple(year.year for year in engineering.years)
@@ -497,12 +574,12 @@ def choice_offers(
     minimal_messages = usage.minimal_packet_iot.messages_per_day
     data_bursts = usage.data_iot.bursts_per_day
     data_messages = usage.data_iot.messages_per_day
-    minimal_first = scaled_usage(
-        minimal_messages[0], usage_factor(choice.minimal_packet_scale, first, first, last)
+    minimal_field = "usage.minimal_packet_iot"
+    data_field = "usage.data_iot"
+    minimal_first = _usage_on_line(
+        minimal_messages[0], choice.minimal_packet_scale, years, 0, minimal_field
     )
-    data_first = scaled_usage(
-        data_bursts[0], usage_factor(choice.data_iot_scale, first, first, last)
-    )
+    data_first = _usage_on_line(data_bursts[0], choice.data_iot_scale, years, 0, data_field)
     minimal_first_bytes = minimal_first * engineering.message_bytes
     data_first_bytes = (
         data_messages * engineering.message_bytes + data_first * engineering.burst_bytes
@@ -525,7 +602,6 @@ def choice_offers(
                     choice.end_prices[ProductClass.SMALL_TERMINAL],
                     usage.small_terminal.gb_per_month,
                     engineering.busy_hour_gb_per_month_small,
-                    "usage.small_terminal.gb_per_month",
                     years,
                     index,
                 ),
@@ -535,32 +611,36 @@ def choice_offers(
                     choice.end_prices[ProductClass.MOUNTED_TERMINAL],
                     usage.mounted_terminal.gb_per_month,
                     engineering.busy_hour_gb_per_month_mounted,
-                    "usage.mounted_terminal.gb_per_month",
                     years,
                     index,
                 ),
                 minimal_packet_iot=_iot_offer(
                     ProductClass.MINIMAL_PACKET_IOT,
                     minimal_price,
-                    scaled_usage(
+                    _usage_on_line(
                         minimal_messages[index],
-                        usage_factor(choice.minimal_packet_scale, year, first, last),
+                        choice.minimal_packet_scale,
+                        years,
+                        index,
+                        minimal_field,
                     ),
                     0,
                     False,
                     minimal_first_bytes,
                     engineering,
+                    year,
                 ),
                 data_iot=_iot_offer(
                     ProductClass.DATA_IOT,
                     DATA_IOT_PRICE_MULTIPLE * minimal_price,
                     data_messages,
-                    scaled_usage(
-                        data_bursts[index], usage_factor(choice.data_iot_scale, year, first, last)
+                    _usage_on_line(
+                        data_bursts[index], choice.data_iot_scale, years, index, data_field
                     ),
                     usage.data_iot.bursts_outside_busy_hours[index],
                     data_first_bytes,
                     engineering,
+                    year,
                 ),
             )
         )

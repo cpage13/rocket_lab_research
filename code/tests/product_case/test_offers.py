@@ -35,6 +35,9 @@ from product_case.offers import (
     usage_factor,
 )
 
+type Mutation = Callable[[dict[str, Any]], None]
+"""A change made to the shipped scenario's mapping before it is validated."""
+
 SHIPPED_YEARS = (2031, 2033, 2035, 2036)
 """The shipped scenario's reported years."""
 
@@ -43,9 +46,16 @@ ADOPTED_CHOICE = 12
 prices held flat, minimal-packet IoT at x8 and data IoT at x1."""
 
 
-def _view(years: tuple[int, ...]) -> EngineeringView:
+SYNTHETIC_SMALL_POOL = TerminalPool(10.0, 2.0, 0.025)
+"""The synthetic artifact's small-terminal pool: 10 Mbps a beam at 2 Mbps and 2.5 percent busy."""
+
+
+def _view(
+    years: tuple[int, ...], small_pool: TerminalPool = SYNTHETIC_SMALL_POOL
+) -> EngineeringView:
     """An engineering view of round numbers for the given years (the offers read only its usage,
-    sizes and years): the synthetic artifact's pools, 340-byte messages and 100 KB bursts."""
+    sizes and years): the synthetic artifact's pools (or the small-terminal pool given),
+    340-byte messages and 100 KB bursts."""
     readings = [
         EngineeringYearReading(
             year=year,
@@ -66,7 +76,7 @@ def _view(years: tuple[int, ...]) -> EngineeringView:
         schema_version="iridium-v7",
         version_stamp="2030-01-01",
         coverage_floor_reached_year=years[0],
-        small_terminal_pool=TerminalPool(10.0, 2.0, 0.025),
+        small_terminal_pool=small_pool,
         mounted_terminal_pool=TerminalPool(12.5, 5.0, 0.1),
         message_bytes=340,
         burst_bytes=100_000,
@@ -409,3 +419,114 @@ def test_every_choice_has_offers_in_every_reported_year() -> None:
         assert [year.year for year in offers.years] == list(SHIPPED_YEARS)
         for year in offers.years:
             assert [offer.product_class for offer in year.classes] == list(ProductClass)
+
+
+def test_a_total_equal_to_its_busy_part_in_decimals_sends_nothing_off_peak(
+    shipped_scenario: dict[str, Any],
+) -> None:
+    """Objective: a monthly total equal to its busy-hour part in decimals is not refused when the
+    busy-hour part, a product of the engineering usage's doubles, lands an ulp above it: a
+    shortfall within the invariants' tolerance of the busy-hour part is an off-peak part of 0
+    (the numerics lens's m2); a real shortfall is still refused.
+
+    Sample: an engineering view whose small terminal runs 0.1 Mbps while active, 7 percent busy
+    (its busy-hour part 0.378 GB a month in decimals, 0.37800000000000006 as doubles); the shipped
+    scenario with the small terminal at 0.378 GB in FY2031, then at 0.377 GB.
+
+    Expected outcome: the busy-hour part sits above 0.378 as doubles; at 0.378 the FY2031 offer
+    has an off-peak part of 0 GB and an off-peak rate of 0; at 0.377 an ``OfferError`` names
+    ``usage.small_terminal.gb_per_month`` and FY2031.
+    """
+    view = _view(SHIPPED_YEARS, small_pool=TerminalPool(10.0, 0.1, 0.07))
+    assert view.busy_hour_gb_per_month_small > 0.378
+    shipped_scenario["usage"]["small_terminal"]["gb_per_month"] = [0.378, 6.7, 8.1, 9.0]
+    config = ProductCaseConfig.model_validate(shipped_scenario)
+    first = choice_offers(config, view, choice_grid(config)[ADOPTED_CHOICE]).years[0]
+    assert first.small_terminal.offpeak_gb_per_month == 0.0
+    assert first.small_terminal.offpeak_rate_bps == 0.0
+    shipped_scenario["usage"]["small_terminal"]["gb_per_month"] = [0.377, 6.7, 8.1, 9.0]
+    config = ProductCaseConfig.model_validate(shipped_scenario)
+    with pytest.raises(OfferError, match=r"^usage\.small_terminal\.gb_per_month: FY2031's 0\.377"):
+        choice_offers(config, view, choice_grid(config)[ADOPTED_CHOICE])
+
+
+def _set_usage(block: str, key: str, value: object) -> Mutation:
+    """A mutation that sets one value of a class's usage block."""
+
+    def mutate(scenario: dict[str, Any]) -> None:
+        scenario["usage"][block][key] = value
+
+    return mutate
+
+
+def _set_prices(block: str, start: float, end: list[float]) -> Mutation:
+    """A mutation that sets one class's start and end prices."""
+
+    def mutate(scenario: dict[str, Any]) -> None:
+        scenario["prices"][block] = {"start_usd_month": start, "end_usd_month": end}
+
+    return mutate
+
+
+NON_FINITE_OFFERS: list[tuple[str, Mutation, str]] = [
+    (
+        "a usage scale beyond a double",
+        _set_usage("data_iot", "scales", [1.0, 1e308]),
+        "usage.data_iot: FY2033's usage at the scale x1e+308 is beyond the range of a double",
+    ),
+    (
+        "minimal-packet messages beyond a double",
+        _set_usage("minimal_packet_iot", "messages_per_day", [10**400, 72, 96, 96]),
+        "usage.minimal_packet_iot: FY2031's usage at the scale x1.0 is beyond the range",
+    ),
+    (
+        "data IoT messages beyond a double",
+        _set_usage("data_iot", "messages_per_day", 10**400),
+        "usage.data_iot: FY2031's messages and bursts a day are beyond the range of a double",
+    ),
+    (
+        "a monthly total whose off-peak rate is not finite",
+        _set_usage("small_terminal", "gb_per_month", [5.4, 6.7, 8.1, 1e300]),
+        "usage.small_terminal.gb_per_month: FY2036's off-peak rate is inf, not a finite number",
+    ),
+    (
+        "a price line that leaves the finite numbers",
+        _set_prices("small_terminal", 1e308, [1e308, 1.0]),
+        "prices.small_terminal: FY2033's price a month is -inf, not a finite number",
+    ),
+    (
+        "a data IoT price beyond a double",
+        _set_prices("minimal_packet_iot", 1e308, [1e308]),
+        "prices.minimal_packet_iot: FY2031's data IoT price a month (twice minimal-packet IoT's) "
+        "is inf",
+    ),
+]
+"""Each finite setting whose offers leave the finite numbers: what it is, the change to the shipped
+scenario, and the start of the one-line refusal."""
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [pytest.param(m, text, id=name) for name, m, text in NON_FINITE_OFFERS],
+)
+def test_a_usage_price_or_rate_that_is_not_finite_is_refused_naming_the_field(
+    shipped_scenario: dict[str, Any], mutation: Mutation, message: str
+) -> None:
+    """Objective: a finite setting whose usage, price or rate leaves the finite numbers is refused
+    by the offers in one line naming its field and the year, never a bare ``OverflowError`` or an
+    infinite number carried into the Monte Carlo (the numerics lens's m3).
+
+    Sample: the shipped scenario with one extreme but finite value (a usage scale of 1e308; 10^400
+    messages a day for either IoT class; 1e300 GB a month; a $1e308 start price falling to $1; a
+    $1e308 minimal-packet price, whose data IoT price doubles past the largest double), its whole
+    grid offered on an engineering view of round numbers.
+
+    Expected outcome: an ``OfferError`` whose one-line message starts as shown.
+    """
+    mutation(shipped_scenario)
+    config = ProductCaseConfig.model_validate(shipped_scenario)
+    with pytest.raises(OfferError) as caught:
+        grid_offers(config, _view(SHIPPED_YEARS))
+    text = str(caught.value)
+    assert text.startswith(message), text
+    assert "\n" not in text, text
