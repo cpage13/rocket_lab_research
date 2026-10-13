@@ -35,7 +35,7 @@ never add:
 - **The product case** asks what the network would sell. It sells four classes
   at the investor's prices, held flat: the small terminal, the mounted
   terminal, minimal-packet IoT and data IoT. Its headline is the typical market
-  of 2,000 drawn markets.
+  (each response at the middle of its range), read beside 2,000 drawn markets.
 
 ## The Verdict At A Glance
 
@@ -53,8 +53,10 @@ The answer, in short:
   for $2,952.8M a year, at a 47.4 percent own margin. The mounted terminal
   alone would serve 3.5 million for $2,116.3M, at 26.5 percent.
 - **IoT's room is large.** In FY2036 the fleet's IoT uplink fits 11.5 billion
-  minimal-packet devices (that class alone: a capacity, not a forecast). The
-  product case sells 184.9 million of them.
+  minimal-packet devices at 48 messages a day (that class alone: a capacity,
+  not a forecast). The product case's devices send more (768 messages a day),
+  and in the typical market they use less than a third of the room: 31.4
+  percent of the uplink off-peak.
 
 The plan by date. Each satellite lives five years, so the fleet flying is the
 last five years' launches, 16 satellites to a launch:
@@ -75,16 +77,26 @@ The product case, in the typical market:
 | FY2035 | $10,527.3M | 89.4 percent | 79.6 percent |
 | FY2036 | $13,156.2M | 88.2 percent | 79.1 percent |
 
-The engineering case, each terminal alone (people; revenue a year; own
-margin). Each column is the whole fleet sold to that class, so the columns
-never add:
+The engineering case, each terminal alone. Each table is the whole fleet sold
+to that one class, so the two never add.
 
-| Year | Small terminal ($10 a month) | Mounted terminal ($50 a month) |
-|---|---|---|
-| FY2031 | 4,139,229; $496.7M; 61.5 percent | 526,557; $315.9M; 39.4 percent |
-| FY2033 | 9,941,462; $1,193.0M; 58.7 percent | 1,289,233; $773.5M; 36.3 percent |
-| FY2035 | 19,400,399; $2,328.0M; 52.2 percent | 2,676,447; $1,605.9M; 30.7 percent |
-| FY2036 | 24,607,046; $2,952.8M; 47.4 percent | 3,527,090; $2,116.3M; 26.5 percent |
+The small terminal alone, at $10 a month:
+
+| Year | People | Revenue a year | Own margin |
+|---|---|---|---|
+| FY2031 | 4,139,229 | $496.7M | 61.5 percent |
+| FY2033 | 9,941,462 | $1,193.0M | 58.7 percent |
+| FY2035 | 19,400,399 | $2,328.0M | 52.2 percent |
+| FY2036 | 24,607,046 | $2,952.8M | 47.4 percent |
+
+The mounted terminal alone, at $50 a month:
+
+| Year | People | Revenue a year | Own margin |
+|---|---|---|---|
+| FY2031 | 526,557 | $315.9M | 39.4 percent |
+| FY2033 | 1,289,233 | $773.5M | 36.3 percent |
+| FY2035 | 2,676,447 | $1,605.9M | 30.7 percent |
+| FY2036 | 3,527,090 | $2,116.3M | 26.5 percent |
 
 Four things never add:
 
@@ -95,10 +107,6 @@ Four things never add:
 - The two applications. The data-center model's all-in case flies the same 301
   launches through FY2036. Each application runs as if it had the shared ramp
   to itself, so their headlines never add.
-
-This is not a precision forecast or a DCF. It is a feasibility study built
-from visible, source-linked assumptions. Every number here comes from the
-promoted artifacts, a cited research claim, or a setting the investor made.
 
 ## Source Snapshot
 
@@ -190,12 +198,8 @@ link's signal quality sets how many distinguishable amplitude-and-phase
 states each change can carry, the way a clean wire can carry four voltage
 levels where a noisy one carries only two. Throughput is the product of the
 two. A better antenna does not widen the spectrum: it cleans the signal, so
-each change carries more bits. That one fact is the device ladder in the next
-section.
-
-These are conditional model outputs, not measured performance from a finished
-spacecraft. The reuse calibration is the number real engineering would move
-first.
+each change carries more bits. That one fact is why the mounted terminal,
+with the better antenna, carries more in each beam than the small terminal.
 
 ## Who Uses It: The Devices
 
@@ -273,14 +277,23 @@ continuous coverage.
 **What the market would buy: the product case.** The product case sells IoT at
 its own, heavier usage (768 messages a day for minimal-packet IoT and 13 bursts
 for data IoT by FY2036), so its devices are never divided by the capacity
-above. It uses a part of the room:
+above:
 
-| Year | IoT devices sold | IoT revenue a year | The uplink room used (busy hours; off-peak) |
+| Year | Minimal-packet IoT devices | Data IoT devices | IoT revenue a year |
 |---|---|---|---|
-| FY2031 | 24,191,736 minimal-packet; 12,095,868 data IoT | $1,741.8M | 14.5 percent; 14.5 percent |
-| FY2033 | 72,183,871; 24,664,672 | $4,374.5M | 4.2 percent; 21.7 percent |
-| FY2035 | 147,273,061; 42,675,455 | $8,374.5M | 9.9 percent; 28.8 percent |
-| FY2036 | 184,890,668; 52,087,110 | $10,406.3M | 11.8 percent; 31.4 percent |
+| FY2031 | 24,191,736 | 12,095,868 | $1,741.8M |
+| FY2033 | 72,183,871 | 24,664,672 | $4,374.5M |
+| FY2035 | 147,273,061 | 42,675,455 | $8,374.5M |
+| FY2036 | 184,890,668 | 52,087,110 | $10,406.3M |
+
+In the typical market those devices use a part of the uplink room:
+
+| Year | Used in the busy hours | Used off-peak |
+|---|---|---|
+| FY2031 | 14.5 percent | 14.5 percent |
+| FY2033 | 4.2 percent | 21.7 percent |
+| FY2035 | 9.9 percent | 28.8 percent |
+| FY2036 | 11.8 percent | 31.4 percent |
 
 Data IoT sends its bursts outside the busy hours from FY2033, so the busy-hour
 use drops that year.
@@ -345,7 +358,7 @@ The cost model is deliberately flat (an investor simplification, 2026-07-09):
 The margin is a full-cost margin: revenue less the fleet's annualized build,
 launch, and replacement cost, over revenue. Operations cost is held at zero by
 explicit assumption, a line to research and add later, stated in every model
-output. For scale, Iridium spends about $376.3M a year of real operating cost
+output. For scale, Iridium spends about $376M a year of real operating cost
 today (revenue $871.7M minus operational EBITDA $495.3M, COMM-615, COMM-616).
 Charged that much in FY2036, the product case's margin would read 85.3 percent,
 and the engineering view of the terminals (below) 29.8 percent.
@@ -353,7 +366,7 @@ and the engineering view of the terminals (below) 29.8 percent.
 ### The Engineering Case: Every Seat Sold
 
 The engineering case sells every seat each people class's fleet carries, at
-the class's flat price. The table at the top shows each terminal alone.
+the class's flat price. The tables at the top show each terminal alone.
 Stated plainly (the investor's yes, 2026-10-12):
 
 - Revenue rises every year in each class.
@@ -371,15 +384,18 @@ should also do so in a way where revenue increases" (2026-10-06).
 
 **Where the next satellite stops paying.** Sold to one class alone at full
 price, an added satellite earns more than it costs until the fleet reaches
-6,006 satellites for the small terminal and 5,402 for the mounted terminal. Past those points it earns
-less. The FY2036 fleet (4,288) is inside both. Each step compares two
-separately computed fleets, so the people added need not fall at every step.
+about 6,006 satellites for the small terminal and about 5,402 for the mounted
+terminal. These are rows of the curve: each crossing lies within a row's
+spacing. Past them an added satellite earns less than it costs. The FY2036
+fleet (4,288) is inside both. Each step compares two separately computed
+fleets, so the people added need not fall at every step.
 
 **The terminals as one business.** To read the two terminals together, split
 the beams in today's mix: 75.7 percent to the small terminal and 24.3 percent
 to the mounted terminal. That is Iridium's 402,000 voice-and-data and 16,100
-broadband customers today, as busy-hour beams (COMM-617). Each class's seats
-are its share of its people, rounded down:
+broadband customers today, as busy-hour beams (COMM-617). The product case's
+artifact publishes the share, and its terminals sell these same seats. Each
+class's seats are its share of its people, rounded down:
 
 | Year | Small terminal seats | Mounted terminal seats | Revenue a year | Margin |
 |---|---|---|---|---|
@@ -396,7 +412,7 @@ floor.
 ### The Product Case: What The Network Would Sell
 
 The product case is its own model, built on the engineering artifact
-(ADR 012). It never feeds the engineering model. It works in four steps:
+(ADR 012). It never feeds the engineering model. In brief:
 
 1. **Demand.** Each class's customers start from Iridium today: 402,000
    voice-and-data customers at $47 a month, 16,100 broadband at $259, and
@@ -413,8 +429,9 @@ The product case is its own model, built on the engineering artifact
 4. **The pick.** The prices are the investor's, held flat. The pick chooses
    only each IoT class's usage: the most median revenue among the usages
    usable in at least three quarters of the markets. It takes minimal-packet
-   IoT at eight times its usage path and data IoT at its path. It is usable in
-   1,744 of 2,000 markets (87.2 percent).
+   IoT to eight times its usage path by FY2036, on a straight line from one
+   times in FY2031 (48, 274, 634 and 768 messages a day), and data IoT at its
+   path. It is usable in 1,744 of 2,000 markets (87.2 percent).
 
 The headline is the central market: each response at the middle of its range,
 the typical market. The four classes side by side (customers or devices;
@@ -486,7 +503,7 @@ model publishes IoT only as a capacity. Only the product case sells IoT.
 |---|---|---|
 | Small terminal | 18,636,082 seats; $2,236.3M | The same |
 | Mounted terminal | 855,857 seats; $513.5M | The same |
-| IoT | A capacity: 11,497,881,052 minimal-packet or 997,732,709 data IoT devices, each class alone | 184,890,668 minimal-packet and 52,087,110 data IoT devices; $10,406.3M |
+| IoT | A capacity: 11,497,881,052 minimal-packet devices at 48 messages a day, or 997,732,709 data IoT devices at 4 bursts a day, each class alone | 184,890,668 minimal-packet devices at 768 messages a day and 52,087,110 data IoT devices at 13 bursts a day; $10,406.3M |
 | Revenue a year | $2,749.8M | $13,156.2M |
 | Margin | 43.5 percent | 88.2 percent |
 
@@ -570,9 +587,10 @@ Inside the horizon the launch cadence, not the spectrum, binds every class.
 The fleet reaches 4,288 satellites in FY2036. At 90 launches a year held, it
 would settle at 7,200 beyond the horizon, still far below the small terminal's
 saturation number (19,995). Sold to one terminal class alone at full price,
-an added satellite stops paying from 5,402 (the mounted terminal) and 6,006
-(the small terminal), so each terminal's runway at full price ends there. IoT's room keeps growing with
-the fleet, and the product case uses less than a third of it in FY2036 (31.4
+an added satellite stops paying from about 5,402 satellites (the mounted
+terminal) and about 6,006 (the small terminal), so each terminal's runway at
+full price ends there. IoT's room keeps growing with the fleet, and in the
+typical market the product case uses less than a third of it in FY2036 (31.4
 percent of the uplink off-peak).
 
 ## What Would Change The Verdict
@@ -599,7 +617,7 @@ percent of the uplink off-peak).
 - **The market.** The product case's three response ranges are modeling
   choices that no market research grounds (COMM-723).
 - **Operations cost.** The explicit zero. A real operating line lowers every
-  margin; Iridium's own $376.3M a year is the scale hint.
+  margin; Iridium's own operating cost, about $376M a year, is the scale hint.
 - **The manifest share.** All-in is a modeling scenario.
 
 ## Alternatives, One Line Each
@@ -632,10 +650,16 @@ parts, the rocket, and the production lines is the data center's
 [structural case](../data_center/structural_case.md), written for the data
 center. This document is the Iridium numbers.
 
-This is a feasibility model, not Rocket Lab guidance, a demand forecast, a
-completed spacecraft design, or investment advice. The strongest conclusion
-is physical: narrow, reliable L-band can support a useful IoT and MSS product
-at the modeled rates if the reuse, the curve's simplifications, the panel,
-the downlink share, and IoT's access assumptions close in engineering. The
-deployment schedule and the economics are scenario layers built on top of that
-physical case, and their settings are stated where they bite.
+This is a feasibility model, not a precision forecast, a DCF, Rocket Lab
+guidance, a demand forecast, a completed spacecraft design, or investment
+advice. It is built from visible, source-linked assumptions: every number
+here comes from the promoted artifacts, a cited research claim, a setting the
+investor made, or simple arithmetic on them. The numbers are conditional
+model outputs, not measured performance from a finished spacecraft, and the
+reuse calibration is the one real engineering would move first. The strongest
+conclusion is physical: narrow, reliable L-band can support a useful IoT and
+MSS product at the modeled rates if the reuse, the curve's simplifications,
+the panel, the downlink share, and IoT's access assumptions close in
+engineering. The deployment schedule and the economics are scenario layers
+built on top of that physical case, and their settings are stated where they
+bite.
