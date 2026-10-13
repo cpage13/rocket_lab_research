@@ -20,8 +20,8 @@ case, with their promoted artifacts and a static reviewed conclusion.
   engine, iridium, saturation, saturation_curve, ground, json_output) carrying
   the Iridium model, the saturation curve's computation, the shared engine and
   the cellular family; and `code/src/product_case/`, the product case.
-- The test suite is green: 1,305 passed and 1 skipped from the repository root
-  (2026-10-13), with mypy strict and ruff clean.
+- The full test suite passes from the repository root, with mypy strict and
+  ruff clean.
 - The evidence library lives in `research/` under the `COMM-*` claim ledger.
 
 ## Current Read
@@ -35,14 +35,15 @@ year in FY2031 and $1,554.4M in FY2036. The cost model is investor-flat
 The engineering case sells every seat of each people class, each class alone.
 In FY2036 the small terminal alone serves 24,607,046 people for $2,952.8M a
 year, at a 47.4 percent own margin. The mounted terminal alone serves
-3,527,090 for $2,116.3M, at 26.5 percent. IoT is a capacity there: in FY2036
-the room fits 11,497,881,052 minimal-packet IoT devices or 997,732,709 data
-IoT devices, each class alone.
+3,527,090 for $2,116.3M, at 26.5 percent. IoT is a capacity there, not a
+forecast: in FY2036 the room fits 11,497,881,052 minimal-packet IoT devices or
+997,732,709 data IoT devices, each class alone at its engineering usage.
 
 The product case sells four classes at the investor's prices, held flat. In
-FY2036, in the typical market, it earns $13,156.2M a year at an 88.2 percent
-margin, 79.1 percent of it from IoT. It is usable in 1,744 of 2,000 drawn
-markets. The two cases are never added.
+FY2036, in the typical market, it would earn $13,156.2M a year at an 88.2
+percent margin, 79.1 percent of it from IoT. That headline sits a little below
+the median of the markets where the case is usable. It is usable in 1,744 of
+2,000 drawn markets. The two cases are never added.
 
 Treat these as traceable model outputs from the artifacts, not a final
 recommendation.

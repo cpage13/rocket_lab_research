@@ -95,8 +95,8 @@ cap.
 
 **The saturation curve.** Computed once by its command and promoted to
 `models/iridium/saturation_curve.json`. For each people class and each of 24
-fleets from 340 to 40,000 satellites (the mounted terminal also at 48,000 and
-64,000), on a shell at 450 km and 53 degrees, it counts the useful beams: the
+requested fleets from 340 to 40,000 satellites (the mounted terminal also at
+48,000 and 64,000), on a shell at 450 km and 53 degrees, it counts the useful beams: the
 co-channel beams a fleet keeps lit over inhabited cells of a shipped world
 population grid (2030, a quarter degree), filled smallest footprint first;
 the directional terminals stack layers under sky sectors. It is computed at

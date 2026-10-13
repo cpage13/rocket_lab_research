@@ -169,10 +169,10 @@ uv run python -m communications.saturation scenarios/iridium.yaml \
 ```
 
 Its usage is `python -m communications.saturation [-h] [--version-stamp
-VERSION_STAMP] scenario output`. Its last measured run, the promotion of
-2026-10-12, took 1,794.2 s of wall time with a 14,095 MB peak-memory bound
-(the curve's `provenance.run_measurement`), so it is never run casually: one
-at a time, on a machine with the memory for it.
+VERSION_STAMP] scenario output`. Its last measured run took about 30 minutes
+with a 14 GB peak-memory bound (the curve's `provenance.run_measurement`
+holds the figures), so it is never run casually: one at a time, on a machine
+with the memory for it.
 
 ## Edit Scenarios
 
@@ -332,11 +332,11 @@ code/
 ├── src/
 │   ├── common/                shared by both applications
 │   │   ├── cadence.py         the launch ramp, launch cost, and their dials
-│   │   ├── cli.py             exit codes, logging, and error lines for both commands
+│   │   ├── cli.py             exit codes, logging, and error lines for every command
 │   │   ├── cohort.py          the service-life cohort cliff
 │   │   ├── file_io.py         the YAML loader, artifact writer, and source checkout
 │   │   ├── input_manifest.py  input-cell vocabulary and builders
-│   │   ├── meta.py            validation and source-status types for meta blocks
+│   │   ├── meta.py            validation and source-status types for meta blocks, the data-dictionary walker
 │   │   └── provenance.py      provenance cells and the FORMULAS table
 │   ├── communications/
 │   │   ├── config.py

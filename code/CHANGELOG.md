@@ -17,7 +17,7 @@ artifact. The published numbers moved with the model, as the conclusion
 states: in FY2036 the fleet flies 4,288 satellites at $1,554.4M a year, the
 small terminal alone serves 24,607,046 people for $2,952.8M a year at a 47.4
 percent own margin, and the product case reads $13,156.2M at an 88.2 percent
-margin in the central market. The curve was promoted on 2026-10-12 and the
+margin in the central market, a little below its usable markets' median. The curve was promoted on 2026-10-12 and the
 Iridium artifact on 2026-10-13; the product case's artifact is new.
 
 ### Added
@@ -25,8 +25,8 @@ Iridium artifact on 2026-10-13; the product case's artifact is new.
 - **The saturation curve, schema saturation-v1** (ADRs 005, 008 and 009):
   `communications/models/iridium/saturation_curve.json`, computed by the new
   command `python -m communications.saturation`. For each people class, at 24
-  fleets from 340 to 40,000 satellites (the mounted terminal also at 48,000 and
-  64,000), it holds the useful beams a shell keeps lit over the inhabited cells
+  requested fleets from 340 to 40,000 satellites (the mounted terminal also at
+  48,000 and 64,000), it holds the useful beams a shell keeps lit over the inhabited cells
   of a shipped population grid (`communications/data/`, GHS-POP R2023A, CC BY
   4.0), at the 25 m^2 reference panel with the band in full-time use; each
   class's markers; the phone class's band points and interference trim; the

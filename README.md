@@ -95,16 +95,17 @@ connection (COMM-639).
 Two cases answer it, side by side and never added. The engineering case is
 every seat each people class could carry, each class alone, with IoT's room
 beside them. The product case is what the network would sell at the
-investor's prices, held flat, in the typical market of 2,000 drawn markets.
+investor's prices, held flat. Its headline is the typical market (each
+response at the middle of its range), read beside 2,000 drawn markets.
 
 - **The fleet.** Every Neutron launch on the shared ramp flies communications
   satellites. The fleet passes the 340-satellite coverage floor in FY2031, with
   528 flying, and reaches 4,288 in FY2036, at $1,554.4M a year.
 - **The product case.** At $10 and $50 a month for the two terminals and $3
-  and $6 for the two IoT classes, the network earns $2,194.6M in FY2031 and
-  **$13,156.2M in FY2036 at an 88.2 percent margin**, about four fifths of it
-  from IoT. That is the typical market; it sits a little below the median of
-  the markets where the case works.
+  and $6 for the two IoT classes, the network would earn $2,194.6M in FY2031
+  and **$13,156.2M in FY2036 at an 88.2 percent margin**, about four fifths of
+  it from IoT. That is the typical market; it sits a little below the median
+  of the markets where the case works.
 - **The engineering case.** Each class could fill the fleet alone. In FY2036
   the small terminal alone serves 24.6 million people ($2,952.8M a year, a
   47.4 percent own margin) and the mounted terminal alone 3.5 million
