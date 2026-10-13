@@ -13,9 +13,11 @@ demand curve in every market and year, never a set count; never a price lower th
 investor's in the case it adopts (lower prices appear only as context).
 
 The modules, as built so far: :mod:`product_case.constants` (the named constants, the enums
-and the formula catalog) and :mod:`product_case.config` (the frozen scenario config, its loader
-and each input's cell spec). The scenario is ``code/scenarios/product_case.yaml``; its values are
-labeled in ``research/SOURCE_INDEX.md``, rows COMM-722 to COMM-726.
+and the formula catalog), :mod:`product_case.config` (the frozen scenario config, its loader
+and each input's cell spec) and :mod:`product_case.engineering` (the one reader of the
+engineering artifact, and the network it gives each reported year). The scenario is
+``code/scenarios/product_case.yaml``; its values are labeled in ``research/SOURCE_INDEX.md``,
+rows COMM-722 to COMM-726.
 """
 
 from __future__ import annotations
