@@ -19,9 +19,10 @@ Per choice, reported year t (t0 the first, t1 the last) and class:
   terminal's downlink use is measured with;
 - an IoT class's usage: its scenario path (minimal-packet IoT's messages a day, data IoT's bursts
   a day; data IoT's messages are one value) times the choice's usage scale's line factor
-  f(t) = 1 + (scale - 1) x (t - t0) / (t1 - t0), rounded half up by
-  :func:`common.cadence.round_half_up` (x8 in FY2033 of FY2031 to FY2036: 72 x 3.8 = 273.6, so
-  274 messages, never the 240 a reported-year index would give); its bytes a day
+  f(t) = 1 + (scale - 1) x (t - t0) / (t1 - t0), the product taken exactly (the scale at its
+  decimal value) and rounded half up by :func:`common.cadence.round_half_up` (x8 in FY2033 of
+  FY2031 to FY2036: 72 x 3.8 = 273.6, so 274 messages, never the 240 a reported-year index
+  would give; an exact half, 50 x 1.15 = 57.5, rounds up to 58); its bytes a day
   B(t) = messages x 340 + bursts x 100,000 (the sizes the engineering artifact publishes); its
   per-device loads: the uplink bits a second and random-access attempts a second in the busy
   hours and off-peak (messages spread over the day; bursts over the day, or over the 20
@@ -31,8 +32,10 @@ Per choice, reported year t (t0 the first, t1 the last) and class:
   the first reported year's at the same choice, the service term of the demand curve.
 
 The operation order of every float follows round 3 of the product case's scratch exploration
-(local), so the reproduction of round 3 lands on its counts. Every record is frozen; nothing is
-kept in a module-level variable: every price, path and scale comes from the config.
+(local), so the reproduction of round 3 lands on its counts; the usage line alone is exact,
+which moves no usage of round 3's grids or the shipped grid (each product 0.1 or more from a
+half). Every record is frozen and a value; nothing is kept in a module-level variable: every
+price, path and scale comes from the config.
 """
 
 from __future__ import annotations
@@ -40,6 +43,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
+from fractions import Fraction
 from itertools import product
 
 from common.cadence import round_half_up
@@ -278,8 +282,16 @@ def price_on_line(start: float, end: float, year: int, first: int, last: int) ->
     return start + (end - start) * (year - first) / (last - first)
 
 
-def usage_factor(scale: float, year: int, first: int, last: int) -> float:
-    """f(t) = 1 + (scale - 1) x (t - t0) / (t1 - t0), a usage path's multiplier in year t.
+def _decimal_value(value: float) -> Fraction:
+    """A scenario number at its decimal value: its shortest ``repr``, as an exact fraction."""
+    return Fraction(repr(value))
+
+
+def usage_factor(scale: float, year: int, first: int, last: int) -> Fraction:
+    """f(t) = 1 + (scale - 1) x (t - t0) / (t1 - t0), a usage path's multiplier in year t, exactly.
+
+    The scale is taken at its decimal value (1.15 is 23/20, not the double nearest it) and the
+    line runs in fiscal years, so the factor is the exact rational the formula gives.
 
     Args:
         scale: The choice's usage scale by the last reported year.
@@ -290,14 +302,21 @@ def usage_factor(scale: float, year: int, first: int, last: int) -> float:
     Returns:
         1 in the first reported year, the scale in the last, on a straight line in fiscal years.
     """
-    return USAGE_SCALE_START + (scale - USAGE_SCALE_START) * (year - first) / (last - first)
+    start = _decimal_value(USAGE_SCALE_START)
+    return start + (_decimal_value(scale) - start) * Fraction(year - first, last - first)
 
 
-def scaled_usage(path_value: int, factor: float) -> int:
+def scaled_usage(path_value: int, factor: Fraction) -> int:
     """A usage path's value times its line factor, in whole messages or bursts, rounded half up.
 
-    ``round_half_up(path_value x factor)``, so x8's FY2033 minimal-packet usage, 72 x 3.8 =
-    273.6, is 274 (round 3's ``scaled``).
+    ``round_half_up(path_value x factor)`` with the product exact: it is the nearest double to
+    the exact product that :func:`common.cadence.round_half_up` rounds, and an exact half is a
+    double, so it rounds up as the formula says (50 messages at x1.15 in the last year: 57.5, so
+    58, where the product of doubles, 57.49999999999999, would give 57). x8's FY2033
+    minimal-packet usage, 72 x 3.8 = 273.6, is 274 (round 3's ``scaled``). A product that is not
+    a half lies at least 1 / (2 x 10^d x (t1 - t0)) from one, for a scale with d decimal places,
+    so the double rounds it as the exact formula does while 10^d x (t1 - t0) x the product stays
+    far below 10^15 (the double's precision); the shipped grid's scales are whole.
 
     Args:
         path_value: The scenario's messages or bursts a day in the year.
@@ -305,8 +324,12 @@ def scaled_usage(path_value: int, factor: float) -> int:
 
     Returns:
         The messages or bursts a day a device sends in the year at the choice.
+
+    Raises:
+        OverflowError: If the product is beyond the range of a double (the offers refuse it,
+            naming the field).
     """
-    return round_half_up(path_value * factor)
+    return round_half_up(float(path_value * factor))
 
 
 def choice_grid(config: ProductCaseConfig) -> tuple[Choice, ...]:

@@ -811,8 +811,10 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     "f(t) = 1 + (scale - 1) x (t - t0) / (t1 - t0); minimal-packet IoT's messages "
                     "a day m(t) = round_half_up(m_path(t) x f(t)) and data IoT's bursts a day "
                     "b(t) = round_half_up(b_path(t) x f(t)), with round_half_up(x) = floor(x + "
-                    "0.5); data IoT's messages a day are its one scenario value in every year (x8 "
-                    "in FY2033 of 2031 to 2036: 72 x 3.8 = 273.6, so 274)"
+                    "0.5) and the product taken exactly, the scale at its decimal value, so an "
+                    "exact half rounds up (50 at x1.15 in the last year: 57.5, so 58); data IoT's "
+                    "messages a day are its one scenario value in every year (x8 in FY2033 of "
+                    "2031 to 2036: 72 x 3.8 = 273.6, so 274)"
                 ),
                 description=(
                     "Each IoT class's usage in a reported year: its scenario path times the "

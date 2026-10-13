@@ -9,6 +9,7 @@ import dataclasses
 import math
 import pickle
 from collections.abc import Callable
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -198,16 +199,45 @@ def test_the_usage_line_runs_in_fiscal_years() -> None:
 
     Sample: the factor at x8 in FY2033 over FY2031 to FY2036; 72 and 96 messages scaled; 2.5.
 
-    Expected outcome: 3.8 within a float's rounding; 274 and 634 (FY2035's 96 x 6.6); 3.
+    Expected outcome: 3.8 exactly (19/5); 274 and 634 (FY2035's 96 x 6.6); 1 in the first
+    year and 8 in the last; 3.
     """
     factor = usage_factor(8.0, 2033, 2031, 2036)
-    assert math.isclose(factor, 3.8, rel_tol=1e-15)
+    assert factor == Fraction(19, 5)
     assert scaled_usage(72, factor) == 274
     assert scaled_usage(72, factor) != 240
     assert scaled_usage(96, usage_factor(8.0, 2035, 2031, 2036)) == 634
-    assert usage_factor(8.0, 2031, 2031, 2036) == 1.0
-    assert usage_factor(8.0, 2036, 2031, 2036) == 8.0
-    assert scaled_usage(5, 0.5) == 3
+    assert usage_factor(8.0, 2031, 2031, 2036) == 1
+    assert usage_factor(8.0, 2036, 2031, 2036) == 8
+    assert scaled_usage(5, Fraction(1, 2)) == 3
+
+
+def test_an_exact_half_rounds_up_as_the_formula_says(
+    shipped_scenario: dict[str, Any],
+    write_scenario: Callable[[dict[str, Any]], Path],
+) -> None:
+    """Objective: the usage line's product is exact, the scale at its decimal value, so an exact
+    half rounds up as the catalog's formula says, where the product of doubles would round it
+    down (the numerics lens's m1).
+
+    Sample: a side scenario whose data IoT sends 8, 10, 12 and 50 bursts a day with usage scales
+    x1 and x1.15, so FY2036 at x1.15 is 50 x 1.15 = 57.5 exactly; its product of doubles is
+    57.49999999999999.
+
+    Expected outcome: the factor is 23/20 exactly; the x1.15 choice sends 58 bursts a day in
+    FY2036 and the x1 choice 50; the product of doubles sits below 57.5, so its rounding would
+    give 57.
+    """
+    shipped_scenario["usage"]["data_iot"]["bursts_per_day"] = [8, 10, 12, 50]
+    shipped_scenario["usage"]["data_iot"]["scales"] = [1.0, 1.15]
+    config = load_product_case_config(write_scenario(shipped_scenario))
+    assert usage_factor(1.15, 2036, 2031, 2036) == Fraction(23, 20)
+    assert 50 * 1.15 < 57.5
+    grid = choice_grid(config)
+    assert (grid[0].data_iot_scale, grid[1].data_iot_scale) == (1.0, 1.15)
+    view = _view(SHIPPED_YEARS)
+    assert choice_offers(config, view, grid[0]).years[-1].data_iot.bursts_per_day == 50
+    assert choice_offers(config, view, grid[1]).years[-1].data_iot.bursts_per_day == 58
 
 
 def test_the_price_line_runs_from_the_start_to_the_end_price() -> None:
