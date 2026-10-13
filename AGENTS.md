@@ -145,9 +145,9 @@ row); a model run makes promoted JSON; a person reviews it into the conclusion.
   `uv run ruff check . && uv run ruff format --check . && uv run mypy --strict src && uv run pytest -q`;
   from the root, `uv run --project code pytest code/tests -q`.
 - **Heavy runs.** The saturation command
-  (`python -m communications.saturation`, about 47 minutes and a 12 GB memory
-  bound on its measured run, the curve's `provenance.run_measurement`) runs one
-  at a time, detached, from an isolated worktree.
+  (`python -m communications.saturation`) runs one at a time, detached, from
+  an isolated worktree: about 30 minutes and a 14 GB memory bound on its last
+  measured run (the curve's `provenance.run_measurement`).
 
 ## Where next
 
