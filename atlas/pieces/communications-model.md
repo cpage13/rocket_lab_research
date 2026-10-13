@@ -152,8 +152,10 @@ and the equality tripwire
 a coarse setting, the drift tests on the committed curve, the command's
 refusals, numpy's confinement). Around them: `test_engine.py` (the shared
 loop and the treadmill), `test_subscribers.py` (the cellular sizing and
-served base), `test_config.py`, `test_ground.py`, `test_promotion_cli.py`
-and `test_no_venture_cross_import.py`. Missed: the suite never runs the
+served base), `test_config.py`, `test_ground.py`, `test_promotion_cli.py`,
+`test_no_venture_cross_import.py` and `test_claim_citations.py` (every
+`COMM-*` claim ID the communications code cites has its source-ledger
+row). Missed: the suite never runs the
 saturation command in full (the drift tests rebuild the committed curve's
 check rows); the conclusion's numbers (the conclusions page).
 
