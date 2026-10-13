@@ -56,8 +56,10 @@ everything a knob, it's just absolutely overwhelming."
   capacity in the engineering model, which carries no IoT count, price or
   revenue (ADR 011): built (`iridium-v7`). The product case as its own model
   on the engineering artifact, selling the terminals and the two IoT classes
-  at the investor's prices held flat (ADR 012): not yet built. Open until
-  both are built, the public documents tell them and the work is accepted.
+  at the investor's prices held flat (ADR 012): built (`product-case-v1`),
+  its first promotion after the public documents' rewrite. Open until the
+  product case is promoted, the public documents tell both and the work is
+  accepted.
 - **Agent documentation.** The charter, atlas and glossary are true to the
   code; the older agent guides are folded in and retired.
 - **Data center.** Rename the space artifact's `gross_profit_*` fields, which
@@ -122,12 +124,14 @@ treatment on the same spine, and no agent needs the repository explained twice.
 - [Assumptions](atlas/pieces/assumptions.md): the scenario files, the two ledgers, the stated assumptions.
 - [Data-center model](atlas/pieces/data-center-model.md): `code/src/data_center/`, the space model and ground reference.
 - [Communications model](atlas/pieces/communications-model.md): `code/src/communications/`, the Iridium model on its saturation curve.
+- [Product case](atlas/pieces/product-case.md): `code/src/product_case/`, what the communications network would sell (the demand curve and the Monte Carlo on the engineering artifact).
 - [Shared core](atlas/pieces/shared-core.md): `code/src/common/`, the cadence spine, cells, file boundary, commands.
 - [Promotion](atlas/pieces/promotion.md): the commands, gate and writer that publish the promoted JSON.
 - [Conclusions](atlas/pieces/conclusions.md): each application's verdict and public documents, reviewed by hand.
 
 Core flow: a research claim sets an assumption (a dial, or a stated ledger
-row); a model run makes promoted JSON; a person reviews it into the conclusion.
+row); a model run makes promoted JSON (the product case's run reads the
+engineering model's promoted JSON); a person reviews it into the conclusion.
 
 ## Project rules
 

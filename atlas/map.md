@@ -30,6 +30,7 @@ mission, rules and goals; each piece has its own page in `atlas/pieces/`.
 | Assumptions | the scenario files, the two assumptions ledgers, the stated assumptions | [assumptions](pieces/assumptions.md) |
 | Data-center model | `code/src/data_center/` | [data-center-model](pieces/data-center-model.md) |
 | Communications model | `code/src/communications/`: the Iridium model, its saturation curve, the on-hold cellular family | [communications-model](pieces/communications-model.md) |
+| Product case | `code/src/product_case/`: the communications market view on the Iridium artifact | [product-case](pieces/product-case.md) |
 | Shared core | `code/src/common/` | [shared-core](pieces/shared-core.md) |
 | Promotion | the publishing commands, the gate, the writer, the promoted JSON | [promotion](pieces/promotion.md) |
 | Conclusions | each application's verdict and its public documents | [conclusions](pieces/conclusions.md) |
@@ -51,7 +52,8 @@ read the resume point it names: it holds what is decided but not built.
   the promoted JSON (query recipes on the promotion page); the claim's
   status in `research/SOURCE_INDEX.md`. A haircut of an engineering case is
   a linear division in the conclusion (the charter), never a model change;
-  the market view is the product case (ADR 012), not yet built.
+  the market view is the product case's artifact (ADR 012), once promoted
+  (the product-case page).
 - **Start new research, a new feasibility study or a new document:** the
   research-wiki page and its rules, then a search of `research/LIBRARY.md`
   and `research/SOURCE_INDEX.md`; only gaps get new research.
@@ -68,8 +70,9 @@ read the resume point it names: it holds what is decided but not built.
   `communications/design.md`) still describe the model before the
   saturation work until their rewrite (the conclusions page, Open): read
   them for history and sources, never for the built model.
-- **Touch shared code:** the shared-core page; both models' frozen
-  baselines must hold.
+- **Touch shared code:** the shared-core page; the frozen baselines of the
+  data center and the Iridium model, and the product case's tests, must
+  hold.
 - **Review or test:** the invariants and their guards below, the suite view
   under Open, each page's Tests heading, and the charter's Quality bar.
 - **Local research wikis**, each a folder directly in `.agent/other/` (local)
@@ -93,19 +96,23 @@ assumptions: the scenario dials (code/scenarios/; defaults in code/src/)
   whose stated rows set no dial
       |  typed configs
       v
-data-center model | communications model  (on the shared core)
-      |  promotion: three commands, one rollback writer
+data-center model | communications model | product case  (on the shared core)
+      |  promotion: four commands, one rollback writer
       v
 promoted JSON (data_center/models/, communications/models/)
       |  deliberate review, never generated
       v
 conclusions and public documents (README.md summarizes both)
 
-inside communications, the curve first, then the artifact that reads it:
+inside communications, in order: the curve, the artifact that reads it,
+then the product case, which reads that artifact:
   the held spectrum, the named constants and the shipped population grid
       --saturation command-->  communications/models/iridium/saturation_curve.json
   the Iridium scenario and that curve, identity-checked
       --Iridium command-->     communications/models/iridium/default.json
+  the product-case scenario and that artifact, its bytes hashed
+      --product-case command-->  communications/models/product_case/default.json
+                                 (written by its first promotion)
 
 .agent/other/ research (local) --validated, investor's go--> research/
 ```
@@ -115,11 +122,12 @@ inside communications, the curve first, then the artifact that reads it:
 | sources to research wiki | topic documents; a `research/SOURCE_INDEX.md` row (claim ID, source status, sources) for every hard number a public document or model input uses |
 | research wiki to assumptions | claim IDs, statuses and research paths, cited by the ledgers; in the data center the input spec tables (`code/src/data_center/input_manifest.py`; the ground's in `code/src/data_center/ground.py`) give every input its claim, status and rationale; a docstring may cite a claim too |
 | within assumptions | the scenario dials and the two ledgers (what each ledger covers is on the assumptions page), plus stated rows that set no dial; investor-set values enter here, labeled investor-set |
-| assumptions to models | YAML read by `common.file_io.load_yaml_mapping` into frozen Pydantic configs (`data_center.config.load_config`, `data_center.ground.load_ground_config`, `communications.config.load_comms_config`) |
+| assumptions to models | YAML read by `common.file_io.load_yaml_mapping` into frozen Pydantic configs (`data_center.config.load_config`, `data_center.ground.load_ground_config`, `communications.config.load_comms_config`, `product_case.config.load_product_case_config`) |
 | shipped data to the saturation command | the population grid `communications/data/ghs_pop_e2030_0p25deg.npz` (ADR 009), read by `communications.saturation.load_population_grid` and refused unless its digest is `POPULATION_GRID_SHA256` |
-| shared core to models | the cadence spine, the cohort cliff, cell and source-status types, the file boundary, the command conventions |
-| models to promoted JSON | promotion, from `code/`, three commands through the rollback writer: `uv run rklb-value --promote` (space and ground), the saturation command `uv run python -m communications.saturation` (the curve; a heavy run) and the Iridium command `uv run python -m communications.json_output` (the Iridium artifact); their arguments, stamps and order on the promotion page |
-| promoted curve to the Iridium model | the Iridium command reads the curve its scenario names through `communications.saturation_curve.load_saturation_curve`, and the identity check, `communications.saturation_curve.check_curve_matches`, refuses a curve computed for other inputs: the one promoted file a model reads back |
+| shared core to models | the cadence spine, the cohort cliff, cell and source-status types, the meta-block types and the one data-dictionary walker (`common.meta.build_data_dictionary`, which builds the dictionary of every artifact that meets ADR 002), the file boundary, the command conventions; the product case takes `round_half_up`, the input cells, `ProvenanceCell`, the meta-block types and the walker, the file boundary and the command conventions (the shared-core page) |
+| models to promoted JSON | promotion, from `code/`, four commands through the rollback writer: `uv run rklb-value --promote` (space and ground), the saturation command `uv run python -m communications.saturation` (the curve; a heavy run), the Iridium command `uv run python -m communications.json_output` (the Iridium artifact) and the product case's command `uv run python -m product_case.json_output` (the product case's artifact, after the Iridium artifact); their arguments, stamps and order on the promotion page |
+| promoted curve to the Iridium model | the Iridium command reads the curve its scenario names through `communications.saturation_curve.load_saturation_curve`, and the identity check, `communications.saturation_curve.check_curve_matches`, refuses a curve computed for other inputs: one of the two promoted files a model reads back |
+| promoted Iridium artifact to the product case | the product case's command reads the Iridium artifact its scenario names once, records the SHA-256 of its bytes and parses only the fields it sells on through `product_case.engineering.engineering_view_from_bytes`, which refuses any schema but `iridium-v7`; nothing goes back to the engineering model (ADR 012): the other promoted file a model reads |
 | promoted JSON to conclusions | a person reviews the JSON and edits the prose; nothing is generated (ADR 001) |
 | research wiki to conclusions | public prose cites claim IDs and human labels (the Source rules on the conclusions page) |
 | local research to research wiki | validated findings (a separate seat re-checked the sources and recomputed the numbers), read by the investor, moved on their go (the research page's rule 8) |
@@ -139,7 +147,9 @@ document, the catalog (`research/LIBRARY.md`) and the tracker
 (claim ID, status); the input that carries it cites the claim (where each
 model keeps that citation: the assumptions page, Source classes); the model
 computes with it; the promoted JSON carries the value (data center: a provenance
-cell and an `inputs.assumption_index` entry with its claim; Iridium: the
+cell and an `inputs.assumption_index` entry with its claim; the product case:
+an input cell under `inputs` with its claim and status, and each headline
+value a provenance cell; Iridium: the
 value, its claim trail staying in `code/src/communications/constants.py`
 and the ledger, and the saturation curve's inputs in its `parameters`,
 which the Iridium artifact names by `saturation.input_hash`); the
@@ -150,7 +160,8 @@ the dial's ledger row where it has one (and the source ledger if the claim
 trail changes); every home of the default, changed together with its
 mirrors; the default guards; the frozen records and the tests that pin the
 old value; re-promotion (for communications, the saturation curve first
-when the change moves one of its inputs); then a review of every document
+when the change moves one of its inputs, then the Iridium artifact, then
+the product case); then a review of every document
 that quotes a moved number. Each application's checklist is on the
 assumptions page.
 
@@ -186,12 +197,19 @@ a communications family's steps, as they stood before the saturation work.
   `iridium-v7`); IoT is capacity (ADR 011): each year and each reading
   carries IoT's room and each IoT class's capacity alone (`years[].iot`,
   `saturation.readings[].iot`), never a count sold or revenue.
+- communications/models/product_case/default.json, written by the product
+  case's first promotion: the product case's artifact (`metadata`,
+  `inputs`, `network`, `choices`, `fronts`, `pick`, `headline`, `spreads`,
+  `meta`, `assumptions`; schema `product-case-v1`); every numeric leaf under
+  `headline.years` is a provenance cell, except each year's `year` index;
+  its four classes side by side, never added.
 - The conclusions and public documents, reviewed against these.
 
 Each artifact states its schema version (`metadata.schema_version`; the
 Iridium artifact's `provenance.schema_version`; the curve's top-level
 `schema_version`); `code/CHANGELOG.md` records them, though not yet the
-curve's or the current Iridium schema (the promotion page, Open).
+curve's, the current Iridium schema or the product case's (the promotion
+page, Open).
 
 ## Invariants, binding ADRs, and the guards that enforce them
 
@@ -203,8 +221,13 @@ curve's or the current Iridium schema (the promotion page, Open).
   provenance, source statuses, validation, data dictionary, formulas, query
   examples (`docs/adr/002-agent-first-json-contract.md`). Guards, for the
   data center: `test_output.py` (the schema), `test_query_examples.py`
-  (every worked query runs), `test_validation_results.py`. The Iridium
-  artifact and the saturation curve do not carry it all (Open, below).
+  (every worked query runs), `test_validation_results.py`,
+  `test_committed_meta.py` (the committed data dictionaries and the space
+  artifact's formula definitions equal a fresh build's); for the product
+  case: `test_every_block_holds_the_foundations_keys_in_order`,
+  `test_every_number_is_linked_to_its_formula` and
+  `test_the_query_examples_run`. The Iridium artifact and the saturation
+  curve do not carry it all (Open, below).
 - The ground reference anchors to the anchor year's deployed-year cohort
   over its service life, never to the living fleet or a market share, and
   is an order-of-magnitude screen, never parity
@@ -218,16 +241,20 @@ curve's or the current Iridium schema (the promotion page, Open).
   configs), never loose dictionaries for known shapes. Guard: `mypy --strict`
   over `code/src/`.
 - Every release-critical input has a source status and a rationale; in the
-  data-center artifacts a value a scenario changes is a scenario override
-  (status `scenario`), never under the default's claim. Guards:
-  `test_input_manifest.py` (cited `RLDC-*` statuses match the ledger; the
-  default publishes no override; an override drops the default's claim) and
-  `test_provenance_uses.py` (every `uses` path resolves). The ground
+  data-center artifacts and the product case's, a value a scenario changes
+  is a scenario override (status `scenario`), never under the default's
+  claim. Guards: `test_input_manifest.py` (cited `RLDC-*` statuses match the
+  ledger; the default publishes no override; an override drops the
+  default's claim), `test_provenance_uses.py` (every `uses` path resolves)
+  and, for the product case,
+  `test_scenario_inputs_keep_the_shipped_values_defaults`. The ground
   defaults lack the space default's two guards (the data-center page, Open).
 - The data-center code defaults equal `code/scenarios/default.yaml`
   (`test_code_defaults_equal_the_default_scenario_file`); the two rebased
   sensitivity scenarios carry every default dial but their stated changes
-  (`test_scenario_drift.py`).
+  (`test_scenario_drift.py`). The product case's code defaults equal
+  `code/scenarios/product_case.yaml`
+  (`test_the_code_defaults_equal_the_shipped_scenario_file`).
 - Launch and node counts are whole numbers, and deployed-year capacity and
   the living fleet stay separate: rules V14 and V16 and the model invariants
   in `code/src/data_center/validation.py`, tested in `test_validation.py`
@@ -237,14 +264,17 @@ curve's or the current Iridium schema (the promotion page, Open).
   (`test_compute_year_revenue_band_is_cost_times_r` in `test_engine.py`;
   `test_naming.py` keeps the revenue and profit fields apart).
 - Data-center promotion writes nothing when any check fails
-  (`test_cli_promote.py`). The two communications commands have no gate of
-  results, and their refusals are listed once, on the promotion page: the
-  saturation command writes only a curve that passes its completeness
-  check (`check_curve_complete`), and the Iridium command runs only on a
-  curve computed for its own inputs (the identity check, below). The
-  regeneration test guards the Iridium artifact
-  (`test_regenerated_default_artifact_matches_committed`) and the drift
-  tests the curve (the frozen baselines, below).
+  (`test_cli_promote.py`). The two communications commands and the product
+  case's have no gate of results, and their refusals are listed once, on
+  the promotion page: the saturation command writes only a curve that
+  passes its completeness check (`check_curve_complete`), the Iridium
+  command runs only on a curve computed for its own inputs (the identity
+  check, below), and the product case's command only on an `iridium-v7`
+  artifact, refusing a run with no usable choice, a broken invariant or a
+  number that is not finite. The regeneration test guards the Iridium
+  artifact (`test_regenerated_default_artifact_matches_committed`) and the
+  drift tests the curve (the frozen baselines, below); the product case's
+  regeneration test comes with its first promotion.
 - A people class's saturation number, where its rows reach one, is a
   spectrum bound reported beside the launch cadence, never a build target
   or a cap on the build, and a fleet past a class's last computed row is
@@ -282,7 +312,10 @@ curve's or the current Iridium schema (the promotion page, Open).
   by review.
 - Every list of the Iridium model's classes runs small terminal, mounted
   terminal, phone class, the order of `DeviceClass`
-  (`test_every_class_in_one_run_in_class_order`); the charter's
+  (`test_every_class_in_one_run_in_class_order`), and every list of the
+  product case's runs small terminal, mounted terminal, minimal-packet IoT,
+  data IoT, the order of `ProductClass`
+  (`test_the_classes_run_small_mounted_minimal_packet_data`); the charter's
   Presentation line gives each case's order.
 - Demand is every resident of an inhabited cell of the shipped grid, which
   is refused unless its digest matches
@@ -297,18 +330,26 @@ curve's or the current Iridium schema (the promotion page, Open).
   `test_promoted_json_export_writes_frozen_baseline`,
   `test_a_retired_iridium_setting_fails_at_load_naming_it`); government
   stays out of revenue (`test_the_three_class_prices_and_no_government_key`).
-  The product case
-  (`docs/adr/012-product-case-is-its-own-model.md`) has no code or guard
-  yet.
-- `common` imports neither model, and `communications` never imports
-  `data_center` or carries Starship, market-share, market-size, adoption,
-  take-rate or uptake machinery (`test_no_venture_imports.py`,
-  `test_no_venture_cross_import.py`); the shared fleet loop,
-  `communications.engine`, imports neither the Iridium family nor the
-  curve's contract (`test_engine_imports_no_family_module`); numpy stays
-  inside `communications.saturation`
-  (`docs/adr/010-numpy-runtime-dependency.md`;
-  `test_numpy_stays_inside_the_saturation_module`).
+  In the product case (`docs/adr/012-product-case-is-its-own-model.md`),
+  IoT's customers come from the demand curve in every market and year,
+  never a set count
+  (`test_an_iot_count_in_the_scenario_is_refused_naming_the_field`,
+  `test_iot_customers_move_with_the_draw_and_the_year`).
+- `common` imports no model package, and `communications` never imports
+  `data_center` or the product case, or carries Starship, market-share,
+  market-size, adoption, take-rate or uptake machinery
+  (`test_no_venture_imports.py`, `test_no_venture_cross_import.py`). The
+  demand curve and the market draws live only in `product_case`, which
+  imports `common` alone (`test_the_product_case_imports_common_alone`) and
+  which neither `communications`, `data_center` nor `common` imports
+  (`docs/adr/012-product-case-is-its-own-model.md`; no test checks the
+  `data_center` side). The shared fleet loop, `communications.engine`,
+  imports neither the Iridium family nor the curve's contract
+  (`test_engine_imports_no_family_module`). numpy is imported only by
+  `communications.saturation` and `product_case.monte_carlo` (ADR 010 as
+  ADR 012 widens it, `docs/adr/010-numpy-runtime-dependency.md`;
+  `test_numpy_stays_inside_the_saturation_module`,
+  `test_only_the_monte_carlo_imports_numpy`).
 - Both models run on one cadence spine (`test_cadence_move.py`); how their
   all-in cases relate is the charter's Objective 1.
 - Frozen baselines lock the published numbers: the data-center golden
@@ -327,7 +368,11 @@ curve's or the current Iridium schema (the promotion page, Open).
   that fleet never reaches it, an Iridium run and a cellular run produce one
   fleet-and-cost record, whose own values it freezes (the living fleets,
   the total cost and the FY2036 replacement cost), so a change that moves
-  both families alike fails too.
+  both families alike fails too. The product case's method is locked by
+  round 3 of its scratch exploration, reproduced on its own fixtures
+  (`test_round_3s_four_and_eight_grid_is_reproduced`,
+  `test_round_3s_three_and_six_grid_is_reproduced`); its published numbers
+  get their regeneration test with its first promotion.
 - No em-dashes in the files `code/tests/test_no_em_dashes.py` covers: the
   code, tests and scenarios, the promoted JSON, the root documents
   (`CLAUDE.md` among them), every document under `atlas/`, `docs/`,
@@ -360,25 +405,24 @@ curve's or the current Iridium schema (the promotion page, Open).
   living capacity, the source-status and input-manifest contract, the JSON
   schemas and query examples, promotion and conclusion stability, the
   ground anchor and parity warnings, the saturation curve and its drift,
-  the Iridium run on it, and the test command's four gates (charter,
-  Project rules). The guards check their own file lists, so they cannot
-  pass vacuously (the em-dash guard and the documents guard fail on a
-  missing path; `test_comms_src_files_discovered`). Tests anchor every path
+  the Iridium run on it, the product case's run on the Iridium artifact,
+  and the test command's four gates (charter, Project rules). The guards
+  check their own file lists, so they cannot pass vacuously (the em-dash
+  guard and the documents guard fail on a missing path;
+  `test_comms_src_files_discovered`). Tests anchor every path
   to their own file and write only to temporary folders, so the suite runs
   from `code/` and from the root. No test checks that every module has a
   test file; each page's Tests heading names its own gaps. Fixtures sit in
-  `conftest.py` at the test root and in the two model test packages; pytest
-  runs in importlib mode, set in `code/pyproject.toml`, because the model
-  test packages share module names.
-- **Artifact contracts.** The data-center artifacts meet ADR 002; the
-  Iridium artifact and the saturation curve carry no per-value provenance
-  cells, data dictionary, query examples or validation results, so they
-  fall short of it (the curve has its own Pydantic contract and
-  completeness check instead).
-- **Decided, not built.** ADR 012 is accepted with no code yet: the
-  product case has no package, page, artifact or guard. It lands with its
-  pages (the atlas's rule): the product case gains its piece page, its row
-  above, its final object and its invariants then.
+  `conftest.py` at the test root and in the three model test packages (the
+  data center's, communications' and the product case's); pytest runs in
+  importlib mode, set in `code/pyproject.toml`, because the model test
+  packages share module names.
+- **Artifact contracts.** The data-center artifacts meet ADR 002, and so
+  does the product case's (its command builds every block ADR 002 names; not
+  yet promoted); the Iridium artifact and the saturation curve carry no
+  per-value provenance cells, data dictionary, query examples or validation
+  results, so they fall short of it (the curve has its own Pydantic contract
+  and completeness check instead).
 - **Unrecorded decisions.** Modeling the maximum in the engineering models
   (haircuts as a division) and the revenue-cost coupling have no ADR,
   though ADR 006 records the communications haircut rule; the market view's

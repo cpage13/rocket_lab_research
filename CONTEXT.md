@@ -19,9 +19,9 @@ product case, never added to it).
 - **Relates to:** product case, full sell-through, all-in deployment
 
 ### product case
-The communications market view (ADR 012), decided and not yet built: its own model on the Iridium model's
-promoted JSON, of what the network would sell (the terminals and the two IoT classes) at the investor's prices
-held flat; it never feeds the engineering model.
+The communications market view (ADR 012): its own model on the Iridium model's promoted JSON, of what the
+network would sell (the terminals and the two IoT classes) at the investor's prices held flat; it never feeds
+the engineering model.
 - **Relates to:** engineering case, minimal-packet IoT, data IoT
 
 ### the Iridium model
@@ -74,13 +74,12 @@ data IoT are two more (ADR 011); IoT counts devices, never people, and no model 
 
 ### minimal-packet IoT
 The IoT device class that sends short messages only; with data IoT, a capacity in the engineering case, which
-the Iridium artifact publishes (ADR 011), and a market in the product case (ADR 012), decided and not yet built.
+the Iridium artifact publishes (ADR 011), and a market in the product case (ADR 012).
 - **Relates to:** data IoT, device class, engineering case, product case
 
 ### data IoT
 The IoT device class that sends bursts of data beside its messages; with minimal-packet IoT, a capacity in the
-engineering case, which the Iridium artifact publishes (ADR 011), and a market in the product case (ADR 012),
-decided and not yet built.
+engineering case, which the Iridium artifact publishes (ADR 011), and a market in the product case (ADR 012).
 - **Relates to:** minimal-packet IoT, device class, engineering case, product case
 
 ### frequency versus bandwidth
