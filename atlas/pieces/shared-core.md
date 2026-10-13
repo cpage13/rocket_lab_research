@@ -1,6 +1,6 @@
 # Shared core
 
-**Maturity.** Stable. Checked against `main` at 3381e25, 2026-10-12.
+**Maturity.** Stable. Checked against `main` at 1570350, 2026-10-12.
 
 **Role.** The code both models import (`code/src/common/`), one
 implementation per helper:

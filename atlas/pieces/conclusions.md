@@ -1,7 +1,7 @@
 # Conclusions
 
 **Maturity.** Stable discipline; the prose is reviewed by hand whenever a
-default changes. Checked against `main` at 3381e25, 2026-10-12.
+default changes. Checked against `main` at 1570350, 2026-10-12.
 
 **Role.** Each application's feasibility verdict and the public documents
 around it: static prose a person writes against the promoted JSON, never

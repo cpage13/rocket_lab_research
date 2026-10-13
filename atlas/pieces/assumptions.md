@@ -1,6 +1,6 @@
 # Assumptions
 
-**Maturity.** Stable. Checked against `main` at 3381e25, 2026-10-12.
+**Maturity.** Stable. Checked against `main` at 1570350, 2026-10-12.
 
 **Role.** Where every assumption lives, in three forms. The machine form:
 the scenario files in `code/scenarios/` and the defaults behind them in

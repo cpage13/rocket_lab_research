@@ -4,7 +4,7 @@
 regenerated artifact that matches the committed one, and a committed
 saturation curve its drift tests rebuild. The High-Bandwidth Cellular Pure
 Play family is on hold. IoT as capacity (ADR 011) and the product case (ADR
-012) are approved, not built. Checked against `main` at 3381e25, 2026-10-12.
+012) are approved, not built. Checked against `main` at 1570350, 2026-10-12.
 
 **Role.** Models a Neutron-launched communications constellation as model
 families on one shared fleet-and-cost loop: each family hands the loop its
