@@ -131,7 +131,7 @@ _LOCAL_MARK = "(local)"
 _LOCAL_PATH = re.compile(r"(?<![\w.-])\.agent(?![\w-])[^\s`)\]]*")
 """A ``.agent`` path in any form (plain text, a span, a link's target, ``../.agent/``)."""
 
-_PACKAGES = ("common", "communications", "data_center")
+_PACKAGES = ("common", "communications", "data_center", "product_case")
 """The top-level packages under ``code/src/``; a dotted name headed by one is a module path."""
 
 _FILE_EXTENSIONS = (
@@ -260,12 +260,7 @@ class DecidedNotBuilt:
     decided_by: str
 
 
-_ADR_012 = "docs/adr/012-product-case-is-its-own-model.md"
-"""ADR 012: the product case as its own model."""
-
-_DECIDED_NOT_BUILT: tuple[DecidedNotBuilt, ...] = (
-    DecidedNotBuilt(_ADR_012, "code/src/product_case/", "ADR 012, the product case's package"),
-)
+_DECIDED_NOT_BUILT: tuple[DecidedNotBuilt, ...] = ()
 """Each span that names what an accepted ADR decided and no code has built yet."""
 
 

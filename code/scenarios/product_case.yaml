@@ -1,0 +1,81 @@
+# =============================================================================
+# The product case: what the communications network would sell (ADR 012)
+# =============================================================================
+#
+# THE SHIPPED PRODUCT-CASE SCENARIO. It holds exactly the code defaults (the
+# *_DEFAULT constants of code/src/product_case/constants.py; a test ties the two).
+# Promote it from code/ with:
+#
+#   uv run python -m product_case.json_output scenarios/product_case.yaml \
+#       communications/models/product_case/default.json
+#
+# (add --version-stamp STAMP to set the stamp), or load it programmatically:
+#
+#   from product_case.config import load_product_case_config
+#   config = load_product_case_config("scenarios/product_case.yaml")
+#
+# WHAT THIS IS. The product case reads the engineering model's promoted artifact
+# (the Iridium model, schema iridium-v7) and sells its network to four classes,
+# side by side: the small terminal, the mounted terminal, minimal-packet IoT and
+# data IoT. Each class's customers come from a demand curve anchored on Iridium
+# today (COMM-617, COMM-618), over 2,000 drawn markets; the pick holds the
+# investor's prices flat and chooses only each IoT class's usage. No IoT count is
+# a setting: a key that sets one is refused at load, naming it. Data IoT's price
+# is twice minimal-packet IoT's (the investor's proportion), never a setting.
+#
+# Each value's basis is on its line; its source-ledger row is in
+# research/SOURCE_INDEX.md (COMM-722 to COMM-726). INVESTOR_SET marks a value
+# the investor set; SCENARIO a modeling choice of the product-case design.
+
+scenario_name: "The product case at the investor's prices, held flat"
+engineering_artifact_path: communications/models/iridium/default.json  # the promoted Iridium artifact, repository-relative
+reported_years: [2031, 2033, 2035, 2036]  # SCENARIO: the 2026-10-05 product-case design's years (COMM-723)
+
+# The prices a month, dollars: the start price in the first reported year, then
+# the end prices a choice may reach by the last; the first end price is the start
+# price, held flat (the candidates); lower ones are context only (COMM-722).
+prices:
+  small_terminal:
+    start_usd_month: 10.0  # INVESTOR_SET 2026-10-07: "Yes, let's use the $10 and $50"
+    end_usd_month: [10.0, 9.0, 8.0, 7.0, 6.0]  # 10 held flat (INVESTOR_SET); 9 to 6 SCENARIO, the design's context rule
+  mounted_terminal:
+    start_usd_month: 50.0  # INVESTOR_SET 2026-10-07: "Yes, let's use the $10 and $50"
+    end_usd_month: [50.0, 45.0, 40.0]  # 50 held flat (INVESTOR_SET); 45 and 40 SCENARIO, the design's context rule
+  minimal_packet_iot:
+    start_usd_month: 3.0  # INVESTOR_SET 2026-10-06: "Let's go with the three and six for now"; data IoT pays twice it
+    end_usd_month: [3.0]  # INVESTOR_SET: held flat, no lower IoT price
+
+# Each class's usage, one value per reported year (COMM-724 unless marked).
+usage:
+  small_terminal:
+    gb_per_month: [5.4, 6.7, 8.1, 9.0]  # INVESTOR_SET 2026-10-04, 2026-10-05 and 2026-10-12 ("go with 9 GB, 90 GB and 13 bursts"); FY2033 SCENARIO, half-way
+  mounted_terminal:
+    gb_per_month: [54.0, 67.0, 81.0, 90.0]  # INVESTOR_SET 2026-10-04, 2026-10-05 and 2026-10-12; FY2033 SCENARIO, half-way
+  minimal_packet_iot:
+    messages_per_day: [48, 72, 96, 96]  # SCENARIO, round 1: the engineering usage's 48, doubling to 96 by FY2035 and held
+    scales: [1.0, 2.0, 4.0, 8.0, 16.0]  # SCENARIO (COMM-723): round 3's steps, extended so the usable test stops the usage
+  data_iot:
+    messages_per_day: 48  # INVESTOR_SET 2026-10-04: the engineering usage's messages, in every year
+    bursts_per_day: [8, 10, 12, 13]  # INVESTOR_SET 8 (2026-10-05) and 13 (2026-10-12); 10 and 12 SCENARIO, round 1
+    bursts_outside_busy_hours: [false, true, true, true]  # INVESTOR_SET 2026-10-05: "excluding peak time", from FY2033
+    scales: [1.0, 2.0, 4.0, 8.0]  # SCENARIO (COMM-723): round 3's steps, extended so the usable test stops the usage
+
+# The drawn markets (COMM-723): each response uniform over its range.
+market:
+  draws: 2000  # SCENARIO, round 2
+  seed: 20261006  # SCENARIO, round 2: the same markets every run
+  gamma:  # the network response
+    low: 0.5  # SCENARIO, round 2
+    high: 1.0  # SCENARIO, round 2: the investor's "eight times the network ... about eight times the revenue"
+  epsilon:  # the price response
+    low: 0.5  # SCENARIO, round 2
+    high: 1.5  # SCENARIO, round 2
+  eta:  # the service response
+    low: 0.0  # SCENARIO, round 2
+    high: 0.5  # SCENARIO, round 2
+
+# The usable test's floors (COMM-725).
+floors:
+  fill: 0.75  # SCENARIO, round 2's reading of "We do not want half our network used"
+  robust: 0.75  # SCENARIO, round 2's reading of "Take the clearly usable ones and then pick where you are"
+  margin_pct: 50.0  # INVESTOR_SET 2026-10-06 and 2026-10-07: "I think about a 50% floor for margin"
