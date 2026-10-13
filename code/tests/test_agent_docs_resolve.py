@@ -260,9 +260,6 @@ class DecidedNotBuilt:
     decided_by: str
 
 
-_ADR_011 = "docs/adr/011-iot-is-capacity-in-the-engineering-model.md"
-"""ADR 011: IoT as capacity in the engineering model."""
-
 _ADR_012 = "docs/adr/012-product-case-is-its-own-model.md"
 """ADR 012: the product case as its own model."""
 

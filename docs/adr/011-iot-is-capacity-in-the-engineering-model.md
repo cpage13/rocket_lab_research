@@ -1,8 +1,8 @@
 # 011 - IoT Is Capacity In The Engineering Model; Its Customers Come From The Product Case
 
 Status: Accepted (2026-10-07, the investor's approval of the product-case design; written
-2026-10-12, before its code: until that lands, `default.json` still carries ADR 007's two IoT
-lines). Supersedes ADR 007. Replaces the consequence of ADR 006 that names the IoT lines.
+2026-10-12, before its code; its code landed 2026-10-13, `default.json` as `iridium-v7`).
+Supersedes ADR 007. Replaces the consequence of ADR 006 that names the IoT lines.
 
 ## Context
 

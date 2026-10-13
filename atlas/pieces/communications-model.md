@@ -3,8 +3,10 @@
 **Maturity.** Built and stable for the Iridium model: a frozen suite, a
 regenerated artifact that matches the committed one, and a committed
 saturation curve its drift tests rebuild. The High-Bandwidth Cellular Pure
-Play family is on hold. IoT as capacity (ADR 011) and the product case (ADR
-012) are approved, not built. Checked against `main` at 1570350, 2026-10-12.
+Play family is on hold. IoT is published as capacity (ADR 011, `iridium-v7`);
+the product case (ADR 012) is approved, not built. Checked against `main` at
+1570350, 2026-10-12; what it says of IoT against part A's code
+(`iridium-v7`), 2026-10-13.
 
 **Role.** Models a Neutron-launched communications constellation as model
 families on one shared fleet-and-cost loop: each family hands the loop its
@@ -35,9 +37,10 @@ assumptions).
   `satellite.satellites_per_launch` and a flat satellite build cost; and the
   `iridium` block: the held spectrum, the panel `aperture_m2`, the label,
   the `saturation` block with the downlink share and the curve's path, and
-  the `arpu` block with the five monthly prices); the named constants in
-  `constants.py` (each class's usage and spectral efficiency, the shell, the
-  IoT lines' counts); the promoted curve, read and identity-checked; the
+  the `arpu` block with the three monthly prices); the named constants in
+  `constants.py` (each class's usage and spectral efficiency, the shell, each
+  IoT class's reference usage and the IoT room's constants); the promoted
+  curve, read and identity-checked; the
   cadence spine and cohort cliff from `code/src/common/`, never
   `data_center`.
 - The curve's own inputs: the held spectrum, the named constants
@@ -62,7 +65,7 @@ assumptions).
 | `config.py` | the frozen `CommsConfig` and its blocks (the Iridium ones: `IridiumDials`, `SaturationDials`, `IridiumArpuDials`), cross-field validators, `load_comms_config` |
 | `constants.py` | every default and named constant, one section per family (to change one, the assumptions page's checklist) |
 | `engine.py` | the shared fleet-and-cost loop (`run_fleet_loop`, `DeploymentRule`, `FleetTrajectory`), `margin_pct`, and the cellular family (`run_comms_model`, the treadmill) |
-| `iridium.py` | the Iridium family: `iridium_dials_of`, `full_cadence_rule`, `run_iridium_model`, its record, the readings, the IoT check, the marginal intervals and the stated assumptions (`_assumptions`) |
+| `iridium.py` | the Iridium family: `iridium_dials_of`, `full_cadence_rule`, `run_iridium_model`, its record, the readings, IoT's room and each IoT class's capacity (`iot_room`), the marginal intervals and the stated assumptions (`_assumptions`) |
 | `saturation.py` | the saturation curve's computation and its command; the one module that imports numpy (ADR 010) |
 | `saturation_curve.py` | the curve's contract: `SaturationInputs`, `SaturationCurve`, `load_saturation_curve`, the identity check `check_curve_matches`, and the readings at any fleet |
 | `ground.py` | the cellular family's two-regime ground comparison (no production caller yet) |
@@ -79,20 +82,22 @@ the engineering artifact (ADR 012).
 three lanes, device class, frequency versus bandwidth, coverage floor,
 saturation, saturation number, saturation curve, useful beams, maximum use,
 ocean factor, panel factor, downlink share, readings, marginal interval,
-IoT books, treadmill, full sell-through, all-in deployment, equality
-tripwire, engineering case, product case (see `CONTEXT.md`).
+minimal-packet IoT, data IoT, treadmill, full sell-through, all-in
+deployment, equality tripwire, engineering case, product case (see
+`CONTEXT.md`).
 
 **State.**
 - The published artifact carries the three people classes side by side
   (the small terminal, the mounted terminal, the phone class), each column
   the whole fleet sold to that class alone (Role): each class's price,
   usage and physics, its markers from the curve and the limit that binds at
-  the horizon's end, and per year the shared fleet and cost beside each
-  class's people, revenue and own margin; then the readings at four fleets
-  (the coverage floor, the retired cap kept for comparison, the horizon-end
-  reach and the steady state), the IoT check, each class's marginal
-  intervals and the stated assumptions. The headline reads are on the
-  promotion page.
+  the horizon's end; each IoT class's engineering usage (`iot_classes`); per
+  year the shared fleet and cost beside each class's useful beams, people,
+  revenue and own margin, and IoT's room with each IoT class's capacity;
+  then the readings at four fleets (the coverage floor, the retired cap kept
+  for comparison, the horizon-end reach and the steady state), each with
+  IoT's room, each class's marginal intervals and the stated assumptions.
+  The headline reads are on the promotion page.
 - The fleet is the cadence's: every comms launch the share allows times the
   satellites per launch, under the cohort cliff. The coverage floor, pinned
   at 340 on the Iridium path, gates every sale: nothing is sold in a year
@@ -102,9 +107,13 @@ tripwire, engineering case, product case (see `CONTEXT.md`).
   beams over ocean and empty land carry no one. Each class's usage and
   spectral efficiency are named constants, not settings, and the curve is
   computed at them (the assumptions page's Iridium checklist).
-- IoT is still ADR 007's two IoT lines (`fixed_books`), each its own revenue
-  line outside every people class's margin, until ADR 011's code replaces
-  them with IoT's capacity. Government is left out of revenue.
+- IoT is capacity (ADR 011): for every year and every reading the artifact
+  publishes IoT's room on the phone class's useful beams in the uplink's
+  share of the frame, and each IoT class's device capacity alone at its
+  engineering usage (the least of the payload, access and tone views at
+  their conservative ends, with the view that binds), null below the
+  coverage floor; never a count sold, a price or revenue, and the two
+  capacities never add. Government is left out of revenue.
 - One beam's data pool caps one person's rate; beam reuse multiplies the
   people served, not that rate.
 - Operations cost is an explicit zero, stated in the artifact.
@@ -113,11 +122,10 @@ tripwire, engineering case, product case (see `CONTEXT.md`).
   Iridium family.
 
 **Open.**
-- **Approved, not built.** IoT as capacity in the engineering model, which
-  then carries no IoT count, price or revenue (ADR 011), and the product
-  case as its own model on this model's artifact (ADR 012). Each lands with
-  its code, its pages and its guards; until then the artifact is as State
-  says.
+- **Approved, not built.** The product case as its own model on this
+  model's artifact (ADR 012), its IoT customers, usage and revenue among it.
+  It lands with its code, its pages and its guards; until then the artifact
+  is as State says.
 - **The public documents.** The root README's Iridium section and the
   folder's documents still describe the model before the saturation work
   (the conclusions page, Open); until their rewrite, the code, the promoted
@@ -144,8 +152,9 @@ tripwire, engineering case, product case (see `CONTEXT.md`).
 
 **Tests.** `code/tests/communications/`. The end-to-end specifications are
 `test_iridium_model.py` (the frozen run at the shipped scenario: fleets,
-costs, every class's people, revenue and margins, the readings, the IoT
-lines and the intervals; `test_regenerated_default_artifact_matches_committed`;
+costs, every class's people, revenue and margins, the readings, IoT's room
+and capacities and the intervals;
+`test_regenerated_default_artifact_matches_committed`;
 and the equality tripwire
 `test_iridium_and_cellular_runs_share_the_fleet_and_cost_records`) and
 `test_saturation.py` (the curve on synthetic worlds and on the real grid at
@@ -161,8 +170,7 @@ check rows); the conclusion's numbers (the conclusions page).
 
 **If this changes, update here.** A family added or retired; the shared
 loop or a deployment rule; the curve's inputs, contract or command; the
-artifact's blocks; IoT as capacity or the product case landing (rewrite
-State and Open).
+artifact's blocks; the product case landing (rewrite State and Open).
 
 **Drill down.** The `code/src/communications/__init__.py` docstring and
 each module's (`iridium.py`, `saturation.py` and `saturation_curve.py`

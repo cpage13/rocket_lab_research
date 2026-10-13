@@ -182,9 +182,10 @@ a communications family's steps, as they stood before the saturation work.
   command and read back by the Iridium command.
 - `communications/models/iridium/default.json`: the Iridium artifact
   (`provenance`, `trajectory_summary`, `orbit_scenario`, `iridium_physics`,
-  `classes`, `years`, `fixed_books`, `saturation`, `assumptions`);
-  `fixed_books` holds ADR 007's two IoT lines, which ADR 011 replaces with
-  IoT's capacity when its code lands.
+  `classes`, `iot_classes`, `years`, `saturation`, `assumptions`; schema
+  `iridium-v7`); IoT is capacity (ADR 011): each year and each reading
+  carries IoT's room and each IoT class's capacity alone (`years[].iot`,
+  `saturation.readings[].iot`), never a count sold or revenue.
 - The conclusions and public documents, reviewed against these.
 
 Each artifact states its schema version (`metadata.schema_version`; the
@@ -288,11 +289,15 @@ curve's or the current Iridium schema (the promotion page, Open).
   (`docs/adr/009-demand-every-resident-on-a-shipped-grid.md`;
   `test_load_population_grid_refuses_a_file_it_cannot_trust`).
 - IoT: ADR 011 (`docs/adr/011-iot-is-capacity-in-the-engineering-model.md`)
-  supersedes ADR 007 and is not yet built, so the Iridium artifact still
-  carries ADR 007's two IoT lines, each outside every people class's margin
-  (`test_the_two_iot_lines_are_fixed_books_frozen_exactly`,
-  `test_each_class_revenue_is_its_people_times_its_price_and_the_books_stay_out`);
-  government stays out of revenue under both. The product case
+  supersedes ADR 007: the Iridium artifact publishes IoT as capacity, each
+  IoT class's capacity alone at its engineering usage and null below the
+  coverage floor, never a count sold, a price or revenue
+  (`test_the_worked_iot_capacity_case_at_fy2031_and_fy2036`,
+  `test_each_class_useful_beams_and_the_iot_room_in_every_year`,
+  `test_promoted_json_export_writes_frozen_baseline`,
+  `test_a_retired_iridium_setting_fails_at_load_naming_it`); government
+  stays out of revenue (`test_the_three_class_prices_and_no_government_key`).
+  The product case
   (`docs/adr/012-product-case-is-its-own-model.md`) has no code or guard
   yet.
 - `common` imports neither model, and `communications` never imports
@@ -370,9 +375,8 @@ curve's or the current Iridium schema (the promotion page, Open).
   cells, data dictionary, query examples or validation results, so they
   fall short of it (the curve has its own Pydantic contract and
   completeness check instead).
-- **Decided, not built.** ADRs 011 and 012 are accepted with no code yet:
-  the Iridium artifact still carries ADR 007's two IoT lines, and the
-  product case has no package, page, artifact or guard. Each lands with its
+- **Decided, not built.** ADR 012 is accepted with no code yet: the
+  product case has no package, page, artifact or guard. It lands with its
   pages (the atlas's rule): the product case gains its piece page, its row
   above, its final object and its invariants then.
 - **Unrecorded decisions.** Modeling the maximum in the engineering models

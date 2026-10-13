@@ -1,6 +1,7 @@
 # Assumptions
 
-**Maturity.** Stable. Checked against `main` at 1570350, 2026-10-12.
+**Maturity.** Stable. Checked against `main` at 1570350, 2026-10-12; its
+Iridium lines on IoT against part A's code (`iridium-v7`), 2026-10-13.
 
 **Role.** Where every assumption lives, in three forms. The machine form:
 the scenario files in `code/scenarios/` and the defaults behind them in
@@ -129,9 +130,10 @@ public source-status taxonomy (`CONTEXT.md`, Ambiguities).
 2. Change the value in its home, together with its mirrors: a scenario
    setting in `code/scenarios/iridium.yaml` (the shared cadence and cost
    dials, `satellite.*`, and the `iridium` block: the held spectrum, the
-   panel, the downlink share, the five prices); a named constant in
+   panel, the downlink share, the three prices); a named constant in
    `code/src/communications/constants.py` (each class's usage and spectral
-   efficiency, the shell, the demand threshold, the IoT lines' counts), with
+   efficiency, the shell, the demand threshold, each IoT class's reference
+   usage and the IoT room's constants), with
    its description in `code/src/communications/config.py` where a config
    field defaults to it. A changed config default can also move the
    cellular family and the equality tripwire.
@@ -151,12 +153,16 @@ public source-status taxonomy (`CONTEXT.md`, Ambiguities).
    `SaturationInputs` field holds them). The saturation command is a heavy
    run (the charter's Project rules); re-freeze on purpose the saturation
    suite's values the moved input changes. The panel, the downlink share,
-   the prices, the off-peak shares, the IoT lines, satellites per launch,
-   the cadence and the costs run on the promoted curve as it stands.
+   the prices, the off-peak shares, IoT's reference usage and the IoT room's
+   constants, satellites per launch, the cadence and the costs run on the
+   promoted curve as it stands.
 4. Re-promote the Iridium artifact with the Iridium command (the promotion
    page, with today's stamp), re-freeze the Iridium suite's numbers on
    purpose, then run the test command: the regeneration test fails until
-   re-promotion.
+   re-promotion. Once the product case is built (ADR 012), re-promote it
+   after this artifact, every time: it reads the engineering artifact, so
+   that artifact is promoted first (the product-case design's promotion
+   order).
 5. Read the artifact's stated-assumption lines (`_assumptions` in
    `code/src/communications/iridium.py`) for text the moved value leaves
    stale, and review every document that quotes a moved number (the
