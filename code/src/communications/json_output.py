@@ -69,7 +69,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from common.cli import (
     EXIT_ERROR,
@@ -170,9 +170,12 @@ figures, the built fleet's annualized cost as the ARPU margin's basis); ``iridiu
 the orbit scenario block; ``iridium-v3`` (2026-07-10) removed the cost-plus revenue fields;
 ``iridium-v2`` (2026-07-09) added the four-bucket ARPU block."""
 
-_BLOCK_CONFIG: Final[ConfigDict] = ConfigDict(frozen=True, allow_inf_nan=False)
-"""Every artifact block's configuration: frozen, and only finite numbers, so the artifact
-never holds an infinity or a NaN (a quantity that does not exist is a null instead)."""
+_BLOCK_CONFIG: Final[ConfigDict] = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+"""Every artifact block's configuration: frozen; only finite numbers, so the artifact never holds
+an infinity or a NaN (a quantity that does not exist is a null instead); and no key the schema
+does not define, so a file read back that carries one (a key another schema wrote, say) is
+refused rather than ignored. The writer builds every block from typed records, so it never
+passes such a key."""
 
 
 class IridiumProvenance(BaseModel):
@@ -180,13 +183,20 @@ class IridiumProvenance(BaseModel):
 
     Records what produced the artifact: the model name, the schema version, the
     scenario label and YAML path, and the caller-supplied version stamp (a
-    git-describe string or a date).
+    git-describe string or a date). The artifact's models are the contract of
+    :data:`IRIDIUM_SCHEMA_VERSION` alone: a file read back that states another schema is
+    refused here, never read as this one.
     """
 
     model_config = _BLOCK_CONFIG
 
     model_name: str = Field(description="The model this artifact belongs to: 'iridium'.")
-    schema_version: str = Field(description="The promoted Iridium artifact schema version.")
+    schema_version: str = Field(
+        description=(
+            "The promoted Iridium artifact schema version; a file read back that states another "
+            "is refused."
+        )
+    )
     scenario_name: str = Field(
         description="The scenario label (from the IridiumDials scenario_name single home)."
     )
@@ -199,6 +209,18 @@ class IridiumProvenance(BaseModel):
     version_stamp: str = Field(
         description="Caller-supplied stamp (git-describe or a date string; default today)."
     )
+
+    @field_validator("schema_version")
+    @classmethod
+    def _states_this_schema(cls, schema_version: str) -> str:
+        """Refuse a schema version other than :data:`IRIDIUM_SCHEMA_VERSION`: these models are
+        that schema's contract, so a file stating another is never read as it."""
+        if schema_version != IRIDIUM_SCHEMA_VERSION:
+            raise ValueError(
+                f"the artifact states schema {schema_version!r}; this contract reads "
+                f"{IRIDIUM_SCHEMA_VERSION!r} only"
+            )
+        return schema_version
 
 
 class TrajectorySummaryBlock(BaseModel):

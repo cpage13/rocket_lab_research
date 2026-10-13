@@ -20,8 +20,9 @@ command); a run that would hold a number that is not finite, refused naming the 
 readings and the reported fleets (the retired cap's reading its own constant); the marginal
 intervals (hand-worked, and their verdicts on the committed curve at the investor's prices),
 with d = 1's IoT room; a saturation number beside the cadence, never a cap; the scenario YAML;
-the stated assumptions; the promoted export frozen on ``iridium-v7``; and the drift guard that
-regenerates the committed artifact byte for byte.
+the stated assumptions; the promoted export frozen on ``iridium-v7``; the drift guard that
+regenerates the committed artifact byte for byte; and the artifact's models reading back their
+own schema only.
 
 Where the targets come from. The fleets and costs are exact arithmetic, worked beside them. The
 people and revenue targets and the marginal chords come from the usage check: an independent
@@ -60,7 +61,7 @@ import pytest
 from pydantic import ValidationError
 
 from common.cli import EXIT_ERROR
-from common.file_io import render_artifact_json
+from common.file_io import ARTIFACT_FILE_END, render_artifact_json
 from communications import iridium, json_output
 from communications.config import (
     CommsConfig,
@@ -2525,3 +2526,42 @@ def test_regenerated_default_artifact_matches_committed(
     regenerated = json.loads(written.read_text(encoding="utf-8"))
     assert regenerated == committed
     assert written.read_bytes() == promoted_iridium_artifact.read_bytes()
+
+
+def test_the_artifact_models_read_back_their_own_schema_only(
+    promoted_iridium_artifact: Path,
+) -> None:
+    """Objective: the artifact's models are the contract of ``iridium-v7`` alone: the committed
+    file reads back through them whole, while a file stating another schema, or carrying a key
+    the schema does not define, is refused rather than read as ``iridium-v7``.
+
+    Sample: the committed ``default.json``; the same stated as ``iridium-v6``; the same with a key
+    the schema does not define at the top level, and then inside FY2031's IoT room.
+
+    Expected outcome: the committed file validates, states ``iridium-v7`` and renders back to the
+    same text (with the file's one closing newline); the relabeled file raises one ValidationError
+    located at ``provenance.schema_version``; each unknown key one ``extra_forbidden`` error
+    located at it.
+    """
+    text = promoted_iridium_artifact.read_text(encoding="utf-8")
+    artifact = IridiumModelArtifact.model_validate_json(text)
+    assert artifact.provenance.schema_version == "iridium-v7"
+    assert render_artifact_json(artifact) + ARTIFACT_FILE_END == text
+    relabeled = json.loads(text)
+    relabeled["provenance"]["schema_version"] = "iridium-v6"
+    with pytest.raises(ValidationError) as refused:
+        IridiumModelArtifact.model_validate(relabeled)
+    assert [error["loc"] for error in refused.value.errors()] == [("provenance", "schema_version")]
+    for location in (
+        ("a_key_v7_does_not_define",),
+        ("years", 5, "iot", "a_key_v7_does_not_define"),
+    ):
+        widened = json.loads(text)
+        node = widened
+        for key in location[:-1]:
+            node = node[key]
+        node[location[-1]] = 1
+        with pytest.raises(ValidationError) as refused:
+            IridiumModelArtifact.model_validate(widened)
+        found = [(error["loc"], error["type"]) for error in refused.value.errors()]
+        assert found == [(location, "extra_forbidden")], found
