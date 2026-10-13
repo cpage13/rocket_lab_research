@@ -346,13 +346,18 @@ def test_each_believability_flag_is_a_warning_that_never_refuses(
 
 def test_the_run_warnings_name_what_raised_them(config: ProductCaseConfig) -> None:
     """Objective: the three warnings: an upper usage edge names the class; the fallback names the
-    share, each failing test's count, that a draw may fail several and that no price is lowered;
-    E6 names the central market's failing tests.
+    pick's usable draws beside the robust floor's own count (so a share just under the floor
+    never reads as it: the numerics lens's m2, 1,499 of 2,000 and the floor both 75.0 percent at
+    one decimal), each failing test's count, that a draw may fail several and that no price is
+    lowered; E6 names the central market's failing tests.
 
-    Sample: a pick on minimal-packet IoT's top scale by the fallback, usable in 61.9 percent of
-    the draws, and a headline failing the fill and the margin.
+    Sample: a pick on minimal-packet IoT's top scale by the fallback, usable in 1,238 of the
+    2,000 draws, then in 1,499; a headline failing the fill and the margin; the shipped floor, 75
+    percent, 1,500 draws.
 
-    Expected outcome: three ``warn`` results, each text naming its cause.
+    Expected outcome: three ``warn`` results, each text naming its cause; the fallback's text
+    "usable in 1,238 of the 2,000 draws, under the robust floor's 1,500 (75 percent of the
+    draws)", then 1,499.
     """
     pick = Pick(12, PickBasis.MOST_USABLE_FALLBACK, (ProductClass.MINIMAL_PACKET_IOT,), ())
     headline = _headline(usable=False, failing=(UsableTest.FILL, UsableTest.MARGIN))
@@ -360,12 +365,16 @@ def test_the_run_warnings_name_what_raised_them(config: ProductCaseConfig) -> No
     assert {result.severity for result in results.values()} == {ValidationSeverity.WARN}
     assert "minimal_packet_iot" in results["warning.pick_on_upper_usage_edge"].observed_result
     fallback = results["warning.start_prices_under_robust_floor"].observed_result
-    assert "61.9 percent" in fallback and "75.0 percent" in fallback
+    floor = "the robust floor's 1,500 (75 percent of the draws)"
+    assert f"the pick, is usable in 1,238 of the 2,000 draws, under {floor}" in fallback
     assert "fill 0; margin 1; iot_uplink_busy 2" in fallback
     assert "a draw may fail several tests" in fallback and "never lowers a price" in fallback
     assert (
         results["warning.central_market_unusable_for_pick"].observed_result == "fails fill, margin"
     )
+    just_under = _by_id(warning_results(config, pick, _summary(share=0.7495), headline))
+    text = just_under["warning.start_prices_under_robust_floor"].observed_result
+    assert f"usable in 1,499 of the 2,000 draws, under {floor}" in text
 
 
 type HeadlineCheck = Callable[[MarketOutcome], ValidationResult]

@@ -20,9 +20,10 @@ Every check is published as a :class:`common.meta.ValidationResult` in the artif
   (1 - 1e-9), "holds" within 1e-9 of it; a use is at most 1 and the margin at or above its floor
   exactly.
 - **The run's warnings** (``warn`` when raised, ``pass`` when not): the pick on an upper usage
-  edge (naming the class); the start prices under the robust floor, the fallback (naming the share
-  and each failing test's count; a draw may fail several, and the run never lowers a price); the
-  central market unusable for the pick (E6: the headline is a reading, not a gate).
+  edge (naming the class); the start prices under the robust floor, the fallback (naming the
+  pick's usable draws beside the floor's own count, so a share just under the floor never reads
+  as it, and each failing test's count; a draw may fail several, and the run never lowers a
+  price); the central market unusable for the pick (E6: the headline is a reading, not a gate).
 - **The invariants**, each a check function with the relative tolerance
   :data:`~product_case.constants.RELATIVE_TOLERANCE` where a float is compared: whole customers; a
   terminal never past its seats; each class's revenue equal to customers x price x 12 / 10^6 and
@@ -63,6 +64,7 @@ from product_case.monte_carlo import (
     MarketOutcome,
     Pick,
     YearOutcome,
+    robust_floor_draws,
 )
 
 logger = logging.getLogger(__name__)
@@ -149,11 +151,6 @@ def _class_of(year: YearOutcome, product_class: ProductClass) -> ClassOutcome:
         if entry.product_class is product_class:
             return entry
     raise InvariantError(f"FY{year.year}: the headline has no {product_class} entry")
-
-
-def _percent(share: float) -> str:
-    """A share as a percent with one decimal."""
-    return f"{PERCENT * share:.1f} percent"
 
 
 _FLAG_HINT: Final[str] = (
@@ -457,7 +454,7 @@ def warning_results(
     """The run's three warnings, each ``warn`` when raised and ``pass`` when not.
 
     Args:
-        config: The scenario (its robust floor).
+        config: The scenario (its draws and its robust floor).
         pick: The pick.
         summary: The pick's summary over the draws.
         headline: The pick at the central market.
@@ -467,7 +464,11 @@ def warning_results(
     """
     edges = ", ".join(str(product_class) for product_class in pick.usage_edges)
     failing = "; ".join(f"{test} {count:,}" for test, count in summary.draws_failing.items())
-    robust = config.floors.robust
+    draws = config.market.draws
+    floor = (
+        f"the robust floor's {robust_floor_draws(config):,} "
+        f"({PERCENT * config.floors.robust:g} percent of the draws)"
+    )
     return (
         _result(
             "warning.pick_on_upper_usage_edge",
@@ -482,14 +483,16 @@ def warning_results(
             "warning.start_prices_under_robust_floor",
             pick.basis is PickBasis.ROBUST_FLOOR_MET,
             "The start prices are usable in at least the robust floor's share of the draws.",
-            f"pick.basis {PickBasis.ROBUST_FLOOR_MET}: usable share >= {_percent(robust)}",
+            f"pick.basis {PickBasis.ROBUST_FLOOR_MET}: usable in at least {floor}",
             (
-                f"the start prices are usable in {_percent(summary.usable_share)} of the draws, "
-                f"under the {_percent(robust)} floor; the pick is the most usable candidate, and "
-                f"its draws fail: {failing} (a draw may fail several tests); the run never lowers "
-                "a price"
+                "no candidate reaches the robust floor: the most usable, the pick, is usable in "
+                f"{summary.usable_draws:,} of the {draws:,} draws, under {floor}; its draws fail: "
+                f"{failing} (a draw may fail several tests); the run never lowers a price"
                 if pick.basis is PickBasis.MOST_USABLE_FALLBACK
-                else f"usable in {_percent(summary.usable_share)} of the draws"
+                else (
+                    f"usable in {summary.usable_draws:,} of the {draws:,} draws, at or above "
+                    f"{floor}"
+                )
             ),
             ["pick.basis", "choices[].usable_share", "choices[].draws_failing"],
             "The fallback is published, warned; the prices stay the scenario's start prices.",

@@ -1300,6 +1300,29 @@ def pick_of(
     )
 
 
+def robust_floor_draws(config: ProductCaseConfig) -> int:
+    """The fewest usable draws that reach the robust floor: the least whole u with
+    u / draws >= the robust floor, the comparison :func:`pick_of` makes on a usable share.
+
+    The warnings and the stated assumptions state a pick's usable draws beside this count, so a
+    share just under the floor never reads as the floor (1,499 of 2,000 draws against the floor's
+    1,500, where both shares read 75.0 percent at one decimal).
+
+    Args:
+        config: The scenario (its draws and its robust floor, above 0 and at most 1).
+
+    Returns:
+        The count, from 1 to the draws.
+    """
+    draws, robust = config.market.draws, config.floors.robust
+    least = math.ceil(robust * draws)
+    while least > 0 and (least - 1) / draws >= robust:
+        least -= 1
+    while least / draws < robust:
+        least += 1
+    return least
+
+
 # ---------------------------------------------------------------------------
 # The pick's spreads (method step 9)
 # ---------------------------------------------------------------------------
@@ -1522,6 +1545,7 @@ __all__ = [
     "fronts_of",
     "outcome_in_market",
     "pick_of",
+    "robust_floor_draws",
     "spreads_of",
     "summarize_grid",
 ]

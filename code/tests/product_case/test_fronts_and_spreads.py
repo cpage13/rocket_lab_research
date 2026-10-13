@@ -38,6 +38,7 @@ from product_case.monte_carlo import (
     fronts_of,
     outcome_in_market,
     pick_of,
+    robust_floor_draws,
 )
 from product_case.offers import Choice
 
@@ -130,6 +131,30 @@ def test_the_pick_rules(config: ProductCaseConfig) -> None:
     unusable = [_summary(0, 0, None), _summary(1, 1_900, 100.0, candidate=False)]
     assert pick_of(unusable, fronts_of(unusable), config) is None
     assert fronts_of(unusable) == Fronts(all_prices=(1,), at_start_prices=())
+
+
+@pytest.mark.parametrize(
+    ("draws", "robust", "least"),
+    [(2_000, 0.75, 1_500), (50, 0.75, 38), (2_000, 0.745, 1_490), (10, 0.7, 7), (9, 1.0, 9)],
+)
+def test_the_robust_floors_count_is_the_picks_own_comparison(
+    draws: int, robust: float, least: int
+) -> None:
+    """Objective: the robust floor's count, which the warnings and the stated line print beside a
+    pick's usable draws, is the least whole u with u / draws >= the floor, the comparison the
+    pick makes on a usable share, at a floor whose product with the draws is not whole (37.5) or
+    not exact in floats (0.745 and 0.7).
+
+    Sample: 2,000 draws at 0.75; 50 at 0.75; 2,000 at 0.745; 10 at 0.7; 9 at 1.0.
+
+    Expected outcome: 1,500, 38, 1,490, 7 and 9; the count reaches the floor and one fewer does
+    not.
+    """
+    config = ProductCaseConfig.model_validate(
+        {"market": {"draws": draws}, "floors": {"robust": robust}}
+    )
+    assert robust_floor_draws(config) == least
+    assert least / draws >= robust > (least - 1) / draws
 
 
 @pytest.mark.parametrize(("count", "stands"), [(2, False), (8, False), (9, True)])
