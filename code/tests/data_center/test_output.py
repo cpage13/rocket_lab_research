@@ -524,7 +524,7 @@ def test_every_data_dictionary_cell_unit_is_the_cells_own_unit(
     flat assumption index) says so; the fleet revenue unit is MUSD and the
     mounting overhead unit is its cell's "fraction".
     """
-    from data_center.json_output import PER_CELL_UNIT
+    from common.meta import PER_CELL_UNIT
 
     out = default_output
     doc = json.loads(out.model_dump_json())

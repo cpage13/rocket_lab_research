@@ -1,23 +1,32 @@
-"""Shared cold-reader contract types for the artifacts' meta blocks.
+"""Shared cold-reader contract for the artifacts' meta blocks: its types and its walker.
 
 The validation-check, data-dictionary, query-example, and formula-definition
 models, their enums, and the source-status counter
 (:func:`summarize_source_statuses`), used by the data-center space and ground
 artifacts' ``meta`` blocks.
+
+The one data-dictionary walker, :func:`build_data_dictionary`, with its unit
+constants: every artifact that meets ADR 002's contract builds its
+``meta.data_dictionary`` with it, from the artifact's typed model (a cell's
+unit read from the cells themselves, any other leaf's from its field's
+declaration).
 """
 
 from __future__ import annotations
 
+import inspect
 import logging
+import types
 from collections import Counter
 from collections.abc import Iterable
-from enum import StrEnum
-from typing import Final
+from enum import Enum, StrEnum
+from typing import Any, Final, Union, get_args, get_origin  # typing-acceptable: introspection
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.fields import FieldInfo
 
-from common.input_manifest import SourceStatus
-from common.provenance import FieldPath
+from common.input_manifest import InputCell, SourceStatus
+from common.provenance import FieldPath, ProvenanceCell
 
 logger = logging.getLogger(__name__)
 
@@ -269,8 +278,273 @@ class ValidationResult(BaseModel):
     remediation_hint: str | None = Field(default=None, description="Suggested remediation.")
 
 
+# ---------------------------------------------------------------------------
+# Units: each cell's own unit, or the unit declared once on a non-cell field.
+# ---------------------------------------------------------------------------
+
+UNIT_JSON_SCHEMA_KEY: Final[str] = "unit"
+"""Key under a non-cell field's ``json_schema_extra`` that declares its unit."""
+
+UNITLESS: Final[str] = "-"
+"""Data-dictionary unit for a unitless number, flag, or enum (and a cell whose
+unit is null)."""
+
+TEXT_UNIT: Final[str] = ""
+"""Data-dictionary unit for free text."""
+
+PER_CELL_UNIT: Final[str] = "per cell (read each cell's unit)"
+"""Data-dictionary unit for a container whose cells carry different units
+(the flat ``inputs.assumption_index``)."""
+
+
+def _cell_unit(cells: list[BaseModel]) -> str:
+    """Return the data-dictionary unit for the cells found at one path.
+
+    The unit is the cells' own declared ``unit`` (a null unit reads
+    :data:`UNITLESS`). When the cells at one path disagree, the entry says
+    so (:data:`PER_CELL_UNIT`) rather than picking one.
+
+    Args:
+        cells: Every :class:`ProvenanceCell` or :class:`InputCell` at the
+            path across the walked output.
+
+    Returns:
+        The shared unit, :data:`PER_CELL_UNIT`, or :data:`UNITLESS` when the
+        output holds no cell at the path.
+    """
+    units = {
+        UNITLESS if unit is None else unit
+        for unit in (c.unit for c in cells if isinstance(c, (ProvenanceCell, InputCell)))
+    }
+    if not units:
+        return UNITLESS
+    if len(units) == 1:
+        return units.pop()
+    return PER_CELL_UNIT
+
+
+def _declared_unit(info: FieldInfo) -> str | None:
+    """Return the unit a non-cell field declares in its ``json_schema_extra``."""
+    extra = info.json_schema_extra
+    if isinstance(extra, dict):
+        unit = extra.get(UNIT_JSON_SCHEMA_KEY)
+        if isinstance(unit, str):
+            return unit
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Type + provenance-class inference for a leaf field.
+# ---------------------------------------------------------------------------
+
+
+def _wire_type(leaf_type: Any) -> str:
+    """Return the JSON wire type for a leaf Python type.
+
+    Args:
+        leaf_type: The leaf's Python type.
+
+    Returns:
+        One of ``'integer'``, ``'number'``, ``'boolean'``, ``'string'``.
+    """
+    if leaf_type is bool:
+        return "boolean"
+    if leaf_type is int:
+        return "integer"
+    if leaf_type is float:
+        return "number"
+    return "string"
+
+
+def _source_class_for(path: str) -> FieldKind:
+    """Provenance class of one leaf path, from its top-level block.
+
+    The ``data_dictionary`` tags every field with a :class:`FieldKind`:
+    fields under ``inputs.*`` are scenario-set inputs (``input``);
+    ``metadata`` fields are run-identity constants (``constant``); everything
+    else (``physical``, ``business``, ``meta``, and the ground reference's
+    computed blocks) is model-derived (``derived``).
+
+    Args:
+        path: The leaf's dotted field path.
+
+    Returns:
+        The field's :class:`FieldKind`.
+    """
+    head = path.split(".", 1)[0]
+    head = head[:-2] if head.endswith("[]") else head
+    if head == "inputs":
+        return FieldKind.INPUT
+    if head == "metadata":
+        return FieldKind.CONSTANT
+    return FieldKind.DERIVED
+
+
+# ---------------------------------------------------------------------------
+# Walking a Pydantic output instance.
+# ---------------------------------------------------------------------------
+
+
+def _is_basemodel(t: Any) -> bool:
+    """True if ``t`` is a Pydantic BaseModel subclass."""
+    return inspect.isclass(t) and issubclass(t, BaseModel)
+
+
+def _is_cell(t: Any) -> bool:
+    """True if ``t`` is a public cell type.
+
+    The data-dictionary walker treats cells as leaves: they are public
+    fields, not nested records to recurse into.
+    """
+    return inspect.isclass(t) and issubclass(t, (ProvenanceCell, InputCell))
+
+
+def _unwrap_optional(t: Any) -> Any:
+    """If ``t`` is ``X | None`` / ``Optional[X]``, return ``X`` (else ``t``)."""
+    origin = get_origin(t)
+    if origin is Union or origin is types.UnionType:
+        args = [a for a in get_args(t) if a is not type(None)]
+        if len(args) == 1:
+            return args[0]
+    return t
+
+
+def _element_type(t: Any) -> Any | None:
+    """If ``t`` is a list / tuple / set, return the element type (else None).
+
+    For ``dict[K, V]`` returns the value type (the model keys data by name).
+    """
+    origin = get_origin(t)
+    if origin in (list, tuple, set, frozenset, Iterable):
+        args = get_args(t)
+        if args:
+            return _unwrap_optional(args[0])
+    if origin is dict:
+        args = get_args(t)
+        if len(args) >= 2:
+            return _unwrap_optional(args[1])
+    return None
+
+
+def _container_items(values: list[Any]) -> list[BaseModel]:
+    """Flatten the list or dict values found at one container path."""
+    items: list[BaseModel] = []
+    for value in values:
+        members = value.values() if isinstance(value, dict) else value
+        items.extend(item for item in members if isinstance(item, BaseModel))
+    return items
+
+
+def _walk(
+    cls: type[BaseModel],
+    prefix: str,
+    instances: list[BaseModel],
+    out: dict[FieldPath, DataDictEntry],
+) -> None:
+    """Recurse into a model class and its instances, one DataDictEntry per leaf.
+
+    Container fields (lists / dicts of models or cells) flatten with a ``[]``
+    suffix on the container's name. A cell is a leaf whose unit is read from
+    the cells themselves (:func:`_cell_unit`) across every instance at the
+    path; any other leaf takes the unit its field declares
+    (:func:`_declared_unit`), else :data:`UNITLESS` for numbers, flags, and
+    enums and :data:`TEXT_UNIT` for text.
+
+    Args:
+        cls: The Pydantic model class to walk.
+        prefix: The dotted path prefix accumulated so far.
+        instances: Every instance of ``cls`` at ``prefix`` in the output.
+        out: The output map, mutated in place.
+    """
+    for name, info in cls.model_fields.items():
+        path = f"{prefix}.{name}" if prefix else name
+        ann = _unwrap_optional(info.annotation)
+        values = [getattr(instance, name) for instance in instances]
+        present = [value for value in values if value is not None]
+        description = info.description or ""
+        source_class = _source_class_for(path)
+
+        if _is_cell(ann):
+            out[path] = DataDictEntry(
+                path=path,
+                description=description,
+                unit=_cell_unit(present),
+                type="cell",
+                source_class=source_class,
+            )
+            continue
+
+        if _is_basemodel(ann):
+            _walk(ann, path, present, out)
+            continue
+
+        elem = _element_type(ann)
+        if elem is not None and _is_cell(elem):
+            out[f"{path}[]"] = DataDictEntry(
+                path=f"{path}[]",
+                description=description,
+                unit=_cell_unit(_container_items(present)),
+                type="cell",
+                source_class=source_class,
+            )
+            continue
+        if elem is not None and _is_basemodel(elem):
+            _walk(elem, f"{path}[]", _container_items(present), out)
+            continue
+
+        leaf_type = elem if elem is not None else ann
+        declared = _declared_unit(info)
+        is_enum = inspect.isclass(leaf_type) and issubclass(leaf_type, Enum)
+        if declared is not None:
+            unit = declared
+        elif leaf_type in (bool, int, float) or is_enum:
+            unit = UNITLESS
+        else:
+            unit = TEXT_UNIT
+        out[path] = DataDictEntry(
+            path=path,
+            description=description,
+            unit=unit,
+            type=_wire_type(leaf_type),
+            source_class=source_class,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Data dictionary
+# ---------------------------------------------------------------------------
+
+
+def build_data_dictionary(output: BaseModel) -> list[DataDictEntry]:
+    """Walk a built output and generate its data dictionary.
+
+    The one walker every artifact that meets ADR 002's contract builds its
+    ``meta.data_dictionary`` with. Returns a
+    path-sorted list of entries: leaf fields produce one entry; container
+    fields (lists / dicts of models or cells) flatten with a ``[]`` suffix.
+    Per-leaf ``description`` is the Pydantic ``Field`` description; a cell's
+    ``unit`` is the unit its cells declare in the output (so the dictionary
+    and the cells cannot disagree), a non-cell leaf's unit is the unit its
+    field declares; ``type`` is the wire type; ``source_class`` follows the
+    path position.
+
+    Args:
+        output: A built output model (its cells supply the units).
+
+    Returns:
+        Data dictionary entries covering every leaf in the tree.
+    """
+    out: dict[FieldPath, DataDictEntry] = {}
+    _walk(type(output), "", [output], out)
+    return [out[path] for path in sorted(out)]
+
+
 __all__ = [
     "COUNT_UNIT",
+    "PER_CELL_UNIT",
+    "TEXT_UNIT",
+    "UNITLESS",
+    "UNIT_JSON_SCHEMA_KEY",
     "DataDictEntry",
     "FieldKind",
     "FormulaDefinition",
@@ -282,5 +556,6 @@ __all__ = [
     "ValidationReport",
     "ValidationResult",
     "ValidationSeverity",
+    "build_data_dictionary",
     "summarize_source_statuses",
 ]
