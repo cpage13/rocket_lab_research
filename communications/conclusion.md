@@ -369,9 +369,9 @@ test is carried by the product case: "With more scale, more time, and more
 satellites, your service should improve and your cost should come down. ... It
 should also do so in a way where revenue increases" (2026-10-06).
 
-**Where the next satellite stops paying.** At full price an added satellite
-earns more than it costs until the fleet reaches 6,006 satellites for the
-small terminal and 5,402 for the mounted terminal. Past those points it earns
+**Where the next satellite stops paying.** Sold to one class alone at full
+price, an added satellite earns more than it costs until the fleet reaches
+6,006 satellites for the small terminal and 5,402 for the mounted terminal. Past those points it earns
 less. The FY2036 fleet (4,288) is inside both. Each step compares two
 separately computed fleets, so the people added need not fall at every step.
 
@@ -569,9 +569,9 @@ the link effect of another panel is not modeled.
 Inside the horizon the launch cadence, not the spectrum, binds every class.
 The fleet reaches 4,288 satellites in FY2036. At 90 launches a year held, it
 would settle at 7,200 beyond the horizon, still far below the small terminal's
-saturation number (19,995). At full price the terminals' added satellites stop
-paying from 5,402 (the mounted terminal) and 6,006 (the small terminal), so
-the terminals' runway at full price ends there. IoT's room keeps growing with
+saturation number (19,995). Sold to one terminal class alone at full price,
+an added satellite stops paying from 5,402 (the mounted terminal) and 6,006
+(the small terminal), so each terminal's runway at full price ends there. IoT's room keeps growing with
 the fleet, and the product case uses less than a third of it in FY2036 (31.4
 percent of the uplink off-peak).
 
