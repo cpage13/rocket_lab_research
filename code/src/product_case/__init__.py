@@ -15,9 +15,11 @@ investor's in the case it adopts (lower prices appear only as context).
 The modules, as built so far: :mod:`product_case.constants` (the named constants, the enums
 and the formula catalog), :mod:`product_case.config` (the frozen scenario config, its loader
 and each input's cell spec), :mod:`product_case.engineering` (the one reader of the
-engineering artifact, and the network it gives each reported year) and
+engineering artifact, and the network it gives each reported year),
 :mod:`product_case.offers` (the choice grid, and each choice's prices, usage, service and
-per-device loads, before any market). The scenario is ``code/scenarios/product_case.yaml``; its
+per-device loads, before any market) and :mod:`product_case.monte_carlo` (the markets drawn, each
+choice judged over them and at the central market, the fronts, the pick and its spreads: the one
+module that imports numpy). The scenario is ``code/scenarios/product_case.yaml``; its
 values are labeled in ``research/SOURCE_INDEX.md``, rows COMM-722 to COMM-726.
 """
 

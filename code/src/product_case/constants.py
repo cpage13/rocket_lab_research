@@ -187,6 +187,10 @@ DOLLARS_PER_MILLION: Final[int] = 1_000_000
 PERCENT: Final[float] = 100.0
 """Percent in a whole: the margin is published in percent (``margin_pct``)."""
 
+BYTES_PER_MB: Final[int] = 1_000_000
+"""Bytes in a megabyte (decimal, as every size here): data IoT's price per unit is published in
+dollars a MB, its bytes a month over 10^6."""
+
 
 # ---------------------------------------------------------------------------
 # The conventions (model inputs: each has a cell spec, COMM-724)
@@ -1478,6 +1482,7 @@ __all__ = [
     "BROADBAND_CUSTOMERS_TODAY",
     "BUSY_HOURS_PER_DAY",
     "BYTES_PER_GB",
+    "BYTES_PER_MB",
     "CLASS_KIND",
     "DATA_IOT_ANCHOR_ARPU_USD_MONTH",
     "DATA_IOT_ANCHOR_CUSTOMERS",
