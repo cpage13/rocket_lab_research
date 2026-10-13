@@ -498,10 +498,10 @@ the market's view. They are never added.
 The prices are the investor's: the small terminal $10 a month and the mounted
 terminal $50 (2026-10-07: "Yes, let's use the $10 and $50. Let's do that"),
 minimal-packet IoT $3 and data IoT $6 (2026-10-06: "Let's go with the three
-and six for now"). They are held flat in every year: "These prices are fixed,
-and the service improves. The reason is that inflation will naturally make it
-cheaper. The prices will not go down, but they will not go up" (the investor,
-2026-10-06). Inflation is not modeled.
+and six for now"). They are held flat in every year while the service
+improves: "The prices will not go down, but they will not go up" (the
+investor, 2026-10-06 19:38). Over time inflation makes a flat price cheaper in
+real terms. Inflation is not modeled.
 
 Each price sits below today's Iridium price for its kind of customer: $47 for
 voice and data, $259 for broadband, and $7.78 for IoT (COMM-618). Why can
