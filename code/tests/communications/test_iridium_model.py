@@ -1490,15 +1490,19 @@ def test_near_zero_share_does_not_publish_a_full_margin_on_an_empty_fleet(
 def test_halving_the_downlink_share_halves_people_capacity_and_the_pool_only(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
-    """Objective: d scales people, each class's capacity and the pool (ADR 008), while the rest
-    of the frame, 1 - d, scales IoT's uplink, payload and single-tone rooms and IoT's
-    random-access room moves with neither: what the stated line on d says.
+    """Objective: d scales people, each class's capacity and the pool (ADR 008), the off-peak
+    per-user rate following the pool only where the pool caps it and the busy-hour per-user rate
+    not moving, while the rest of the frame, 1 - d, scales IoT's uplink, payload and single-tone
+    rooms and IoT's random-access room moves with neither: what the stated line on d says.
 
     Sample: the shipped scenario at d = 0.67 and at d = 0.335, read at the 2,000 reading.
 
     Expected outcome: at half d every class's people at 2,000 are half (within one person's
-    rounding), its capacity there (``read_fleet``) half and its pool half; useful beams, the
-    share of maximum use, U, maximum use, the satellite's peak and the markers unchanged. IoT's
+    rounding), its capacity there (``read_fleet``) half and its pool half; its off-peak rate at
+    each d the lower of its pool and its own rate x busy-hour share over off-peak share (at 0.67
+    the small terminal's own ratio caps it, 10.0 Mbps; at 0.335 every pool does); its busy-hour
+    rate, useful beams, the share of maximum use, U, maximum use, the satellite's peak and the
+    markers unchanged. IoT's
     uplink, payload and single-tone rooms there grow by (1 - 0.335) / (1 - 0.67), about 2.015,
     and its two access rooms stay equal, so minimal-packet IoT's capacity (random access binding
     at both) is unchanged and data IoT's payload view (binding at both) grows by that ratio.
@@ -1527,6 +1531,12 @@ def test_halving_the_downlink_share_halves_people_capacity_and_the_pool_only(
         assert capacities[1] == pytest.approx(capacities[0] / 2)
         full_block, half_block = full.iridium.classes[index], half.iridium.classes[index]
         assert half_block.beam_pool_mbps == pytest.approx(full_block.beam_pool_mbps / 2)
+        usage = CLASS_USAGE[device_class]
+        own_ratio = usage.active_rate_mbps * usage.concurrency_peak / usage.concurrency_offpeak
+        for block in (full_block, half_block):
+            assert block.per_user_rate_offpeak_mbps == min(block.beam_pool_mbps, own_ratio)
+        assert half_block.per_user_rate_offpeak_mbps == half_block.beam_pool_mbps
+        assert half_block.per_user_rate_peak_mbps == full_block.per_user_rate_peak_mbps
         assert half_block.per_satellite_capacity_gbps == full_block.per_satellite_capacity_gbps
         assert half_block.maximum_use_beams == full_block.maximum_use_beams
         markers = (
@@ -1537,6 +1547,8 @@ def test_halving_the_downlink_share_halves_people_capacity_and_the_pool_only(
         )
         for marker in markers:
             assert getattr(half_block, marker) == getattr(full_block, marker), marker
+    small_at_shipped_d = full.iridium.classes[0]
+    assert small_at_shipped_d.per_user_rate_offpeak_mbps == 10.0 < small_at_shipped_d.beam_pool_mbps
     uplink_growth = (1.0 - 0.335) / (1.0 - 0.67)
     full_room = full.iridium.saturation.readings[1].iot
     half_room = half.iridium.saturation.readings[1].iot
@@ -2167,9 +2179,11 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
     among it (the phone class's tier is in-chipset, and no unmodified phone is reached), and
     operations at zero; the curve,
     the reuse calibration (0.15 at the 25 m^2 reference panel, an estimate, COMM-410 and
-    COMM-411), d (every people figure and every downlink capacity scale with it; IoT's uplink,
-    payload and single-tone rooms with 1 - d and its random-access room with neither, so an IoT
-    class's capacity follows its binding view), and the panel with the rule's measured limits
+    COMM-411), d (each people figure and each class's downlink pool scale with it, the off-peak
+    per-user rate follows the pool only where the pool caps it, and the satellite's peak and the
+    busy-hour per-user rates do not move; IoT's uplink, payload and single-tone rooms with 1 - d
+    and its random-access room with neither, so an IoT class's capacity follows its binding
+    view), and the panel with the rule's measured limits
     (``PANEL_RULE_LIMITS_NOTE``: every class carries at least what the rule gives below the
     reference panel); the cadence fleet with no target and no cap; this run's 16 per launch
     beside the validated counts (16 with the block upgrade and its two conditions, 15 without
@@ -2203,8 +2217,10 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
         "the reuse calibration is 0.15 gbps per mhz per unit of spectral efficiency at the 25 "
         "m^2 reference panel, an estimate (comm-410, comm-411)",
         "the downlink share d is 0.67, the time-division duplex band's downlink time share (adr "
-        "008): every people figure and every downlink capacity figure but the satellite's peak "
-        "scales with it, and the uplink holds the rest of the frame, 1 - d.",
+        "008): each people figure and each class's downlink pool (w x se x d) scale with it; each "
+        "class's off-peak per-user rate follows the pool only where the pool caps it; the "
+        "satellite's peak and each class's busy-hour per-user rate (its rate while active) do not "
+        "move with d. the uplink holds the rest of the frame, 1 - d.",
         "iot's uplink, payload and single-tone rooms scale with 1 - d and its random-access room "
         "with neither, so an iot class's capacity follows 1 - d while its payload or single-tone "
         "view binds and does not move with d while its random-access view binds.",
@@ -2262,6 +2278,7 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
     assert margin.endswith("null in a year with no revenue."), margin
     assert "gross" not in joined
     assert "every people and capacity figure" not in joined
+    assert "every downlink capacity figure" not in joined
     assert "the terminals' own upload" not in joined
     assert "(its floor)" not in joined
     assert "exact in beams" not in joined

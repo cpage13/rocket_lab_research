@@ -1280,9 +1280,11 @@ def _assumptions(
         ),
         (
             f"The downlink share d is {dials.saturation.downlink_share:g}, the time-division "
-            "duplex band's downlink time share (ADR 008): every people figure and every downlink "
-            "capacity figure but the satellite's peak scales with it, and the uplink holds the "
-            "rest of the frame, 1 - d. IoT's uplink, payload and single-tone rooms scale with "
+            "duplex band's downlink time share (ADR 008): each people figure and each class's "
+            "downlink pool (W x SE x d) scale with it; each class's off-peak per-user rate "
+            "follows the pool only where the pool caps it; the satellite's peak and each class's "
+            "busy-hour per-user rate (its rate while active) do not move with d. The uplink holds "
+            "the rest of the frame, 1 - d. IoT's uplink, payload and single-tone rooms scale with "
             "1 - d and its random-access room with neither, so an IoT class's capacity follows "
             "1 - d while its payload or single-tone view binds and does not move with d while its "
             "random-access view binds."

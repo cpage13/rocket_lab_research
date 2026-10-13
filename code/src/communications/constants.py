@@ -1220,10 +1220,12 @@ DOWNLINK_SHARE_DEFAULT: Final[float] = 0.67
 COMM-662). The downlink time share d of Iridium's time-division duplex band (COMM-662: the
 uplink and the downlink share its tones in time): Certus 700's 2 : 1 down-to-up rate split
 (COMM-620: 704 kbps down, 352 up), 704 / (704 + 352) to two figures. The saturation curve is
-computed at d = 1; ADR 008 scales people, and every downlink capacity but the satellite's peak,
-by d when the curve is read. IoT's room lies in the uplink's share, 1 - d: its uplink, payload
-and tone rooms scale with 1 - d and its random-access room with neither (ADR 011). ADR 008's
-documented alternatives: 0.5, the symmetric frame, and 0.75, an estimate. A scenario setting."""
+computed at d = 1; when the curve is read, each people figure and each class's downlink pool
+scale with d (ADR 008), each class's off-peak per-user rate follows the pool only where the pool
+caps it, and the satellite's peak and each class's busy-hour per-user rate do not move. IoT's
+room lies in the uplink's share, 1 - d: its uplink, payload and tone rooms scale with 1 - d and
+its random-access room with neither (ADR 011). ADR 008's documented alternatives: 0.5, the
+symmetric frame, and 0.75, an estimate. A scenario setting."""
 
 SATURATION_CURVE_PATH_DEFAULT: Final[str] = "communications/models/iridium/saturation_curve.json"
 """The promoted saturation curve, repository-relative (ADR 005: ``saturation_curve.json``
