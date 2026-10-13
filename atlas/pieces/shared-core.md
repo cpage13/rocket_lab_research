@@ -1,6 +1,6 @@
 # Shared core
 
-**Maturity.** Stable. Checked against `main` at 1570350, 2026-10-12.
+**Maturity.** Stable. Checked against `part-c-contract-helpers` at 2ce71ba, 2026-10-13.
 
 **Role.** The code both models import (`code/src/common/`), one
 implementation per helper:
@@ -11,7 +11,7 @@ implementation per helper:
 | `cohort.py` | the service-life cohort cliff (`LivedCohort`, `cohort_is_alive_at`, `living_cohorts`) |
 | `provenance.py` | `ProvenanceCell`, the `FORMULAS` catalog, the `cell` factory, the strict readers `as_float` and `as_int` |
 | `input_manifest.py` | the input-cell vocabulary (`InputCell`, `SourceStatus`, `AssumptionRole`) and the default-versus-override rule |
-| `meta.py` | the meta-block types: validation checks and results, data dictionary, query examples, formula definitions |
+| `meta.py` | the meta-block types: validation checks and results, data dictionary, query examples, formula definitions; the data-dictionary walker `build_data_dictionary` and its unit constants, shared by the artifacts that meet ADR 002 |
 | `file_io.py` | the file boundary: `load_yaml_mapping`, `render_artifact_json`, `artifact_write` and its `PendingWrite`, `write_files_with_rollback`, `locate_source_checkout` and its `SourceCheckout`, whose `anchored` method anchors a relative path at the repository root (the rule both communications commands anchor the curve, the grid and their outputs by; a scenario path resolves against the working directory), `ModelFileError` |
 | `cli.py` | the command conventions: product on stdout, status on stderr, exit status 1 for an expected failure and 2 for a usage error, followed by all three promotion commands |
 

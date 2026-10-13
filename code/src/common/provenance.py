@@ -6,10 +6,11 @@ space artifact's ``physical.years`` and ``business.years``, but each year's
 formula_name + uses + sources + description; the ground reference builds its
 cells with the same factory. The communications artifacts (the Iridium
 artifact and the saturation curve) carry plain numbers, and the communications
-code reads only :func:`as_float` and :func:`as_int` from here. The
-:data:`FORMULAS` table is the authoritative
-lookup for ``formula_name`` keys; V13 enforces that every used name exists
-here.
+code reads only :func:`as_float` and :func:`as_int` from here. A cell's
+``formula_name`` resolves through the formula catalog of the artifact that
+publishes it. :data:`FORMULAS` is the data center's catalog, which
+:func:`cell` reads: :func:`cell` refuses a name the catalog lacks, and V13
+checks that every name a space-artifact cell uses exists there.
 
 The :func:`cell` factory hides ProvenanceCell-construction noise: a caller
 passes a ``formula_name`` and the factory resolves the human-readable
@@ -23,7 +24,8 @@ string, a missing value, or a fractional count raises instead of turning into
 a silent number.
 
 The output contract relies on two durable rules: every emitted formula name
-must resolve through the catalog below, and every public numeric cell should
+must resolve through the catalog of the artifact that publishes it (the data
+center's is :data:`FORMULAS`, below), and every public numeric cell should
 carry enough provenance for a reader to trace formula, inputs, sources, and
 description without private lifecycle notes.
 """
@@ -57,7 +59,9 @@ type FiscalYear = int
 """A calendar fiscal year as an integer, e.g. ``2036``."""
 
 type FormulaName = str
-"""A :data:`FORMULAS` key, e.g. ``kw_per_node_from_n_and_kw_per_pkg``."""
+"""A formula's key in the catalog of the artifact that publishes the cell, e.g.
+``kw_per_node_from_n_and_kw_per_pkg`` (a key of :data:`FORMULAS`, the data
+center's catalog)."""
 
 
 # ---------------------------------------------------------------------------
@@ -92,8 +96,12 @@ class ProvenanceCell(BaseModel):
         value: The leaf value. ``float`` / ``int`` for numerics, ``str`` for
             enum-valued cells, ``bool`` for flags, ``None`` for not-yet-computed.
         unit: The unit string (e.g. ``kW``, ``MUSD``, ``PFLOPS/kW``).
-        formula: Human-readable formula text (resolved from :data:`FORMULAS`).
-        formula_name: The stable formula key; must exist in :data:`FORMULAS`.
+        formula: Human-readable formula text, resolved from the formula catalog
+            of the artifact that publishes the cell (for a data-center cell,
+            :data:`FORMULAS`, which :func:`cell` reads).
+        formula_name: The stable formula key; it resolves through the formula
+            catalog of the artifact that publishes the cell (for a data-center
+            cell, :data:`FORMULAS`).
         uses: JSON paths of the upstream cells / dials this value derives from.
         sources: Provenance citations or local derivation labels.
         source_status: Source classification for the computed output cell.
@@ -114,13 +122,15 @@ class ProvenanceCell(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# FORMULAS: the authoritative formula_name lookup (plan section 0.8)
+# FORMULAS: the data center's formula catalog (plan section 0.8)
 # ---------------------------------------------------------------------------
 #
-# Every formula_name a ProvenanceCell references must have an entry here.
-# V13 (Phase 5) enforces this: any cell whose formula_name is missing from
-# this table fails the validation rule. Sub-agents adding a new formula must
-# add it here too.
+# The data center's catalog: every formula_name a data-center cell references
+# must have an entry here. cell() refuses a name missing from this table, and
+# V13 (Phase 5) checks the space artifact's cells: any cell whose formula_name
+# is missing fails the validation rule. Another artifact's cells resolve
+# through that artifact's own catalog. Sub-agents adding a new data-center
+# formula must add it here too.
 
 
 FORMULAS: Final[dict[FormulaName, FormulaSpec]] = {
@@ -259,8 +269,8 @@ FORMULAS: Final[dict[FormulaName, FormulaSpec]] = {
     ),
     # ---- Per-node cost-breakdown lines (cycle-2 Phase 2; the five build
     # lines the engine's CostBreakdown emits as individual cells). These
-    # extend plan section 0.8, added when first used (plan section 0.8:
-    # "sub-agents adding any new formula must also add it to FORMULAS").
+    # extend plan section 0.8, added when first used, as the data center's
+    # catalog requires.
     "compute_cost_from_n_and_usd_per_pkg": FormulaSpec(
         formula="N x usd_per_pkg / 1_000_000",
         description="Per-node compute build cost (all packages), $M.",
@@ -282,8 +292,8 @@ FORMULAS: Final[dict[FormulaName, FormulaSpec]] = {
         description="Total per-node build + launch cost (sum of the five lines), $M.",
     ),
     # ---- Output-assembly formula names (cycle-2 Phase 4A). Added when
-    # first used by the PhysicalYear cells (plan section 0.8: "sub-agents
-    # adding any new formula must also add it to FORMULAS").
+    # first used by the PhysicalYear cells, as the data center's catalog
+    # requires (plan section 0.8).
     "frontier_generation_from_cadence": FormulaSpec(
         formula="latest generation with year_available <= FY (18-month cadence rule)",
         description="The frontier GPU generation selected for a model year (D7).",
@@ -371,16 +381,20 @@ def cell(
     sources: list[str],
     description: str,
 ) -> ProvenanceCell:
-    """Build a :class:`ProvenanceCell`, resolving ``formula`` text from FORMULAS.
+    """Build a :class:`ProvenanceCell` from the data center's catalog, FORMULAS.
 
-    The factory is the single construction point for provenance cells. It
-    looks up the human-readable ``formula`` string from :data:`FORMULAS`
-    using ``formula_name`` so call sites never duplicate formula text.
+    The factory is the single construction point for the cells whose formula
+    resolves through :data:`FORMULAS`, the data center's catalog: every
+    data-center cell and every cell the cadence spine returns. It looks up the
+    human-readable ``formula`` string from :data:`FORMULAS` using
+    ``formula_name`` so call sites never duplicate formula text. A cell of an
+    artifact with a catalog of its own resolves its ``formula_name`` there.
 
     Args:
         value: The leaf value (numeric / enum string / flag / ``None``).
         unit: The unit string (e.g. ``kW``, ``MUSD``).
-        formula_name: The stable formula key; must exist in :data:`FORMULAS`.
+        formula_name: The stable formula key; it must exist in
+            :data:`FORMULAS`, the data center's catalog.
         uses: JSON paths of upstream cells / dials this value derives from.
         sources: Provenance citations backing the value.
         description: One-sentence plain-language meaning of this cell.

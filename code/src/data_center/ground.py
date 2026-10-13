@@ -57,12 +57,12 @@ from common.meta import (
     SourceStatusSummary,
     ValidationResult,
     ValidationSeverity,
+    build_data_dictionary,
     summarize_source_statuses,
 )
 from common.provenance import FieldPath, ProvenanceCell, as_float, as_int, cell
 from data_center.config import anchor_year
 from data_center.input_manifest import ScenarioIdentity, collect_input_cells
-from data_center.json_output import build_data_dictionary
 from data_center.output import YEAR_UNIT, YEARS_UNIT, ArtifactRole, RunMetadata, SpaceModelOutput
 
 logger = logging.getLogger(__name__)

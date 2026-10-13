@@ -20,12 +20,13 @@ def test_validation_severity_strings() -> None:
     assert ValidationSeverity.FAIL == "fail"
 
 
-def test_query_applies_to_names_the_two_artifacts() -> None:
+def test_query_applies_to_names_the_three_artifacts() -> None:
     """Objective: one query family per published artifact.
 
-    Expected: exactly ``space`` and ``ground``.
+    Expected: exactly ``space`` and ``ground`` (the data center's two artifacts)
+    and ``product_case`` (the product case's artifact, ADR 012).
     """
-    assert {member.value for member in QueryAppliesTo} == {"space", "ground"}
+    assert {member.value for member in QueryAppliesTo} == {"space", "ground", "product_case"}
 
 
 def test_query_example_carries_its_jq_expression() -> None:
