@@ -29,7 +29,7 @@ The communications family the repository publishes: the most the L-band Rocket L
 can carry, every seat of the small terminal, the mounted terminal and the phone class sold on the fleet the
 launch cadence builds.
 - **Avoid:** Model B, direct-to-cell model
-- **Relates to:** the three lanes, device class, full sell-through, IoT books, saturation curve
+- **Relates to:** the three lanes, device class, full sell-through, minimal-packet IoT, data IoT, saturation curve
 
 ### High-Bandwidth Cellular Pure Play model
 The second communications family (cellular spectrum to phones), on hold; the equality tripwire runs it beside
@@ -73,20 +73,15 @@ data IoT are two more (ADR 011); IoT counts devices, never people, and no model 
 - **Relates to:** minimal-packet IoT, data IoT
 
 ### minimal-packet IoT
-The IoT device class that sends short messages only; with data IoT, a capacity in the engineering case (ADR
-011) and a market in the product case (ADR 012), both decided and not yet built: today the Iridium artifact
-carries the two as the IoT books.
-- **Relates to:** data IoT, IoT books, device class
+The IoT device class that sends short messages only; with data IoT, a capacity in the engineering case, which
+the Iridium artifact publishes (ADR 011), and a market in the product case (ADR 012), decided and not yet built.
+- **Relates to:** data IoT, device class, engineering case, product case
 
 ### data IoT
 The IoT device class that sends bursts of data beside its messages; with minimal-packet IoT, a capacity in the
-engineering case and a market in the product case, both decided and not yet built (today one of the IoT books).
-- **Relates to:** minimal-packet IoT, IoT books, device class
-
-### IoT books
-The two IoT revenue lines the Iridium artifact still carries (`fixed_books`, ADR 007), set device counts at set
-prices outside every people class's margin, which ADR 011 replaces with IoT's capacity.
-- **Relates to:** minimal-packet IoT, data IoT
+engineering case, which the Iridium artifact publishes (ADR 011), and a market in the product case (ADR 012),
+decided and not yet built.
+- **Relates to:** minimal-packet IoT, device class, engineering case, product case
 
 ### frequency versus bandwidth
 Frequency is where the signal sits (about 1.6 GHz); bandwidth, the width held (about 8 MHz), sets capacity.
@@ -138,8 +133,11 @@ maximum use linearly, never the saturation numbers, the ocean factor or satellit
 - **Relates to:** saturation curve
 
 ### downlink share
-d: the share of the time-division duplex frame the downlink holds, a scenario setting (ADR 008); every people
-and capacity figure but the satellite's peak scales with it, and the curve is computed at d = 1.
+d: the share of the time-division duplex frame the downlink holds, a scenario setting (ADR 008); each people
+figure and each class's downlink pool scale with it, each class's off-peak per-user rate follows the pool only
+where the pool caps it, and the satellite's peak and each class's busy-hour per-user rate do not move with d. The
+uplink holds the rest of the frame, 1 - d: IoT's uplink, payload and single-tone rooms scale with 1 - d and its
+random-access room with neither (ADR 011). The curve is computed at d = 1.
 - **Relates to:** saturation curve
 
 ### readings
@@ -212,8 +210,8 @@ The public evidence class of a claim or input; public documents never cite `plac
   spectrum saturates; in code 2,000 is only a reading and each people class's saturation number is derived,
   so agents would quote a cap as physics.
 - **Sheet A, ARPU buckets.** Retired with the four-bucket revenue case (mix shares of one pool, a government
-  bucket among them) yet still in the communications documents until their rewrite and in the IoT books'
-  basis text; the built model sells every seat of each people class at its own price.
+  bucket among them) yet still in the communications documents until their rewrite; the built model sells
+  every seat of each people class at its own price.
 - **floor.** The coverage floor (which gates every Iridium sale; the cadence sizes the fleet), the conservative
   floor (the most conservative published reading, shown but never leading), the phone class's price floor (no
   price haircut goes below it), the margin floors (rule V3 in the data center; the investor's floor on the

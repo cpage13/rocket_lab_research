@@ -1,6 +1,8 @@
 # Promotion
 
-**Maturity.** Stable. Checked against `main` at 1570350, 2026-10-12.
+**Maturity.** Stable. Checked against `main` at 1570350, 2026-10-12; its
+Iridium artifact's IoT blocks against part A's code (`iridium-v7`),
+2026-10-13.
 
 **Role.** The publishing boundary: three commands run a scenario and write
 the promoted JSON (the final objects, listed on the map) through one
@@ -86,7 +88,9 @@ the ground artifact carries its own (`ground_anchor`, `ground_assumptions`,
 input map: `jq '.inputs.assumption_index["inputs.config.cadence.launches_at_year_10"]' data_center/models/space/default.json`.
 A ground `uses` path prefixed `space:` points into the space artifact. The
 Iridium artifact carries no worked queries; read it by block, for example
-`jq '.classes[] | {device_class, saturation_number, saturation_not_reached_by, binding_limit_at_horizon_end}' communications/models/iridium/default.json`.
+`jq '.classes[] | {device_class, saturation_number, saturation_not_reached_by, binding_limit_at_horizon_end}' communications/models/iridium/default.json`,
+or the final year's IoT capacities,
+`jq '.years[-1].iot.classes[] | {iot_class, device_capacity, binding_view}' communications/models/iridium/default.json`.
 
 **The headline reads.**
 - Data center: the space artifact's worked queries
@@ -99,12 +103,15 @@ Iridium artifact carries no worked queries; read it by block, for example
   `ground_space_ratio` reads the inverse, ground over orbit.
 - Communications: `communications/models/iridium/default.json` is long, so
   read it by block: each people class's markers and binding limit
-  (`classes`); each year's fleet and cost, each class's people, revenue and
-  own margin, and the two IoT lines (`years`); the readings
-  (`saturation.readings`); the stated assumptions (`assumptions`). Each
-  class's column is the whole fleet sold to that class alone, so the
-  columns are never summed into a fleet revenue (ADR 006; the map's
-  invariants).
+  (`classes`); each IoT class's engineering usage (`iot_classes`); each
+  year's fleet and cost, each class's useful beams, people, revenue and own
+  margin, and IoT's room with each IoT class's capacity (`years`); the
+  readings, each with IoT's room (`saturation.readings`); the stated
+  assumptions (`assumptions`). Each class's column is the whole fleet sold
+  to that class alone, so the columns are never summed into a fleet revenue
+  (ADR 006; the map's invariants); each IoT class's capacity is the whole
+  room given to that class alone, never a count sold, and the two are never
+  added (ADR 011).
 
 **Terms.** promoted JSON, provenance cell, default scenario, saturation
 curve (see `CONTEXT.md`).

@@ -26,31 +26,34 @@ that the curve was computed for the config's own inputs (the identity check,
 2. **The years**: in every year whose living fleet is at or above the coverage floor
    (pinned at 340 on the Iridium path), each device class serves every person its living fleet
    carries (the curve's people, read at the downlink share d and the panel factor, rounded half
-   up) at its own flat price, and the two IoT lines earn their fixed books; below the floor
-   nothing is sold. Each class's own margin is its own revenue against the year's whole-fleet
-   annualized cost, null with no revenue; the IoT lines are never inside it. The years are
+   up) at its own flat price; below the floor nothing is sold. Each class's busy-hour useful
+   beams are published in every year, below the floor too, since beams are physical. Each
+   class's own margin is its own revenue against the year's whole-fleet annualized cost, null
+   with no revenue. Each year carries IoT's room on the phone class's useful beams and each IoT
+   class's device capacity alone at its engineering usage (:func:`iot_room`, ADR 011), never a
+   count sold or revenue, the capacities null below the floor. The years are
    read before anything else, so a year's fleet past a class's last computed row raises
    :class:`~communications.saturation_curve.CurveBeyondLastRowError` naming that year.
 3. **The readings**: every class at four reported fleets (the coverage floor; 2,000, the
    retired cap, kept for comparison; the horizon-end full-cadence reach; the steady state
-   beyond the horizon), each priced by its reading cost, and the IoT check at each.
+   beyond the horizon), each priced by its reading cost, and IoT's room and capacities at each.
 4. **Each class's block**: its price, usage and physics (the satellite's peak at the
    panel, the downlink pool and the per-user rates), its markers from the curve, the limit
    that binds at the horizon's end, and its marginal intervals on the curve's own rows. A
    class whose curve reaches no saturation number, its final fleet past the fleet the curve
    names it not reached by, raises :class:`BindingLimitUnmeasuredError`: the curve does not
    measure the elasticity of capacity past that fleet, so which limit binds there is not known.
-5. **The record**, :class:`IridiumRecord`: everything the ``iridium-v6`` artifact publishes
-   beside the shared fleet-and-cost record, with the stated assumptions, so the artifact
-   builder reads no dial and holds no Optional check.
+5. **The record**, :class:`IridiumRecord`: everything the ``iridium-v7`` artifact publishes
+   beside the shared fleet-and-cost record (each IoT class's engineering usage among it), with
+   the stated assumptions, so the artifact builder reads no dial and holds no Optional check.
 
 Every list of classes runs small terminal, mounted terminal, phone class (the order of
 :class:`~communications.constants.DeviceClass`), never phone-first. No quantity that does not
 exist is published as a number: a margin with no revenue, U at a fleet of 0, a marker not
-reached and an IoT share below the floor are None, and nothing divides by zero. A run whose
-records would hold an infinity or a NaN (a setting past what the model can compute) is
-refused as the entry's last step, naming the first such field and the settings behind it, so
-a run the entry returns holds only finite numbers.
+reached and an IoT class's capacity below the floor are None, and nothing divides by zero. A
+run whose records would hold an infinity or a NaN (a setting past what the model can compute)
+is refused as the entry's last step, naming the first such field and the settings behind it,
+so a run the entry returns holds only finite numbers.
 
 numpy-free, like every communications module but the saturation module (ADR 010).
 """
@@ -59,7 +62,7 @@ from __future__ import annotations
 
 import logging
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields, is_dataclass
 from enum import StrEnum
 from types import MappingProxyType
@@ -70,28 +73,20 @@ from communications.config import CommsConfig, IridiumArpuDials, IridiumDials
 from communications.constants import (
     APERTURE_STACK_CAVEAT_NOTE,
     APERTURE_VALIDATED_STACK_LIMIT_M2,
-    BITS_PER_BYTE,
     CLASS_SE_CENTRAL,
     CLASS_USAGE,
     DATA_IOT_BURST_BYTES,
-    DATA_IOT_BURSTS_PER_DAY,
-    DATA_IOT_DEVICES,
-    DATA_IOT_PRICE_USD_MONTH_DEFAULT,
     ECOSYSTEM_ASSUMPTION_NOTE,
     HZ_PER_MHZ,
+    IOT_ENGINEERING_USAGE,
     IOT_MAC_EFFICIENCY,
     IOT_MESSAGE_AIRTIME_HIGH_S,
     IOT_MESSAGE_AIRTIME_LOW_S,
     IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH,
     IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW,
     IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND,
-    IRIDIUM_IOT_BOOK_DEVICES,
     IRIDIUM_OPERATIONS_COST_MUSD,
-    MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES,
-    MINIMAL_PACKET_IOT_DEVICES,
     MINIMAL_PACKET_IOT_MESSAGE_BYTES,
-    MINIMAL_PACKET_IOT_MESSAGES_PER_DAY,
-    MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT,
     MONTHS_PER_YEAR,
     MOUNTED_TERMINAL_CLASS_SE_HIGH,
     MOUNTED_TERMINAL_CLASS_SE_LOW,
@@ -111,6 +106,8 @@ from communications.constants import (
     SMALL_TERMINAL_CLASS_SE_LOW,
     ClassUsage,
     DeviceClass,
+    IotClass,
+    IotView,
 )
 from communications.engine import (
     MUSD_TO_USD,
@@ -126,6 +123,7 @@ from communications.saturation_curve import (
     BandName,
     ClassCurve,
     CurveBeyondLastRowError,
+    FleetReading,
     SaturationCurve,
     SaturationCurveError,
     check_curve_matches,
@@ -295,11 +293,96 @@ class ClassRecord:
 
 
 @dataclass(frozen=True)
+class IotClassCapacityRecord:
+    """One IoT class alone at one fleet: the devices IoT's whole room holds for it (ADR 011).
+
+    Each view's devices are the room over one device's load a second at the class's engineering
+    usage (:data:`~communications.constants.IOT_ENGINEERING_USAGE`, a day's average); the
+    capacity is the least, in whole devices. Each class is given the whole room, so the two
+    classes' capacities never add. A capacity, never a count sold or a forecast. Every field but
+    the class is None below the coverage floor (IoT needs continuous coverage).
+
+    Attributes:
+        iot_class: The IoT class.
+        devices_by_payload_bits: The uplink's payload bits a second over one device's uplink
+            bits a second.
+        devices_by_random_access: The access attempts a second at the window's low end over one
+            device's attempts a second.
+        devices_by_single_tone_time: The single-tone seconds a second over one device's tone
+            seconds a second, at the message airtime's high end.
+        device_capacity: The least of the three, rounded down to whole devices.
+        binding_view: The view that gives the least, a tie going to the earliest in
+            :class:`~communications.constants.IotView`'s order.
+    """
+
+    iot_class: IotClass
+    devices_by_payload_bits: float | None
+    devices_by_random_access: float | None
+    devices_by_single_tone_time: float | None
+    device_capacity: int | None
+    binding_view: IotView | None
+
+
+@dataclass(frozen=True)
+class IotRoomRecord:
+    """IoT's room at one fleet, and each IoT class's capacity in it alone (ADR 011).
+
+    IoT rides the phone class's useful beams (IoT devices are low gain, so their reuse follows
+    the phone rule) in the uplink's share of the frame, 1 - d (ADR 008). Those are the beams lit
+    over inhabited cells (the phone class's ocean factor of the fleet's beams), so IoT over
+    oceans and empty land is not counted: a conservative basis. The room is published at every
+    fleet (0.0 at a fleet of 0); each class's capacity only at or above the coverage floor.
+
+    Attributes:
+        uplink_bits_per_second: The phone class's useful beams x the held width x the phone
+            class's central spectral efficiency x (1 - d), bits a second.
+        uplink_payload_bits_per_second: That x the MAC efficiency, bits a second.
+        access_attempts_per_second_low: The phone class's useful beams x the random-access
+            window's low end x the windows a second.
+        access_attempts_per_second_high: The same at the window's high end.
+        single_tone_seconds_per_second: The phone class's useful beams x the held width over
+            the NB-IoT tone x (1 - d): the single-tone seconds the uplink holds a second.
+        classes: Each IoT class's capacity alone, in IoT class order.
+    """
+
+    uplink_bits_per_second: float
+    uplink_payload_bits_per_second: float
+    access_attempts_per_second_low: float
+    access_attempts_per_second_high: float
+    single_tone_seconds_per_second: float
+    classes: tuple[IotClassCapacityRecord, ...]
+
+
+@dataclass(frozen=True)
+class IotClassRecord:
+    """One IoT class's engineering usage and the loads a day it gives (ADR 011): the usage each
+    capacity is read at, never a count of devices.
+
+    Attributes:
+        iot_class: The IoT class.
+        messages_per_day: Its messages a day.
+        bursts_per_day: Its bursts a day, beside the messages.
+        uplink_bits_per_day: Its uplink bits a day.
+        access_attempts_per_day: Its random-access attempts a day, one per message or burst.
+        single_tone_messages_per_day: Its messages a day read on single tones.
+    """
+
+    iot_class: IotClass
+    messages_per_day: int
+    bursts_per_day: int
+    uplink_bits_per_day: int
+    access_attempts_per_day: int
+    single_tone_messages_per_day: int
+
+
+@dataclass(frozen=True)
 class ClassYearRecord:
     """One class's line in one model year.
 
     Attributes:
         device_class: The class.
+        useful_beams: The class's busy-hour useful beams at the year's living fleet (L times the
+            panel factor), read in every year, below the coverage floor too: beams are physical.
         people_served: Every person the living fleet carries for the class, rounded half up;
             0 below the coverage floor.
         revenue_musd: Those people at the class's price for the year, $M; 0.0 below the floor.
@@ -308,6 +391,7 @@ class ClassYearRecord:
     """
 
     device_class: DeviceClass
+    useful_beams: float
     people_served: int
     revenue_musd: float
     own_margin_pct: float | None
@@ -319,38 +403,14 @@ class YearRecord:
 
     Attributes:
         year: The fiscal year (the key of the shared record's year).
-        minimal_packet_iot_revenue_musd: Minimal-packet IoT's book, $M; 0.0 below the floor.
-        data_iot_revenue_musd: Data IoT's book, $M; 0.0 below the floor.
         classes: Each class's line, in class order.
+        iot: IoT's room on the year's phone-class useful beams and each IoT class's capacity in
+            it alone (:func:`iot_room`), the capacities null below the coverage floor.
     """
 
     year: int
-    minimal_packet_iot_revenue_musd: float
-    data_iot_revenue_musd: float
     classes: tuple[ClassYearRecord, ...]
-
-
-@dataclass(frozen=True)
-class FixedBooksRecord:
-    """The two IoT lines (ADR 007): fixed counts at their prices, each its own line.
-
-    Attributes:
-        minimal_packet_iot_devices: Minimal-packet IoT's fixed count.
-        minimal_packet_iot_price_usd_per_month: Its monthly price, dollars.
-        minimal_packet_iot_annual_revenue_musd: Its book, $M a year, from the floor year.
-        data_iot_devices: Data IoT's fixed count.
-        data_iot_price_usd_per_month: Its monthly price, dollars.
-        data_iot_annual_revenue_musd: Its book, $M a year, from the floor year.
-        basis: Where the counts come from and how the lines are sold.
-    """
-
-    minimal_packet_iot_devices: int
-    minimal_packet_iot_price_usd_per_month: float
-    minimal_packet_iot_annual_revenue_musd: float
-    data_iot_devices: int
-    data_iot_price_usd_per_month: float
-    data_iot_annual_revenue_musd: float
-    basis: str
+    iot: IotRoomRecord
 
 
 @dataclass(frozen=True)
@@ -388,55 +448,15 @@ class ReadingRecord:
         fleet_annual_cost_musd: The reading's cost, $M a year: the final year's annualized
             cost at the horizon-end reach, else the fleet times the cost per satellite-year.
         classes: Each class's reading, in class order.
+        iot: IoT's room on the reading's phone-class useful beams and each IoT class's capacity
+            in it alone (:func:`iot_room`), the capacities null below the coverage floor.
     """
 
     label: str
     fleet: int
     fleet_annual_cost_musd: float
     classes: tuple[ClassReadingRecord, ...]
-
-
-@dataclass(frozen=True)
-class IotCheckRowRecord:
-    """One IoT line at one reported fleet; every field but ``fleet`` None below the floor.
-
-    Attributes:
-        fleet: The fleet, satellites.
-        devices_per_useful_beam: The line's devices over the phone class's useful beams (times
-            the panel factor).
-        uplink_bits_share: A beam's daily IoT bits over its uplink's daily bits, a fraction;
-            None when the uplink holds no time (d = 1).
-        uplink_bits_share_with_mac: The same over the MAC efficiency.
-        access_attempts_per_second_per_beam: One attempt per message or burst.
-        uplink_tone_share_low: Minimal-packet IoT's message channel time over the uplink's
-            tone time at the low airtime, a fraction; None with no uplink, and None for data
-            IoT, whose bursts are not single-tone messages (the tone time of the single-tone
-            messages it sends beside them goes unreported).
-        uplink_tone_share_high: The same at the high airtime.
-    """
-
-    fleet: int
-    devices_per_useful_beam: float | None
-    uplink_bits_share: float | None
-    uplink_bits_share_with_mac: float | None
-    access_attempts_per_second_per_beam: float | None
-    uplink_tone_share_low: float | None
-    uplink_tone_share_high: float | None
-
-
-@dataclass(frozen=True)
-class IotCheckRecord:
-    """The IoT check, one row per reported fleet for each line.
-
-    Attributes:
-        minimal_packet_iot: Minimal-packet IoT's rows.
-        data_iot: Data IoT's rows (its tone shares None: its bursts are not single-tone
-            messages, and the tone time of the single-tone messages it sends beside them goes
-            unreported).
-    """
-
-    minimal_packet_iot: tuple[IotCheckRowRecord, ...]
-    data_iot: tuple[IotCheckRowRecord, ...]
+    iot: IotRoomRecord
 
 
 @dataclass(frozen=True)
@@ -453,7 +473,6 @@ class SaturationRecord:
         readings: The four reported fleets' readings, in order.
         band_saturation_numbers: The phone class's band points' saturation numbers (None when
             not reached), in band order.
-        iot_check: The IoT check.
         limits: The curve's stated limits, carried over.
     """
 
@@ -465,7 +484,6 @@ class SaturationRecord:
     panel_factor: float
     readings: tuple[ReadingRecord, ...]
     band_saturation_numbers: Mapping[BandName, int | None]
-    iot_check: IotCheckRecord
     limits: tuple[str, ...]
 
 
@@ -473,9 +491,9 @@ class SaturationRecord:
 class IridiumRecord:
     """The Iridium family's record of a run, read beside its shared fleet-and-cost record.
 
-    It mirrors the ``iridium-v6`` artifact's Iridium blocks (the class blocks, each year's
-    Iridium lines, the fixed books, the saturation block and the assumptions) and carries
-    what the artifact reads from the Iridium dials, so the builder needs no config. The
+    It mirrors the ``iridium-v7`` artifact's Iridium blocks (the class blocks, each IoT class's
+    engineering usage, each year's Iridium lines, the saturation block and the assumptions) and
+    carries what the artifact reads from the Iridium dials, so the builder needs no config. The
     deployment, the living fleet and every cost line are the shared record's; nothing here
     repeats them.
 
@@ -491,8 +509,9 @@ class IridiumRecord:
         cost_per_satellite_year_musd: One satellite's annualized cost at the final year's
             launch price, $M (defined even when no cohort flies).
         classes: Each class's block, in class order.
+        iot_classes: Each IoT class's engineering usage and its loads a day, in IoT class
+            order: the usage each IoT capacity is read at, never a count of devices (ADR 011).
         years: Each model year's Iridium lines, in the shared record's order.
-        fixed_books: The two IoT lines.
         saturation: The curve and its readings.
         assumptions: The stated assumptions, in order.
     """
@@ -506,8 +525,8 @@ class IridiumRecord:
     coverage_floor_reached_year: int | None
     cost_per_satellite_year_musd: float
     classes: tuple[ClassRecord, ...]
+    iot_classes: tuple[IotClassRecord, ...]
     years: tuple[YearRecord, ...]
-    fixed_books: FixedBooksRecord
     saturation: SaturationRecord
     assumptions: tuple[str, ...]
 
@@ -524,43 +543,6 @@ class IridiumRun:
 
     fleet: FleetTrajectory
     iridium: IridiumRecord
-
-
-@dataclass(frozen=True)
-class _IotUsage:
-    """What one IoT device sends a day (engine-internal): its usage, apart from any count.
-
-    The IoT check takes a line's device count beside it (:func:`_iot_row`), so the shares a
-    usage gives read at whatever count a caller supplies.
-
-    Attributes:
-        bytes_per_day: The device's daily volume, bytes.
-        attempts_per_day: Its access attempts a day, one per message or burst.
-        single_tone_messages_per_day: Its messages a day read on single tones; None for data
-            IoT, whose bursts are not single-tone messages, so the tone time of the messages it
-            sends beside them goes unreported.
-    """
-
-    bytes_per_day: int
-    attempts_per_day: int
-    single_tone_messages_per_day: int | None
-
-
-_MINIMAL_PACKET_IOT_USAGE: Final[_IotUsage] = _IotUsage(
-    bytes_per_day=MINIMAL_PACKET_IOT_MESSAGES_PER_DAY * MINIMAL_PACKET_IOT_MESSAGE_BYTES,
-    attempts_per_day=MINIMAL_PACKET_IOT_MESSAGES_PER_DAY,
-    single_tone_messages_per_day=MINIMAL_PACKET_IOT_MESSAGES_PER_DAY,
-)
-"""A minimal-packet IoT device: 48 messages of 340 bytes a day, each on one tone."""
-
-_DATA_IOT_USAGE: Final[_IotUsage] = _IotUsage(
-    bytes_per_day=DATA_IOT_BURSTS_PER_DAY * DATA_IOT_BURST_BYTES
-    + MINIMAL_PACKET_IOT_MESSAGES_PER_DAY * MINIMAL_PACKET_IOT_MESSAGE_BYTES,
-    attempts_per_day=DATA_IOT_BURSTS_PER_DAY + MINIMAL_PACKET_IOT_MESSAGES_PER_DAY,
-    single_tone_messages_per_day=None,
-)
-"""A data IoT device: 4 bursts of 100 KB a day beside the 48 messages; its bursts are not
-single-tone, and its messages' tone time goes unreported (no tone share)."""
 
 
 def iridium_dials_of(config: CommsConfig) -> IridiumDials:
@@ -702,7 +684,7 @@ def _panel_factor(dials: IridiumDials, curve: SaturationCurve) -> float:
 
 
 def _class_price(arpu: IridiumArpuDials, device_class: DeviceClass) -> float:
-    """Return a class's monthly price from the five prices."""
+    """Return a class's monthly price from the three prices."""
     match device_class:
         case DeviceClass.SMALL_TERMINAL_CLASS:
             return arpu.small_terminal_class_price_usd_month
@@ -715,14 +697,15 @@ def _class_price(arpu: IridiumArpuDials, device_class: DeviceClass) -> float:
 
 
 def _annual_revenue_musd(count: float, price_usd_per_month: float) -> float:
-    """Return a count (people, devices, or the people one satellite adds) at a monthly price
-    for a year, $M."""
+    """Return a count (people, or the people one satellite adds) at a monthly price for a year,
+    $M."""
     return count * price_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
 
 
 def _sells(fleet: int, coverage_floor: int) -> bool:
     """Whether a fleet sells: the floor rule's one home. At or above the coverage floor every
-    class and both IoT lines are sold in full; below it nothing is sold."""
+    class is sold in full and each IoT class's capacity is published; below it nothing is sold
+    and the capacities are null (IoT needs continuous coverage)."""
     return fleet >= coverage_floor
 
 
@@ -757,22 +740,23 @@ def _class_sale(
     )
 
 
-def _people_served(
+def _year_reading(
     curve: SaturationCurve,
     device_class: DeviceClass,
     fleet_year: FleetYear,
     *,
     downlink_share: float,
     panel_factor: float,
-) -> int:
-    """Return every person a year's living fleet carries for a class, rounded half up.
+) -> FleetReading:
+    """Return a class's readings at a year's living fleet, from one bracketing of the fleet: its
+    useful beams and its people (unrounded) among them.
 
     Raises:
         CurveBeyondLastRowError: If the year's fleet lies past the class's last row, naming the
             year beside the reading's own message (the fleet, the class and the last row).
     """
     try:
-        people = people_at(
+        return read_fleet(
             curve,
             device_class,
             fleet_year.living_fleet,
@@ -781,7 +765,6 @@ def _people_served(
         )
     except CurveBeyondLastRowError as exc:
         raise CurveBeyondLastRowError(f"FY{fleet_year.year}'s living fleet: {exc}") from exc
-    return round_half_up(people)
 
 
 def _years(
@@ -789,28 +772,31 @@ def _years(
     curve: SaturationCurve,
     *,
     coverage_floor: int,
+    spectrum_mhz: float,
     downlink_share: float,
     panel_factor: float,
     prices: Mapping[DeviceClass, float],
-    books: FixedBooksRecord,
 ) -> tuple[YearRecord, ...]:
-    """Each model year's Iridium lines: every seat sold at or above the floor, nothing below it."""
+    """Each model year's Iridium lines: every seat sold at or above the floor, nothing below it.
+
+    Each class is read once a year (:func:`_year_reading`), below the floor too, since beams are
+    physical: its useful beams in every year; its people, rounded half up, and its revenue only
+    from the year the living fleet reaches the coverage floor (0 and 0.0 before it). The year's
+    IoT room is read on its phone-class useful beams (:func:`iot_room`).
+    """
     years: list[YearRecord] = []
     for fleet_year in fleet.years:
         sold = _sells(fleet_year.living_fleet, coverage_floor)
         lines: list[ClassYearRecord] = []
         for device_class in DeviceClass:
-            people = (
-                _people_served(
-                    curve,
-                    device_class,
-                    fleet_year,
-                    downlink_share=downlink_share,
-                    panel_factor=panel_factor,
-                )
-                if sold
-                else 0
+            reading = _year_reading(
+                curve,
+                device_class,
+                fleet_year,
+                downlink_share=downlink_share,
+                panel_factor=panel_factor,
             )
+            people = round_half_up(reading.people) if sold else 0
             sale = _class_sale(
                 people,
                 sold=sold,
@@ -820,6 +806,7 @@ def _years(
             lines.append(
                 ClassYearRecord(
                     device_class=device_class,
+                    useful_beams=reading.useful_beams,
                     people_served=people,
                     revenue_musd=sale.revenue_musd,
                     own_margin_pct=sale.own_margin_pct,
@@ -828,16 +815,22 @@ def _years(
         years.append(
             YearRecord(
                 year=fleet_year.year,
-                minimal_packet_iot_revenue_musd=(
-                    books.minimal_packet_iot_annual_revenue_musd if sold else _NOTHING_SOLD_MUSD
-                ),
-                data_iot_revenue_musd=(
-                    books.data_iot_annual_revenue_musd if sold else _NOTHING_SOLD_MUSD
-                ),
                 classes=tuple(lines),
+                iot=iot_room(
+                    _phone_useful_beams(lines),
+                    spectrum_mhz=spectrum_mhz,
+                    downlink_share=downlink_share,
+                    at_or_above_floor=sold,
+                ),
             )
         )
     return tuple(years)
+
+
+def _phone_useful_beams(lines: Sequence[ClassYearRecord | ClassReadingRecord]) -> float:
+    """The phone class's useful beams among a year's or a reading's class lines: the beams IoT
+    rides (IoT devices are low gain, so their reuse follows the phone rule)."""
+    return next(line.useful_beams for line in lines if line.device_class is DeviceClass.PHONE_CLASS)
 
 
 @dataclass(frozen=True)
@@ -913,11 +906,14 @@ def _reading(
     reported: _ReportedFleet,
     *,
     coverage_floor: int,
+    spectrum_mhz: float,
     downlink_share: float,
     panel_factor: float,
     prices: Mapping[DeviceClass, float],
 ) -> ReadingRecord:
     """Every class at one reported fleet; below the floor it carries people and sells nothing.
+    IoT's room is read on the reading's phone-class useful beams (:func:`iot_room`), each IoT
+    class's capacity null below the floor.
 
     Raises:
         CurveBeyondLastRowError: If the reported fleet lies past a class's last row, naming the
@@ -963,102 +959,169 @@ def _reading(
         fleet=reported.fleet,
         fleet_annual_cost_musd=reported.annual_cost_musd,
         classes=tuple(lines),
+        iot=iot_room(
+            _phone_useful_beams(lines),
+            spectrum_mhz=spectrum_mhz,
+            downlink_share=downlink_share,
+            at_or_above_floor=sold,
+        ),
     )
 
 
-def _iot_row(
-    usage: _IotUsage,
-    reading: ReadingRecord,
+def _binding_view(devices_by_view: Mapping[IotView, float]) -> IotView:
+    """Return the view giving the least devices, a tie going to the earliest in
+    :class:`~communications.constants.IotView`'s order (``min`` keeps the first of equal keys, and
+    the views are taken in that order). Two of :func:`iot_room`'s views tie at the least where
+    their rooms are both 0 (at d = 1 the payload and tone views, and the payload view binds), and
+    where minimal-packet IoT's random-access and single-tone views meet: W (1 - d) equal to the
+    window's low end x the NB-IoT tone x the airtime's high end (1,496,250 Hz at the named
+    constants, d = 0.81296875 at 8 MHz). There, when the two floats come out equal, random access
+    binds; when rounding leaves them a unit in the last place or two apart, the lower binds."""
+    return min(IotView, key=lambda view: devices_by_view[view])
+
+
+def _iot_class_capacity(
+    iot_class: IotClass,
     *,
-    devices: int,
-    coverage_floor: int,
-    uplink_bits_per_beam_day: float,
-    uplink_tone_seconds_per_beam_day: float,
-) -> IotCheckRowRecord:
-    """One IoT line at one reported fleet: ``devices`` of one usage, spread over the phone
-    class's useful beams.
+    uplink_payload_bits_per_second: float,
+    access_attempts_per_second_low: float,
+    single_tone_seconds_per_second: float,
+) -> IotClassCapacityRecord:
+    """One IoT class alone in the whole room, at its engineering usage, a day's average.
 
-    The count is an argument apart from the per-device usage, and every share is the devices
-    a beam times that usage over the beam's uplink, so the same usage reads at any count.
-    Every field but the fleet is None below the coverage floor (the books are not sold there)
-    and wherever its denominator does not exist (no useful beam; an uplink with no time).
+    Each view divides its room by one device's load a second (its load a day over
+    :data:`~communications.constants.SECONDS_PER_DAY`): the uplink bits; the access attempts, one
+    per message or burst; the tone seconds, each single-tone message holding a tone for the
+    airtime's high end. The engineering usage's loads are positive named constants, so no view
+    divides by zero. The capacity is rounded down only from a finite least view: a room past what
+    a float holds leaves a view that is not finite, which the run's last step refuses
+    (:func:`_refuse_a_number_that_is_not_finite`), so the capacity is then None, never rounded.
     """
-    phone_beams = next(
-        line_reading.useful_beams
-        for line_reading in reading.classes
-        if line_reading.device_class is DeviceClass.PHONE_CLASS
-    )
-    if not _sells(reading.fleet, coverage_floor) or phone_beams <= 0:
-        return IotCheckRowRecord(
-            fleet=reading.fleet,
-            devices_per_useful_beam=None,
-            uplink_bits_share=None,
-            uplink_bits_share_with_mac=None,
-            access_attempts_per_second_per_beam=None,
-            uplink_tone_share_low=None,
-            uplink_tone_share_high=None,
-        )
-    per_beam = devices / phone_beams
-    bits_share = (
-        per_beam * usage.bytes_per_day * BITS_PER_BYTE / uplink_bits_per_beam_day
-        if uplink_bits_per_beam_day > 0
-        else None
-    )
-    tone_shares: tuple[float | None, float | None] = (None, None)
-    if usage.single_tone_messages_per_day is not None and uplink_tone_seconds_per_beam_day > 0:
-        messages = per_beam * usage.single_tone_messages_per_day
-        tone_shares = (
-            messages * IOT_MESSAGE_AIRTIME_LOW_S / uplink_tone_seconds_per_beam_day,
-            messages * IOT_MESSAGE_AIRTIME_HIGH_S / uplink_tone_seconds_per_beam_day,
-        )
-    return IotCheckRowRecord(
-        fleet=reading.fleet,
-        devices_per_useful_beam=per_beam,
-        uplink_bits_share=bits_share,
-        uplink_bits_share_with_mac=None if bits_share is None else bits_share / IOT_MAC_EFFICIENCY,
-        access_attempts_per_second_per_beam=per_beam * usage.attempts_per_day / SECONDS_PER_DAY,
-        uplink_tone_share_low=tone_shares[0],
-        uplink_tone_share_high=tone_shares[1],
+    usage = IOT_ENGINEERING_USAGE[iot_class]
+    devices = {
+        IotView.PAYLOAD_BITS: uplink_payload_bits_per_second
+        / (usage.uplink_bits_per_day / SECONDS_PER_DAY),
+        IotView.RANDOM_ACCESS: access_attempts_per_second_low
+        / (usage.access_attempts_per_day / SECONDS_PER_DAY),
+        IotView.SINGLE_TONE_TIME: single_tone_seconds_per_second
+        / (usage.single_tone_messages_per_day * IOT_MESSAGE_AIRTIME_HIGH_S / SECONDS_PER_DAY),
+    }
+    binding = _binding_view(devices)
+    least = devices[binding]
+    return IotClassCapacityRecord(
+        iot_class=iot_class,
+        devices_by_payload_bits=devices[IotView.PAYLOAD_BITS],
+        devices_by_random_access=devices[IotView.RANDOM_ACCESS],
+        devices_by_single_tone_time=devices[IotView.SINGLE_TONE_TIME],
+        device_capacity=math.floor(least) if math.isfinite(least) else None,
+        binding_view=binding,
     )
 
 
-def _iot_check(
-    readings: tuple[ReadingRecord, ...],
-    dials: IridiumDials,
+def iot_room(
+    phone_useful_beams: float,
     *,
-    coverage_floor: int,
-) -> IotCheckRecord:
-    """The IoT check at every reported fleet, each line on its own.
+    spectrum_mhz: float,
+    downlink_share: float,
+    at_or_above_floor: bool,
+) -> IotRoomRecord:
+    """Return IoT's room at a fleet and each IoT class's capacity in it alone (ADR 011).
 
-    A beam's uplink is the held width at the phone class's spectral efficiency over the share of
-    the frame the downlink leaves (1 - d, ADR 008), and its tones are the held width over the
-    NB-IoT tone in that share; both are per day.
+    With L the phone class's useful beams at the fleet (times the panel factor, as
+    :func:`~communications.saturation_curve.read_fleet` gives them: the beams lit over inhabited
+    cells, so IoT over oceans and empty land is not counted, a conservative basis), W the held
+    width in Hz, SE the phone class's central spectral efficiency and d the downlink share (the
+    views below each read at its conservative end)::
+
+        uplink bits a second       = L x W x SE x (1 - d)            (the uplink's share, ADR 008)
+        payload bits a second      = that x the MAC efficiency       (0.20, COMM-659)
+        access attempts a second   = L x the random-access window x the windows a second
+                                     (57 low and 1,650 high devices a window, COMM-654; 1 a second)
+        single-tone seconds a sec. = L x W / the NB-IoT tone x (1 - d)   (3,750 Hz, COMM-714)
+
+    Each IoT class alone takes the whole room at its engineering usage, devices by payload bits,
+    by random access at the window's low end and by single-tone time at the airtime's high end
+    (7 s, COMM-719); its capacity is the least, rounded down, and that view binds (a tie to the
+    earliest in :class:`~communications.constants.IotView`'s order). The two capacities never add.
+    At d = 1 the payload and tone rooms are 0, so each capacity is 0 with the payload view
+    binding. The worked case, FY2031 and FY2036 of the shipped scenario, is pinned in the tests
+    (``IOT_WORKED_ROOMS`` in ``tests/communications/test_iridium_model.py``, the build's own print
+    at full precision) rather than quoted here, so a re-promotion of the curve re-freezes it in
+    one place.
+
+    Args:
+        phone_useful_beams: The phone class's useful beams at the fleet, times the panel factor.
+        spectrum_mhz: The held width, MHz.
+        downlink_share: The downlink share d.
+        at_or_above_floor: Whether the fleet is at or above the coverage floor; below it every
+            class's five capacity fields are None (IoT needs continuous coverage), while the room
+            is published.
+
+    Returns:
+        The room, with each IoT class's capacity in IoT class order.
     """
-    uplink_share = _WHOLE_FRAME - dials.saturation.downlink_share
-    width_hz = dials.spectrum_mhz * HZ_PER_MHZ
-    uplink_bits_per_beam_day = (
-        width_hz * CLASS_SE_CENTRAL[DeviceClass.PHONE_CLASS] * uplink_share * SECONDS_PER_DAY
+    width_hz = spectrum_mhz * HZ_PER_MHZ
+    uplink_share = _WHOLE_FRAME - downlink_share
+    uplink_bits = (
+        phone_useful_beams * width_hz * CLASS_SE_CENTRAL[DeviceClass.PHONE_CLASS] * uplink_share
     )
-    uplink_tone_seconds_per_beam_day = width_hz / NB_IOT_TONE_HZ * uplink_share * SECONDS_PER_DAY
+    payload_bits = uplink_bits * IOT_MAC_EFFICIENCY
+    access_low = (
+        phone_useful_beams
+        * IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW
+        * IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND
+    )
+    access_high = (
+        phone_useful_beams
+        * IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH
+        * IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND
+    )
+    tone_seconds = phone_useful_beams * width_hz / NB_IOT_TONE_HZ * uplink_share
+    classes = tuple(
+        _iot_class_capacity(
+            iot_class,
+            uplink_payload_bits_per_second=payload_bits,
+            access_attempts_per_second_low=access_low,
+            single_tone_seconds_per_second=tone_seconds,
+        )
+        if at_or_above_floor
+        else IotClassCapacityRecord(
+            iot_class=iot_class,
+            devices_by_payload_bits=None,
+            devices_by_random_access=None,
+            devices_by_single_tone_time=None,
+            device_capacity=None,
+            binding_view=None,
+        )
+        for iot_class in IotClass
+    )
+    return IotRoomRecord(
+        uplink_bits_per_second=uplink_bits,
+        uplink_payload_bits_per_second=payload_bits,
+        access_attempts_per_second_low=access_low,
+        access_attempts_per_second_high=access_high,
+        single_tone_seconds_per_second=tone_seconds,
+        classes=classes,
+    )
 
-    def rows(usage: _IotUsage, devices: int) -> tuple[IotCheckRowRecord, ...]:
-        """A line's row at each reported fleet: its count of devices of its usage."""
-        return tuple(
-            _iot_row(
-                usage,
-                reading,
-                devices=devices,
-                coverage_floor=coverage_floor,
-                uplink_bits_per_beam_day=uplink_bits_per_beam_day,
-                uplink_tone_seconds_per_beam_day=uplink_tone_seconds_per_beam_day,
+
+def _iot_class_records() -> tuple[IotClassRecord, ...]:
+    """Each IoT class's engineering usage and its loads a day, in IoT class order: the usage
+    every IoT capacity is read at (:data:`~communications.constants.IOT_ENGINEERING_USAGE`)."""
+    records: list[IotClassRecord] = []
+    for iot_class in IotClass:
+        usage = IOT_ENGINEERING_USAGE[iot_class]
+        records.append(
+            IotClassRecord(
+                iot_class=iot_class,
+                messages_per_day=usage.messages_per_day,
+                bursts_per_day=usage.bursts_per_day,
+                uplink_bits_per_day=usage.uplink_bits_per_day,
+                access_attempts_per_day=usage.access_attempts_per_day,
+                single_tone_messages_per_day=usage.single_tone_messages_per_day,
             )
-            for reading in readings
         )
-
-    return IotCheckRecord(
-        minimal_packet_iot=rows(_MINIMAL_PACKET_IOT_USAGE, MINIMAL_PACKET_IOT_DEVICES),
-        data_iot=rows(_DATA_IOT_USAGE, DATA_IOT_DEVICES),
-    )
+    return tuple(records)
 
 
 def _marginal_intervals(
@@ -1170,40 +1233,6 @@ def _class_record(
     )
 
 
-def _fixed_books(arpu: IridiumArpuDials) -> FixedBooksRecord:
-    """The two IoT lines at their fixed counts and prices (ADR 007).
-
-    The basis states where the counts come from in named constants alone (the iridium-v5
-    model's count at the floor it was read at; Iridium's own book; the price relation at the
-    default prices), so it reads true at any setting a run takes.
-    """
-    return FixedBooksRecord(
-        minimal_packet_iot_devices=MINIMAL_PACKET_IOT_DEVICES,
-        minimal_packet_iot_price_usd_per_month=arpu.minimal_packet_iot_price_usd_month,
-        minimal_packet_iot_annual_revenue_musd=_annual_revenue_musd(
-            MINIMAL_PACKET_IOT_DEVICES, arpu.minimal_packet_iot_price_usd_month
-        ),
-        data_iot_devices=DATA_IOT_DEVICES,
-        data_iot_price_usd_per_month=arpu.data_iot_price_usd_month,
-        data_iot_annual_revenue_musd=_annual_revenue_musd(
-            DATA_IOT_DEVICES, arpu.data_iot_price_usd_month
-        ),
-        basis=(
-            "Minimal-packet IoT's count is the capable count: the iridium-v5 model's Sheet A "
-            f"IoT count at the {MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES}-satellite coverage "
-            "floor, held as a stated assumption (ADR 007), not Iridium's own IoT book "
-            f"({IRIDIUM_IOT_BOOK_DEVICES:,} devices, COMM-617). Data IoT's count is half of it, "
-            "in proportion, the investor's setting of 2026-10-04: at the default prices "
-            f"(${MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT:g} and "
-            f"${DATA_IOT_PRICE_USD_MONTH_DEFAULT:g} a month) half the count at double the "
-            "price. Each line is its own revenue line, never inside a class's margin; neither "
-            "moves with the fleet, a class, the downlink share, the panel or satellites per "
-            "launch; both are sold in full from the first year the living fleet reaches the "
-            "coverage floor, and not before. Government is left out of revenue."
-        ),
-    )
-
-
 def _assumptions(
     config: CommsConfig,
     dials: IridiumDials,
@@ -1216,6 +1245,8 @@ def _assumptions(
     small = CLASS_USAGE[DeviceClass.SMALL_TERMINAL_CLASS]
     mounted = CLASS_USAGE[DeviceClass.MOUNTED_TERMINAL_CLASS]
     phone = CLASS_USAGE[DeviceClass.PHONE_CLASS]
+    minimal_iot = IOT_ENGINEERING_USAGE[IotClass.MINIMAL_PACKET_IOT]
+    data_iot = IOT_ENGINEERING_USAGE[IotClass.DATA_IOT]
     floor = config.coverage.satellites_for_full_coverage
     below_phone_floor = (
         "; this run sets the phone class below that floor, at "
@@ -1249,8 +1280,14 @@ def _assumptions(
         ),
         (
             f"The downlink share d is {dials.saturation.downlink_share:g}, the time-division "
-            "duplex band's downlink time share (ADR 008): every people and capacity figure but "
-            "the satellite's peak scales with it, and the uplink holds the rest of the frame."
+            "duplex band's downlink time share (ADR 008): each people figure and each class's "
+            "downlink pool (W x SE x d) scale with it; each class's off-peak per-user rate "
+            "follows the pool only where the pool caps it; the satellite's peak and each class's "
+            "busy-hour per-user rate (its rate while active) do not move with d. The uplink holds "
+            "the rest of the frame, 1 - d. IoT's uplink, payload and single-tone rooms scale with "
+            "1 - d and its random-access room with neither, so an IoT class's capacity follows "
+            "1 - d while its payload or single-tone view binds and does not move with d while its "
+            "random-access view binds."
         ),
         (
             f"The panel is {dials.aperture_m2:g} m^2, applied linearly on the curve: a panel "
@@ -1277,9 +1314,10 @@ def _assumptions(
             "today (COMM-712)."
         ),
         (
-            "Every seat is sold: each year each device class serves every person its living "
-            "fleet carries, and each class's column is the whole fleet sold to that class "
-            "alone, so revenue rises with the fleet."
+            "Every seat is sold: each year each people class (the small terminal, the mounted "
+            "terminal and the phone class) serves every person its living fleet carries, and "
+            "each class's column is the whole fleet sold to that class alone, so revenue rises "
+            "with the fleet."
         ),
         (
             "Each class's price is held flat: the small terminal "
@@ -1294,8 +1332,7 @@ def _assumptions(
         ),
         (
             "Each class's own margin is its own revenue against the whole fleet's annualized "
-            "build and launch cost (operations zero, above), null in a year with no revenue; "
-            "the IoT lines are never inside it."
+            "build and launch cost (operations zero, above), null in a year with no revenue."
         ),
         (
             "Each class's usage is the investor's (2026-10-04): the small terminal "
@@ -1318,21 +1355,27 @@ def _assumptions(
             f"{CLASS_SE_CENTRAL[DeviceClass.PHONE_CLASS]:g})."
         ),
         (
-            "IoT is two fixed lines, each its own revenue line and never inside a class's "
-            f"margin: minimal-packet IoT, {MINIMAL_PACKET_IOT_DEVICES:,} devices at "
-            f"${arpu.minimal_packet_iot_price_usd_month:g} a month "
-            f"({MINIMAL_PACKET_IOT_MESSAGES_PER_DAY} messages of "
-            f"{MINIMAL_PACKET_IOT_MESSAGE_BYTES} bytes a day), and data IoT, "
-            f"{DATA_IOT_DEVICES:,} devices at ${arpu.data_iot_price_usd_month:g} a month "
-            f"({DATA_IOT_BURSTS_PER_DAY} bursts of {DATA_IOT_BURST_BYTES // _BYTES_PER_KB} KB a "
-            "day beside the messages). Their counts are fixed (ADR 007): they never move with "
-            "the fleet, a class, d, the panel or satellites per launch."
+            "IoT is two device classes, minimal-packet IoT and data IoT, carried on the phone "
+            "class's useful beams (IoT devices are low gain, so their reuse follows the phone "
+            "rule) in the uplink's share of the frame, 1 - d. Those are the beams lit over "
+            "inhabited cells, the phone class's ocean factor of the fleet's beams (each reading "
+            "publishes it), so IoT over oceans and empty land is not counted: a conservative "
+            "basis. For every year and reading the model publishes the IoT room and each IoT "
+            "class's device capacity alone at its engineering usage (minimal-packet IoT "
+            f"{minimal_iot.messages_per_day} messages of "
+            f"{MINIMAL_PACKET_IOT_MESSAGE_BYTES} bytes a day; data IoT "
+            f"{data_iot.bursts_per_day} bursts of {DATA_IOT_BURST_BYTES // _BYTES_PER_KB} KB a "
+            f"day beside {data_iot.messages_per_day} messages): the least of the payload-bits, "
+            "random-access and single-tone-time views at their conservative ends, each class "
+            "given the whole room, so the two capacities never add. A capacity is never a "
+            "count sold and never revenue: IoT's customers, usage and revenue are the product "
+            "case's (ADR 011)."
         ),
         (
-            f"The coverage floor ({floor} satellites) gates every sale: nothing is sold, by a "
-            "class or an IoT line, in a year whose living fleet is below it, and from the first "
-            "year at it every class and both IoT lines are sold in full (a step with no "
-            "phase-in)."
+            f"The coverage floor ({floor} satellites) gates every sale: nothing is sold in a "
+            "year whose living fleet is below it, and each IoT class's capacity is null there "
+            "(IoT needs continuous coverage); from the first year at it every class is sold in "
+            "full and both IoT capacities are published (a step with no phase-in)."
         ),
         "Government is left out of revenue: the model carries no government count, price or line.",
         (
@@ -1342,26 +1385,46 @@ def _assumptions(
             f"and the steady state beyond the {config.metadata.horizon_years}-year horizon (the "
             "final year's comms launches times satellites per launch times the life). The "
             "coverage floor, the retired cap and the steady state are priced at the final "
-            "year's cost per satellite-year; a reading below the coverage floor sells nothing."
+            "year's cost per satellite-year; a reading below the coverage floor sells nothing, "
+            "and each IoT class's capacity there is null."
         ),
         (
-            "The IoT check spreads each line's devices over the phone class's useful beams "
-            "(IoT devices are low gain, so their reuse follows the phone rule) and reads its "
-            "daily volume against a beam's uplink (the frame's share 1 - d), with and without a "
-            f"{IOT_MAC_EFFICIENCY * _PERCENT:g} percent MAC efficiency; its access attempts a "
-            "second a beam, one per message or burst, against a random-access window of "
+            "IoT's room, at each year's and each reading's phone-class useful beams L, the held "
+            f"width W ({dials.spectrum_mhz:g} MHz), the phone class's central spectral efficiency "
+            f"SE ({CLASS_SE_CENTRAL[DeviceClass.PHONE_CLASS]:g}) and the uplink's share 1 - d: "
+            "the uplink bits a second, L x W x SE x (1 - d); the payload bits a second, those "
+            f"times a {IOT_MAC_EFFICIENCY * _PERCENT:g} percent MAC efficiency (COMM-659); the "
+            "access attempts a second, L x a random-access window of "
             f"{IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW} to {IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH:,} "
-            f"devices (COMM-654) at an assumed {IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND} window a "
-            "second (no source gives a window rate); "
-            "and, for minimal-packet IoT, its messages' channel time on "
-            f"{NB_IOT_TONE_HZ * _TONE_KHZ_PER_HZ:g} kHz tones at {IOT_MESSAGE_AIRTIME_LOW_S:g} "
-            f"to {IOT_MESSAGE_AIRTIME_HIGH_S:g} s a message (COMM-714, COMM-719)."
+            f"devices (COMM-654) x an assumed {IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND} window a "
+            "second (no source gives a window rate); and the single-tone seconds a second, L x W "
+            f"over the {NB_IOT_TONE_HZ * _TONE_KHZ_PER_HZ:g} kHz NB-IoT tone (COMM-714) x "
+            "(1 - d). Each IoT class's capacity reads each view at its conservative end: the "
+            "payload bits after the MAC efficiency, the random-access window's low end "
+            f"({IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW}) and the message airtime's high end "
+            f"({IOT_MESSAGE_AIRTIME_HIGH_S:g} s of {IOT_MESSAGE_AIRTIME_LOW_S:g} to "
+            f"{IOT_MESSAGE_AIRTIME_HIGH_S:g} s, COMM-719); the least, rounded down to whole "
+            "devices, is the capacity, and its view binds (a tie goes to the earlier in that "
+            "order)."
+        ),
+        (
+            "IoT's room is the whole IoT uplink: no people class's own upload (the small "
+            "terminal's, the mounted terminal's, or the phone class's on the beams IoT rides) is "
+            "subtracted from it."
+        ),
+        (
+            "Each IoT class's capacity is read at its engineering usage, averaged over the day; "
+            "the product case's devices sit at their own usage and time basis, so neither is "
+            "divided by the other."
         ),
         (
             "Each class's saturation number is a spectrum bound reported beside the launch "
-            "cadence, never a build target or a cap; a fleet past a class's last computed row "
-            "is refused, never extrapolated or clamped. The curve's stated limits are carried "
-            "in saturation.limits."
+            "cadence, never a build target or a cap. A fleet past a class's last computed row "
+            "is refused, never extrapolated or clamped; so is a run whose final year's living "
+            "fleet passes the fleet a class with no saturation number is not reached by, since "
+            "the curve's rows do not measure the elasticity of capacity there and which limit "
+            "binds is not known (ADR 005). The curve's stated limits are carried in "
+            "saturation.limits."
         ),
         (
             "The Iridium model is the MSS lane (owned L-band, purpose-built or in-chipset "
@@ -1406,8 +1469,8 @@ def _refuse_a_number_that_is_not_finite(
 
     The shared fleet-and-cost record is walked first, then the Iridium record. The fleet
     record's numbers are its cost lines, which scale with the cost settings alone; the Iridium
-    record's scale with the panel (people, beams, capacity and the IoT check), the prices
-    (revenue) and the cost settings (the margins, the readings' costs and the cost per
+    record's scale with the panel (people, beams, capacity, and IoT's room and capacities), the
+    prices (revenue) and the cost settings (the margins, the readings' costs and the cost per
     satellite-year). No bound moves: a setting this far out is one the model cannot compute.
 
     Raises:
@@ -1452,9 +1515,9 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
     (``check_curve_matches(saturation_inputs_for(dials), curve)``), so a curve computed for
     other inputs (another held spectrum, say) is never read; the panel factor (the scenario's
     panel over the curve's reference panel) is formed; the shared fleet-and-cost loop flies
-    the full cadence (:func:`full_cadence_rule`); then the years, the readings and the IoT
-    check, each class's block and the books are read from the curve and priced (the module
-    docstring's steps), and the stated assumptions written.
+    the full cadence (:func:`full_cadence_rule`); then the years and the readings, each with
+    IoT's room and capacities, and each class's block are read from the curve and priced (the
+    module docstring's steps), and the stated assumptions written.
 
     Args:
         config: A communications config with an ``iridium:`` block.
@@ -1481,10 +1544,10 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
         ValueError: If the panel factor is not a positive finite number (a panel so small its
             ratio to the reference panel underflows to 0), naming ``iridium.aperture_m2``; or
             if the run's records would hold an infinity or a NaN (a panel, a price or a cost
-            setting past what the model can compute: a panel of 1e-305 or 2.5e300 m^2, say,
-            or a price of 5e-324 dollars), naming the first such field (the fleet-and-cost
+            setting past what the model can compute: a panel of 2.5e300 m^2, say, or a price
+            of 5e-324 dollars), naming the first such field (the fleet-and-cost
             record walked first), its value and the settings its record scales with, each
-            with its value (the panel, the five prices and the cost settings; the cost
+            with its value (the panel, the three prices and the cost settings; the cost
             settings alone for the fleet-and-cost record). No run is returned.
         OverflowError: If the people at a fleet overflow to infinity and cannot become a
             count (a panel of about 1e308 m^2), before any record is built.
@@ -1501,15 +1564,14 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
     prices = MappingProxyType(
         {device_class: _class_price(dials.arpu, device_class) for device_class in DeviceClass}
     )
-    books = _fixed_books(dials.arpu)
     years = _years(
         fleet,
         curve,
         coverage_floor=coverage_floor,
+        spectrum_mhz=dials.spectrum_mhz,
         downlink_share=downlink_share,
         panel_factor=panel_factor,
         prices=prices,
-        books=books,
     )
     final = fleet.years[-1]
     cost_per_satellite_year_musd = per_satellite_annual_cost_musd(
@@ -1523,6 +1585,7 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
             curve,
             reported,
             coverage_floor=coverage_floor,
+            spectrum_mhz=dials.spectrum_mhz,
             downlink_share=downlink_share,
             panel_factor=panel_factor,
             prices=prices,
@@ -1559,8 +1622,8 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
         ),
         cost_per_satellite_year_musd=cost_per_satellite_year_musd,
         classes=classes,
+        iot_classes=_iot_class_records(),
         years=years,
-        fixed_books=books,
         saturation=SaturationRecord(
             curve_path=dials.saturation.curve_path,
             curve_schema_version=curve.schema_version,
@@ -1572,7 +1635,6 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
             band_saturation_numbers=MappingProxyType(
                 {band.point.name: band.markers.saturation_number for band in curve.bands}
             ),
-            iot_check=_iot_check(readings, dials, coverage_floor=coverage_floor),
             limits=curve.limits,
         ),
         assumptions=_assumptions(config, dials, curve, panel_factor=panel_factor),
@@ -1600,9 +1662,9 @@ __all__ = [
     "ClassReadingRecord",
     "ClassRecord",
     "ClassYearRecord",
-    "FixedBooksRecord",
-    "IotCheckRecord",
-    "IotCheckRowRecord",
+    "IotClassCapacityRecord",
+    "IotClassRecord",
+    "IotRoomRecord",
     "IridiumRecord",
     "IridiumRun",
     "MarginalIntervalRecord",
@@ -1613,6 +1675,7 @@ __all__ = [
     "derive_iridium_per_user_rates",
     "derive_per_satellite_capacity_gbps",
     "full_cadence_rule",
+    "iot_room",
     "iridium_dials_of",
     "run_iridium_model",
 ]

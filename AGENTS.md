@@ -52,11 +52,12 @@ everything a knob, it's just absolutely overwhelming."
   the three side by side on the fleet the all-in launch cadence builds (ADRs
   005 to 010). Open until the public documents tell the built model and the
   work is accepted.
-- **Communications, IoT and the product case.** IoT as capacity in the
-  engineering model, which carries no IoT count, price or revenue (ADR 011),
-  and the product case as its own model on the engineering artifact, selling
-  the terminals and the two IoT classes at the investor's prices held flat
-  (ADR 012); approved 2026-10-07, not yet built.
+- **Communications, IoT and the product case.** Approved 2026-10-07. IoT as
+  capacity in the engineering model, which carries no IoT count, price or
+  revenue (ADR 011): built (`iridium-v7`). The product case as its own model
+  on the engineering artifact, selling the terminals and the two IoT classes
+  at the investor's prices held flat (ADR 012): not yet built. Open until
+  both are built, the public documents tell them and the work is accepted.
 - **Agent documentation.** The charter, atlas and glossary are true to the
   code; the older agent guides are folded in and retired.
 - **Data center.** Rename the space artifact's `gross_profit_*` fields, which

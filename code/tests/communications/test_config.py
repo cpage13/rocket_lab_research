@@ -7,7 +7,8 @@ classes' own defaults and bounds are tested once, in
 ``tests/common/test_cadence_move.py``), the satellite / coverage / comms-share /
 ground blocks, the field bounds, the cross-field validators (the coverage floor at or
 below the fleet cap; on an Iridium config every cellular sizing and revenue dial at its
-default and no ground block), a retired Iridium setting refused at load, every float dial of
+default and no ground block), a retired Iridium setting refused at load, the config's top
+level, the Iridium block and its saturation block pinned to their settings, every float dial of
 an Iridium config finite and never a boolean, the numbers of the metadata, comms share and
 satellite blocks never a boolean or a quoted number, the YAML loader pair, and the Iridium
 saturation block (its defaults, the shipped scenario's block, its bounds). Mirrors the data-center
@@ -474,10 +475,15 @@ RETIRED_IRIDIUM_SETTINGS: tuple[tuple[str, ...], ...] = (
     ("arpu", "premium_price_usd_month"),
     ("arpu", "iot_price_usd_month"),
     ("arpu", "government_price_usd_month"),
+    ("arpu", "minimal_packet_iot_price_usd_month"),
+    ("arpu", "data_iot_price_usd_month"),
 )
-"""The Iridium settings the switch retires, with the investor's OK of 2026-10-04: the device
-class, the SE override, the one usage for every class, the IoT passthrough, the four-bucket
-sheet's mixes and prices, the single IoT price and the government price."""
+"""The retired Iridium settings. The switch retired the first fourteen, with the investor's OK of
+2026-10-04: the device class, the SE override, the one usage for every class, the IoT
+passthrough, the four-bucket sheet's mixes and prices (its one price for IoT among them) and the
+government price. ADR 011 retired the last two, minimal-packet IoT's and data IoT's prices, with
+the investor's approval of the product-case design (2026-10-07): the engineering model publishes
+IoT as capacity, and IoT's prices are the product case's."""
 
 
 def test_a_retired_iridium_setting_fails_at_load_naming_it(tmp_path: Path) -> None:
@@ -485,12 +491,12 @@ def test_a_retired_iridium_setting_fails_at_load_naming_it(tmp_path: Path) -> No
     rather than being silently ignored (``extra="forbid"``).
 
     Sample: an Iridium scenario setting each retired field in turn (each class's usage and its
-    spectral efficiency are named constants; the IoT counts are the books'; there is no
-    government price), at a plausible value.
+    spectral efficiency are named constants; IoT is capacity in this model, its prices the
+    product case's; there is no government price), at a plausible value.
 
     Expected outcome: each fails at load with one ValidationError located at that field
-    (``iridium.device_class``, ``iridium.arpu.government_price_usd_month``, say), of the type
-    pydantic gives an unknown key.
+    (``iridium.device_class``, ``iridium.arpu.government_price_usd_month``,
+    ``iridium.arpu.data_iot_price_usd_month``, say), of the type pydantic gives an unknown key.
     """
     scenario = tmp_path / "retired.yaml"
     for path in RETIRED_IRIDIUM_SETTINGS:
@@ -499,6 +505,41 @@ def test_a_retired_iridium_setting_fails_at_load_naming_it(tmp_path: Path) -> No
             load_comms_config(scenario)
         assert _located(refused) == [".".join(("iridium", *path))], path
         assert refused.value.errors()[0]["type"] == "extra_forbidden"
+
+
+def test_the_config_iridium_and_saturation_blocks_hold_exactly_their_settings() -> None:
+    """Objective: the config's top level, its Iridium block and that block's saturation block
+    hold exactly the settings the models read, in order, so no setting joins one of them unseen
+    (IoT is capacity in the engineering model, never a setting: ADR 011). The Iridium price
+    block's three fields are pinned in ``test_the_three_class_prices_and_no_government_key``.
+
+    Sample: each model's own fields.
+
+    Expected outcome: the top level is metadata, cadence, the comms share, launch cost,
+    satellite, coverage, subscribers, revenue, ground and iridium; the Iridium block the
+    spectrum, the panel, the label, the saturation block and the price block; the saturation
+    block the downlink share and the curve path; each in that order.
+    """
+    assert list(CommsConfig.model_fields) == [
+        "metadata",
+        "cadence",
+        "comms_cadence",
+        "launch_cost",
+        "satellite",
+        "coverage",
+        "subscribers",
+        "revenue",
+        "ground",
+        "iridium",
+    ]
+    assert list(IridiumDials.model_fields) == [
+        "spectrum_mhz",
+        "aperture_m2",
+        "scenario_name",
+        "saturation",
+        "arpu",
+    ]
+    assert list(SaturationDials.model_fields) == ["downlink_share", "curve_path"]
 
 
 def _float_dial_paths(block: type[BaseModel]) -> list[tuple[str, ...]]:
@@ -555,12 +596,12 @@ def test_the_iridium_dials_refuse_a_boolean_naming_the_field(tmp_path: Path) -> 
     ``tests/common/test_cadence_move.py``.
 
     Sample: every float field of the Iridium dials and of the blocks nested in them (the
-    spectrum, the panel, the downlink share and the five prices), walked from the model's own
+    spectrum, the panel, the downlink share and the three prices), walked from the model's own
     fields, each written in a scenario YAML as ``true``; the panel written as ``yes`` and as
     ``on`` (YAML 1.1 reads both as true) and as the quoted ``"15"``; the panel as the integer
     ``15``.
 
-    Expected outcome: the walk finds those eight fields; each boolean and the quoted number
+    Expected outcome: the walk finds those six fields; each boolean and the quoted number
     fail at load with one ValidationError, located at that field (``iridium.aperture_m2``,
     say); the integer panel loads as 15.0, a float.
     """

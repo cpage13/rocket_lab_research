@@ -42,8 +42,9 @@ ceil(subscriber_target / subscribers_per_satellite)))``.
 
 THE IRIDIUM MODEL has no target and no cap: its fleet is every comms launch the cadence
 share allows, each device class's people are read from the promoted saturation curve, and
-its defaults are below: the five monthly prices, the panel, each class's usage and
-spectral efficiency, the two IoT lines' fixed counts, and the IoT reading's constants.
+its defaults are below: the three monthly prices, the panel, each class's usage and
+spectral efficiency, and IoT's capacity constants (each IoT class's reference usage and the
+IoT room's constants, ADR 011).
 """
 
 from __future__ import annotations
@@ -136,6 +137,36 @@ class DeviceClass(StrEnum):
     SMALL_TERMINAL_CLASS = "small_terminal_class"
     MOUNTED_TERMINAL_CLASS = "mounted_terminal_class"
     PHONE_CLASS = "phone_class"
+
+
+class IotClass(StrEnum):
+    """The engineering model's two IoT device classes: the key that names each (never a setting).
+
+    An IoT class is measured in devices, never people, and the engineering model sells no IoT
+    seat: it publishes what IoT the network can carry, each class alone at its engineering usage
+    (:data:`IOT_ENGINEERING_USAGE`), never a count sold, a price or revenue (ADR 011). The member
+    order is the order every list of IoT classes takes. ``MINIMAL_PACKET_IOT`` sends short
+    messages only; ``DATA_IOT`` sends bursts of data beside the same messages.
+    """
+
+    MINIMAL_PACKET_IOT = "minimal_packet_iot"
+    DATA_IOT = "data_iot"
+
+
+class IotView(StrEnum):
+    """The three views of IoT's room, each read at its conservative end (ADR 011).
+
+    An IoT class's device capacity is the least of the devices the three views hold, and the view
+    that gives it binds; this member order breaks a tie (the earliest binds).
+    ``PAYLOAD_BITS`` is the uplink's payload bits after the MAC efficiency
+    (:data:`IOT_MAC_EFFICIENCY`); ``RANDOM_ACCESS`` the random-access attempts at the window's low
+    end (:data:`IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW`); ``SINGLE_TONE_TIME`` the single-tone time
+    at the message airtime's high end (:data:`IOT_MESSAGE_AIRTIME_HIGH_S`).
+    """
+
+    PAYLOAD_BITS = "payload_bits"
+    RANDOM_ACCESS = "random_access"
+    SINGLE_TONE_TIME = "single_tone_time"
 
 
 # ===========================================================================
@@ -300,9 +331,9 @@ family it is the lower bound on the fleet target, NOT the fleet the build fills 
 when the subscriber base is large: the capacity dimension (see
 :data:`SUBSCRIBERS_PER_SATELLITE_DEFAULT`) can require more satellites than this to
 SERVE the base, in which case the capacity need binds and the fleet target rises
-above the floor. On the Iridium path it is pinned at this value (one shell, one floor;
-the IoT counts are sized at it, ADR 007): nothing is sold in a year whose living fleet
-is below it, and it is the first of the reported fleets. The floor is the quality-link
+above the floor. On the Iridium path it is pinned at this value (one shell, one floor):
+nothing is sold in a year whose living fleet is below it, IoT's capacity is null there, and
+it is the first of the reported fleets. The floor is the quality-link
 case (a 25 degree elevation mask over
 the populated mid-latitude band, +/-55 deg, at 95% coverage, ~450 km, ~53 deg
 inclined). Backed by the project coverage simulation (populated band, 450 km, 25 deg
@@ -612,12 +643,12 @@ HZ_PER_MHZ: Final[float] = 1_000_000.0
 tones. A unit constant, not a tunable."""
 
 SECONDS_PER_DAY: Final[int] = 86_400
-"""Fixed unit conversion: a day's seconds, for the IoT reading's daily volumes and access
-rates. A unit constant, not a tunable."""
+"""A unit conversion: a day's seconds, turning an IoT device's loads a day into loads a second
+(the IoT capacity's day average). A unit constant, not a tunable."""
 
 BITS_PER_BYTE: Final[int] = 8
-"""Fixed unit conversion: bits in a byte, for the IoT reading's daily volumes. A unit
-constant, not a tunable."""
+"""A unit conversion: bits in a byte, for an IoT device's uplink bits a day. A unit constant,
+not a tunable."""
 
 ECOSYSTEM_ASSUMPTION_NOTE: Final[str] = (
     "The Iridium model's phone-class tier assumes phone-form-factor devices with in-chipset "
@@ -664,14 +695,14 @@ never moves this historical reading."""
 
 # ===========================================================================
 # The Iridium model's prices (investor-set, 2026-10-03 and 2026-10-04; the two terminal
-# prices 2026-10-07): each class's and each IoT line's monthly price, held flat
+# prices 2026-10-07): each device class's monthly price, held flat
 # ===========================================================================
 #
-# Each device class sells every seat its living fleet carries at its own price, and the two
-# IoT lines are fixed books at theirs (the counts below). A lower price or a smaller market
-# is a division in the conclusions, never in the model; a margin is re-derived there, never
-# divided. Government is left out of revenue (2026-10-04): no government count, price or
-# line.
+# Each device class sells every seat its living fleet carries at its own price. IoT has no
+# price here: the engineering model publishes IoT as capacity, and IoT's prices are the
+# product case's (ADR 011). A lower price or a smaller market is a division in the
+# conclusions, never in the model; a margin is re-derived there, never divided. Government is
+# left out of revenue (2026-10-04): no government count, price or line.
 
 SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = 10.0
 """INVESTOR_SET (the investor, 2026-10-07: "Yes, let's use the $10 and $50"; it was $15, the
@@ -699,81 +730,56 @@ phone class's monthly price, dollars: set at its floor, :data:`PHONE_CLASS_PRICE
 (Sheet A's standard $15), held flat. Its own constant, since Sheet A's standard price went to
 the small terminal, whose own price is now the investor's $10 (2026-10-07)."""
 
-MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT: Final[float] = 4.0
-"""INVESTOR_SET (the investor's trial price, 2026-10-04). Minimal-packet IoT's monthly price
-per device, dollars."""
-
-DATA_IOT_PRICE_USD_MONTH_DEFAULT: Final[float] = 8.0
-"""INVESTOR_SET (the investor's trial price, 2026-10-04; Sheet A's IoT price of 2026-07-09,
-the investor's confirmed about-8 against Iridium's 7.78 IoT ARPU today, COMM-618, renamed for
-data IoT). Data IoT's monthly price per device, dollars."""
-
 ARPU_PRICE_CEILING_USD_MONTH: Final[float] = 5000.0
-"""The upper Field bound on every monthly price (the three classes' and the two IoT
-lines'), dollars: a generous sanity ceiling well above the Certus 259 anchor (COMM-618),
-guarding a fat-fingered price without constraining any real MSS tier. A fixed bound, not a
-tunable."""
+"""The upper Field bound on every monthly price (the three device classes'), dollars: a
+generous sanity ceiling well above the Certus 259 anchor (COMM-618), guarding a fat-fingered
+price without constraining any real MSS tier. A fixed bound, not a tunable."""
 
 # ===========================================================================
-# The two IoT lines (ADR 007): fixed counts, and the IoT reading's constants
+# IoT as capacity (ADR 011): the capacity's reference usage and the IoT room's constants
 # ===========================================================================
 #
-# IoT is two fixed books, each its own revenue line, never inside a device class's margin,
-# sold from the first year the living fleet reaches the coverage floor. Their counts are
-# named constants, not settings, and never move with the fleet, the class, the downlink
-# share, the panel or satellites per launch. The IoT reading (ADR 007's IoT check)
-# spreads each line's count over the phone class's useful beams (IoT devices are low gain,
-# so their reuse follows the phone rule) and reports its share of a beam's uplink.
-
-MINIMAL_PACKET_IOT_DEVICES: Final[int] = 51_670_320
-"""INVESTOR_SET (the investor, 2026-10-04; held as a stated assumption, ADR 007).
-Minimal-packet IoT's fixed device count, the capable count: the iridium-v5 model's Sheet A IoT
-count at the :data:`MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES`-satellite coverage floor, not
-Iridium's own IoT book (:data:`IRIDIUM_IOT_BOOK_DEVICES`, COMM-617). Nothing physical caps the
-count short of billions of devices (COMM-659), so any count is a stated assumption."""
-
-MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES: Final[int] = 340
-"""INVESTOR_SET (2026-10-04, ADR 007). The coverage floor, satellites, at which the iridium-v5
-model's Sheet A IoT count was read for :data:`MINIMAL_PACKET_IOT_DEVICES`: the count's stated
-basis, its own constant (not :data:`SATELLITES_FOR_FULL_COVERAGE_DEFAULT`, the floor the
-Iridium path pins), so a later change to the pinned floor never rewrites where the count came
-from."""
-
-IRIDIUM_IOT_BOOK_DEVICES: Final[int] = 1_998_000
-"""SOURCED_FACT (COMM-617, certified: Iridium's billable IoT subscribers at year-end 2025).
-Iridium's own IoT book, devices: named beside the model's minimal-packet IoT count, which is a
-stated assumption and not this book."""
-
-DATA_IOT_DEVICES: Final[int] = 25_835_160
-"""INVESTOR_SET (the investor, 2026-10-04: "somewhere in proportion"; held as a stated
-assumption, ADR 007). Data IoT's fixed device count: half the minimal-packet count at double
-its price, so the two books are equal. Iridium's own tiers run close to that inverse
-proportion (IoT 1,998,000 devices at $7.78 a month against voice and data 402,000 at $47,
-COMM-617, COMM-618)."""
+# IoT is two device classes, minimal-packet IoT and data IoT, measured in devices. The
+# engineering model sells no IoT seat: it publishes IoT's room on the phone class's useful
+# beams (IoT devices are low gain, so their reuse follows the phone rule) in the uplink's
+# share of the frame, and each IoT class's device capacity alone at its reference usage,
+# never a count sold, a price or revenue. IoT's customers, usage and revenue are the product
+# case's.
 
 MINIMAL_PACKET_IOT_MESSAGE_BYTES: Final[int] = 340
 """SOURCED_FACT (COMM-620, certified: Iridium's SBD IoT messages, about 340 bytes, the
-volume engine; COMM-659). One minimal-packet IoT message, bytes."""
+volume engine; COMM-659). One IoT message, bytes: the size of every message of the IoT
+capacity's reference usage (:class:`IotUsage`), each IoT class's alike."""
 
 MINIMAL_PACKET_IOT_MESSAGES_PER_DAY: Final[int] = 48
-"""INVESTOR_SET (the investor's usage table, 2026-10-04). Minimal-packet IoT's messages a day
-per device: 48 of 340 bytes is about 1.5 bits a second, the top of COMM-659's 0.03 to 1.5
-bits a second for a low-duty narrowband device. Data IoT sends them too, beside its bursts."""
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). The messages a day one IoT device of
+either class sends in the IoT capacity's reference usage (:data:`IOT_ENGINEERING_USAGE`), a
+usage and never a count of devices: 48 of 340 bytes is about 1.5 bits a second, the top of
+COMM-659's 0.03 to 1.5 bits a second for a low-duty narrowband device. Data IoT sends them too,
+beside its bursts."""
+
+MINIMAL_PACKET_IOT_BURSTS_PER_DAY: Final[int] = 0
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). The bursts a day one minimal-packet IoT
+device sends in the IoT capacity's reference usage (:data:`IOT_ENGINEERING_USAGE`), a usage and
+never a count of devices: none, since the class sends short messages only (the bursts are data
+IoT's, :data:`DATA_IOT_BURSTS_PER_DAY`)."""
 
 DATA_IOT_BURSTS_PER_DAY: Final[int] = 4
-"""INVESTOR_SET (the investor's usage, 2026-10-04, an assumption). Data IoT's bursts a day per
-device, each :data:`DATA_IOT_BURST_BYTES`, beside its 48 messages. The line's rate of about
-88 kbps, the top of Certus mid's 22 to 88 kbps (COMM-674), describes it and enters no
-computation."""
+"""INVESTOR_SET (the investor's usage, 2026-10-04, an assumption). The bursts a day one data IoT
+device sends in the IoT capacity's reference usage (:data:`IOT_ENGINEERING_USAGE`), each
+:data:`DATA_IOT_BURST_BYTES`, beside its 48 messages: a usage and never a count of devices. The
+class's rate of about 88 kbps, the top of Certus mid's 22 to 88 kbps (COMM-674), describes it
+and enters no computation."""
 
 DATA_IOT_BURST_BYTES: Final[int] = 100_000
 """INVESTOR_SET (the investor's usage, 2026-10-04, an assumption). One data IoT burst, bytes
-(100 KB)."""
+(100 KB): the burst size of the IoT capacity's reference usage (:class:`IotUsage`)."""
 
 IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW: Final[int] = 57
 """SOURCED_ESTIMATE (COMM-654). The low end of the devices one NB-IoT NTN random-access window
-serves, by mode: the IoT reading's access attempts a second a beam are read against this
-window (a per-opportunity contention figure, not a population cap)."""
+serves, by mode: the IoT room's access attempts a second are the phone class's useful beams
+times this window times the windows a second, the access view's conservative end (a
+per-opportunity contention figure, not a population cap)."""
 
 IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH: Final[int] = 1_650
 """SOURCED_ESTIMATE (COMM-654). The high end of the devices one NB-IoT NTN random-access window
@@ -781,27 +787,87 @@ serves, by mode."""
 
 IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND: Final[int] = 1
 """ESTIMATE (an assumption with no source: COMM-654 gives the devices one random-access window
-serves, not how often a window opens). The random-access windows a beam offers a second,
-against which the access attempts a second a beam are read."""
+serves, not how often a window opens). The random-access windows a beam offers a second: the
+IoT room's access attempts a second are the useful beams times a window's devices times this."""
 
 IOT_MAC_EFFICIENCY: Final[float] = 0.20
 """ESTIMATE (COMM-659). The share of a beam's uplink bits that carry payload after the MAC
-layer's overhead: the IoT reading reports the uplink bits share without it and with it (the
-share over this)."""
+layer's overhead: the IoT room's payload bits a second are its uplink bits a second times
+this, the payload view."""
 
 IOT_MESSAGE_AIRTIME_LOW_S: Final[float] = 4.0
 """ESTIMATE (COMM-719, a ``scenario`` row: the design reviewer's figure, not investor-set).
-The low end of the time one 340-byte minimal-packet IoT message holds one uplink tone,
-seconds."""
+The low end of the time one 340-byte IoT message, of either IoT class, holds one uplink
+tone, seconds."""
 
 IOT_MESSAGE_AIRTIME_HIGH_S: Final[float] = 7.0
-"""ESTIMATE (COMM-719, a ``scenario`` row). The high end of the time one 340-byte
-minimal-packet IoT message holds one uplink tone, seconds."""
+"""ESTIMATE (COMM-719, a ``scenario`` row). The high end of the time one 340-byte IoT message,
+of either IoT class, holds one uplink tone, seconds: the single-tone view's conservative end,
+at which each IoT class's capacity is read."""
 
 NB_IOT_TONE_HZ: Final[float] = 3_750.0
 """SOURCED_FACT (COMM-714, certified). NB-IoT's narrowest uplink allocation, one single-tone
 subcarrier, Hz: the held width over it counts the tones (about 2,133 in 8 MHz), and the
 uplink holds the share 1 - d of them (the downlink share d, ADR 008)."""
+
+
+@dataclass(frozen=True)
+class IotUsage:
+    """What one IoT device sends a day: an IoT class's usage, never a count of devices.
+
+    Every message is :data:`MINIMAL_PACKET_IOT_MESSAGE_BYTES` and every burst
+    :data:`DATA_IOT_BURST_BYTES` (the sizes the artifact's physics block publishes); the loads a
+    day are derived from the two counts a day, so a usage's loads cannot drift from its counts.
+
+    Attributes:
+        messages_per_day: The device's messages a day.
+        bursts_per_day: Its bursts a day, beside the messages.
+    """
+
+    messages_per_day: int
+    bursts_per_day: int
+
+    @property
+    def bytes_per_day(self) -> int:
+        """The device's daily volume, bytes: its messages and its bursts at their sizes."""
+        return (
+            self.messages_per_day * MINIMAL_PACKET_IOT_MESSAGE_BYTES
+            + self.bursts_per_day * DATA_IOT_BURST_BYTES
+        )
+
+    @property
+    def uplink_bits_per_day(self) -> int:
+        """The device's daily uplink bits: its daily volume in bits (IoT is mostly uplink)."""
+        return self.bytes_per_day * BITS_PER_BYTE
+
+    @property
+    def access_attempts_per_day(self) -> int:
+        """The device's random-access attempts a day: one per message or burst."""
+        return self.messages_per_day + self.bursts_per_day
+
+    @property
+    def single_tone_messages_per_day(self) -> int:
+        """The device's messages a day read on single tones: every message, a data IoT device's
+        included (its bursts are not single-tone messages)."""
+        return self.messages_per_day
+
+
+IOT_ENGINEERING_USAGE: Final[Mapping[IotClass, IotUsage]] = MappingProxyType(
+    {
+        IotClass.MINIMAL_PACKET_IOT: IotUsage(
+            messages_per_day=MINIMAL_PACKET_IOT_MESSAGES_PER_DAY,
+            bursts_per_day=MINIMAL_PACKET_IOT_BURSTS_PER_DAY,
+        ),
+        IotClass.DATA_IOT: IotUsage(
+            messages_per_day=MINIMAL_PACKET_IOT_MESSAGES_PER_DAY,
+            bursts_per_day=DATA_IOT_BURSTS_PER_DAY,
+        ),
+    }
+)
+"""INVESTOR_SET (the investor's usage, 2026-10-04). The IoT capacity's reference usage, one entry
+per :class:`IotClass` in its order, read-only: minimal-packet IoT 48 messages a day; data IoT 4
+bursts beside the same 48 messages. Each IoT class's device capacity is read at its entry, a day's
+average: a usage, never a count of devices, a price or a forecast (ADR 011)."""
 
 # ===========================================================================
 # The shipped population grid (the saturation curve's demand map, ADR 009)
@@ -1155,9 +1221,12 @@ DOWNLINK_SHARE_DEFAULT: Final[float] = 0.67
 COMM-662). The downlink time share d of Iridium's time-division duplex band (COMM-662: the
 uplink and the downlink share its tones in time): Certus 700's 2 : 1 down-to-up rate split
 (COMM-620: 704 kbps down, 352 up), 704 / (704 + 352) to two figures. The saturation curve is
-computed at d = 1; ADR 008 scales people, and every capacity but the satellite's peak, by d
-when the curve is read. ADR 008's documented alternatives: 0.5, the symmetric frame, and 0.75,
-an estimate. A scenario setting."""
+computed at d = 1; in a run, each people figure and each class's downlink pool
+scale with d (ADR 008), each class's off-peak per-user rate follows the pool only where the pool
+caps it, and the satellite's peak and each class's busy-hour per-user rate do not move. IoT's
+room lies in the uplink's share, 1 - d: its uplink, payload and tone rooms scale with 1 - d and
+its random-access room with neither (ADR 011). ADR 008's documented alternatives: 0.5, the
+symmetric frame, and 0.75, an estimate. A scenario setting."""
 
 SATURATION_CURVE_PATH_DEFAULT: Final[str] = "communications/models/iridium/saturation_curve.json"
 """The promoted saturation curve, repository-relative (ADR 005: ``saturation_curve.json``
@@ -1226,25 +1295,24 @@ __all__ = [
     "SPECTRUM_MHZ_DEFAULT",
     # The Iridium model's prices (2026-10-03 and 2026-10-04; the two terminal prices 2026-10-07).
     "ARPU_PRICE_CEILING_USD_MONTH",
-    "DATA_IOT_PRICE_USD_MONTH_DEFAULT",
-    "MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT",
     "MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT",
     "PHONE_CLASS_PRICE_FLOOR_USD_MONTH",
     "PHONE_CLASS_PRICE_USD_MONTH_DEFAULT",
     "SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT",
-    # The two IoT lines and the IoT reading (ADR 007).
+    # IoT as capacity (ADR 011): its classes, views and reference usage, and the room's constants.
     "DATA_IOT_BURSTS_PER_DAY",
     "DATA_IOT_BURST_BYTES",
-    "DATA_IOT_DEVICES",
+    "IOT_ENGINEERING_USAGE",
     "IOT_MAC_EFFICIENCY",
     "IOT_MESSAGE_AIRTIME_HIGH_S",
     "IOT_MESSAGE_AIRTIME_LOW_S",
     "IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND",
     "IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH",
     "IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW",
-    "IRIDIUM_IOT_BOOK_DEVICES",
-    "MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES",
-    "MINIMAL_PACKET_IOT_DEVICES",
+    "IotClass",
+    "IotUsage",
+    "IotView",
+    "MINIMAL_PACKET_IOT_BURSTS_PER_DAY",
     "MINIMAL_PACKET_IOT_MESSAGES_PER_DAY",
     "MINIMAL_PACKET_IOT_MESSAGE_BYTES",
     "NB_IOT_TONE_HZ",

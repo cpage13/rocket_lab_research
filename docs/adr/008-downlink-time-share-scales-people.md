@@ -1,6 +1,12 @@
 # 008 - The Downlink Time Share Scales People Capacity
 
-Status: Accepted (2026-10-04, with the saturation module's strategy, Revision 4)
+Status: Accepted (2026-10-04, with the saturation module's strategy, Revision 4); since ADR 011
+(2026-10-13, `iridium-v7`), the Decision's "multiplies every people figure, and every capacity
+figure except the satellite's peak, by d" holds for each people figure and each class's downlink
+pool, while each class's off-peak per-user rate follows the pool only where the pool caps it, its
+busy-hour per-user rate does not move with d, IoT's uplink, payload and single-tone rooms scale
+with 1 - d and its random-access room with neither; and the Consequences' line on IoT staying far
+from binding on the uplink share describes the IoT counts ADR 011 removed.
 
 ## Context
 

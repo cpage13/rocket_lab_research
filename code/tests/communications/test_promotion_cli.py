@@ -57,9 +57,9 @@ from communications.iridium import (
     ClassReadingRecord,
     ClassRecord,
     ClassYearRecord,
-    FixedBooksRecord,
-    IotCheckRecord,
-    IotCheckRowRecord,
+    IotClassCapacityRecord,
+    IotClassRecord,
+    IotRoomRecord,
     IridiumRecord,
     MarginalIntervalRecord,
     ReadingRecord,
@@ -70,9 +70,9 @@ from communications.json_output import (
     ClassBlock,
     ClassReadingBlock,
     ClassYearBlock,
-    FixedBooksBlock,
-    IotCheckBlock,
-    IotCheckRowBlock,
+    IotClassBlock,
+    IotClassCapacityBlock,
+    IotRoomBlock,
     IridiumModelArtifact,
     MarginalIntervalBlock,
     ReadingBlock,
@@ -309,12 +309,13 @@ def test_a_run_that_would_hold_a_number_that_is_not_finite_names_the_panel(
     ``revenue_musd``, and not the setting).
 
     Sample: an Iridium scenario with a panel of 2.5e300 m^2 (finite, so it loads; the people
-    stay finite and revenue overflows to infinity, first at the 2,000-satellite reading at the
-    defaults' 0.18 share).
+    stay finite and the IoT room's uplink bits a second overflow to infinity, first in FY2028,
+    whose 12 satellites at the defaults' 0.18 share are the first fleet; re-derived by running
+    it, 2026-10-13).
 
     Expected outcome: exit 1; exactly one ERROR record, on one line and with no exception
     attached, naming the scenario, the first field that is not finite and
-    ``iridium.aperture_m2`` with its value beside the five prices; no artifact written.
+    ``iridium.aperture_m2`` with its value beside the three prices; no artifact written.
     """
     scenario = tmp_path / "huge_panel.yaml"
     scenario.write_text("iridium:\n  aperture_m2: 2.5e+300\n", encoding="utf-8")
@@ -328,7 +329,7 @@ def test_a_run_that_would_hold_a_number_that_is_not_finite_names_the_panel(
     assert "\n" not in message
     assert message.startswith(
         f"could not promote {scenario}: the run's "
-        "iridium.saturation.readings[1].classes[0].revenue_musd is inf, not a finite number: "
+        "iridium.years[2].iot.uplink_bits_per_second is inf, not a finite number: "
         "the Iridium record scales with iridium.aperture_m2 (2.5e+300), "
     )
     for name in IridiumArpuDials.model_fields:
@@ -564,11 +565,11 @@ _RECORDS_AND_BLOCKS: Final[tuple[tuple[type, type[BaseModel]], ...]] = (
     (ClassRecord, ClassBlock),
     (MarginalIntervalRecord, MarginalIntervalBlock),
     (ClassYearRecord, ClassYearBlock),
-    (FixedBooksRecord, FixedBooksBlock),
     (ReadingRecord, ReadingBlock),
     (ClassReadingRecord, ClassReadingBlock),
-    (IotCheckRecord, IotCheckBlock),
-    (IotCheckRowRecord, IotCheckRowBlock),
+    (IotRoomRecord, IotRoomBlock),
+    (IotClassCapacityRecord, IotClassCapacityBlock),
+    (IotClassRecord, IotClassBlock),
     (SaturationRecord, SaturationBlock),
 )
 """Each Iridium record the artifact publishes whole, beside the block the writer maps it onto
@@ -584,8 +585,8 @@ _IRIDIUM_RECORD_HOMES: Final[dict[str, str | None]] = {
     "coverage_floor_reached_year": "trajectory_summary",
     "cost_per_satellite_year_musd": "trajectory_summary",
     "classes": None,
+    "iot_classes": None,
     "years": None,
-    "fixed_books": None,
     "saturation": None,
     "assumptions": None,
 }
@@ -625,8 +626,8 @@ def test_each_record_and_its_block_carry_the_same_fields_in_the_same_order(
     under the same name and in the same order (the artifact's key order), and no other.
 
     Sample: the nine record and block pairs the writer maps field for field (classes and their
-    intervals, each year's class lines, the fixed books, the readings and their class lines,
-    the IoT check and its rows, the saturation block).
+    intervals, each year's class lines, the readings and their class lines, IoT's room and each
+    IoT class's capacity in it, each IoT class's engineering usage, the saturation block).
 
     Expected outcome: the record's field names, in order, equal the block's.
     """
@@ -637,9 +638,10 @@ def test_every_field_of_the_iridium_record_and_its_years_reaches_the_artifact() 
     """Objective: the Iridium record's own fields, and each year's Iridium lines, are published
     too: none can be added without a home in the artifact.
 
-    Sample: the Iridium record's thirteen fields and their homes (``_IRIDIUM_RECORD_HOMES``);
-    the year record's fields against the year block, which also carries the shared record's
-    launches, living fleet and annualized cost beside them.
+    Sample: the Iridium record's thirteen fields and their homes (``_IRIDIUM_RECORD_HOMES``,
+    ``iot_classes`` a field of the artifact's top level); the year record's fields against the
+    year block, which also carries the shared record's launches, living fleet and annualized
+    cost beside them.
 
     Expected outcome: the homes name exactly the Iridium record's fields; each home is a field
     of the artifact's top level, or of the block it names, under the same name; every field of
@@ -664,7 +666,7 @@ def test_every_artifact_field_is_required_so_a_field_left_unmapped_fails_the_bui
     artifact, or of any block under it, has a default.
 
     Sample: the artifact model and every block model its fields reach, walked through their
-    annotations (tuples, unions and dictionaries included).
+    annotations (tuples, unions and dictionaries included), the three IoT blocks among them.
 
     Expected outcome: the walk reaches exactly the block models ``json_output`` defines (so no
     block escapes the check), and every field of each is required.

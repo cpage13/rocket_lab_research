@@ -1,10 +1,10 @@
 {
   "provenance": {
     "model_name": "iridium",
-    "schema_version": "iridium-v6",
+    "schema_version": "iridium-v7",
     "scenario_name": "Iridium L-band max-outcome (every device class)",
     "source_scenario_path": "code/scenarios/iridium.yaml",
-    "version_stamp": "2026-10-12"
+    "version_stamp": "2026-10-13"
   },
   "trajectory_summary": {
     "total_cost_through_final_year_musd": 8729.0,
@@ -26,7 +26,16 @@
     "aperture_m2": 15.4,
     "satellites_per_launch": 16,
     "operations_cost_musd": 0.0,
-    "ecosystem_assumption": "The Iridium model's phone-class tier assumes phone-form-factor devices with in-chipset support for Iridium's 1616 to 1626.5 MHz L-band (0 dBi, no external antenna). A literally-unmodified 2026 phone receives nothing on this band: no phone has an L-band MSS radio and the band is not a deployed 3GPP NTN band (COMM-668 / COMM-669 / COMM-670). Today's real in-chipset path on this band is Project Stardust (NB-IoT NTN): messaging and IoT, kbps-class, no voice (COMM-661 to COMM-676). The phone class's data-grade service (its own usage, a named constant) is therefore a forward assumption: a future where standard chipsets include the band grown up from the Stardust path, 0 dBi, no external antenna, at the cost of the low phone-class SE tier (a knowingly-taken capacity haircut of about 3x to 4x versus the gain terminals). Boosted-antenna devices are purpose-built (our hardware, no chipset assumption). The Iridium model is the MSS lane and never claims to reach an unmodified handset; the unmodified-phone lane stays on cellular spectrum (the High-Bandwidth Cellular Pure Play model)."
+    "ecosystem_assumption": "The Iridium model's phone-class tier assumes phone-form-factor devices with in-chipset support for Iridium's 1616 to 1626.5 MHz L-band (0 dBi, no external antenna). A literally-unmodified 2026 phone receives nothing on this band: no phone has an L-band MSS radio and the band is not a deployed 3GPP NTN band (COMM-668 / COMM-669 / COMM-670). Today's real in-chipset path on this band is Project Stardust (NB-IoT NTN): messaging and IoT, kbps-class, no voice (COMM-661 to COMM-676). The phone class's data-grade service (its own usage, a named constant) is therefore a forward assumption: a future where standard chipsets include the band grown up from the Stardust path, 0 dBi, no external antenna, at the cost of the low phone-class SE tier (a knowingly-taken capacity haircut of about 3x to 4x versus the gain terminals). Boosted-antenna devices are purpose-built (our hardware, no chipset assumption). The Iridium model is the MSS lane and never claims to reach an unmodified handset; the unmodified-phone lane stays on cellular spectrum (the High-Bandwidth Cellular Pure Play model).",
+    "iot_message_bytes": 340,
+    "iot_burst_bytes": 100000,
+    "iot_mac_efficiency": 0.2,
+    "iot_random_access_window_devices_low": 57,
+    "iot_random_access_window_devices_high": 1650,
+    "iot_random_access_windows_per_second": 1,
+    "iot_tone_hz": 3750.0,
+    "iot_message_airtime_low_s": 4.0,
+    "iot_message_airtime_high_s": 7.0
   },
   "classes": [
     {
@@ -608,325 +617,620 @@
       ]
     }
   ],
+  "iot_classes": [
+    {
+      "iot_class": "minimal_packet_iot",
+      "messages_per_day": 48,
+      "bursts_per_day": 0,
+      "uplink_bits_per_day": 130560,
+      "access_attempts_per_day": 48,
+      "single_tone_messages_per_day": 48
+    },
+    {
+      "iot_class": "data_iot",
+      "messages_per_day": 48,
+      "bursts_per_day": 4,
+      "uplink_bits_per_day": 3330560,
+      "access_attempts_per_day": 52,
+      "single_tone_messages_per_day": 48
+    }
+  ],
   "years": [
     {
       "year": 2026,
       "comms_launches_flown": 0,
       "living_fleet": 0,
       "annual_cost_musd": 0.0,
-      "minimal_packet_iot_revenue_musd": 0.0,
-      "data_iot_revenue_musd": 0.0,
       "classes": [
         {
           "device_class": "small_terminal_class",
+          "useful_beams": 0.0,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         },
         {
           "device_class": "mounted_terminal_class",
+          "useful_beams": 0.0,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         },
         {
           "device_class": "phone_class",
+          "useful_beams": 0.0,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         }
-      ]
+      ],
+      "iot": {
+        "uplink_bits_per_second": 0.0,
+        "uplink_payload_bits_per_second": 0.0,
+        "access_attempts_per_second_low": 0.0,
+        "access_attempts_per_second_high": 0.0,
+        "single_tone_seconds_per_second": 0.0,
+        "classes": [
+          {
+            "iot_class": "minimal_packet_iot",
+            "devices_by_payload_bits": null,
+            "devices_by_random_access": null,
+            "devices_by_single_tone_time": null,
+            "device_capacity": null,
+            "binding_view": null
+          },
+          {
+            "iot_class": "data_iot",
+            "devices_by_payload_bits": null,
+            "devices_by_random_access": null,
+            "devices_by_single_tone_time": null,
+            "device_capacity": null,
+            "binding_view": null
+          }
+        ]
+      }
     },
     {
       "year": 2027,
       "comms_launches_flown": 2,
       "living_fleet": 32,
       "annual_cost_musd": 11.6,
-      "minimal_packet_iot_revenue_musd": 0.0,
-      "data_iot_revenue_musd": 0.0,
       "classes": [
         {
           "device_class": "small_terminal_class",
+          "useful_beams": 1200.182530972581,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         },
         {
           "device_class": "mounted_terminal_class",
+          "useful_beams": 1221.4262913670354,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         },
         {
           "device_class": "phone_class",
+          "useful_beams": 1187.0013058124885,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         }
-      ]
+      ],
+      "iot": {
+        "uplink_bits_per_second": 2036894240.77423,
+        "uplink_payload_bits_per_second": 407378848.154846,
+        "access_attempts_per_second_low": 67659.07443131185,
+        "access_attempts_per_second_high": 1958552.154590606,
+        "single_tone_seconds_per_second": 835648.9192919919,
+        "classes": [
+          {
+            "iot_class": "minimal_packet_iot",
+            "devices_by_payload_bits": null,
+            "devices_by_random_access": null,
+            "devices_by_single_tone_time": null,
+            "device_capacity": null,
+            "binding_view": null
+          },
+          {
+            "iot_class": "data_iot",
+            "devices_by_payload_bits": null,
+            "devices_by_random_access": null,
+            "devices_by_single_tone_time": null,
+            "device_capacity": null,
+            "binding_view": null
+          }
+        ]
+      }
     },
     {
       "year": 2028,
       "comms_launches_flown": 3,
       "living_fleet": 80,
       "annual_cost_musd": 29.0,
-      "minimal_packet_iot_revenue_musd": 0.0,
-      "data_iot_revenue_musd": 0.0,
       "classes": [
         {
           "device_class": "small_terminal_class",
+          "useful_beams": 3000.456327431452,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         },
         {
           "device_class": "mounted_terminal_class",
+          "useful_beams": 3053.5657284175886,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         },
         {
           "device_class": "phone_class",
+          "useful_beams": 2967.5032645312217,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         }
-      ]
+      ],
+      "iot": {
+        "uplink_bits_per_second": 5092235601.935576,
+        "uplink_payload_bits_per_second": 1018447120.3871154,
+        "access_attempts_per_second_low": 169147.68607827963,
+        "access_attempts_per_second_high": 4896380.386476516,
+        "single_tone_seconds_per_second": 2089122.29822998,
+        "classes": [
+          {
+            "iot_class": "minimal_packet_iot",
+            "devices_by_payload_bits": null,
+            "devices_by_random_access": null,
+            "devices_by_single_tone_time": null,
+            "device_capacity": null,
+            "binding_view": null
+          },
+          {
+            "iot_class": "data_iot",
+            "devices_by_payload_bits": null,
+            "devices_by_random_access": null,
+            "devices_by_single_tone_time": null,
+            "device_capacity": null,
+            "binding_view": null
+          }
+        ]
+      }
     },
     {
       "year": 2029,
       "comms_launches_flown": 5,
       "living_fleet": 160,
       "annual_cost_musd": 58.0,
-      "minimal_packet_iot_revenue_musd": 0.0,
-      "data_iot_revenue_musd": 0.0,
       "classes": [
         {
           "device_class": "small_terminal_class",
+          "useful_beams": 6000.912654862904,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         },
         {
           "device_class": "mounted_terminal_class",
+          "useful_beams": 6107.131456835177,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         },
         {
           "device_class": "phone_class",
+          "useful_beams": 5935.006529062443,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         }
-      ]
+      ],
+      "iot": {
+        "uplink_bits_per_second": 10184471203.871153,
+        "uplink_payload_bits_per_second": 2036894240.7742307,
+        "access_attempts_per_second_low": 338295.37215655926,
+        "access_attempts_per_second_high": 9792760.772953032,
+        "single_tone_seconds_per_second": 4178244.59645996,
+        "classes": [
+          {
+            "iot_class": "minimal_packet_iot",
+            "devices_by_payload_bits": null,
+            "devices_by_random_access": null,
+            "devices_by_single_tone_time": null,
+            "device_capacity": null,
+            "binding_view": null
+          },
+          {
+            "iot_class": "data_iot",
+            "devices_by_payload_bits": null,
+            "devices_by_random_access": null,
+            "devices_by_single_tone_time": null,
+            "device_capacity": null,
+            "binding_view": null
+          }
+        ]
+      }
     },
     {
       "year": 2030,
       "comms_launches_flown": 9,
       "living_fleet": 304,
       "annual_cost_musd": 110.19999999999999,
-      "minimal_packet_iot_revenue_musd": 0.0,
-      "data_iot_revenue_musd": 0.0,
       "classes": [
         {
           "device_class": "small_terminal_class",
+          "useful_beams": 11401.73404423952,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         },
         {
           "device_class": "mounted_terminal_class",
+          "useful_beams": 11603.549767986837,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         },
         {
           "device_class": "phone_class",
+          "useful_beams": 11276.51240521864,
           "people_served": 0,
           "revenue_musd": 0.0,
           "own_margin_pct": null
         }
-      ]
+      ],
+      "iot": {
+        "uplink_bits_per_second": 19350495287.355183,
+        "uplink_payload_bits_per_second": 3870099057.471037,
+        "access_attempts_per_second_low": 642761.2070974625,
+        "access_attempts_per_second_high": 18606245.468610756,
+        "single_tone_seconds_per_second": 7938664.733273921,
+        "classes": [
+          {
+            "iot_class": "minimal_packet_iot",
+            "devices_by_payload_bits": null,
+            "devices_by_random_access": null,
+            "devices_by_single_tone_time": null,
+            "device_capacity": null,
+            "binding_view": null
+          },
+          {
+            "iot_class": "data_iot",
+            "devices_by_payload_bits": null,
+            "devices_by_random_access": null,
+            "devices_by_single_tone_time": null,
+            "device_capacity": null,
+            "binding_view": null
+          }
+        ]
+      }
     },
     {
       "year": 2031,
       "comms_launches_flown": 14,
       "living_fleet": 528,
       "annual_cost_musd": 191.4,
-      "minimal_packet_iot_revenue_musd": 2480.17536,
-      "data_iot_revenue_musd": 2480.17536,
       "classes": [
         {
           "device_class": "small_terminal_class",
+          "useful_beams": 19375.007968453017,
           "people_served": 4139229,
           "revenue_musd": 496.70748,
           "own_margin_pct": 61.46625373952491
         },
         {
           "device_class": "mounted_terminal_class",
+          "useful_beams": 19819.324128329084,
           "people_served": 526557,
           "revenue_musd": 315.9342,
           "own_margin_pct": 39.417764838374566
         },
         {
           "device_class": "phone_class",
+          "useful_beams": 19160.469197388542,
           "people_served": 3560271,
           "revenue_musd": 640.84878,
           "own_margin_pct": 70.13335969836754
         }
-      ]
+      ],
+      "iot": {
+        "uplink_bits_per_second": 32879365142.718735,
+        "uplink_payload_bits_per_second": 6575873028.543747,
+        "access_attempts_per_second_low": 1092146.744251147,
+        "access_attempts_per_second_high": 31614774.175691094,
+        "single_tone_seconds_per_second": 13488970.31496153,
+        "classes": [
+          {
+            "iot_class": "minimal_packet_iot",
+            "devices_by_payload_bits": 4351680680.653951,
+            "devices_by_random_access": 1965864139.6520646,
+            "devices_by_single_tone_time": 3468592366.7043934,
+            "device_capacity": 1965864139,
+            "binding_view": "random_access"
+          },
+          {
+            "iot_class": "data_iot",
+            "devices_by_payload_bits": 170588558.58059296,
+            "devices_by_random_access": 1814643821.2172902,
+            "devices_by_single_tone_time": 3468592366.7043934,
+            "device_capacity": 170588558,
+            "binding_view": "payload_bits"
+          }
+        ]
+      }
     },
     {
       "year": 2032,
       "comms_launches_flown": 22,
       "living_fleet": 848,
       "annual_cost_musd": 307.4,
-      "minimal_packet_iot_revenue_musd": 2480.17536,
-      "data_iot_revenue_musd": 2480.17536,
       "classes": [
         {
           "device_class": "small_terminal_class",
+          "useful_beams": 30563.895792027124,
           "people_served": 6519755,
           "revenue_musd": 782.3706,
           "own_margin_pct": 60.709157527136114
         },
         {
           "device_class": "mounted_terminal_class",
+          "useful_beams": 31700.621774248044,
           "people_served": 836317,
           "revenue_musd": 501.7902,
           "own_margin_pct": 38.739337675387056
         },
         {
           "device_class": "phone_class",
+          "useful_beams": 30021.017476307494,
           "people_served": 5578305,
           "revenue_musd": 1004.0949,
           "own_margin_pct": 69.38536387347452
         }
-      ]
+      ],
+      "iot": {
+        "uplink_bits_per_second": 51516065989.34366,
+        "uplink_payload_bits_per_second": 10303213197.868732,
+        "access_attempts_per_second_low": 1711197.9961495271,
+        "access_attempts_per_second_high": 49534678.83590736,
+        "single_tone_seconds_per_second": 21134796.30332047,
+        "classes": [
+          {
+            "iot_class": "minimal_packet_iot",
+            "devices_by_payload_bits": 6818302851.530779,
+            "devices_by_random_access": 3080156393.069149,
+            "devices_by_single_tone_time": 5434661906.568121,
+            "device_capacity": 3080156393,
+            "binding_view": "random_access"
+          },
+          {
+            "iot_class": "data_iot",
+            "devices_by_payload_bits": 267281664.43356624,
+            "devices_by_random_access": 2843221285.909983,
+            "devices_by_single_tone_time": 5434661906.568121,
+            "device_capacity": 267281664,
+            "binding_view": "payload_bits"
+          }
+        ]
+      }
     },
     {
       "year": 2033,
       "comms_launches_flown": 35,
       "living_fleet": 1360,
       "annual_cost_musd": 493.0,
-      "minimal_packet_iot_revenue_musd": 2480.17536,
-      "data_iot_revenue_musd": 2480.17536,
       "classes": [
         {
           "device_class": "small_terminal_class",
+          "useful_beams": 46801.785066801465,
           "people_served": 9941462,
           "revenue_musd": 1192.97544,
           "own_margin_pct": 58.674756958952976
         },
         {
           "device_class": "mounted_terminal_class",
+          "useful_beams": 49248.08454594371,
           "people_served": 1289233,
           "revenue_musd": 773.5398,
           "own_margin_pct": 36.267015607988114
         },
         {
           "device_class": "phone_class",
+          "useful_beams": 45584.50859407408,
           "people_served": 8470209,
           "revenue_musd": 1524.63762,
           "own_margin_pct": 67.66444737209095
         }
-      ]
+      ],
+      "iot": {
+        "uplink_bits_per_second": 78223016747.43112,
+        "uplink_payload_bits_per_second": 15644603349.486225,
+        "access_attempts_per_second_low": 2598316.9898622227,
+        "access_attempts_per_second_high": 75214439.18022224,
+        "single_tone_seconds_per_second": 32091494.05022815,
+        "classes": [
+          {
+            "iot_class": "minimal_packet_iot",
+            "devices_by_payload_bits": 10353046334.218826,
+            "devices_by_random_access": 4676970581.752001,
+            "devices_by_single_tone_time": 8252098470.058667,
+            "device_capacity": 4676970581,
+            "binding_view": "random_access"
+          },
+          {
+            "iot_class": "data_iot",
+            "devices_by_payload_bits": 405845782.509731,
+            "devices_by_random_access": 4317203613.924924,
+            "devices_by_single_tone_time": 8252098470.058667,
+            "device_capacity": 405845782,
+            "binding_view": "payload_bits"
+          }
+        ]
+      }
     },
     {
       "year": 2034,
       "comms_launches_flown": 51,
       "living_fleet": 2096,
       "annual_cost_musd": 759.8,
-      "minimal_packet_iot_revenue_musd": 2480.17536,
-      "data_iot_revenue_musd": 2480.17536,
       "classes": [
         {
           "device_class": "small_terminal_class",
+          "useful_beams": 68191.86330557014,
           "people_served": 14389815,
           "revenue_musd": 1726.7778,
           "own_margin_pct": 55.998971031478405
         },
         {
           "device_class": "mounted_terminal_class",
+          "useful_beams": 74699.63704673239,
           "people_served": 1921616,
           "revenue_musd": 1152.9696,
           "own_margin_pct": 34.10060421367571
         },
         {
           "device_class": "phone_class",
+          "useful_beams": 65458.82971710317,
           "people_served": 12163123,
           "revenue_musd": 2189.36214,
           "own_margin_pct": 65.29582812645148
         }
-      ]
+      ],
+      "iot": {
+        "uplink_bits_per_second": 112327351794.54904,
+        "uplink_payload_bits_per_second": 22465470358.90981,
+        "access_attempts_per_second_low": 3731153.2938748808,
+        "access_attempts_per_second_high": 108007069.03322023,
+        "single_tone_seconds_per_second": 46083016.120840624,
+        "classes": [
+          {
+            "iot_class": "minimal_packet_iot",
+            "devices_by_payload_bits": 14866855384.572668,
+            "devices_by_random_access": 6716075928.974786,
+            "devices_by_single_tone_time": 11849918431.073303,
+            "device_capacity": 6716075928,
+            "binding_view": "random_access"
+          },
+          {
+            "iot_class": "data_iot",
+            "devices_by_payload_bits": 582789872.877176,
+            "devices_by_random_access": 6199454703.669032,
+            "devices_by_single_tone_time": 11849918431.073303,
+            "device_capacity": 582789872,
+            "binding_view": "payload_bits"
+          }
+        ]
+      }
     },
     {
       "year": 2035,
       "comms_launches_flown": 70,
       "living_fleet": 3072,
       "annual_cost_musd": 1113.6,
-      "minimal_packet_iot_revenue_musd": 2480.17536,
-      "data_iot_revenue_musd": 2480.17536,
       "classes": [
         {
           "device_class": "small_terminal_class",
+          "useful_beams": 92609.86946113223,
           "people_served": 19400399,
           "revenue_musd": 2328.04788,
           "own_margin_pct": 52.165932257372646
         },
         {
           "device_class": "mounted_terminal_class",
+          "useful_beams": 106199.39472610576,
           "people_served": 2676447,
           "revenue_musd": 1605.8682,
           "own_margin_pct": 30.654333898635024
         },
         {
           "device_class": "phone_class",
+          "useful_beams": 88089.14546528562,
           "people_served": 16368138,
           "revenue_musd": 2946.26484,
           "own_margin_pct": 62.20299054989232
         }
-      ]
+      ],
+      "iot": {
+        "uplink_bits_per_second": 151160973618.4301,
+        "uplink_payload_bits_per_second": 30232194723.686024,
+        "access_attempts_per_second_low": 5021081.29152128,
+        "access_attempts_per_second_high": 145347090.01772127,
+        "single_tone_seconds_per_second": 62014758.407561064,
+        "classes": [
+          {
+            "iot_class": "minimal_packet_iot",
+            "devices_by_payload_bits": 20006599449.498104,
+            "devices_by_random_access": 9037946324.738304,
+            "devices_by_single_tone_time": 15946652161.944275,
+            "device_capacity": 9037946324,
+            "binding_view": "random_access"
+          },
+          {
+            "iot_class": "data_iot",
+            "devices_by_payload_bits": 784271000.7105328,
+            "devices_by_random_access": 8342719684.373818,
+            "devices_by_single_tone_time": 15946652161.944275,
+            "device_capacity": 784271000,
+            "binding_view": "payload_bits"
+          }
+        ]
+      }
     },
     {
       "year": 2036,
       "comms_launches_flown": 90,
       "living_fleet": 4288,
       "annual_cost_musd": 1554.4,
-      "minimal_packet_iot_revenue_musd": 2480.17536,
-      "data_iot_revenue_musd": 2480.17536,
       "classes": [
         {
           "device_class": "small_terminal_class",
+          "useful_beams": 117825.72038141267,
           "people_served": 24607046,
           "revenue_musd": 2952.84552,
           "own_margin_pct": 47.359250950588155
         },
         {
           "device_class": "mounted_terminal_class",
+          "useful_beams": 143072.5405058388,
           "people_served": 3527090,
           "revenue_musd": 2116.254,
           "own_margin_pct": 26.549459563927574
         },
         {
           "device_class": "phone_class",
+          "useful_beams": 112065.11747154818,
           "people_served": 20823193,
           "revenue_musd": 3748.17474,
           "own_margin_pct": 58.52914797670292
         }
-      ]
+      ],
+      "iot": {
+        "uplink_bits_per_second": 192303741581.17667,
+        "uplink_payload_bits_per_second": 38460748316.23534,
+        "access_attempts_per_second_low": 6387711.695878246,
+        "access_attempts_per_second_high": 184907443.8280545,
+        "single_tone_seconds_per_second": 78893842.6999699,
+        "classes": [
+          {
+            "iot_class": "minimal_packet_iot",
+            "devices_by_payload_bits": 25451965797.50868,
+            "devices_by_random_access": 11497881052.580843,
+            "devices_by_single_tone_time": 20286988122.849403,
+            "device_capacity": 11497881052,
+            "binding_view": "random_access"
+          },
+          {
+            "iot_class": "data_iot",
+            "devices_by_payload_bits": 997732709.9715161,
+            "devices_by_random_access": 10613428663.920776,
+            "devices_by_single_tone_time": 20286988122.849403,
+            "device_capacity": 997732709,
+            "binding_view": "payload_bits"
+          }
+        ]
+      }
     }
   ],
-  "fixed_books": {
-    "minimal_packet_iot_devices": 51670320,
-    "minimal_packet_iot_price_usd_per_month": 4.0,
-    "minimal_packet_iot_annual_revenue_musd": 2480.17536,
-    "data_iot_devices": 25835160,
-    "data_iot_price_usd_per_month": 8.0,
-    "data_iot_annual_revenue_musd": 2480.17536,
-    "basis": "Minimal-packet IoT's count is the capable count: the iridium-v5 model's Sheet A IoT count at the 340-satellite coverage floor, held as a stated assumption (ADR 007), not Iridium's own IoT book (1,998,000 devices, COMM-617). Data IoT's count is half of it, in proportion, the investor's setting of 2026-10-04: at the default prices ($4 and $8 a month) half the count at double the price. Each line is its own revenue line, never inside a class's margin; neither moves with the fleet, a class, the downlink share, the panel or satellites per launch; both are sold in full from the first year the living fleet reaches the coverage floor, and not before. Government is left out of revenue."
-  },
   "saturation": {
     "curve_path": "communications/models/iridium/saturation_curve.json",
     "curve_schema_version": "saturation-v1",
@@ -967,7 +1271,32 @@
             "revenue_musd": 421.82226,
             "own_margin_pct": 70.78153248716652
           }
-        ]
+        ],
+        "iot": {
+          "uplink_bits_per_second": 21642001308.226196,
+          "uplink_payload_bits_per_second": 4328400261.64524,
+          "access_attempts_per_second_low": 718877.6658326883,
+          "access_attempts_per_second_high": 20809616.64252519,
+          "single_tone_seconds_per_second": 8878769.767477414,
+          "classes": [
+            {
+              "iot_class": "minimal_packet_iot",
+              "devices_by_payload_bits": 2864382526.088762,
+              "devices_by_random_access": 1293979798.498839,
+              "devices_by_single_tone_time": 2283112225.9227633,
+              "device_capacity": 1293979798,
+              "binding_view": "random_access"
+            },
+            {
+              "iot_class": "data_iot",
+              "devices_by_payload_bits": 112285556.36474007,
+              "devices_by_random_access": 1194442890.9220052,
+              "devices_by_single_tone_time": 2283112225.9227633,
+              "device_capacity": 112285556,
+              "binding_view": "payload_bits"
+            }
+          ]
+        }
       },
       {
         "label": "the retired cap, kept for comparison",
@@ -1001,7 +1330,32 @@
             "revenue_musd": 2110.90788,
             "own_margin_pct": 65.6545883944495
           }
-        ]
+        ],
+        "iot": {
+          "uplink_bits_per_second": 108302174453.69728,
+          "uplink_payload_bits_per_second": 21660434890.739456,
+          "access_attempts_per_second_low": 3597449.8507347004,
+          "access_attempts_per_second_high": 104136706.20547818,
+          "single_tone_seconds_per_second": 44431661.31433735,
+          "classes": [
+            {
+              "iot_class": "minimal_packet_iot",
+              "devices_by_payload_bits": 14334111324.754053,
+              "devices_by_random_access": 6475409731.322461,
+              "devices_by_single_tone_time": 11425284337.972462,
+              "device_capacity": 6475409731,
+              "binding_view": "random_access"
+            },
+            {
+              "iot_class": "data_iot",
+              "devices_by_payload_bits": 561905978.1417806,
+              "devices_by_random_access": 5977301290.451502,
+              "devices_by_single_tone_time": 11425284337.972462,
+              "device_capacity": 561905978,
+              "binding_view": "payload_bits"
+            }
+          ]
+        }
       },
       {
         "label": "the horizon-end full-cadence reach",
@@ -1035,7 +1389,32 @@
             "revenue_musd": 3748.17474,
             "own_margin_pct": 58.52914797670292
           }
-        ]
+        ],
+        "iot": {
+          "uplink_bits_per_second": 192303741581.17667,
+          "uplink_payload_bits_per_second": 38460748316.23534,
+          "access_attempts_per_second_low": 6387711.695878246,
+          "access_attempts_per_second_high": 184907443.8280545,
+          "single_tone_seconds_per_second": 78893842.6999699,
+          "classes": [
+            {
+              "iot_class": "minimal_packet_iot",
+              "devices_by_payload_bits": 25451965797.50868,
+              "devices_by_random_access": 11497881052.580843,
+              "devices_by_single_tone_time": 20286988122.849403,
+              "device_capacity": 11497881052,
+              "binding_view": "random_access"
+            },
+            {
+              "iot_class": "data_iot",
+              "devices_by_payload_bits": 997732709.9715161,
+              "devices_by_random_access": 10613428663.920776,
+              "devices_by_single_tone_time": 20286988122.849403,
+              "device_capacity": 997732709,
+              "binding_view": "payload_bits"
+            }
+          ]
+        }
       },
       {
         "label": "the steady state, beyond the 10-year horizon",
@@ -1069,7 +1448,32 @@
             "revenue_musd": 5152.05,
             "own_margin_pct": 49.340553760153725
           }
-        ]
+        ],
+        "iot": {
+          "uplink_bits_per_second": 264330926652.2882,
+          "uplink_payload_bits_per_second": 52866185330.45764,
+          "access_attempts_per_second_low": 8780223.088100484,
+          "access_attempts_per_second_high": 254164352.55027714,
+          "single_tone_seconds_per_second": 108443457.08811823,
+          "classes": [
+            {
+              "iot_class": "minimal_packet_iot",
+              "devices_by_payload_bits": 34984975586.33226,
+              "devices_by_random_access": 15804401558.58087,
+              "devices_by_single_tone_time": 27885460394.087543,
+              "device_capacity": 15804401558,
+              "binding_view": "random_access"
+            },
+            {
+              "iot_class": "data_iot",
+              "devices_by_payload_bits": 1371432555.6517642,
+              "devices_by_random_access": 14588678361.766956,
+              "devices_by_single_tone_time": 27885460394.087543,
+              "device_capacity": 1371432555,
+              "binding_view": "payload_bits"
+            }
+          ]
+        }
       }
     ],
     "band_saturation_numbers": {
@@ -1079,84 +1483,6 @@
       "density_100_per_km2": 17814,
       "grid_0p5_deg": 21613,
       "beams_48": null
-    },
-    "iot_check": {
-      "minimal_packet_iot": [
-        {
-          "fleet": 340,
-          "devices_per_useful_beam": 4096.953320407464,
-          "uplink_bits_share": 0.0036077807017315154,
-          "uplink_bits_share_with_mac": 0.018038903508657576,
-          "access_attempts_per_second_per_beam": 2.2760851780041467,
-          "uplink_tone_share_low": 0.012932302147750832,
-          "uplink_tone_share_high": 0.022631528758563956
-        },
-        {
-          "fleet": 2000,
-          "devices_per_useful_beam": 818.6933417288653,
-          "uplink_bits_share": 0.0007209420776685167,
-          "uplink_bits_share_with_mac": 0.0036047103883425835,
-          "access_attempts_per_second_per_beam": 0.454829634293814,
-          "uplink_tone_share_low": 0.002584259285760307,
-          "uplink_tone_share_high": 0.004522453750080538
-        },
-        {
-          "fleet": 4288,
-          "devices_per_useful_beam": 461.07407162731437,
-          "uplink_bits_share": 0.0004060222334972466,
-          "uplink_bits_share_with_mac": 0.002030111167486233,
-          "access_attempts_per_second_per_beam": 0.25615226201517466,
-          "uplink_tone_share_low": 0.0014554105796316741,
-          "uplink_tone_share_high": 0.0025469685143554295
-        },
-        {
-          "fleet": 7200,
-          "devices_per_useful_beam": 335.4366068433425,
-          "uplink_bits_share": 0.0002953857713720188,
-          "uplink_bits_share_with_mac": 0.001476928856860094,
-          "access_attempts_per_second_per_beam": 0.1863536704685236,
-          "uplink_tone_share_low": 0.0010588276731166113,
-          "uplink_tone_share_high": 0.0018529484279540698
-        }
-      ],
-      "data_iot": [
-        {
-          "fleet": 340,
-          "devices_per_useful_beam": 2048.476660203732,
-          "uplink_bits_share": 0.046016889146595116,
-          "uplink_bits_share_with_mac": 0.23008444573297557,
-          "access_attempts_per_second_per_beam": 1.2328794714189129,
-          "uplink_tone_share_low": null,
-          "uplink_tone_share_high": null
-        },
-        {
-          "fleet": 2000,
-          "devices_per_useful_beam": 409.34667086443267,
-          "uplink_bits_share": 0.00919554552006608,
-          "uplink_bits_share_with_mac": 0.0459777276003304,
-          "access_attempts_per_second_per_beam": 0.2463660519091493,
-          "uplink_tone_share_low": null,
-          "uplink_tone_share_high": null
-        },
-        {
-          "fleet": 4288,
-          "devices_per_useful_beam": 230.53703581365718,
-          "uplink_bits_share": 0.005178773782156057,
-          "uplink_bits_share_with_mac": 0.025893868910780285,
-          "access_attempts_per_second_per_beam": 0.13874914192488627,
-          "uplink_tone_share_low": null,
-          "uplink_tone_share_high": null
-        },
-        {
-          "fleet": 7200,
-          "devices_per_useful_beam": 167.71830342167124,
-          "uplink_bits_share": 0.00376761655446075,
-          "uplink_bits_share_with_mac": 0.018838082772303748,
-          "access_attempts_per_second_per_beam": 0.1009415715037836,
-          "uplink_tone_share_low": null,
-          "uplink_tone_share_high": null
-        }
-      ]
     },
     "limits": [
       "Fluid (fractional) beams, idealized 3 dB footprints and one circular shell.",
@@ -1176,21 +1502,23 @@
     "Operations cost is assumed zero (0.0 USD millions per year): an explicit investor-instructed assumption, a fixed operations line to research and add later, stated here rather than silently omitted.",
     "People come from the promoted saturation curve (saturation-v1), computed once with the band in full-time use at the 25 m^2 reference panel and the held 8 MHz: each class's people at a fleet are the curve's capacity there, times the downlink share d, times the panel factor, over the class's busy-hour load per person (its rate while active times its busy-hour share). Beams over oceans and empty land carry no one.",
     "The reuse calibration is 0.15 Gbps per MHz per unit of spectral efficiency at the 25 m^2 reference panel, an estimate (COMM-410, COMM-411): it sets each class's satellite peak and the curve's beams per satellite.",
-    "The downlink share d is 0.67, the time-division duplex band's downlink time share (ADR 008): every people and capacity figure but the satellite's peak scales with it, and the uplink holds the rest of the frame.",
+    "The downlink share d is 0.67, the time-division duplex band's downlink time share (ADR 008): each people figure and each class's downlink pool (W x SE x d) scale with it; each class's off-peak per-user rate follows the pool only where the pool caps it; the satellite's peak and each class's busy-hour per-user rate (its rate while active) do not move with d. The uplink holds the rest of the frame, 1 - d. IoT's uplink, payload and single-tone rooms scale with 1 - d and its random-access room with neither, so an IoT class's capacity follows 1 - d while its payload or single-tone view binds and does not move with d while its random-access view binds.",
     "The panel is 15.4 m^2, applied linearly on the curve: a panel factor of 0.616 on people, useful beams, capacity and maximum use, never on the saturation numbers, the ocean factor or satellites per launch. Below the reference panel every class carries at least what the rule gives, because a cell's people cap does not shrink with the panel: computed at 15.4 m^2 instead (one snapshot of the shipped grid, 342 to 40,000 satellites), the small terminal carries up to about 1.8 percent more capacity and people (2.0 percent more useful beams), the phone class up to about 1.1 percent more, and the mounted terminal exactly what the rule gives; each class's maximum use is up to about 4.6 percent above the rule's. Above the reference panel the people caps do not grow with the panel, so the rule gives at least what the panel would: computed at 40 m^2 (342 to 10,000 satellites), useful beams up to about 3.0 percent below the rule's and maximum use up to about 5.6 percent below (each the small terminal's), and the rule ignores the per-link SNR lift a larger panel also gives. Farther from the reference, as measured: at 10 m^2 the small terminal's gaps are wider than at 15.4 m^2 (its maximum use about 7.2 percent above the rule's), while the phone class's and the mounted terminal's equal those at 15.4 m^2 at the same fleets; at 60 m^2 every class's maximum use is further below the rule's than at 40 m^2, up to about 11.3 percent, and useful beams fall up to about 6.4 percent below (each the small terminal's). Each beam's rate is held at its reference-panel value: the link effect of another panel is not modeled.",
     "The fleet is every comms launch the cadence share allows (100 percent of the Neutron cadence) times 16 satellites per launch, each cohort living 5 years: there is no fleet target and no cap, and no saturation number sizes, caps, stops or slows the build.",
     "Satellites per launch is a direct scenario setting (bounds 1 to 16); this run flies 16. The validated counts are 16 with the Neutron block upgrade assumed from the first launch, for the stack kept in the fairing's cylinder at calculation C's pitch on a rod-held base (COMM-713), and 15 without the upgrade, the mass-bound count today (COMM-712).",
-    "Every seat is sold: each year each device class serves every person its living fleet carries, and each class's column is the whole fleet sold to that class alone, so revenue rises with the fleet.",
+    "Every seat is sold: each year each people class (the small terminal, the mounted terminal and the phone class) serves every person its living fleet carries, and each class's column is the whole fleet sold to that class alone, so revenue rises with the fleet.",
     "Each class's price is held flat: the small terminal $10, the mounted terminal $50 and the phone class $15 a month. The phone class's floor is the investor's $15 a month, which no price haircut goes below. A lower price or a smaller market is a division in the conclusions, never in the model: a price haircut divides revenue only, a market haircut people and revenue, and every margin is re-derived against the same fleet cost, never divided or averaged.",
-    "Each class's own margin is its own revenue against the whole fleet's annualized build and launch cost (operations zero, above), null in a year with no revenue; the IoT lines are never inside it.",
+    "Each class's own margin is its own revenue against the whole fleet's annualized build and launch cost (operations zero, above), null in a year with no revenue.",
     "Each class's usage is the investor's (2026-10-04): the small terminal 2 Mbps while active, 2.5 percent of users at the busy hour and 0.5 percent off-peak; the mounted terminal 5 Mbps, 10 and 2 percent; the phone class 0.75 Mbps, 2.5 and 0.5 percent.",
     "Spectral efficiency is estimate-tier: the small terminal's band 1.5 to 2.5, the mounted terminal's 2 to 3 and the phone class's 0.5 to 0.8 bps/Hz, each class read at its central value (2, 2.5 and 0.65).",
-    "IoT is two fixed lines, each its own revenue line and never inside a class's margin: minimal-packet IoT, 51,670,320 devices at $4 a month (48 messages of 340 bytes a day), and data IoT, 25,835,160 devices at $8 a month (4 bursts of 100 KB a day beside the messages). Their counts are fixed (ADR 007): they never move with the fleet, a class, d, the panel or satellites per launch.",
-    "The coverage floor (340 satellites) gates every sale: nothing is sold, by a class or an IoT line, in a year whose living fleet is below it, and from the first year at it every class and both IoT lines are sold in full (a step with no phase-in).",
+    "IoT is two device classes, minimal-packet IoT and data IoT, carried on the phone class's useful beams (IoT devices are low gain, so their reuse follows the phone rule) in the uplink's share of the frame, 1 - d. Those are the beams lit over inhabited cells, the phone class's ocean factor of the fleet's beams (each reading publishes it), so IoT over oceans and empty land is not counted: a conservative basis. For every year and reading the model publishes the IoT room and each IoT class's device capacity alone at its engineering usage (minimal-packet IoT 48 messages of 340 bytes a day; data IoT 4 bursts of 100 KB a day beside 48 messages): the least of the payload-bits, random-access and single-tone-time views at their conservative ends, each class given the whole room, so the two capacities never add. A capacity is never a count sold and never revenue: IoT's customers, usage and revenue are the product case's (ADR 011).",
+    "The coverage floor (340 satellites) gates every sale: nothing is sold in a year whose living fleet is below it, and each IoT class's capacity is null there (IoT needs continuous coverage); from the first year at it every class is sold in full and both IoT capacities are published (a step with no phase-in).",
     "Government is left out of revenue: the model carries no government count, price or line.",
-    "The readings: the coverage floor (340); 2,000 satellites, the retired cap, kept for comparison; the horizon-end full-cadence reach (the final year's living fleet, priced at the final year's annualized cost); and the steady state beyond the 10-year horizon (the final year's comms launches times satellites per launch times the life). The coverage floor, the retired cap and the steady state are priced at the final year's cost per satellite-year; a reading below the coverage floor sells nothing.",
-    "The IoT check spreads each line's devices over the phone class's useful beams (IoT devices are low gain, so their reuse follows the phone rule) and reads its daily volume against a beam's uplink (the frame's share 1 - d), with and without a 20 percent MAC efficiency; its access attempts a second a beam, one per message or burst, against a random-access window of 57 to 1,650 devices (COMM-654) at an assumed 1 window a second (no source gives a window rate); and, for minimal-packet IoT, its messages' channel time on 3.75 kHz tones at 4 to 7 s a message (COMM-714, COMM-719).",
-    "Each class's saturation number is a spectrum bound reported beside the launch cadence, never a build target or a cap; a fleet past a class's last computed row is refused, never extrapolated or clamped. The curve's stated limits are carried in saturation.limits.",
+    "The readings: the coverage floor (340); 2,000 satellites, the retired cap, kept for comparison; the horizon-end full-cadence reach (the final year's living fleet, priced at the final year's annualized cost); and the steady state beyond the 10-year horizon (the final year's comms launches times satellites per launch times the life). The coverage floor, the retired cap and the steady state are priced at the final year's cost per satellite-year; a reading below the coverage floor sells nothing, and each IoT class's capacity there is null.",
+    "IoT's room, at each year's and each reading's phone-class useful beams L, the held width W (8 MHz), the phone class's central spectral efficiency SE (0.65) and the uplink's share 1 - d: the uplink bits a second, L x W x SE x (1 - d); the payload bits a second, those times a 20 percent MAC efficiency (COMM-659); the access attempts a second, L x a random-access window of 57 to 1,650 devices (COMM-654) x an assumed 1 window a second (no source gives a window rate); and the single-tone seconds a second, L x W over the 3.75 kHz NB-IoT tone (COMM-714) x (1 - d). Each IoT class's capacity reads each view at its conservative end: the payload bits after the MAC efficiency, the random-access window's low end (57) and the message airtime's high end (7 s of 4 to 7 s, COMM-719); the least, rounded down to whole devices, is the capacity, and its view binds (a tie goes to the earlier in that order).",
+    "IoT's room is the whole IoT uplink: no people class's own upload (the small terminal's, the mounted terminal's, or the phone class's on the beams IoT rides) is subtracted from it.",
+    "Each IoT class's capacity is read at its engineering usage, averaged over the day; the product case's devices sit at their own usage and time basis, so neither is divided by the other.",
+    "Each class's saturation number is a spectrum bound reported beside the launch cadence, never a build target or a cap. A fleet past a class's last computed row is refused, never extrapolated or clamped; so is a run whose final year's living fleet passes the fleet a class with no saturation number is not reached by, since the curve's rows do not measure the elasticity of capacity there and which limit binds is not known (ADR 005). The curve's stated limits are carried in saturation.limits.",
     "The Iridium model is the MSS lane (owned L-band, purpose-built or in-chipset devices), never the cellular direct-to-cell unmodified-phone lane (the High-Bandwidth Cellular Pure Play model)."
   ]
 }

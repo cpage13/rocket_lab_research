@@ -14,7 +14,7 @@ number that is not finite (``allow_inf_nan=False``), and so do the cadence and l
 blocks, ``common.cadence``'s, shared with the data-center model (the launch cost's by the
 same setting, the cadence's dials being whole numbers), each at load, naming the field. The
 numeric fields of the Iridium blocks (the held spectrum, the panel, the downlink share and the
-five prices), of the metadata, comms share and satellite blocks, and of the shared cadence and
+three prices), of the metadata, comms share and satellite blocks, and of the shared cadence and
 launch-cost blocks are also strict: a boolean (a YAML ``true``, ``yes`` or ``on``) is refused
 at load, naming the field, never read as 1, and so is a quoted number; an integer loads as a
 float field's float, and a whole-number float (16.0) as an integer field's integer, as before
@@ -72,9 +72,10 @@ cost-coupled multiple or a price applied to a sized base. The blocks:
   Iridium model, which reads every device class's people from the promoted saturation
   curve: the held spectrum, the panel, the label, the ``saturation`` block
   (:class:`SaturationDials`: the downlink time share and the curve's path) and the
-  ``arpu`` block (:class:`IridiumArpuDials`: the five monthly prices). Each class's usage,
-  its spectral efficiency and the two IoT lines' counts are named constants
-  (:mod:`communications.constants`), not settings.
+  ``arpu`` block (:class:`IridiumArpuDials`: the three monthly prices). Each class's usage,
+  its spectral efficiency and each IoT class's reference usage are named constants
+  (:mod:`communications.constants`), not settings; IoT is published as capacity and has no
+  price here (ADR 011).
 
 This model imports only from ``common.*`` and ``communications.*`` (never
 ``data_center``, per the cross-import guard) and uses none of the forbidden
@@ -101,7 +102,6 @@ from communications.constants import (
     ARPU_USD_PER_MONTH_DEFAULT,
     BASE_YEAR_DEFAULT,
     COMMS_SHARE_DEFAULT,
-    DATA_IOT_PRICE_USD_MONTH_DEFAULT,
     DOWNLINK_SHARE_DEFAULT,
     GROUND_BASIS_DEFAULT,
     HORIZON_YEARS_DEFAULT,
@@ -111,7 +111,6 @@ from communications.constants import (
     MAX_HORIZON_YEARS,
     MIN_FY,
     MIN_HORIZON_YEARS,
-    MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT,
     MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT,
     PHONE_CLASS_PRICE_USD_MONTH_DEFAULT,
     REVENUE_MULTIPLE_DEFAULT,
@@ -501,16 +500,15 @@ class GroundInterfaceDials(BaseModel):
 
 
 class IridiumArpuDials(BaseModel):
-    """The Iridium model's five monthly prices, held flat (investor-set; the YAML's ``arpu:``).
+    """The Iridium model's three monthly prices, held flat (investor-set; the YAML's ``arpu:``).
 
-    Each device class sells every seat its living fleet carries at its own price, and each
-    of the two IoT lines is a fixed book at its own (their device counts are named constants,
-    :data:`~communications.constants.MINIMAL_PACKET_IOT_DEVICES` and
-    :data:`~communications.constants.DATA_IOT_DEVICES`, ADR 007, not settings). The classes
-    run small terminal, mounted terminal, phone class, never phone-first. Every price is
-    above 0 and at most :data:`~communications.constants.ARPU_PRICE_CEILING_USD_MONTH`, and
-    a number, never a boolean (each field is strict: a YAML ``true`` is refused, not read as
-    a price of 1).
+    Each device class sells every seat its living fleet carries at its own price; the classes
+    run small terminal, mounted terminal, phone class, never phone-first. IoT has no price
+    here: the engineering model publishes IoT as capacity, never a count sold or revenue, and
+    IoT's prices are the product case's (ADR 011), so a scenario still setting one fails at
+    load, naming it (``extra="forbid"``). Every price is above 0 and at most
+    :data:`~communications.constants.ARPU_PRICE_CEILING_USD_MONTH`, and a number, never a
+    boolean (each field is strict: a YAML ``true`` is refused, not read as a price of 1).
     Government is left out of revenue (2026-10-04): there is no government price. A lower
     price or a smaller market is a division in the conclusions, never a setting here.
 
@@ -554,28 +552,6 @@ class IridiumArpuDials(BaseModel):
             f"{PHONE_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-03), its floor: no price "
             "haircut takes it lower. Configurable; a run priced below the floor says so in its "
             "stated assumptions."
-        ),
-    )
-    minimal_packet_iot_price_usd_month: float = Field(
-        default=MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT,
-        gt=0,
-        le=ARPU_PRICE_CEILING_USD_MONTH,
-        strict=True,
-        description=(
-            "Minimal-packet IoT's monthly price per device, dollars. INVESTOR_SET to "
-            f"{MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT:g} (the investor's trial price, "
-            "2026-10-04). Configurable."
-        ),
-    )
-    data_iot_price_usd_month: float = Field(
-        default=DATA_IOT_PRICE_USD_MONTH_DEFAULT,
-        gt=0,
-        le=ARPU_PRICE_CEILING_USD_MONTH,
-        strict=True,
-        description=(
-            "Data IoT's monthly price per device, dollars. INVESTOR_SET to "
-            f"{DATA_IOT_PRICE_USD_MONTH_DEFAULT:g} (the investor's trial price, 2026-10-04; "
-            "Iridium's IoT ARPU is 7.78 today, COMM-618). Configurable."
         ),
     )
 
@@ -626,12 +602,12 @@ class IridiumDials(BaseModel):
     class's flat price. Its settings are the held spectrum (``spectrum_mhz``, a WIDTH, not a
     frequency, which the curve's identity check pins), the panel (``aperture_m2``, applied
     linearly on the curve), the label, the ``saturation`` block (the downlink time share and
-    the curve's path) and the ``arpu`` block (the five monthly prices). Each class's usage,
-    its central spectral efficiency and the two IoT lines' device counts are named constants
+    the curve's path) and the ``arpu`` block (the three monthly prices). Each class's usage,
+    its central spectral efficiency and each IoT class's reference usage are named constants
     (:mod:`communications.constants`), not settings; a scenario still setting a retired one
-    fails at load, naming it (``extra="forbid"``). The Iridium model is the MSS lane
-    (purpose-built or in-chipset devices on owned L-band), never an unmodified phone (that is
-    the cellular lane, the High-Bandwidth Cellular Pure Play model).
+    (IoT's two prices among them) fails at load, naming it (``extra="forbid"``). The Iridium model
+    is the MSS lane (purpose-built or in-chipset devices on owned L-band), never an unmodified
+    phone (that is the cellular lane, the High-Bandwidth Cellular Pure Play model).
 
     Every number here is finite: a NaN or an infinity is refused at load, naming the field
     (``allow_inf_nan=False``, as the saturation curve's contract models refuse them), so no
@@ -697,10 +673,9 @@ class IridiumDials(BaseModel):
     arpu: IridiumArpuDials = Field(
         default_factory=IridiumArpuDials,
         description=(
-            "The five monthly prices (:class:`IridiumArpuDials`): the small terminal's, the "
-            "mounted terminal's, the phone class's, minimal-packet IoT's and data IoT's. "
-            "Defaulted, so every Iridium config carries the prices and the two IoT lines, "
-            "and every consumer reads one shape."
+            "The three monthly prices (:class:`IridiumArpuDials`): the small terminal's, the "
+            "mounted terminal's and the phone class's. Defaulted, so every Iridium config "
+            "carries the prices and every consumer reads one shape."
         ),
     )
 
@@ -801,11 +776,11 @@ class CommsConfig(BaseModel):
 
         The Iridium path reads none of the cellular family's sizing and revenue dials (its
         fleet is the cadence's, its people the saturation curve's, its prices the ``arpu``
-        block's) and pins the coverage floor (one shell, one floor; the IoT counts are sized
-        at it, ADR 007). So on an Iridium config every field of the ``coverage``,
-        ``subscribers`` and ``revenue`` blocks keeps its default, and ``ground``, which no
-        Iridium run reads, stays None. The check walks each block's own fields against a
-        block built with its defaults, so a field added later is refused with no edit here;
+        block's) and pins the coverage floor (one shell, one floor: nothing is sold below it,
+        and IoT's capacity is null there). So on an Iridium config every field of the
+        ``coverage``, ``subscribers`` and ``revenue`` blocks keeps its default, and ``ground``,
+        which no Iridium run reads, stays None. The check walks each block's own fields against
+        a block built with its defaults, so a field added later is refused with no edit here;
         each refusal names the field, its default and the value.
 
         The check is on the value, not on whether the field was written: the test helpers
