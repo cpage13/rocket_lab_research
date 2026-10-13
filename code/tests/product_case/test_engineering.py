@@ -22,7 +22,9 @@ from product_case.constants import TERMINAL_CUSTOMERS_TODAY, VOICE_DATA_CUSTOMER
 from product_case.engineering import (
     EngineeringArtifactError,
     EngineeringView,
+    EngineeringYearReading,
     TerminalPool,
+    build_engineering_view,
     class_split,
     engineering_view_from_bytes,
 )
@@ -194,8 +196,13 @@ def _zero_message(artifact: dict[str, Any]) -> None:
 
 
 def _zero_phone_beams(artifact: dict[str, Any]) -> None:
-    """FY2031 with no phone-class beams under its rooms (attempts a beam would divide by 0)."""
+    """FY2031 with no phone-class beams, so, as part A publishes it, every room zero with them
+    (each scales with those beams): the cause is the beams, never the downlink share."""
     _year_class(artifact, 2031, "phone_class")["useful_beams"] = 0.0
+    iot = _year(artifact, 2031)["iot"]
+    iot["uplink_payload_bits_per_second"] = 0.0
+    iot["access_attempts_per_second_low"] = 0.0
+    iot["single_tone_seconds_per_second"] = 0.0
 
 
 def _no_phone_beams(artifact: dict[str, Any]) -> None:
@@ -205,12 +212,14 @@ def _no_phone_beams(artifact: dict[str, Any]) -> None:
 
 
 def _zero_access_room(artifact: dict[str, Any]) -> None:
-    """FY2033 with no random-access room (the room is 57 attempts a second on each useful beam)."""
+    """FY2033 with no random-access room beside 60,000 phone-class beams: the room is 57 attempts
+    a second on each useful beam, so a zero room with beams contradicts them."""
     _year(artifact, 2033)["iot"]["access_attempts_per_second_low"] = 0.0
 
 
 def _zero_tone_room(artifact: dict[str, Any]) -> None:
-    """FY2032 with no single-tone room alone (its payload room still published)."""
+    """FY2032 with no single-tone room beside its payload room of 1.4e10 bits a second: both
+    scale with the beams and the uplink's share 1 - d, so one zero alone contradicts the other."""
     _year(artifact, 2032)["iot"]["single_tone_seconds_per_second"] = 0.0
 
 
@@ -287,6 +296,7 @@ REFUSALS: list[tuple[str, Mutation, tuple[int, ...], tuple[str, ...]]] = [
         (
             "FY2032: IoT's room is zero",
             "years[].iot.uplink_payload_bits_per_second is 0.0",
+            "years[].iot.single_tone_seconds_per_second is 0.0",
             "a downlink share of 1 leaves the uplink no time",
         ),
     ),
@@ -315,7 +325,7 @@ REFUSALS: list[tuple[str, Mutation, tuple[int, ...], tuple[str, ...]]] = [
         ("iridium_physics.iot_message_bytes is 0", "above 0"),
     ),
     (
-        "no phone-class beams under a room",
+        "no phone-class beams, every room zero with them",
         _zero_phone_beams,
         (2031, 2032, 2033),
         (
@@ -325,23 +335,24 @@ REFUSALS: list[tuple[str, Mutation, tuple[int, ...], tuple[str, ...]]] = [
         ),
     ),
     (
-        "a zero access room",
+        "a zero access room beside beams",
         _zero_access_room,
         (2031, 2032, 2033),
         (
-            "FY2033: IoT's room is zero",
+            "FY2033: an inconsistent artifact",
             "years[].iot.access_attempts_per_second_low is 0.0",
-            "the phone class has no useful beams for IoT to ride",
+            "the phone class has 60000.0 useful beams",
         ),
     ),
     (
-        "a zero tone room",
+        "a zero tone room beside a payload room",
         _zero_tone_room,
         (2031, 2032, 2033),
         (
-            "FY2032: IoT's room is zero",
+            "FY2032: an inconsistent artifact",
             "years[].iot.single_tone_seconds_per_second is 0.0",
-            "a downlink share of 1 leaves the uplink no time",
+            "but years[].iot.uplink_payload_bits_per_second is 14000000000.0",
+            "zero together or not at all",
         ),
     ),
     (
@@ -407,11 +418,13 @@ def test_every_refusal_of_an_engineering_artifact_names_the_field_or_the_year(
     one line naming the artifact and the field or the year: another schema (naming
     ``iridium-v7``); a field it reads missing, of the wrong type or not finite; a null coverage
     floor year; a reported year absent from the artifact or before its floor year; a reported
-    year whose payload or tone room is zero (d = 1) or whose access room or phone-class beams
-    are zero (no useful beams), each with its own cause; a terminal class with no people in a
-    reported year; a pool, a size or the airtime not above 0; a value derived from the pools
-    (people a beam, busy-hour data, the class split) that leaves the finite numbers above 0;
-    people beyond a double; a class the reader needs absent.
+    year whose phone-class beams are zero (no useful beams, checked first, so a year whose rooms
+    are zero with them is never laid to the downlink share), whose payload and tone rooms are
+    zero together (d = 1), or with one room zero alone (an inconsistent artifact, naming the
+    room), each with its own cause; a terminal class with no people in a reported year; a pool,
+    a size or the airtime not above 0; a value derived from the pools (people a beam, busy-hour
+    data, the class split) that leaves the finite numbers above 0; people beyond a double; a
+    class the reader needs absent.
 
     Sample: the synthetic artifact with one change, read for the reported years shown.
 
@@ -443,6 +456,60 @@ def test_bytes_that_are_not_json_are_refused() -> None:
         engineering_view_from_bytes(
             b'{"provenance": {', path="synthetic/iridium.json", reported_years=(2031, 2032)
         )
+
+
+@pytest.mark.parametrize(
+    "people",
+    [
+        pytest.param(math.inf, id="infinite"),
+        pytest.param(math.nan, id="not a number"),
+        pytest.param(1e-320, id="below the smallest normal double"),
+        pytest.param(0.5, id="half a person"),
+    ],
+)
+def test_a_direct_build_refuses_people_not_finite_or_below_one(people: float) -> None:
+    """Objective: a view built from plain numbers refuses a terminal's people that are not a
+    finite number of at least 1, naming the field and the year, so each year's seats and scale
+    are finite and above 0 on a direct build as on the reader's path (the re-check's n3: people
+    of inf gave seats and a scale of inf, and 1e-320 a scale of 0, unrefused).
+
+    Sample: a direct build of one reported year, FY2031, with the synthetic artifact's pools,
+    sizes, beams and rooms (20,000 phone beams; 7e9 bits, 1.14 million attempts and 1.4e7
+    tone-seconds a second), the mounted terminal at 500,000 people and the small terminal's
+    people as shown.
+
+    Expected outcome: an ``EngineeringArtifactError`` naming FY2031, the small terminal's
+    ``people_served`` with its value, and the finite number of at least 1 it needs.
+    """
+    reading = EngineeringYearReading(
+        year=2031,
+        living_fleet=500,
+        annual_cost_musd=200.0,
+        people_small_terminal=people,
+        people_mounted_terminal=500_000.0,
+        phone_useful_beams=20_000.0,
+        iot_payload_bits_per_second=7.0e9,
+        iot_access_attempts_per_second=1_140_000.0,
+        iot_single_tone_seconds_per_second=1.4e7,
+    )
+    with pytest.raises(EngineeringArtifactError) as caught:
+        build_engineering_view(
+            path="direct/build",
+            sha256="0" * 64,
+            schema_version="iridium-v7",
+            version_stamp="2030-01-01",
+            coverage_floor_reached_year=2031,
+            small_terminal_pool=TerminalPool(10.0, 2.0, 0.025),
+            mounted_terminal_pool=TerminalPool(12.5, 5.0, 0.1),
+            message_bytes=340,
+            burst_bytes=100_000,
+            airtime_high_s=7.0,
+            readings=[reading],
+        )
+    message = str(caught.value)
+    assert message.startswith("direct/build: FY2031: "), message
+    assert f"people_served of small_terminal_class is {people!r}" in message, message
+    assert "a finite number of at least 1" in message, message
 
 
 def test_the_committed_artifact_reads_to_round_one_class_split_to_the_bit(

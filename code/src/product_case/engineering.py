@@ -28,15 +28,18 @@ It refuses, naming the field or the year, with :class:`EngineeringArtifactError`
 not JSON; another schema (naming ``iridium-v7``); a field it reads missing or of the wrong type; a
 null coverage floor year (no year of service in the horizon); a reported year absent from the
 artifact, or before its coverage floor year; a reported year in which a terminal class has no
-people (no seats, so the fill would divide by zero); a reported year whose payload or tone room
-is zero (a downlink share of 1 leaves the uplink no time) or whose access room or phone-class
-beams are zero (the phone class has no useful beams for IoT to ride); a beam pool, a message or
+people (no seats, so the fill would divide by zero), or people that are not a finite number of
+at least 1; a reported year whose phone-class beams are zero (the phone class has no useful beams
+for IoT to ride, so every room is zero), or, with beams, whose payload and tone rooms are zero
+together (a downlink share of 1 leaves the uplink no time); a room zero alone, which contradicts
+the beams it scales with (an inconsistent artifact, naming the room); a beam pool, a message or
 burst size or the airtime that is not above 0 (each divides a quantity); a value derived from
 them that is not a finite number above 0 (a pool's people a beam or busy-hour data, the class
 split, which must also be below 1), naming the fields it came from; people beyond the range of
-a double. With those held, each year's seats and scale are finite and above 0. The view is
-frozen and holds plain numbers, so a test can build one from pinned values; a view built so must
-hold the class split and the busy-hour data its pools give (within
+a double. With those held, on the reader's path and on a direct build alike, each year's seats
+lie above 0 and at most its people, and its scale is finite and above 0. The view is frozen and
+holds plain numbers, so a test can build one from pinned values; a view built so must hold the
+class split and the busy-hour data its pools give (within
 :data:`~product_case.constants.RELATIVE_TOLERANCE`), which it checks.
 """
 
@@ -77,11 +80,12 @@ class EngineeringArtifactError(ValueError):
     Raised by :func:`engineering_view_from_bytes`, :func:`build_engineering_view` and the
     view's own construction for bytes that are not JSON, another schema, a field missing or of
     the wrong type, a null coverage floor year, a reported year absent or before the floor, a
-    terminal class with no people in a reported year, a reported year whose IoT room or
-    phone-class beams are zero, a pool, a size or the airtime that is not above 0, a derived
-    value that is not a finite number above 0, people beyond the range of a double, or a view
-    whose class split or busy-hour data its pools do not give. The message is one line naming
-    the artifact and the field or the year.
+    terminal class with no people in a reported year or people that are not a finite number of
+    at least 1, a reported year whose IoT room or phone-class beams are zero, a room that
+    contradicts the phone-class beams it scales with (an inconsistent artifact), a pool, a size
+    or the airtime that is not above 0, a derived value that is not a finite number above 0,
+    people beyond the range of a double, or a view whose class split or busy-hour data its pools
+    do not give. The message is one line naming the artifact and the field or the year.
     """
 
 
@@ -291,7 +295,18 @@ def class_split(small: TerminalPool, mounted: TerminalPool) -> float:
 
 
 def _refuse_unsellable(path: str, floor_year: int, reading: EngineeringYearReading) -> None:
-    """Refuse a reported year the product case cannot sell in, naming the year and the field."""
+    """Refuse a reported year the product case cannot sell in, naming the year and the field.
+
+    The people come first: each terminal class's must be a finite number of at least 1 (none is
+    no seats, and the fill would divide by zero), so every year's seats and scale are finite
+    and above 0 on every path, the reader's and a direct build's. Then IoT's rooms, in part A's
+    terms: each scales with the phone class's useful beams L, the payload and tone rooms also
+    with the uplink's share 1 - d. So L is checked first (none, and every room is zero: the phone
+    class has no useful beams for IoT to ride); with L above 0, the payload and tone rooms zero
+    together are a downlink share of 1; a room zero alone (the access room, or one of the payload
+    and tone rooms) contradicts the beams it scales with, and is refused as an inconsistent
+    artifact naming its field.
+    """
     year = reading.year
     if year < floor_year:
         raise EngineeringArtifactError(
@@ -304,41 +319,52 @@ def _refuse_unsellable(path: str, floor_year: int, reading: EngineeringYearReadi
         TERMINAL_DEVICE_CLASS[ProductClass.MOUNTED_TERMINAL]: reading.people_mounted_terminal,
     }
     for device_class, count in people.items():
-        if not count > 0:
+        people_field = f"years[].classes[].people_served of {device_class}"
+        if math.isfinite(count) and count <= 0:
             raise EngineeringArtifactError(
-                f"{path}: FY{year}: {device_class} has no people (years[].classes[]"
-                f".people_served is {count!r}), so it has no seats and the fill would divide "
-                "by zero"
+                f"{path}: FY{year}: {device_class} has no people ({people_field} is {count!r}), "
+                "so it has no seats and the fill would divide by zero"
             )
-    no_uplink_time = "a downlink share of 1 leaves the uplink no time"
-    no_beams = "the phone class has no useful beams for IoT to ride"
-    rooms = (
-        (
-            "years[].iot.uplink_payload_bits_per_second",
-            reading.iot_payload_bits_per_second,
-            no_uplink_time,
-        ),
-        (
-            "years[].iot.access_attempts_per_second_low",
-            reading.iot_access_attempts_per_second,
-            no_beams,
-        ),
-        (
-            "years[].iot.single_tone_seconds_per_second",
-            reading.iot_single_tone_seconds_per_second,
-            no_uplink_time,
-        ),
-        (
-            f"years[].classes[].useful_beams of {PHONE_DEVICE_CLASS}",
-            reading.phone_useful_beams,
-            no_beams,
-        ),
-    )
-    for field, room, cause in rooms:
+        if not (math.isfinite(count) and count >= 1):
+            raise EngineeringArtifactError(
+                f"{path}: FY{year}: {people_field} is {count!r}; the product case needs a finite "
+                "number of at least 1 (whole people), so each year's seats and scale are finite "
+                "and above 0"
+            )
+    beams_field = f"years[].classes[].useful_beams of {PHONE_DEVICE_CLASS}"
+    beams = reading.phone_useful_beams
+    if not beams > 0:
+        raise EngineeringArtifactError(
+            f"{path}: FY{year}: IoT's room is zero ({beams_field} is {beams!r}): the phone class "
+            "has no useful beams for IoT to ride, so no IoT device fits"
+        )
+    access_field = "years[].iot.access_attempts_per_second_low"
+    access = reading.iot_access_attempts_per_second
+    if not access > 0:
+        raise EngineeringArtifactError(
+            f"{path}: FY{year}: an inconsistent artifact: {access_field} is {access!r}, but the "
+            f"phone class has {beams!r} useful beams ({beams_field}), and the access room is "
+            "those beams times the random-access window, zero only with them"
+        )
+    payload_field = "years[].iot.uplink_payload_bits_per_second"
+    tone_field = "years[].iot.single_tone_seconds_per_second"
+    payload = reading.iot_payload_bits_per_second
+    tone = reading.iot_single_tone_seconds_per_second
+    if not payload > 0 and not tone > 0:
+        raise EngineeringArtifactError(
+            f"{path}: FY{year}: IoT's room is zero ({payload_field} is {payload!r} and "
+            f"{tone_field} is {tone!r}): a downlink share of 1 leaves the uplink no time, so no "
+            "IoT device fits"
+        )
+    for field, room, other_field, other_room in (
+        (payload_field, payload, tone_field, tone),
+        (tone_field, tone, payload_field, payload),
+    ):
         if not room > 0:
             raise EngineeringArtifactError(
-                f"{path}: FY{year}: IoT's room is zero ({field} is {room!r}): {cause}, so no IoT "
-                "device fits"
+                f"{path}: FY{year}: an inconsistent artifact: {field} is {room!r}, but "
+                f"{other_field} is {other_room!r}; both scale with the phone class's useful beams "
+                "and the uplink's share 1 - d, so they are zero together or not at all"
             )
 
 
@@ -430,11 +456,13 @@ def build_engineering_view(
         The frozen view.
 
     Raises:
-        EngineeringArtifactError: If a pool, a size or the airtime is not above 0, a reported year
-            is before the coverage floor year, a terminal class has no people in it, or its IoT
-            room or the phone class's beams are zero; or a derived value (a pool's people a beam
-            or busy-hour data, the class split) is not a finite number above 0, or the split not
-            below 1, naming the fields it came from.
+        EngineeringArtifactError: If a pool, a size or the airtime is not above 0; a reported
+            year is before the coverage floor year, a terminal class has no people in it or
+            people that are not a finite number of at least 1, the phone class's beams are zero,
+            its payload and tone rooms are zero together, or a room is zero alone (an
+            inconsistent artifact); or a derived value (a pool's people a beam or busy-hour data,
+            the class split) is not a finite number above 0, or the split not below 1, naming
+            the fields it came from.
     """
     small_class = TERMINAL_DEVICE_CLASS[ProductClass.SMALL_TERMINAL]
     mounted_class = TERMINAL_DEVICE_CLASS[ProductClass.MOUNTED_TERMINAL]
@@ -454,9 +482,10 @@ def build_engineering_view(
             f"active_user_rate_mbps and concurrency_peak of {small_class} and {mounted_class}; "
             "the product case needs it strictly between 0 and 1 (each terminal some beams)"
         )
-    # With s strictly between 0 and 1 and each year's people a finite number of at least 1,
-    # each seat count lies above 0 and at most its people, so the seats and k are finite and
-    # above 0: no further check can fire.
+    # With s strictly between 0 and 1 and each year's people a finite number of at least 1
+    # (_refuse_unsellable refused any other count above, on this path whoever calls it), each
+    # seat count lies above 0 and at most its people, and k, their sum over 418,100, is finite
+    # and above 0: no further check can fire.
     years = tuple(_engineering_year(share, reading) for reading in readings)
     view = EngineeringView(
         path=path,
