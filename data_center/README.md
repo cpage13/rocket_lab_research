@@ -1,4 +1,4 @@
-# Data Center Workstream
+# Data Center
 
 This folder holds the data-center application of Rocket Lab Research: a
 Neutron-launched orbital AI-inference data center, modeled end to end. For the
@@ -47,7 +47,7 @@ runway.
 | [assumptions.md](assumptions.md) | The default-assumption ledger and source-status taxonomy. |
 | [models/space/default.json](models/space/default.json) | The promoted space model: every number with formula, units, and source. |
 | [models/ground/default.json](models/ground/default.json) | The ground reference for the same 2036 cohort. |
-| [CURRENT_STATE.md](CURRENT_STATE.md) | Short workstream handoff. |
+| [CURRENT_STATE.md](CURRENT_STATE.md) | Short handoff. |
 | [../research/README.md](../research/README.md) | The evidence wiki and source ledger. |
 | [../code/README.md](../code/README.md) | How to run, promote, test, and query the model. |
 
@@ -78,6 +78,7 @@ leaf under `physical.years` and `business.years` is a provenance cell with
 should also read [../AGENTS.md](../AGENTS.md) and
 [../atlas/map.md](../atlas/map.md).
 
-Communications is a separate workstream with its own modeled application (the
-Iridium model); see [../communications/README.md](../communications/README.md).
-It makes no data-center claims.
+Communications is the sibling application (the Iridium model and, beside it,
+the product case); see [../communications/README.md](../communications/README.md).
+It makes no data-center claims, and the two applications' headlines never add:
+each runs as if it had the shared launch ramp to itself.
