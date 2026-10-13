@@ -11,12 +11,17 @@ versions, the enums every product-case list and record runs on, and
 
 Each constant's docstring opens with its source class and says why that value:
 ``SOURCED_FACT`` (a certified ledger row), ``INVESTOR_SET`` (the date and the investor's
-words), ``SCENARIO`` (a modeling choice, with whose and when), ``DERIVED`` (computed from the
-constants it names), or none for a unit conversion, a schema version, a structural bound or
-a mapping, which says what it is instead. A constant that is a model input also has a cell
-spec in :mod:`product_case.config`, which carries its claim ID and status into the artifact's
-``inputs.constants``; unit conversions, the schema versions and the invariants' tolerance are
-definitions, not inputs, and have none.
+words, quoted, and where the words say less than the value, the approvals that made it the
+value), ``SCENARIO`` (a modeling choice, with whose and when), ``DERIVED`` (computed from the
+constants it names), or none for a definition, which says what it is instead: a unit
+conversion, a schema version, a structural bound, a mapping, and four named here, a
+scenario's default label and engineering artifact path (:data:`SCENARIO_NAME_DEFAULT` and
+:data:`ENGINEERING_ARTIFACT_PATH_DEFAULT`, the run's identity), the formula catalog's path
+separator (:data:`PATH_SEPARATOR`) and the engineering artifact's key of the phone class
+(:data:`PHONE_DEVICE_CLASS`). A constant that is a model input also has a cell spec in
+:mod:`product_case.config`, which carries its claim ID and status into the artifact's
+``inputs.constants``; the definitions and the invariants' tolerance are not inputs and have
+none.
 
 IoT is never a count here: the anchors are the demand curve's starting points, today's
 customers at today's prices, and every IoT customer the product case publishes comes from the
@@ -188,9 +193,10 @@ PERCENT: Final[float] = 100.0
 # ---------------------------------------------------------------------------
 
 BUSY_HOURS_PER_DAY: Final[int] = 4
-"""INVESTOR_SET (2026-10-04: "for busy hours, it's fine"; COMM-724): the busy hours a day. A
-terminal's busy-hour data a month is its engineering usage over these hours, so its busy-hour
-load and its seats are the engineering case's; the rest of its data goes in the other hours."""
+"""INVESTOR_SET (2026-10-04 19:59, asked to set the 4: "I'm not sure what you mean by four, but
+that's okay. ... So for busy hours, it's fine"; COMM-724): the busy hours a day. A terminal's
+busy-hour data a month is its engineering usage over these hours, so its busy-hour load and its
+seats are the engineering case's; the rest of its data goes in the other hours."""
 
 OFFPEAK_HOURS_PER_DAY: Final[int] = HOURS_PER_DAY - BUSY_HOURS_PER_DAY
 """DERIVED: the off-peak hours a day, 20, the day's hours less the busy hours; data IoT's bursts
@@ -240,15 +246,26 @@ TERMINAL_CUSTOMERS_TODAY: Final[int] = VOICE_DATA_CUSTOMERS_TODAY + BROADBAND_CU
 broadband); the network's scale k(t) is the terminals' seats over this base."""
 
 DATA_IOT_ANCHOR_SHARE: Final[float] = 0.5
-"""INVESTOR_SET (the investor's proportion, 2026-10-04: "Are they going to have as many as the
+"""INVESTOR_SET (the investor's proportion, 2026-10-04: "You look for proportions, look at
+research. It's not rocket science, extrapolate it out. Are they going to have as many as the
 small, minimal pack IOT? No. Is it going to have more than the small terminal, double the price?
-Yes"; COMM-726): data IoT's anchor is half of Iridium's IoT customers today. It sets the demand
-curve's starting point only: data IoT's customers in every market and year come from the curve."""
+Yes"; COMM-726): data IoT's anchor is half of Iridium's IoT customers today. The words give the
+bounds (fewer than minimal-packet IoT, more than the small terminal) and the doubled price; the
+half is the investor's method that day, a proportion from the research: Iridium's tiers run close
+to inverse proportion (IoT 1,998,000 at $7.78 against voice and data 402,000 at $47, COMM-617 and
+COMM-618), so twice the price holds half the customers. It became the product case's value with
+the code design the investor approved at its gate (2026-10-07 13:03: "So actually, I think we're
+on yes. I think this is yes") and the plan (2026-10-12 20:27: "yes, approved, go ahead with the
+plan"). It sets the demand curve's starting point only: data IoT's customers in every market and
+year come from the curve."""
 
 DATA_IOT_PRICE_MULTIPLE: Final[float] = 2.0
-"""INVESTOR_SET (the investor's proportion, 2026-10-04; COMM-722 and COMM-726): data IoT's price
-is twice minimal-packet IoT's in every year (so data IoT's price is not a setting), and its
-anchor price twice Iridium's IoT ARPU today."""
+"""INVESTOR_SET (the investor's proportion, 2026-10-04: "Is it going to have more than the small
+terminal, double the price? Yes"; kept in every IoT price the investor set: "data IoT ... $8.00,
+the minimal packet is $4.00", 2026-10-04, then "Let's go with the three and six for now",
+2026-10-06 19:52; COMM-722 and COMM-726): data IoT's price is twice minimal-packet IoT's in every
+year (so data IoT's price is not a setting), and its anchor price twice Iridium's IoT ARPU
+today."""
 
 DATA_IOT_ANCHOR_CUSTOMERS: Final[float] = IOT_CUSTOMERS_TODAY * DATA_IOT_ANCHOR_SHARE
 """DERIVED (COMM-617 by the investor's proportion; COMM-726): data IoT's anchor customers,
@@ -312,9 +329,11 @@ USAGE_SCALE_START: Final[float] = 1.0
 list rises from it ("we just increase usage", the investor, 2026-10-06)."""
 
 RELATIVE_TOLERANCE: Final[float] = 1e-9
-"""The relative tolerance of the run's invariants (whole customers, a terminal never past its
-seats, revenue equal to customers times price times 12): float rounding only, far below any
-quantity the product case publishes."""
+"""SCENARIO (the product-case code design's invariants, approved by the investor at its gate on
+2026-10-07): the relative tolerance of the run's invariants (whole customers, a terminal never
+past its seats, revenue equal to customers times price times 12), a billionth: well above the
+rounding of double arithmetic (about 1e-16 relative a step), so float rounding alone never
+refuses a run, and far below any quantity the product case publishes."""
 
 
 # ---------------------------------------------------------------------------
@@ -334,46 +353,72 @@ REPORTED_YEARS_DEFAULT: Final[tuple[int, ...]] = (2031, 2033, 2035, 2036)
 end); the method's years, on which the summed revenue and the usable test run."""
 
 SMALL_TERMINAL_START_PRICE_USD_MONTH_DEFAULT: Final[float] = 10.0
-"""INVESTOR_SET (2026-10-07: "Yes, let's use the $10 and $50. Let's do that"; COMM-722): the
-small terminal's price a month in the first reported year, held flat; the engineering model's
-small terminal price too (one price list)."""
+"""INVESTOR_SET (2026-10-07, about 10:55: "Yes, let's use the $10 and $50. Let's do that";
+COMM-722): the small terminal's price a month in the first reported year, held flat (2026-10-06
+19:38: "The prices will not go down, but they will not go up"); the engineering model's small
+terminal price too (one price list)."""
 
 SMALL_TERMINAL_END_PRICES_USD_MONTH_DEFAULT: Final[tuple[float, ...]] = (10.0, 9.0, 8.0, 7.0, 6.0)
-"""INVESTOR_SET for the first entry, the start price held flat (2026-10-06 19:38: "The prices will
-not go down, but they will not go up"); SCENARIO for the rest, context only (the product-case code
-design's rule, approved 2026-10-07; COMM-722 and COMM-723): steps of a tenth of the investor's
+"""INVESTOR_SET for the first entry, the start price (2026-10-07: "Yes, let's use the $10 and
+$50. Let's do that") held flat (2026-10-06 19:38: "The prices will not go down, but they will not
+go up"); SCENARIO for the rest, context only (the product-case code design's rule, approved by the
+investor at its gate on 2026-10-07; COMM-722 and COMM-723): steps of a tenth of the investor's
 price down to the lowest step at or above the class's break-even alone in every reported year."""
 
 MOUNTED_TERMINAL_START_PRICE_USD_MONTH_DEFAULT: Final[float] = 50.0
-"""INVESTOR_SET (2026-10-07: "Yes, let's use the $10 and $50. Let's do that"; COMM-722): the
-mounted terminal's price a month in the first reported year, held flat; the engineering model's
-mounted terminal price too (one price list)."""
+"""INVESTOR_SET (2026-10-07, about 10:55: "Yes, let's use the $10 and $50. Let's do that";
+COMM-722): the mounted terminal's price a month in the first reported year, held flat (2026-10-06
+19:38: "The prices will not go down, but they will not go up"); the engineering model's mounted
+terminal price too (one price list)."""
 
 MOUNTED_TERMINAL_END_PRICES_USD_MONTH_DEFAULT: Final[tuple[float, ...]] = (50.0, 45.0, 40.0)
-"""INVESTOR_SET for the first entry, the start price held flat; SCENARIO for the rest, context
-only (the product-case code design's rule, approved 2026-10-07; COMM-722 and COMM-723): steps of
-a tenth of the investor's price down to the lowest step at or above the class's break-even alone
-in every reported year."""
+"""INVESTOR_SET for the first entry, the start price (2026-10-07: "Yes, let's use the $10 and
+$50. Let's do that") held flat (2026-10-06 19:38: "The prices will not go down, but they will not
+go up"); SCENARIO for the rest, context only (the product-case code design's rule, approved by the
+investor at its gate on 2026-10-07; COMM-722 and COMM-723): steps of a tenth of the investor's
+price down to the lowest step at or above the class's break-even alone in every reported year."""
 
 MINIMAL_PACKET_IOT_START_PRICE_USD_MONTH_DEFAULT: Final[float] = 3.0
 """INVESTOR_SET (2026-10-06 19:52: "Let's go with the three and six for now"; COMM-722):
-minimal-packet IoT's price a month, held flat; data IoT pays twice it."""
+minimal-packet IoT's price a month, held flat (2026-10-06 19:38: "The prices will not go down, but
+they will not go up"); data IoT pays twice it."""
 
 MINIMAL_PACKET_IOT_END_PRICES_USD_MONTH_DEFAULT: Final[tuple[float, ...]] = (3.0,)
-"""INVESTOR_SET (2026-10-06 19:52; COMM-722): minimal-packet IoT's one end price, its start price
-held flat; the grid holds no lower IoT price."""
+"""INVESTOR_SET (2026-10-06 19:52: "Let's go with the three and six for now", held flat, 19:38:
+"The prices will not go down, but they will not go up"; COMM-722): minimal-packet IoT's one end
+price, its start price; the grid holds no lower IoT price."""
 
 SMALL_TERMINAL_GB_PER_MONTH_DEFAULT: Final[tuple[float, ...]] = (5.4, 6.7, 8.1, 9.0)
-"""INVESTOR_SET for FY2031 (the engineering usage, 2026-10-04), FY2035 (the 50 percent bigger
-allotment, 2026-10-05) and FY2036 (2026-10-12: "go with 9 GB, 90 GB and 13 bursts"); SCENARIO
-for FY2033 (half-way); COMM-724: the small terminal's data a month in all, in each reported
-year; its busy-hour part is the engineering usage's and the rest goes off-peak."""
+"""INVESTOR_SET for FY2031, FY2035 and FY2036; SCENARIO for FY2033 (COMM-724): the small
+terminal's data a month in all, in each reported year; its busy-hour part is the engineering
+usage's and the rest goes off-peak. FY2031's 5.4 GB is the engineering usage the investor approved
+(2026-10-04 13:33: "yes, go with the recommended column": 2 Mbps while active, 2.5 percent active
+at the busy hour and 0.5 percent off-peak) over the 4 busy hours (2026-10-04 19:59: "So for busy
+hours, it's fine") and the 20 off-peak hours, 2.7 GB each. FY2035's 8.1 GB is 5.4 GB with the
+investor's bigger allotment (2026-10-05: "for some of your bigger products, you get a 50% increase
+in your monthly allotment ... this is just a rough estimate right now"). FY2036's 9 GB the investor
+set (2026-10-12 15:56: "go with 9 GB, 90 GB and 13 bursts"). FY2033's 6.7 GB is about half-way
+(round 1's 2.7 + 4.0 GB). The words of 2026-10-04 and 2026-10-05 give a usage and a rough
+allotment, not these totals; the totals became the product case's values with the code design the
+investor approved at its gate (2026-10-07 13:03, Q1 to Q5 yes: "So actually, I think we're on yes.
+I think this is yes") and the plan (2026-10-12 20:27: "yes, approved, go ahead with the plan"),
+which keeps FY2035 at 8.1 GB."""
 
 MOUNTED_TERMINAL_GB_PER_MONTH_DEFAULT: Final[tuple[float, ...]] = (54.0, 67.0, 81.0, 90.0)
-"""INVESTOR_SET for FY2031 (the engineering usage, 2026-10-04), FY2035 (the 50 percent bigger
-allotment, 2026-10-05) and FY2036 (2026-10-12: "go with 9 GB, 90 GB and 13 bursts"); SCENARIO
-for FY2033 (half-way); COMM-724: the mounted terminal's data a month in all, in each reported
-year; its busy-hour part is the engineering usage's and the rest goes off-peak."""
+"""INVESTOR_SET for FY2031, FY2035 and FY2036; SCENARIO for FY2033 (COMM-724): the mounted
+terminal's data a month in all, in each reported year; its busy-hour part is the engineering
+usage's and the rest goes off-peak. FY2031's 54 GB is the engineering usage the investor approved
+(2026-10-04 13:33: "yes, go with the recommended column": 5 Mbps while active, 10 percent active at
+the busy hour and 2 percent off-peak) over the 4 busy hours (2026-10-04 19:59: "So for busy hours,
+it's fine") and the 20 off-peak hours, 27 GB each. FY2035's 81 GB is 54 GB with the investor's
+bigger allotment (2026-10-05: "for some of your bigger products, you get a 50% increase in your
+monthly allotment ... this is just a rough estimate right now"). FY2036's 90 GB the investor set
+(2026-10-12 15:56: "go with 9 GB, 90 GB and 13 bursts"). FY2033's 67 GB is about half-way (round
+1's 27 + 40 GB). The words of 2026-10-04 and 2026-10-05 give a usage and a rough allotment, not
+these totals; the totals became the product case's values with the code design the investor
+approved at its gate (2026-10-07 13:03, Q1 to Q5 yes: "So actually, I think we're on yes. I think
+this is yes") and the plan (2026-10-12 20:27: "yes, approved, go ahead with the plan"), which keeps
+FY2035 at 81 GB."""
 
 MINIMAL_PACKET_IOT_MESSAGES_PER_DAY_DEFAULT: Final[tuple[int, ...]] = (48, 72, 96, 96)
 """SCENARIO (round 1 of the scratch exploration, 2026-10-06; COMM-724): minimal-packet IoT's
@@ -386,18 +431,31 @@ the usage, approved by the investor with the code design on 2026-10-07; COMM-723
 scales a choice may take for minimal-packet IoT by the last reported year, each step doubling."""
 
 DATA_IOT_MESSAGES_PER_DAY_DEFAULT: Final[int] = 48
-"""INVESTOR_SET (the investor's usage table, 2026-10-04; COMM-724): data IoT's messages a day in
-every year, the engineering usage's 48; the usage scale moves its bursts, not its messages."""
+"""INVESTOR_SET (the investor's usage table, frozen 2026-10-04 12:31: "This looks good ... we'll
+kind of freeze it here"; COMM-724): data IoT's messages a day in every year, the engineering
+usage's 48 messages of 340 bytes, beside its bursts; the usage scale moves its bursts, not its
+messages. The table gave data IoT its bursts on top of those messages and the words freeze the
+table as a whole; the 48 became the product case's value with the code design the investor
+approved at its gate (2026-10-07 13:03) and the plan (2026-10-12 20:27: "yes, approved, go ahead
+with the plan")."""
 
 DATA_IOT_BURSTS_PER_DAY_DEFAULT: Final[tuple[int, ...]] = (8, 10, 12, 13)
-"""INVESTOR_SET for FY2031's 8 (2026-10-05: "let's say we just doubled that") and FY2036's 13
-(2026-10-12: "go with 9 GB, 90 GB and 13 bursts"); SCENARIO for FY2033's 10 and FY2035's 12
-(round 1); COMM-724: data IoT's 100 KB bursts a day in each reported year, before a choice's
-usage scale; a usage a device sends, never a count of devices."""
+"""INVESTOR_SET for FY2031's 8 (2026-10-05: "My thinking is $8 is quite expensive for just 4
+bursts of 100 kilobytes a day. So let's say we just doubled that") and FY2036's 13 (2026-10-12
+15:56: "go with 9 GB, 90 GB and 13 bursts"); SCENARIO for FY2033's 10 and FY2035's 12 (round 1 of
+the scratch exploration); COMM-724: data IoT's 100 KB bursts a day in each reported year, before a
+choice's usage scale; a usage a device sends, never a count of devices. The 2026-10-05 words were
+thinking aloud ("we don't have to change anything"); the 8 became the product case's value with
+the code design the investor approved at its gate (2026-10-07 13:03) and the plan (2026-10-12
+20:27: "yes, approved, go ahead with the plan")."""
 
 DATA_IOT_BURSTS_OUTSIDE_BUSY_HOURS_DEFAULT: Final[tuple[bool, ...]] = (False, True, True, True)
-"""INVESTOR_SET (2026-10-05: "excluding peak time"; COMM-724): from FY2033 data IoT's bursts go
-outside the busy hours, spread over the 20 off-peak hours; FY2031's go at any hour (round 1)."""
+"""INVESTOR_SET for FY2033 to FY2036 (2026-10-05: "Could the data IoT at the higher price do
+bursts like 12 or 24 bursts a day? Maybe you could say excluding peak time or something like
+that"; COMM-724): from FY2033 data IoT's bursts go outside the busy hours, spread over the 20
+off-peak hours; SCENARIO for FY2031's, at any hour (round 1). The words asked a question; the
+timing became the product case's value with the code design the investor approved at its gate
+(2026-10-07 13:03) and the plan (2026-10-12 20:27: "yes, approved, go ahead with the plan")."""
 
 DATA_IOT_SCALES_DEFAULT: Final[tuple[float, ...]] = (1.0, 2.0, 4.0, 8.0)
 """SCENARIO (round 3's 1, 2 and 4, 2026-10-06, extended so the usable test, not the grid, stops
@@ -405,35 +463,59 @@ the usage, approved by the investor with the code design on 2026-10-07; COMM-723
 scales a choice may take for data IoT by the last reported year, each step doubling."""
 
 DRAWS_DEFAULT: Final[int] = 2_000
-"""SCENARIO (round 2 of the scratch exploration, 2026-10-06; COMM-723): the market draws."""
+"""SCENARIO (round 2 of the scratch exploration, 2026-10-06, approved by the investor with the
+product-case code design at its gate on 2026-10-07; COMM-723): the market draws. What 2,000 buy:
+the pick holds across seeds (at seeds 1 to 5 it is the same choice, usable in 1,719 to 1,754 of
+the 2,000 draws, the plan's probe pB2, local), and the headline, read at the central market, moves
+with neither the draws nor the seed; the spreads' 10th and 90th percentiles need at least 9
+(:data:`MIN_DRAWS`)."""
 
 SEED_DEFAULT: Final[int] = 20_261_006
 """SCENARIO (round 2, 2026-10-06; COMM-723): the seed of the standard generator that draws the
-markets, so every run draws the same markets (round 3's stream)."""
+markets, so every run draws the same markets (round 3's stream); another seed moves the drawn
+markets and can move the pick near a floor, never the central market (the pick holds at seeds 1 to
+5, :data:`DRAWS_DEFAULT`)."""
 
 GAMMA_LOW_DEFAULT: Final[float] = 0.5
-"""SCENARIO (round 2, 2026-10-06; COMM-723): the network response's low end: four times the
-network only doubles the customers."""
+"""SCENARIO (round 2, 2026-10-06; COMM-723): the network response's low end, 0.5: customers grow
+as the square root of the network's scale, so four times the network only doubles them. No market
+research grounds the three ranges: they are a modeling choice, approved by the investor with the
+product-case code design at its gate on 2026-10-07."""
 
 GAMMA_HIGH_DEFAULT: Final[float] = 1.0
-"""SCENARIO (round 2, 2026-10-06; COMM-723): the network response's high end, the investor's "If
-we are getting eight times the network overall, we should be getting about eight times the
-revenue" (2026-10-06)."""
+"""SCENARIO (round 2, 2026-10-06; COMM-723): the network response's high end, 1.0: customers grow
+in proportion to the network's scale, the investor's "If we are getting eight times the network
+overall, we should be getting about eight times the revenue. That is just an approximation"
+(2026-10-06); at the range's middle, 0.75, eight times the network brings 4.76 times the
+customers. A modeling choice (no market research grounds it), approved with the code design on
+2026-10-07."""
 
 EPSILON_LOW_DEFAULT: Final[float] = 0.5
-"""SCENARIO (round 2, 2026-10-06; COMM-723): the price response's low end."""
+"""SCENARIO (round 2, 2026-10-06; COMM-723): the price response's low end, 0.5: customers grow as
+the square root of today's price over the class's, so a price half today's brings 1.41 times the
+customers and the revenue falls 29 percent. The range, 0.5 to 1.5, is centred on 1
+(:data:`EPSILON_HIGH_DEFAULT` says what that middle does). A modeling choice (no market research
+grounds it), approved with the code design on 2026-10-07."""
 
 EPSILON_HIGH_DEFAULT: Final[float] = 1.5
-"""SCENARIO (round 2, 2026-10-06; COMM-723): the price response's high end (at 1.0 a price a
-third lower brings half again as many customers)."""
+"""SCENARIO (round 2, 2026-10-06; COMM-723): the price response's high end, 1.5: a price half
+today's brings 2.83 times the customers and the revenue rises 41 percent (a price a third lower,
+1.84 times the customers). The range is centred on 1, so at the central market, where the
+headline is read, the price response is exactly 1: for a given usage an uncapped class's price
+change shows there as customers, not revenue, and a terminal at its seats shows it as revenue; the
+headline moves with a price only through the usage the pick then takes (the design's D7, ADR 012).
+A modeling choice (no market research grounds it), approved with the code design on 2026-10-07."""
 
 ETA_LOW_DEFAULT: Final[float] = 0.0
-"""SCENARIO (round 2, 2026-10-06; COMM-723): the service response's low end: more service brings
-no customers."""
+"""SCENARIO (round 2, 2026-10-06; COMM-723): the service response's low end, 0: more service brings
+no customers. A modeling choice (no market research grounds it), approved with the code design on
+2026-10-07."""
 
 ETA_HIGH_DEFAULT: Final[float] = 0.5
-"""SCENARIO (round 2, 2026-10-06; COMM-723): the service response's high end: half again the
-service brings 22 percent more customers."""
+"""SCENARIO (round 2, 2026-10-06; COMM-723): the service response's high end, 0.5: half again the
+service brings 22 percent more customers and twice the service 41 percent more; at the range's
+middle, 0.25, half again the service brings 11 percent more. A modeling choice (no market research
+grounds it), approved with the code design on 2026-10-07."""
 
 FILL_FLOOR_DEFAULT: Final[float] = 0.75
 """SCENARIO (round 2's reading of the investor's "We do not want half our network used",

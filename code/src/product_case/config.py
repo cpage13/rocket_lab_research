@@ -636,6 +636,43 @@ _TERMINAL_END_RULE: Final[str] = (
 )
 """The rule behind a terminal's lower end prices, quoted in their specs' rationales."""
 
+_TERMINAL_PRICE_WORDS: Final[str] = (
+    "(2026-10-07: \"Yes, let's use the $10 and $50. Let's do that\")"
+)
+"""The investor's words that set the two terminals' prices, quoted in their specs' rationales."""
+
+_IOT_PRICE_WORDS: Final[str] = '(2026-10-06 19:52: "Let\'s go with the three and six for now")'
+"""The investor's words that set the two IoT prices, quoted in their specs' rationales."""
+
+_APPROVALS: Final[str] = (
+    'the code design the investor approved at its gate (2026-10-07 13:03, Q1 to Q5 yes: "So '
+    'actually, I think we\'re on yes. I think this is yes") and the plan (2026-10-12 20:27: "yes, '
+    'approved, go ahead with the plan")'
+)
+"""The two approvals that made a value the product case's where the investor's words say less
+than the value (a usage, a rough allotment, a question), quoted in those specs' rationales."""
+
+_ENGINEERING_USAGE_WORDS: Final[str] = (
+    '2026-10-04 13:33: "yes, go with the recommended column"; the 4 busy hours, 2026-10-04 19:59: '
+    '"So for busy hours, it\'s fine"'
+)
+"""The investor's words behind a terminal's FY2031 total: the usage column and the busy hours."""
+
+_ALLOTMENT_WORDS: Final[str] = (
+    '2026-10-05: "for some of your bigger products, you get a 50% increase in your monthly '
+    'allotment ... this is just a rough estimate right now"'
+)
+"""The investor's words behind a terminal's FY2035 total, quoted in full."""
+
+_FY2036_USAGE_WORDS: Final[str] = '2026-10-12 15:56: "go with 9 GB, 90 GB and 13 bursts"'
+"""The investor's words that set the product case's FY2036 usage."""
+
+_RANGES_CHOICE: Final[str] = (
+    "A modeling choice, which no market research grounds; approved by the investor with the "
+    "product-case code design at its gate on 2026-10-07."
+)
+"""What grounds the three market responses' ranges, said in each range end's rationale."""
+
 
 def _scenario_spec(
     label: str,
@@ -676,17 +713,16 @@ SCENARIO_SPECS: Final[Mapping[str, CellSpec]] = MappingProxyType(
             "USD/month",
             _PRICES_CLAIM,
             "The product case's prices: the small terminal's, held flat.",
-            "INVESTOR_SET (2026-10-07: \"Yes, let's use the $10 and $50. Let's do that\"; it was "
-            f"$15), held flat {_HELD_FLAT}; the engineering model's small terminal price too "
-            "(one price list).",
+            f"INVESTOR_SET {_TERMINAL_PRICE_WORDS}, it was $15; held flat {_HELD_FLAT}; the "
+            "engineering model's small terminal price too (one price list).",
         ),
         "prices.small_terminal.end_usd_month": _scenario_spec(
             "Small terminal end prices",
             "USD/month",
             _PRICES_CLAIM,
             "The product case's prices: the start price, then the context's lower end prices.",
-            "INVESTOR_SET (2026-10-07) for the first entry, the start price held flat; "
-            + _TERMINAL_END_RULE,
+            f"INVESTOR_SET for the first entry, the start price {_TERMINAL_PRICE_WORDS} held flat "
+            f"{_HELD_FLAT}; " + _TERMINAL_END_RULE,
             supporting=(SupportingClaim(_SETTINGS_CLAIM, "The choice grid the end prices span."),),
         ),
         "prices.mounted_terminal.start_usd_month": _scenario_spec(
@@ -694,17 +730,16 @@ SCENARIO_SPECS: Final[Mapping[str, CellSpec]] = MappingProxyType(
             "USD/month",
             _PRICES_CLAIM,
             "The product case's prices: the mounted terminal's, held flat.",
-            "INVESTOR_SET (2026-10-07: \"Yes, let's use the $10 and $50. Let's do that\"; it was "
-            f"$100), held flat {_HELD_FLAT}; the engineering model's mounted terminal price too "
-            "(one price list).",
+            f"INVESTOR_SET {_TERMINAL_PRICE_WORDS}, it was $100; held flat {_HELD_FLAT}; the "
+            "engineering model's mounted terminal price too (one price list).",
         ),
         "prices.mounted_terminal.end_usd_month": _scenario_spec(
             "Mounted terminal end prices",
             "USD/month",
             _PRICES_CLAIM,
             "The product case's prices: the start price, then the context's lower end prices.",
-            "INVESTOR_SET (2026-10-07) for the first entry, the start price held flat; "
-            + _TERMINAL_END_RULE,
+            f"INVESTOR_SET for the first entry, the start price {_TERMINAL_PRICE_WORDS} held flat "
+            f"{_HELD_FLAT}; " + _TERMINAL_END_RULE,
             supporting=(SupportingClaim(_SETTINGS_CLAIM, "The choice grid the end prices span."),),
         ),
         "prices.minimal_packet_iot.start_usd_month": _scenario_spec(
@@ -712,8 +747,7 @@ SCENARIO_SPECS: Final[Mapping[str, CellSpec]] = MappingProxyType(
             "USD/month",
             _PRICES_CLAIM,
             "The product case's prices: minimal-packet IoT's, held flat; data IoT pays twice it.",
-            'INVESTOR_SET (2026-10-06 19:52: "Let\'s go with the three and six for now"), held '
-            f"flat {_HELD_FLAT}.",
+            f"INVESTOR_SET {_IOT_PRICE_WORDS}, held flat {_HELD_FLAT}.",
             notes=(
                 "Data IoT pays twice this price in every year and choice (the investor's "
                 "proportion, 2026-10-04); its price is not a setting."
@@ -724,28 +758,38 @@ SCENARIO_SPECS: Final[Mapping[str, CellSpec]] = MappingProxyType(
             "USD/month",
             _PRICES_CLAIM,
             "The product case's prices: minimal-packet IoT's start price, held flat.",
-            "INVESTOR_SET (2026-10-06 19:52): the start price held flat, its one end price; the "
-            "grid holds no lower IoT price.",
+            f"INVESTOR_SET {_IOT_PRICE_WORDS}: the start price held flat {_HELD_FLAT}, its one end "
+            "price; the grid holds no lower IoT price.",
         ),
         "usage.small_terminal.gb_per_month": _scenario_spec(
             "Small terminal data a month, in all",
             "GB/month",
             _USAGE_CLAIM,
             "The usage paths: the small terminal's data a month in each reported year.",
-            "INVESTOR_SET for FY2031 (the engineering usage, 2026-10-04), FY2035 (the 50 percent "
-            'bigger allotment, 2026-10-05) and FY2036 (2026-10-12: "go with 9 GB, 90 GB and 13 '
-            'bursts"); SCENARIO for FY2033 (half-way). The busy-hour part is the engineering '
-            "usage's; the rest is off-peak.",
+            "INVESTOR_SET for FY2031, FY2035 and FY2036; SCENARIO for FY2033. FY2031's 5.4 GB is "
+            f"the engineering usage the investor approved ({_ENGINEERING_USAGE_WORDS}): 2 Mbps "
+            "while active, 2.5 percent active at the busy hour and 0.5 percent off-peak, 2.7 GB a "
+            "month over the 4 busy hours and 2.7 GB over the 20 off-peak hours. FY2035's 8.1 GB is "
+            f"5.4 GB with the investor's bigger allotment ({_ALLOTMENT_WORDS}). FY2036's 9 GB "
+            f"({_FY2036_USAGE_WORDS}). FY2033's 6.7 GB is about half-way (round 1's 2.7 + 4.0 GB). "
+            "The words of 2026-10-04 and 2026-10-05 give a usage and a rough allotment, not these "
+            f"totals; the totals became the product case's values with {_APPROVALS}. The busy-hour "
+            "part is the engineering usage's; the rest is off-peak.",
         ),
         "usage.mounted_terminal.gb_per_month": _scenario_spec(
             "Mounted terminal data a month, in all",
             "GB/month",
             _USAGE_CLAIM,
             "The usage paths: the mounted terminal's data a month in each reported year.",
-            "INVESTOR_SET for FY2031 (the engineering usage, 2026-10-04), FY2035 (the 50 percent "
-            'bigger allotment, 2026-10-05) and FY2036 (2026-10-12: "go with 9 GB, 90 GB and 13 '
-            'bursts"); SCENARIO for FY2033 (half-way). The busy-hour part is the engineering '
-            "usage's; the rest is off-peak.",
+            "INVESTOR_SET for FY2031, FY2035 and FY2036; SCENARIO for FY2033. FY2031's 54 GB is "
+            f"the engineering usage the investor approved ({_ENGINEERING_USAGE_WORDS}): 5 Mbps "
+            "while active, 10 percent active at the busy hour and 2 percent off-peak, 27 GB a "
+            "month over the 4 busy hours and 27 GB over the 20 off-peak hours. FY2035's 81 GB is "
+            f"54 GB with the investor's bigger allotment ({_ALLOTMENT_WORDS}). FY2036's 90 GB "
+            f"({_FY2036_USAGE_WORDS}). FY2033's 67 GB is about half-way (round 1's 27 + 40 GB). "
+            "The words of 2026-10-04 and 2026-10-05 give a usage and a rough allotment, not these "
+            f"totals; the totals became the product case's values with {_APPROVALS}. The busy-hour "
+            "part is the engineering usage's; the rest is off-peak.",
         ),
         "usage.minimal_packet_iot.messages_per_day": _scenario_spec(
             "Minimal-packet IoT messages a day",
@@ -772,17 +816,22 @@ SCENARIO_SPECS: Final[Mapping[str, CellSpec]] = MappingProxyType(
             "messages/day",
             _USAGE_CLAIM,
             "The usage paths: data IoT's messages a day, the same in every year.",
-            "INVESTOR_SET (the investor's usage table, 2026-10-04): the engineering usage's 48; "
-            "the usage scale moves the bursts, not the messages.",
+            "INVESTOR_SET (the investor's usage table, frozen 2026-10-04 12:31: \"This looks good "
+            "... we'll kind of freeze it here\"): the engineering usage's 48 messages of 340 bytes "
+            "a day, beside the bursts the table gave data IoT; the words freeze the table as a "
+            f"whole, and the 48 became the product case's value with {_APPROVALS}. The usage scale "
+            "moves the bursts, not the messages.",
         ),
         "usage.data_iot.bursts_per_day": _scenario_spec(
             "Data IoT bursts a day",
             "bursts/day",
             _USAGE_CLAIM,
             "The usage paths: data IoT's 100 KB bursts a day, before a choice's scale.",
-            "INVESTOR_SET for FY2031's 8 (2026-10-05: \"let's say we just doubled that\") and "
-            'FY2036\'s 13 (2026-10-12: "go with 9 GB, 90 GB and 13 bursts"); SCENARIO for '
-            "FY2033's 10 and FY2035's 12 (round 1 of the scratch exploration).",
+            "INVESTOR_SET for FY2031's 8 (2026-10-05: \"My thinking is $8 is quite expensive for "
+            "just 4 bursts of 100 kilobytes a day. So let's say we just doubled that\") and "
+            f"FY2036's 13 ({_FY2036_USAGE_WORDS}); SCENARIO for FY2033's 10 and FY2035's 12 (round "
+            "1 of the scratch exploration). The 2026-10-05 words were thinking aloud (\"we don't "
+            f"have to change anything\"); the 8 became the product case's value with {_APPROVALS}.",
             notes="A usage a device sends, never a count of devices.",
         ),
         "usage.data_iot.bursts_outside_busy_hours": _scenario_spec(
@@ -790,8 +839,11 @@ SCENARIO_SPECS: Final[Mapping[str, CellSpec]] = MappingProxyType(
             None,
             _USAGE_CLAIM,
             "The usage paths: when data IoT's bursts go.",
-            'INVESTOR_SET (2026-10-05: "excluding peak time"): outside the busy hours from '
-            "FY2033; SCENARIO for FY2031's, at any hour (round 1 of the scratch exploration).",
+            'INVESTOR_SET for FY2033 to FY2036 (2026-10-05: "Could the data IoT at the higher '
+            "price do bursts like 12 or 24 bursts a day? Maybe you could say excluding peak time "
+            "or something like that\"): outside the busy hours from FY2033; SCENARIO for FY2031's, "
+            "at any hour (round 1 of the scratch exploration). The words asked a question; the "
+            f"timing became the product case's value with {_APPROVALS}.",
         ),
         "usage.data_iot.scales": _scenario_spec(
             "Data IoT usage scales",
@@ -807,7 +859,11 @@ SCENARIO_SPECS: Final[Mapping[str, CellSpec]] = MappingProxyType(
             "draws",
             _SETTINGS_CLAIM,
             "The Monte Carlo's settings: the number of drawn markets.",
-            "SCENARIO (round 2 of the scratch exploration, 2026-10-06).",
+            "SCENARIO (round 2 of the scratch exploration, 2026-10-06; approved by the investor "
+            "with the product-case code design at its gate on 2026-10-07). What 2,000 draws buy: "
+            "the pick holds across seeds (at seeds 1 to 5 the same choice, usable in 1,719 to "
+            "1,754 of the 2,000 draws, the plan's probe pB2, local), and the headline, read at the "
+            "central market, moves with neither the draws nor the seed.",
         ),
         "market.seed": _scenario_spec(
             "Market seed",
@@ -815,38 +871,51 @@ SCENARIO_SPECS: Final[Mapping[str, CellSpec]] = MappingProxyType(
             _SETTINGS_CLAIM,
             "The Monte Carlo's settings: the generator's seed.",
             "SCENARIO (round 2 of the scratch exploration, 2026-10-06): one seed, so every run "
-            "draws the same markets; another seed moves the drawn markets, never the central one.",
+            "draws the same markets; another seed moves the drawn markets, never the central one "
+            "(the pick holds at seeds 1 to 5).",
         ),
         "market.gamma.low": _scenario_spec(
             "Network response, low end",
             "exponent",
             _SETTINGS_CLAIM,
             "The Monte Carlo's settings: the network response's range.",
-            "SCENARIO (round 2 of the scratch exploration, 2026-10-06): four times the network "
-            "only doubles the customers.",
+            "SCENARIO (round 2 of the scratch exploration, 2026-10-06): at 0.5 customers grow as "
+            "the square root of the network's scale, so four times the network only doubles them. "
+            + _RANGES_CHOICE,
         ),
         "market.gamma.high": _scenario_spec(
             "Network response, high end",
             "exponent",
             _SETTINGS_CLAIM,
             "The Monte Carlo's settings: the network response's range.",
-            "SCENARIO (round 2, 2026-10-06), its top the investor's \"If we are getting eight "
-            'times the network overall, we should be getting about eight times the revenue" '
-            "(2026-10-06).",
+            "SCENARIO (round 2, 2026-10-06): at 1.0 customers grow in proportion to the network's "
+            "scale, the investor's \"If we are getting eight times the network overall, we should "
+            'be getting about eight times the revenue. That is just an approximation" '
+            "(2026-10-06); at the range's middle, 0.75, eight times the network brings 4.76 times "
+            "the customers. " + _RANGES_CHOICE,
         ),
         "market.epsilon.low": _scenario_spec(
             "Price response, low end",
             "exponent",
             _SETTINGS_CLAIM,
             "The Monte Carlo's settings: the price response's range.",
-            "SCENARIO (round 2 of the scratch exploration, 2026-10-06).",
+            "SCENARIO (round 2 of the scratch exploration, 2026-10-06): at 0.5 a price half "
+            "today's brings 1.41 times the customers and the revenue falls 29 percent. The range "
+            "is centred on 1 (its high end's rationale says what that middle does). "
+            + _RANGES_CHOICE,
         ),
         "market.epsilon.high": _scenario_spec(
             "Price response, high end",
             "exponent",
             _SETTINGS_CLAIM,
             "The Monte Carlo's settings: the price response's range.",
-            "SCENARIO (round 2 of the scratch exploration, 2026-10-06).",
+            "SCENARIO (round 2 of the scratch exploration, 2026-10-06): at 1.5 a price half "
+            "today's brings 2.83 times the customers and the revenue rises 41 percent. The range "
+            "is centred on 1, so at the central market, where the headline is read, the price "
+            "response is exactly 1: for a given usage an uncapped class's price change shows there "
+            "as customers, not revenue, and a terminal at its seats shows it as revenue; the "
+            "headline moves with a price only through the usage the pick then takes. "
+            + _RANGES_CHOICE,
         ),
         "market.eta.low": _scenario_spec(
             "Service response, low end",
@@ -854,14 +923,17 @@ SCENARIO_SPECS: Final[Mapping[str, CellSpec]] = MappingProxyType(
             _SETTINGS_CLAIM,
             "The Monte Carlo's settings: the service response's range.",
             "SCENARIO (round 2 of the scratch exploration, 2026-10-06): at 0 more service brings "
-            "no customers.",
+            "no customers. " + _RANGES_CHOICE,
         ),
         "market.eta.high": _scenario_spec(
             "Service response, high end",
             "exponent",
             _SETTINGS_CLAIM,
             "The Monte Carlo's settings: the service response's range.",
-            "SCENARIO (round 2 of the scratch exploration, 2026-10-06).",
+            "SCENARIO (round 2 of the scratch exploration, 2026-10-06): at 0.5 half again the "
+            "service brings 22 percent more customers and twice the service 41 percent more; at "
+            "the range's middle, 0.25, half again the service brings 11 percent more. "
+            + _RANGES_CHOICE,
         ),
         "floors.fill": _scenario_spec(
             "Fill floor",
@@ -953,9 +1025,15 @@ _ANCHOR_RATIONALE: Final[str] = (
 """The rationale every certified anchor shares."""
 
 _DATA_IOT_ANCHOR_RATIONALE: Final[str] = (
-    "INVESTOR_SET (the investor's proportion, 2026-10-04: \"Is it going to have more than the "
-    "small terminal, double the price? Yes\"): half of Iridium's IoT customers today at double "
-    "their ARPU, on COMM-617 and COMM-618. Iridium reports one commercial IoT segment (1,998,000 "
+    "INVESTOR_SET (the investor's proportion, 2026-10-04: \"You look for proportions, look at "
+    "research. It's not rocket science, extrapolate it out. Are they going to have as many as the "
+    "small, minimal pack IOT? No. Is it going to have more than the small terminal, double the "
+    "price? Yes\"): half of Iridium's IoT customers today at double their ARPU, on COMM-617 and "
+    "COMM-618. The words give the bounds and the doubled price; the half is the investor's method "
+    "that day, a proportion from the research: Iridium's tiers run close to inverse proportion "
+    "(IoT 1,998,000 at $7.78 against voice and data 402,000 at $47), so twice the price holds half "
+    f"the customers; it became the product case's value with {_APPROVALS}. Iridium reports one "
+    "commercial IoT segment (1,998,000 "
     "at $7.78, COMM-617, COMM-618); the product case takes it whole as minimal-packet IoT's "
     "anchor and anchors data IoT beside it, so the two IoT classes start from twice Iridium's IoT "
     "revenue today ($373.1M a year against $186.5M). The curve's starting point, never a count of "
@@ -1080,7 +1158,9 @@ CONSTANT_INPUTS: Final[Mapping[str, ConstantInput]] = MappingProxyType(
             _PRICES_CLAIM,
             "The product case's prices: data IoT at double minimal-packet IoT's price.",
             "INVESTOR_SET (the investor's proportion, 2026-10-04: \"Is it going to have more than "
-            'the small terminal, double the price? Yes"): data IoT pays twice minimal-packet '
+            'the small terminal, double the price? Yes"; kept in every IoT price the investor set: '
+            '"data IoT ... $8.00, the minimal packet is $4.00", 2026-10-04, then "Let\'s go with '
+            'the three and six for now", 2026-10-06 19:52): data IoT pays twice minimal-packet '
             "IoT's price in every year and choice, so its price is not a setting.",
             supporting=(
                 SupportingClaim(_DATA_IOT_ANCHOR_CLAIM, "The same multiple on data IoT's anchor."),
@@ -1094,8 +1174,10 @@ CONSTANT_INPUTS: Final[Mapping[str, ConstantInput]] = MappingProxyType(
             SourceStatus.SCENARIO,
             _USAGE_CLAIM,
             "The usage paths' conventions: the 4 busy hours.",
-            "INVESTOR_SET (2026-10-04: \"for busy hours, it's fine\"): a terminal's busy-hour data "
-            "is its engineering usage over these hours, so its seats are the engineering case's.",
+            "INVESTOR_SET (2026-10-04 19:59, asked to set the 4: \"I'm not sure what you mean by "
+            "four, but that's okay. ... So for busy hours, it's fine\"): a terminal's busy-hour "
+            "data is its engineering usage over these hours, so its seats are the engineering "
+            "case's.",
         ),
         "days_per_month": _constant(
             DAYS_PER_MONTH,

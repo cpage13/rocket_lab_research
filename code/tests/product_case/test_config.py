@@ -8,6 +8,8 @@ catalog holds one entry per formula of the method.
 
 from __future__ import annotations
 
+import ast
+import itertools
 import math
 from collections.abc import Callable
 from pathlib import Path
@@ -16,6 +18,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, ValidationError
 
+import product_case.constants as constants_module
 from common.input_manifest import AssumptionRole, SourceStatus
 from product_case.config import (
     CONSTANT_INPUTS,
@@ -470,6 +473,93 @@ def test_the_classes_run_small_mounted_minimal_packet_data() -> None:
     assert list(ProductClass) == order
     assert list(CLASS_KIND) == order
     assert [CLASS_KIND[c] for c in order] == [ClassKind.TERMINAL] * 2 + [ClassKind.IOT] * 2
+
+
+SOURCE_CLASSES = ("SOURCED_FACT", "INVESTOR_SET", "SCENARIO", "DERIVED")
+"""The source classes a named constant's docstring opens with (the constants module's rule)."""
+
+DEFINITIONS = frozenset(
+    {
+        "BITS_PER_BYTE",
+        "BITS_PER_MEGABIT",
+        "SECONDS_PER_HOUR",
+        "HOURS_PER_DAY",
+        "SECONDS_PER_DAY",
+        "MONTHS_PER_YEAR",
+        "DOLLARS_PER_MILLION",
+        "PERCENT",
+        "PRODUCT_CASE_SCHEMA_VERSION",
+        "ENGINEERING_SCHEMA_VERSION",
+        "MIN_REPORTED_YEARS",
+        "MIN_DRAWS",
+        "USAGE_SCALE_START",
+        "CLASS_KIND",
+        "TERMINAL_DEVICE_CLASS",
+        "DEMAND_ANCHORS",
+        "FORMULA_CATALOG",
+        "SCENARIO_NAME_DEFAULT",
+        "ENGINEERING_ARTIFACT_PATH_DEFAULT",
+        "PATH_SEPARATOR",
+        "PHONE_DEVICE_CLASS",
+    }
+)
+"""The constants whose docstrings say what they are instead of a source class: the unit
+conversions, the schema versions, the structural bounds, the mappings and the four definitions
+the constants module's docstring names."""
+
+RANGE_ENDS = frozenset(
+    {
+        "GAMMA_LOW_DEFAULT",
+        "GAMMA_HIGH_DEFAULT",
+        "EPSILON_LOW_DEFAULT",
+        "EPSILON_HIGH_DEFAULT",
+        "ETA_LOW_DEFAULT",
+        "ETA_HIGH_DEFAULT",
+    }
+)
+"""The six ends of the market responses' ranges."""
+
+
+def _constant_docstrings() -> dict[str, str]:
+    """Each module-level constant of ``product_case.constants`` with its docstring, from source."""
+    tree = ast.parse(Path(constants_module.__file__).read_text(encoding="utf-8"))
+    found: dict[str, str] = {}
+    for node, following in itertools.pairwise(tree.body):
+        if not (isinstance(following, ast.Expr) and isinstance(following.value, ast.Constant)):
+            continue
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            found[node.target.id] = str(following.value.value)
+    return found
+
+
+def test_every_named_constant_states_its_basis() -> None:
+    """Objective: the constants module's documentation rule holds for every public constant
+    (the investor's condition, 2026-10-06: the Monte Carlo documented by the repository's
+    rules): a docstring opens with its source class, or the constant is a definition the
+    module's docstring names; an INVESTOR_SET value quotes the investor's words with their
+    date; each end of a market response's range says that no market research grounds it.
+
+    Sample: every name in ``product_case.constants.__all__`` that is a constant (upper case),
+    with its docstring read from the module's source.
+
+    Expected outcome: each has a docstring; every non-definition opens with SOURCED_FACT,
+    INVESTOR_SET, SCENARIO or DERIVED; every docstring that opens INVESTOR_SET holds a quoted
+    span and a 2026 date; every range end's docstring says "no market research".
+    """
+    docstrings = _constant_docstrings()
+    names = [name for name in constants_module.__all__ if name.isupper()]
+    assert names, "the constants module exports no constants"
+    for name in names:
+        assert name in docstrings, f"{name} has no docstring"
+        text = docstrings[name]
+        if name in DEFINITIONS:
+            continue
+        assert text.startswith(SOURCE_CLASSES), f"{name}: {text[:60]!r}"
+        if text.startswith("INVESTOR_SET"):
+            assert '"' in text and "2026-" in text, f"{name} quotes no dated words"
+        if name in RANGE_ENDS:
+            words = " ".join(text.split()).lower()
+            assert "no market research" in words, f"{name} does not say what grounds it"
 
 
 def test_the_formula_catalog_holds_one_entry_per_formula() -> None:

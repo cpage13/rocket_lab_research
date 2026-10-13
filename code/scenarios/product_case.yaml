@@ -24,8 +24,15 @@
 # is twice minimal-packet IoT's (the investor's proportion), never a setting.
 #
 # Each value's basis is on its line; its source-ledger row is in
-# research/SOURCE_INDEX.md (COMM-722 to COMM-726). INVESTOR_SET marks a value
-# the investor set; SCENARIO a modeling choice of the product-case design.
+# research/SOURCE_INDEX.md (COMM-722 to COMM-726), and its full basis, the
+# investor's words quoted, in its constant's docstring. INVESTOR_SET marks a
+# value the investor set; SCENARIO a modeling choice of the product-case design.
+# Where the investor's words say less than a value (the FY2031 and FY2035
+# totals, data IoT's 48 messages, its 8 bursts and their timing), the value
+# became the product case's with the code design the investor approved at its
+# gate (2026-10-07 13:03, Q1 to Q5 yes: "So actually, I think we're on yes. I
+# think this is yes") and the plan (2026-10-12 20:27: "yes, approved, go ahead
+# with the plan").
 
 scenario_name: "The product case at the investor's prices, held flat"  # the run's label (the artifact's metadata), not an input
 engineering_artifact_path: communications/models/iridium/default.json  # the promoted Iridium artifact, repository-relative
@@ -33,46 +40,49 @@ reported_years: [2031, 2033, 2035, 2036]  # SCENARIO: the 2026-10-05 product-cas
 
 # The prices a month, dollars: the start price in the first reported year, then
 # the end prices a choice may reach by the last; the first end price is the start
-# price, held flat (the candidates); lower ones are context only (COMM-722).
+# price, held flat (the candidates: 2026-10-06 19:38, "The prices will not go
+# down, but they will not go up"); lower ones are context only (COMM-722).
 prices:
   small_terminal:
-    start_usd_month: 10.0  # INVESTOR_SET 2026-10-07: "Yes, let's use the $10 and $50"
+    start_usd_month: 10.0  # INVESTOR_SET 2026-10-07: "Yes, let's use the $10 and $50. Let's do that"
     end_usd_month: [10.0, 9.0, 8.0, 7.0, 6.0]  # 10 held flat (INVESTOR_SET); 9 to 6 SCENARIO, the design's context rule
   mounted_terminal:
-    start_usd_month: 50.0  # INVESTOR_SET 2026-10-07: "Yes, let's use the $10 and $50"
+    start_usd_month: 50.0  # INVESTOR_SET 2026-10-07: "Yes, let's use the $10 and $50. Let's do that"
     end_usd_month: [50.0, 45.0, 40.0]  # 50 held flat (INVESTOR_SET); 45 and 40 SCENARIO, the design's context rule
   minimal_packet_iot:
-    start_usd_month: 3.0  # INVESTOR_SET 2026-10-06: "Let's go with the three and six for now"; data IoT pays twice it
-    end_usd_month: [3.0]  # INVESTOR_SET: held flat, no lower IoT price
+    start_usd_month: 3.0  # INVESTOR_SET 2026-10-06 19:52: "Let's go with the three and six for now"; data IoT pays twice it
+    end_usd_month: [3.0]  # INVESTOR_SET 2026-10-06 19:52: held flat, no lower IoT price
 
 # Each class's usage, one value per reported year (COMM-724 unless marked).
 usage:
   small_terminal:
-    gb_per_month: [5.4, 6.7, 8.1, 9.0]  # INVESTOR_SET 2026-10-04, 2026-10-05 and 2026-10-12 ("go with 9 GB, 90 GB and 13 bursts"); FY2033 SCENARIO, half-way
+    gb_per_month: [5.4, 6.7, 8.1, 9.0]  # INVESTOR_SET FY2031 (2.7 + 2.7 GB, 2026-10-04 13:33: "yes, go with the recommended column"), FY2035 (2026-10-05: "for some of your bigger products, you get a 50% increase in your monthly allotment ... this is just a rough estimate right now") and FY2036 (2026-10-12 15:56: "go with 9 GB, 90 GB and 13 bursts"); FY2033 SCENARIO, about half-way (round 1's 2.7 + 4.0 GB)
   mounted_terminal:
-    gb_per_month: [54.0, 67.0, 81.0, 90.0]  # INVESTOR_SET 2026-10-04, 2026-10-05 and 2026-10-12; FY2033 SCENARIO, half-way
+    gb_per_month: [54.0, 67.0, 81.0, 90.0]  # INVESTOR_SET FY2031 (27 + 27 GB, the recommended column, 2026-10-04 13:33), FY2035 (the bigger allotment, 2026-10-05) and FY2036 (2026-10-12 15:56); FY2033 SCENARIO, about half-way (round 1's 27 + 40 GB)
   minimal_packet_iot:
     messages_per_day: [48, 72, 96, 96]  # SCENARIO, round 1: the engineering usage's 48, doubling to 96 by FY2035 and held
     scales: [1.0, 2.0, 4.0, 8.0, 16.0]  # SCENARIO (COMM-723): round 3's steps, extended so the usable test stops the usage
   data_iot:
-    messages_per_day: 48  # INVESTOR_SET 2026-10-04: the engineering usage's messages, in every year
-    bursts_per_day: [8, 10, 12, 13]  # INVESTOR_SET 8 (2026-10-05) and 13 (2026-10-12); 10 and 12 SCENARIO, round 1
-    bursts_outside_busy_hours: [false, true, true, true]  # INVESTOR_SET 2026-10-05: "excluding peak time", from FY2033
+    messages_per_day: 48  # INVESTOR_SET, the usage table the investor froze (2026-10-04 12:31: "This looks good ... we'll kind of freeze it here"): the engineering usage's 48, in every year
+    bursts_per_day: [8, 10, 12, 13]  # INVESTOR_SET 8 (2026-10-05, of 4 bursts: "So let's say we just doubled that") and 13 (2026-10-12 15:56); 10 and 12 SCENARIO, round 1
+    bursts_outside_busy_hours: [false, true, true, true]  # INVESTOR_SET from FY2033 (2026-10-05: "Maybe you could say excluding peak time or something like that"); FY2031 SCENARIO, at any hour (round 1)
     scales: [1.0, 2.0, 4.0, 8.0]  # SCENARIO (COMM-723): round 3's steps, extended so the usable test stops the usage
 
-# The drawn markets (COMM-723): each response uniform over its range.
+# The drawn markets (COMM-723): each response uniform over its range. No market
+# research grounds the three ranges: a modeling choice of round 2, approved by
+# the investor with the product-case code design at its gate on 2026-10-07.
 market:
-  draws: 2000  # SCENARIO, round 2
+  draws: 2000  # SCENARIO, round 2: the pick holds at seeds 1 to 5 (1,719 to 1,754 usable); the headline moves with neither the draws nor the seed
   seed: 20261006  # SCENARIO, round 2: the same markets every run
   gamma:  # the network response
-    low: 0.5  # SCENARIO, round 2
+    low: 0.5  # SCENARIO, round 2: four times the network only doubles the customers
     high: 1.0  # SCENARIO, round 2: the investor's "eight times the network ... about eight times the revenue"
   epsilon:  # the price response
-    low: 0.5  # SCENARIO, round 2
-    high: 1.5  # SCENARIO, round 2
+    low: 0.5  # SCENARIO, round 2: a price half today's brings 1.41 times the customers
+    high: 1.5  # SCENARIO, round 2: 2.83 times; the range centred on 1, so at the central market an uncapped class's price change shows as customers, not revenue
   eta:  # the service response
-    low: 0.0  # SCENARIO, round 2
-    high: 0.5  # SCENARIO, round 2
+    low: 0.0  # SCENARIO, round 2: more service brings no customers
+    high: 0.5  # SCENARIO, round 2: half again the service brings 22 percent more customers
 
 # The usable test's floors (COMM-725).
 floors:
