@@ -309,12 +309,13 @@ def test_a_run_that_would_hold_a_number_that_is_not_finite_names_the_panel(
     ``revenue_musd``, and not the setting).
 
     Sample: an Iridium scenario with a panel of 2.5e300 m^2 (finite, so it loads; the people
-    stay finite and revenue overflows to infinity, first at the 2,000-satellite reading at the
-    defaults' 0.18 share).
+    stay finite and the IoT room's uplink bits a second overflow to infinity, first in FY2028,
+    whose 12 satellites at the defaults' 0.18 share are the first fleet; re-derived by running
+    it, 2026-10-13).
 
     Expected outcome: exit 1; exactly one ERROR record, on one line and with no exception
     attached, naming the scenario, the first field that is not finite and
-    ``iridium.aperture_m2`` with its value beside the five prices; no artifact written.
+    ``iridium.aperture_m2`` with its value beside the three prices; no artifact written.
     """
     scenario = tmp_path / "huge_panel.yaml"
     scenario.write_text("iridium:\n  aperture_m2: 2.5e+300\n", encoding="utf-8")
@@ -328,7 +329,7 @@ def test_a_run_that_would_hold_a_number_that_is_not_finite_names_the_panel(
     assert "\n" not in message
     assert message.startswith(
         f"could not promote {scenario}: the run's "
-        "iridium.saturation.readings[1].classes[0].revenue_musd is inf, not a finite number: "
+        "iridium.years[2].iot.uplink_bits_per_second is inf, not a finite number: "
         "the Iridium record scales with iridium.aperture_m2 (2.5e+300), "
     )
     for name in IridiumArpuDials.model_fields:
@@ -665,7 +666,7 @@ def test_every_artifact_field_is_required_so_a_field_left_unmapped_fails_the_bui
     artifact, or of any block under it, has a default.
 
     Sample: the artifact model and every block model its fields reach, walked through their
-    annotations (tuples, unions and dictionaries included).
+    annotations (tuples, unions and dictionaries included), the three IoT blocks among them.
 
     Expected outcome: the walk reaches exactly the block models ``json_output`` defines (so no
     block escapes the check), and every field of each is required.

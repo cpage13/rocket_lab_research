@@ -474,10 +474,15 @@ RETIRED_IRIDIUM_SETTINGS: tuple[tuple[str, ...], ...] = (
     ("arpu", "premium_price_usd_month"),
     ("arpu", "iot_price_usd_month"),
     ("arpu", "government_price_usd_month"),
+    ("arpu", "minimal_packet_iot_price_usd_month"),
+    ("arpu", "data_iot_price_usd_month"),
 )
-"""The Iridium settings the switch retires, with the investor's OK of 2026-10-04: the device
-class, the SE override, the one usage for every class, the IoT passthrough, the four-bucket
-sheet's mixes and prices, the single IoT price and the government price."""
+"""The retired Iridium settings. The switch retired the first fourteen, with the investor's OK of
+2026-10-04: the device class, the SE override, the one usage for every class, the IoT
+passthrough, the four-bucket sheet's mixes and prices (its one price for IoT among them) and the
+government price. ADR 011 retired the last two, minimal-packet IoT's and data IoT's prices, with
+the investor's approval of the product-case design (2026-10-07): the engineering model publishes
+IoT as capacity, and IoT's prices are the product case's."""
 
 
 def test_a_retired_iridium_setting_fails_at_load_naming_it(tmp_path: Path) -> None:
@@ -489,8 +494,8 @@ def test_a_retired_iridium_setting_fails_at_load_naming_it(tmp_path: Path) -> No
     product case's; there is no government price), at a plausible value.
 
     Expected outcome: each fails at load with one ValidationError located at that field
-    (``iridium.device_class``, ``iridium.arpu.government_price_usd_month``, say), of the type
-    pydantic gives an unknown key.
+    (``iridium.device_class``, ``iridium.arpu.government_price_usd_month``,
+    ``iridium.arpu.data_iot_price_usd_month``, say), of the type pydantic gives an unknown key.
     """
     scenario = tmp_path / "retired.yaml"
     for path in RETIRED_IRIDIUM_SETTINGS:

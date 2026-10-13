@@ -20,7 +20,7 @@ command); a run that would hold a number that is not finite, refused naming the 
 readings and the reported fleets (the retired cap's reading its own constant); the marginal
 intervals (hand-worked, and their verdicts on the committed curve at the investor's prices),
 with d = 1's IoT room; a saturation number beside the cadence, never a cap; the scenario YAML;
-the stated assumptions; the promoted export frozen on ``iridium-v6``; and the drift guard that
+the stated assumptions; the promoted export frozen on ``iridium-v7``; and the drift guard that
 regenerates the committed artifact byte for byte.
 
 Where the targets come from. The fleets and costs are exact arithmetic, worked beside them. The
@@ -52,6 +52,7 @@ import dataclasses
 import json
 import logging
 import math
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -311,7 +312,6 @@ V6_REMOVED_KEYS = frozenset(
         "fleet_target",
         "full_coverage_reached_year",
         "government",
-        "iot",
         "iot_devices",
         "mix_pct",
         "people_capacity_living_fleet_final_year",
@@ -327,12 +327,77 @@ V6_REMOVED_KEYS = frozenset(
         "total_connections",
     }
 )
-"""Every key name the ``iridium-v5`` artifact carried that ``iridium-v6`` carries nowhere, at any
-depth (the committed v5 artifact against v6, 29 names): the target, regime, completion and
-built-fleet fields, the per-person cost fields, the density, the fleet aggregate, the served
-base, the living fleet's people capacity, the IoT passthrough, the renamed cost and per-launch
-fields, and the four-bucket block with its inner keys. (A later schema that brings one back
-under a new meaning names it here.)"""
+"""Every key name the ``iridium-v5`` artifact carried that ``iridium-v6`` carried nowhere, at any
+depth (the committed v5 artifact against v6, 29 names), but ``iot``, which ``iridium-v7`` brought
+back under a new meaning (each year's and each reading's IoT room, ADR 011), so 28 here: the
+target, regime, completion and built-fleet fields, the per-person cost fields, the density, the
+fleet aggregate, the served base, the living fleet's people capacity, the IoT passthrough's
+``iot_devices``, the renamed cost and per-launch fields, and the four-bucket block with its inner
+keys. (A later schema that brings one back under a new meaning names it here.)"""
+
+YEAR_KEYS = ("year", "comms_launches_flown", "living_fleet", "annual_cost_musd", "classes", "iot")
+"""Each ``years`` entry's keys in ``iridium-v7``, in order (IoT foundation v1)."""
+
+CLASS_YEAR_KEYS = (
+    "device_class",
+    "useful_beams",
+    "people_served",
+    "revenue_musd",
+    "own_margin_pct",
+)
+"""Each year's class line's keys in ``iridium-v7``, in order: the useful beams after the class."""
+
+IOT_ROOM_KEYS = (
+    "uplink_bits_per_second",
+    "uplink_payload_bits_per_second",
+    "access_attempts_per_second_low",
+    "access_attempts_per_second_high",
+    "single_tone_seconds_per_second",
+    "classes",
+)
+"""An IoT room block's keys (each year's and each reading's ``iot``), in order."""
+
+IOT_CLASS_CAPACITY_KEYS = (
+    "iot_class",
+    "devices_by_payload_bits",
+    "devices_by_random_access",
+    "devices_by_single_tone_time",
+    "device_capacity",
+    "binding_view",
+)
+"""One IoT class's capacity block's keys, in order."""
+
+SATURATION_KEYS = (
+    "curve_path",
+    "curve_schema_version",
+    "curve_version_stamp",
+    "input_hash",
+    "downlink_share",
+    "panel_factor",
+    "readings",
+    "band_saturation_numbers",
+    "limits",
+)
+"""The saturation block's keys in ``iridium-v7``, in order."""
+
+READING_KEYS = ("label", "fleet", "fleet_annual_cost_musd", "classes", "iot")
+"""Each reading's keys in ``iridium-v7``, in order: IoT's room after the classes."""
+
+IOT_PHYSICS_FROZEN: dict[str, int | float] = {
+    "iot_message_bytes": 340,
+    "iot_burst_bytes": 100_000,
+    "iot_mac_efficiency": 0.20,
+    "iot_random_access_window_devices_low": 57,
+    "iot_random_access_window_devices_high": 1_650,
+    "iot_random_access_windows_per_second": 1,
+    "iot_tone_hz": 3_750.0,
+    "iot_message_airtime_low_s": 4.0,
+    "iot_message_airtime_high_s": 7.0,
+}
+"""The physics block's nine IoT constants, frozen as IoT foundation v1 states them, in order after
+the ecosystem assumption: the message and burst sizes (COMM-620; the investor's usage), the MAC
+efficiency (COMM-659), the random-access window's two ends and its rate (COMM-654; an
+assumption), the NB-IoT tone (COMM-714) and the message airtime's two ends (COMM-719)."""
 
 SyntheticCurve = Callable[[IridiumDials], SaturationCurve]
 """The ``synthetic_saturation_curve`` fixture: Iridium dials in, a curve stamped for them out."""
@@ -1238,11 +1303,15 @@ def test_below_the_floor_nothing_is_sold_and_the_cost_accrues(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
     """Objective: the floor rule: nothing is sold in a year whose living fleet is below the
-    coverage floor (340), and from the first year at it every class is sold in full.
+    coverage floor (340), and from the first year at it every class is sold in full; for IoT,
+    the room is published in every year while each IoT class's capacity is null below the floor
+    (IoT needs continuous coverage).
 
     Expected outcome: FY2026 to FY2030 (0, 32, 80, 160 and 304 satellites) have every class's
     people 0, revenue 0.0 and a null margin, while their annualized cost accrues (above 0.0 from
-    FY2027); the floor is reached in FY2031, from which every class has its own margin.
+    FY2027), and IoT's room is published (0.0 at the fleet of 0, above 0.0 after) with every IoT
+    class's five capacity fields null; the floor is reached in FY2031, from which every class has
+    its own margin and both IoT classes their capacity.
     """
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
     assert run.iridium.coverage_floor_reached_year == FLOOR_YEAR
@@ -1255,8 +1324,12 @@ def test_below_the_floor_nothing_is_sold_and_the_cost_accrues(
             )
             if fleet_year.year > BASE_YEAR_DEFAULT:
                 assert fleet_year.annual_cost_this_year_musd > 0.0
+            room = iridium_year.iot
+            assert (room.uplink_payload_bits_per_second > 0.0) is (fleet_year.living_fleet > 0)
+            assert all(dataclasses.astuple(entry)[1:] == (None,) * 5 for entry in room.classes)
         else:
             assert all(line.own_margin_pct is not None for line in iridium_year.classes)
+            assert all(entry.device_capacity is not None for entry in iridium_year.iot.classes)
 
 
 def test_the_three_class_prices_and_no_government_key(
@@ -1578,29 +1651,41 @@ def test_a_reading_past_a_class_last_row_fails_naming_the_reading_and_its_settin
         assert named in message
 
 
+NonFiniteSettings = tuple[tuple[tuple[str, ...], float], ...]
+"""Settings written beside a non-finite case's own setting: each a config path and its value."""
+
+
 @pytest.mark.parametrize(
-    ("setting", "value", "first_field"),
+    ("setting", "value", "also", "first_field"),
     [
         (
             ("iridium", "aperture_m2"),
-            1e-305,
-            "iridium.saturation.iot_check.minimal_packet_iot[0].devices_per_useful_beam is inf",
+            2.5e300,
+            (),
+            "iridium.years[1].iot.uplink_bits_per_second is inf",
         ),
-        (("iridium", "aperture_m2"), 2.5e300, "iridium.years[7].classes[0].revenue_musd is inf"),
+        (
+            ("iridium", "aperture_m2"),
+            2.5e300,
+            ((("iridium", "saturation", "downlink_share"), 1.0),),
+            "iridium.years[1].iot.uplink_bits_per_second is nan",
+        ),
         (
             ("iridium", "arpu", "phone_class_price_usd_month"),
             5e-324,
+            (),
             "iridium.years[5].classes[2].own_margin_pct is -inf",
         ),
         (
             ("satellite", "satellite_build_cost_musd"),
             1e308,
+            (),
             "fleet.years[1].build_cost_this_year_musd is inf",
         ),
     ],
     ids=[
-        "a panel so small the IoT devices per beam overflow",
-        "a panel so large revenue overflows",
+        "a panel so large the IoT room overflows",
+        "a panel so large the IoT room is not a number at full downlink",
         "a subnormal price",
         "a build cost that overflows the fleet's costs",
     ],
@@ -1610,28 +1695,33 @@ def test_a_run_that_would_hold_a_number_that_is_not_finite_is_refused_naming_the
     committed_saturation_curve: SaturationCurve,
     setting: tuple[str, ...],
     value: float,
+    also: NonFiniteSettings,
     first_field: str,
 ) -> None:
     """Objective: a run the Iridium entry returns holds only finite numbers (before the fix these
     settings, each valid at load, returned records holding inf, -inf or NaN, which only the
     artifact's models refused, naming an artifact field rather than the setting).
 
-    Sample: the shipped scenario with, in turn, a panel of 1e-305 m^2 (its factor is positive, so
-    the entry's panel check passes, but the IoT devices per useful beam overflow), a panel of
-    2.5e300 m^2 (people stay finite; revenue overflows and the margins become NaN), a phone class
-    price of 5e-324 dollars (its margin overflows to -inf) and a satellite build cost of 1e308 $M
-    (the fleet-and-cost record's costs overflow).
+    Sample (each case's first field re-derived by running it, 2026-10-13): the shipped scenario
+    with, in turn, a panel of 2.5e300 m^2 (people stay finite; the IoT room's uplink bits a
+    second overflow first, in FY2027, the room's first field walked before its capacity views);
+    the same panel with the band in full-time downlink, d = 1 (the uplink's product overflows
+    before its zero share, so the room's uplink is NaN); a phone class price of 5e-324 dollars
+    (its margin overflows to -inf); and a satellite build cost of 1e308 $M (the fleet-and-cost
+    record's costs overflow).
 
     Expected outcome: a ValueError (the type itself) naming the first field that is not finite
     (the fleet-and-cost record walked first) and its value, then the settings its record scales
-    with, each with its value: for the Iridium record the panel, the five prices and the cost
-    settings; for the fleet-and-cost record the cost settings alone.
+    with, each with its value: for the Iridium record the panel, the three prices (exactly the
+    three people classes', in class order) and the cost settings; for the fleet-and-cost record
+    the cost settings alone.
     """
     data = load_comms_config(iridium_yaml).model_dump()
-    node = data
-    for key in setting[:-1]:
-        node = node[key]
-    node[setting[-1]] = value
+    for path, written in ((setting, value), *also):
+        node = data
+        for key in path[:-1]:
+            node = node[key]
+        node[path[-1]] = written
     config = CommsConfig.model_validate(data)
     with pytest.raises(ValueError, match="not a finite number") as refused:
         run_iridium_model(config, committed_saturation_curve)
@@ -1645,8 +1735,11 @@ def test_a_run_that_would_hold_a_number_that_is_not_finite_is_refused_naming_the
         assert "iridium." not in message
     else:
         assert "iridium.aperture_m2 (" in message
-        for name in IridiumArpuDials.model_fields:
-            assert f"iridium.arpu.{name} (" in message
+        assert re.findall(r"iridium\.arpu\.(\w+) \(", message) == [
+            "small_terminal_class_price_usd_month",
+            "mounted_terminal_class_price_usd_month",
+            "phone_class_price_usd_month",
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -2186,18 +2279,25 @@ def test_promoted_json_export_writes_frozen_baseline(
     tmp_path: Path, iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
     """Objective: the promoted-JSON writer end to end (the scenario YAML in, the artifact file
-    out), frozen on iridium-v6.
+    out), frozen on iridium-v7 (IoT as capacity, ADR 011).
 
     Expected outcome: the file exists with provenance 'iridium', the stamp and schema
-    iridium-v6; the trajectory summary exact ($8,729.0M through FY2036, $1,554.4M final-year
-    annualized, $406.0M replacement, 4,288 living, 301 launches, the floor reached in FY2031,
-    $0.3625M a satellite-year); the orbit block; the physics (8 MHz, 15.4 m^2, 16 per launch,
-    operations 0.0, the ecosystem note); the class blocks in order with their prices and
-    saturation numbers; the years' fleet, cost and frozen people at FY2031, FY2033 and FY2036;
-    the steady state's frozen people; the saturation block's identity (the committed curve's
-    path, schema, stamp and hash), d, the panel factor, the band saturation numbers and the
-    curve's limits; none of the 29 key names the v6 schema removed, at any depth
-    (``V6_REMOVED_KEYS``).
+    iridium-v7; the top level in the foundation's order, ``iot_classes`` after ``classes``; the
+    trajectory summary exact ($8,729.0M through FY2036, $1,554.4M final-year annualized, $406.0M
+    replacement, 4,288 living, 301 launches, the floor reached in FY2031, $0.3625M a
+    satellite-year); the orbit block; the physics (8 MHz, 15.4 m^2, 16 per launch, operations
+    0.0, the ecosystem note) and its nine IoT constants after it, in order (340 bytes, 100,000
+    bytes, 0.20, 57, 1,650, 1 a second, 3,750 Hz, 4 and 7 s); the class blocks in order with
+    their prices and saturation numbers; ``iot_classes`` at the engineering usage (48, 0,
+    130,560, 48 and 48; 48, 4, 3,330,560, 52 and 48); the years' fleet, cost and frozen people at
+    FY2031, FY2033 and FY2036, each year's and each class line's fields in the foundation's
+    order; FY2031's and FY2036's IoT rooms and capacities, the build's own print's values, with
+    their binding views (1,965,864,139 and 170,588,558; 11,497,881,052 and 997,732,709; random
+    access, then payload bits); FY2036's phone class useful beams the print's; the steady
+    state's frozen people; the saturation block's identity (the committed curve's path, schema,
+    stamp and hash), d, the panel factor, the band saturation numbers and the curve's limits,
+    its fields and each reading's in the foundation's order; none of the 28 key names the v6
+    schema removed and v7 did not bring back, at any depth (``V6_REMOVED_KEYS``).
     """
     out_path = tmp_path / "iridium_default.json"
     written = export_iridium_json(iridium_yaml, out_path, version_stamp="test-stamp")
@@ -2209,13 +2309,14 @@ def test_promoted_json_export_writes_frozen_baseline(
         "orbit_scenario",
         "iridium_physics",
         "classes",
+        "iot_classes",
         "years",
         "saturation",
         "assumptions",
     ]
     assert payload["provenance"] == {
         "model_name": MODEL_NAME,
-        "schema_version": "iridium-v6",
+        "schema_version": "iridium-v7",
         "scenario_name": IRIDIUM_SCENARIO_NAME_DEFAULT,
         "source_scenario_path": "code/scenarios/iridium.yaml",
         "version_stamp": "test-stamp",
@@ -2237,13 +2338,16 @@ def test_promoted_json_export_writes_frozen_baseline(
         "source_status": ORBIT_SCENARIO_SOURCE_STATUS.value,
         "basis": ORBIT_SCENARIO_BASIS,
     }
-    assert payload["iridium_physics"] == {
+    physics = {
         "spectrum_mhz": HELD_SPECTRUM_MHZ,
         "aperture_m2": DEFAULT_PANEL_M2,
         "satellites_per_launch": 16,
         "operations_cost_musd": 0.0,
         "ecosystem_assumption": ECOSYSTEM_ASSUMPTION_NOTE,
+        **IOT_PHYSICS_FROZEN,
     }
+    assert payload["iridium_physics"] == physics
+    assert list(payload["iridium_physics"]) == list(physics)
     classes = payload["classes"]
     assert [block["device_class"] for block in classes] == [each.value for each in CLASS_ORDER]
     assert [block["price_usd_per_month"] for block in classes] == [
@@ -2252,13 +2356,53 @@ def test_promoted_json_export_writes_frozen_baseline(
     assert [block["saturation_number"] for block in classes] == list(FROZEN_SATURATION_NUMBERS)
     assert classes[1]["saturation_not_reached_by"] == FROZEN_MOUNTED_NOT_REACHED_BY
     assert [len(block["marginal_intervals"]) for block in classes] == [24, 26, 24]
+    assert payload["iot_classes"] == [
+        {
+            "iot_class": iot_class.value,
+            "messages_per_day": messages,
+            "bursts_per_day": bursts,
+            "uplink_bits_per_day": bits,
+            "access_attempts_per_day": attempts,
+            "single_tone_messages_per_day": tones,
+        }
+        for iot_class, messages, bursts, _, bits, attempts, tones in IOT_USAGE_LOADS
+    ]
     years = {year["year"]: year for year in payload["years"]}
     assert [year["living_fleet"] for year in payload["years"]] == list(LIVING_FLEET)
     assert [year["comms_launches_flown"] for year in payload["years"]] == list(COMMS_LAUNCHES)
     for year, people in FROZEN_PEOPLE.items():
         assert years[year]["annual_cost_musd"] == pytest.approx(ANNUAL_COST_MUSD[year])
         assert [line["people_served"] for line in years[year]["classes"]] == list(people)
+    for year in payload["years"]:
+        assert list(year) == list(YEAR_KEYS)
+        assert all(list(line) == list(CLASS_YEAR_KEYS) for line in year["classes"])
+    for year_number, fleet, beams, room_values, tone, iot_classes in IOT_WORKED_ROOMS:
+        iot = years[year_number]["iot"]
+        assert years[year_number]["living_fleet"] == fleet
+        assert years[year_number]["classes"][2]["useful_beams"] == pytest.approx(beams, rel=1e-9)
+        assert list(iot) == list(IOT_ROOM_KEYS)
+        assert (
+            iot["uplink_bits_per_second"],
+            iot["uplink_payload_bits_per_second"],
+            iot["access_attempts_per_second_low"],
+            iot["access_attempts_per_second_high"],
+        ) == pytest.approx(room_values, rel=1e-9)
+        assert iot["single_tone_seconds_per_second"] == pytest.approx(tone, rel=1e-9)
+        for entry, iot_class, (views, capacity), binding in zip(
+            iot["classes"], IOT_CLASS_ORDER, iot_classes, IOT_BINDING_VIEWS, strict=True
+        ):
+            assert list(entry) == list(IOT_CLASS_CAPACITY_KEYS)
+            assert entry["iot_class"] == iot_class.value
+            published = (
+                entry["devices_by_payload_bits"],
+                entry["devices_by_random_access"],
+                entry["devices_by_single_tone_time"],
+            )
+            assert published == pytest.approx(views, rel=1e-9)
+            assert (entry["device_capacity"], entry["binding_view"]) == (capacity, binding.value)
     saturation = payload["saturation"]
+    assert list(saturation) == list(SATURATION_KEYS)
+    assert all(list(reading) == list(READING_KEYS) for reading in saturation["readings"])
     steady = saturation["readings"][3]
     assert steady["fleet"] == STEADY_STATE_FLEET
     assert [line["people"] for line in steady["classes"]] == list(FROZEN_STEADY_STATE_PEOPLE)
@@ -2270,7 +2414,7 @@ def test_promoted_json_export_writes_frozen_baseline(
     assert saturation["panel_factor"] == pytest.approx(DEFAULT_PANEL_FACTOR)
     assert saturation["band_saturation_numbers"] == FROZEN_BAND_SATURATION_NUMBERS
     assert saturation["limits"] == list(committed_saturation_curve.limits)
-    assert len(V6_REMOVED_KEYS) == 29
+    assert len(V6_REMOVED_KEYS) == 28
     returned = sorted(_keys(payload) & V6_REMOVED_KEYS)
     assert returned == [], returned
 
