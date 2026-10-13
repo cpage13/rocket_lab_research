@@ -2148,9 +2148,11 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
     capacity alone at its engineering usage and never a count sold or revenue (ADR 011); the
     floor rule, IoT's capacity null below the floor; the
     room's formulas and constants with their claim IDs (COMM-659, COMM-654, COMM-714 and
-    COMM-719), each view at its conservative end; the whole IoT uplink, the terminals' upload not
-    subtracted; each capacity at its engineering usage over the day, never divided by the
-    product case's devices; government left out of revenue; the readings; the refusals of a
+    COMM-719), each view at its conservative end; the whole IoT uplink, no people class's upload
+    subtracted (the phone class's on the beams IoT rides among them); each capacity at its
+    engineering usage over the day, never divided by the product case's devices; government left
+    out of revenue; the readings, a reading below the floor selling nothing with each IoT
+    class's capacity null there; the refusals of a
     fleet past a class's last row and of a final fleet past a no-number class's label (ADR 005);
     the limits; no line calls the margin gross; no stack caveat at the default.
     """
@@ -2207,11 +2209,15 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
         "l x w over the 3.75 khz nb-iot tone (comm-714) x (1 - d)",
         "the random-access window's low end (57) and the message airtime's high end (7 s of 4 to "
         "7 s, comm-719)",
-        "iot's room is the whole iot uplink: the terminals' own upload is not subtracted from it",
+        "iot's room is the whole iot uplink: no people class's own upload (the small terminal's, "
+        "the mounted terminal's, or the phone class's on the beams iot rides) is subtracted from "
+        "it.",
         "each iot class's capacity is read at its engineering usage, averaged over the day",
         "so neither is divided by the other",
         "government is left out of revenue",
         "the retired cap, kept for comparison",
+        "a reading below the coverage floor sells nothing, and each iot class's capacity there "
+        "is null.",
         "never a build target or a cap",
         "a fleet past a class's last computed row is refused, never extrapolated or clamped",
         "so is a run whose final year's living fleet passes the fleet a class with no saturation "
@@ -2222,6 +2228,7 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
     assert margin.endswith("null in a year with no revenue."), margin
     assert "gross" not in joined
     assert "every people and capacity figure" not in joined
+    assert "the terminals' own upload" not in joined
     assert "(its floor)" not in joined
     assert "exact in beams" not in joined
     assert APERTURE_STACK_CAVEAT_NOTE not in lines

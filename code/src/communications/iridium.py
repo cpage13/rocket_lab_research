@@ -1380,7 +1380,8 @@ def _assumptions(
             f"and the steady state beyond the {config.metadata.horizon_years}-year horizon (the "
             "final year's comms launches times satellites per launch times the life). The "
             "coverage floor, the retired cap and the steady state are priced at the final "
-            "year's cost per satellite-year; a reading below the coverage floor sells nothing."
+            "year's cost per satellite-year; a reading below the coverage floor sells nothing, "
+            "and each IoT class's capacity there is null."
         ),
         (
             "IoT's room, at each year's and each reading's phone-class useful beams L, the held "
@@ -1402,8 +1403,9 @@ def _assumptions(
             "order)."
         ),
         (
-            "IoT's room is the whole IoT uplink: the terminals' own upload is not subtracted "
-            "from it."
+            "IoT's room is the whole IoT uplink: no people class's own upload (the small "
+            "terminal's, the mounted terminal's, or the phone class's on the beams IoT rides) is "
+            "subtracted from it."
         ),
         (
             "Each IoT class's capacity is read at its engineering usage, averaged over the day; "
