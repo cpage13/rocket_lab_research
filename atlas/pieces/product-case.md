@@ -3,7 +3,7 @@
 **Maturity.** Built, not yet promoted: the package, its shipped scenario and
 its tests stand; its promoted artifact and the regeneration test that guards
 it come with its first promotion. Checked against `part-b-product-case` at
-9cd2b0d, 2026-10-13.
+77a4133, 2026-10-13.
 
 **Role.** The communications market view, its own model on the engineering
 artifact (ADR 012): what the network the Iridium model builds would sell at
@@ -114,9 +114,6 @@ terms.
   product model (L3); every year FY2031 to FY2036, where the scenario reports
   four (L4); the terminals' upload in IoT's room, which waits on the
   terminal-uplink research (L5).
-- The public documents do not yet tell the product case, and
-  `communications/assumptions.md` has no product-case section yet (the
-  conclusions page, Open).
 
 **Tests.** `code/tests/product_case/`. The end-to-end specification is
 `test_end_to_end.py`: a synthetic Iridium artifact and a small scenario

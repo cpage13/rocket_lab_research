@@ -77,9 +77,8 @@ assumptions).
 **Adding a family.** A family module whose deployment rule runs on the
 shared loop and whose record sits beside the shared one (the map's flow for
 a new application or family adds the thesis first);
-`communications/design.md` gives the steps as they stood before the
-saturation work, until its rewrite. A market view is a separate model on
-the engineering artifact (ADR 012).
+`communications/design.md` gives the steps. A market view is a separate
+model on the engineering artifact (ADR 012).
 
 **Terms.** the Iridium model, High-Bandwidth Cellular Pure Play model, the
 three lanes, device class, frequency versus bandwidth, coverage floor,
@@ -123,19 +122,16 @@ deployment, equality tripwire, engineering case, product case (see
 - The cellular family is the config default (no `iridium` block), with no
   scenario file or artifact; the equality tripwire runs it beside the
   Iridium family.
-
-**Open.**
-- **The public documents.** The root README's Iridium section and the
-  folder's documents still describe the model before the saturation work
-  (the conclusions page, Open); until their rewrite, the code, the promoted
-  JSON and this page are the truth.
 - Each class's usage is a named constant the curve is computed at, so a
   seat's service is the same in every year while each added satellite
   reaches fewer people and the fleet's cost a seat rises. The investor ruled
   (2026-10-12) that the conclusions state this plainly beside each class's
   revenue rising every year, and that the product case (ADR 012) carries
-  the service that improves, which its code now does (its usage paths rise
-  year by year); both wait for the documents' rewrite.
+  the service that improves (its usage paths rise year by year).
+  `communications/conclusion.md` states both: its section "The Engineering
+  Case: Every Seat Sold" and the product case's tables.
+
+**Open.**
 - Whether the small and mounted terminals' upload carries every seat is an
   open local research wiki, `.agent/other/wiki_terminal_uplink/` (local).
 - The phone class needs the band in standard phone chipsets (the stated

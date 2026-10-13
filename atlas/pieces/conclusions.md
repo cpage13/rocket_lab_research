@@ -110,8 +110,6 @@ in its Source Snapshot.
   promoted after them: until that promotion lands, their links to it do not
   resolve, and its stamp in the Source Snapshot, the ledger's anchors and
   the handoff is the build run's (2026-10-13).
-- The rewrite's one review (every changed line, at the end) is pending; its
-  bolder lines have had no adversarial check yet.
 
 **Tests.** The em-dash guard covers every `*.md` in `data_center/`,
 `communications/` and `docs/`, and the root documents;

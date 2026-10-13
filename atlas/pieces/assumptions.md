@@ -58,16 +58,15 @@ objective 2 (each input traces to a claim ID or says investor-set).
   "Contextual assumption, not a model input" (the launch site,
   `RLDC-LAUNCH-SITE`). Then the public output anchors, the ground and the
   premium and sensitivity boundaries, and the maintenance rule.
-- `communications/assumptions.md`: a row per dial (the sourced and derived
-  dials), then the assumptions register (investor-set values, the published
-  ARPU sheet, why the cadence share is all-in, and the conventions and
-  modeling posture, whose rows state what the model leaves out), the output
-  anchors, and the maintenance rule, which does not name the artifact's
-  stated lines. Its rows still describe the model before the saturation work
-  (the four-bucket price sheet, a 25 m^2 panel, uniform-demand geography)
-  until its rewrite (the conclusions page, Open). It has no product-case
-  section yet: until the rewrite, the product case's values are labeled in
-  the source-ledger rows `COMM-722` to `COMM-726` and in each constant's
+- `communications/assumptions.md`: a row per dial for the engineering case
+  (the sourced and derived dials), then the engineering case's IoT room and
+  capacity, then a row per dial for the product case; the assumptions
+  register (investor-set values, why the cadence share is all-in, and the
+  conventions and modeling posture, whose rows state what the models leave
+  out); both artifacts' output anchors; the alternatives, one line each; the
+  catalog status; and the maintenance rule, which still does not name the
+  artifacts' stated lines. The product case's values are also labeled in the
+  source-ledger rows `COMM-722` to `COMM-726` and in each constant's
   docstring.
 
 **Source classes.** Each default in a `constants.py` opens its docstring
@@ -139,9 +138,8 @@ public source-status taxonomy (`CONTEXT.md`, Ambiguities).
    conclusions page); a `git grep` for the old values is the quick check.
 
 *Iridium.*
-1. Update the dial's row in `communications/assumptions.md` (its rewrite
-   pending, the conclusions page, Open), and the source ledger if the claim
-   trail changes.
+1. Update the dial's row in `communications/assumptions.md`, and the source
+   ledger if the claim trail changes.
 2. Change the value in its home, together with its mirrors: a scenario
    setting in `code/scenarios/iridium.yaml` (the shared cadence and cost
    dials, `satellite.*`, and the `iridium` block: the held spectrum, the
@@ -188,9 +186,8 @@ public source-status taxonomy (`CONTEXT.md`, Ambiguities).
 
 *Product case.*
 1. Update the dial's row in `communications/assumptions.md`'s product-case
-   section (it comes with the rewrite, the conclusions page, Open), and the
-   dial's source-ledger row (`COMM-722` to `COMM-726`) when the value or the
-   investor's words change.
+   section, and the dial's source-ledger row (`COMM-722` to `COMM-726`) when
+   the value or the investor's words change.
 2. Change the value in its homes, together: the setting in
    `code/scenarios/product_case.yaml`, its `*_DEFAULT` constant in
    `code/src/product_case/constants.py` (its docstring's basis with it) and

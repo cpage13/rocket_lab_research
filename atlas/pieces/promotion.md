@@ -26,9 +26,9 @@ agent-first contract of ADR 002.
   The product case's first promotion writes a fifth file. Scratch runs go to
   `code/outputs/data_center/runs/`, which git ignores.
 
-**Commands** (from `code/`; `code/README.md` lists the data-center commands
-and the Iridium command, and the saturation command's module docstring
-gives its own):
+**Commands** (from `code/`; `code/README.md` lists all four: the
+data-center commands and, in its section "Run The Communications Models",
+the Iridium command, the product case's and the saturation command):
 - `uv run rklb-value --promote 2>&1 | tee /tmp/rklb_promote.txt` writes the
   default space and ground artifacts.
 - `uv run rklb-value scenarios/conservative.yaml --promote --output-name conservative`
@@ -162,10 +162,6 @@ objects).
   commands, not `rklb-value` flags, run in order (the curve, the Iridium
   artifact, then the product case), and no project-level runner covers them
   (`data_center/CURRENT_STATE.md` names the runner as future work).
-- `code/CHANGELOG.md` has no entry yet for the curve's schema, the current
-  Iridium schema or the product case's, and `code/README.md` lists neither
-  the saturation command nor the product case's: both wait for the
-  documents' rewrite (the conclusions page, Open).
 - The product case is not yet promoted: its first promotion writes its
   artifact and adds its regeneration test (the committed artifact against a
   fresh promotion at its own stamp, naming both SHA-256s when the Iridium

@@ -64,12 +64,11 @@ read the resume point it names: it holds what is decided but not built.
   `data_center/assumptions.md`, `data_center/conclusion.md`.
 - **Work on communications or saturation:** the communications page (State
   and Open first) and ADRs 005 to 012; for active work, the resume point
-  named in `.agent/INDEX.md` (local), through forge-recover. The folder's
-  documents (`communications/CURRENT_STATE.md`, `communications/README.md`,
-  `communications/assumptions.md`, `communications/conclusion.md`,
-  `communications/design.md`) still describe the model before the
-  saturation work until their rewrite (the conclusions page, Open): read
-  them for history and sources, never for the built model.
+  named in `.agent/INDEX.md` (local), through forge-recover. Then the
+  folder's documents (`communications/CURRENT_STATE.md`,
+  `communications/README.md`, `communications/assumptions.md`,
+  `communications/conclusion.md`, `communications/design.md`), which tell
+  both built models, the engineering case and the product case.
 - **Touch shared code:** the shared-core page; the frozen baselines of the
   data center and the Iridium model, and the product case's tests, must
   hold.
@@ -175,7 +174,7 @@ rule runs on the shared fleet loop and whose record sits beside the shared
 one, a scenario file and a frozen suite, promotion, and a conclusion
 written deliberately. A market view of an engineering model is a separate
 model on its promoted artifact (ADR 012). `communications/design.md` gives
-a communications family's steps, as they stood before the saturation work.
+a communications family's steps.
 
 ## Final objects
 
@@ -207,9 +206,7 @@ a communications family's steps, as they stood before the saturation work.
 
 Each artifact states its schema version (`metadata.schema_version`; the
 Iridium artifact's `provenance.schema_version`; the curve's top-level
-`schema_version`); `code/CHANGELOG.md` records them, though not yet the
-curve's, the current Iridium schema or the product case's (the promotion
-page, Open).
+`schema_version`); `code/CHANGELOG.md` records them.
 
 ## Invariants, binding ADRs, and the guards that enforce them
 
