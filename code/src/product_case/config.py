@@ -650,10 +650,10 @@ _ARPU_CLAIM: Final[str] = "COMM-618"
 """The source-ledger row of Iridium's ARPU today (certified)."""
 
 _HELD_FLAT: Final[str] = (
-    '(2026-10-06 19:38: "These prices are fixed, and the service improves ... The prices will not '
-    'go down, but they will not go up")'
+    '(2026-10-06 19:38: "The prices will not go down, but they will not go up")'
 )
-"""The investor's words that hold every price flat, quoted in the price specs' rationales."""
+"""The investor's words that hold every price flat, quoted in the price specs' rationales (the
+sentence the constants' docstrings quote)."""
 
 _TERMINAL_END_RULE: Final[str] = (
     "SCENARIO (the product-case code design's rule, approved by the investor on 2026-10-07) for "
