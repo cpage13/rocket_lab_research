@@ -45,12 +45,12 @@
 # with the Neutron block upgrade assumed; the Iridium block sets the held spectrum,
 # the 15.4 m^2 panel, the label, the saturation block and the three prices. Each
 # class's usage and spectral efficiency and each IoT class's reference usage are
-# named constants, not settings. On an Iridium config the cellular
-# family's sizing and revenue dials (the coverage, subscribers and revenue blocks)
-# keep their defaults, the coverage floor pinned at 340 satellites (nothing is sold
-# in a year whose living fleet is below it), and a ground block is refused: the
-# config rejects another value at load, naming it. Operations cost is assumed zero:
-# an explicit stated assumption (IRIDIUM_OPERATIONS_COST_MUSD), a fixed line to
+# named constants, not settings. On an Iridium config the cellular family's sizing
+# and revenue dials (the coverage, subscribers and revenue blocks) keep their
+# defaults, the coverage floor pinned at 340 satellites (nothing is sold in a year
+# whose living fleet is below it), and a ground block is refused: the config
+# rejects another value at load, naming it. Operations cost is assumed zero: an
+# explicit stated assumption (IRIDIUM_OPERATIONS_COST_MUSD), a fixed line to
 # research and add later. `spectrum_mhz` is a WIDTH held (8 MHz exclusive), not a
 # frequency.
 #

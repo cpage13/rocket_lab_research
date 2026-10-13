@@ -1975,7 +1975,7 @@ def test_iridium_yaml_scenario_loads_and_runs(
     promoted curve.
 
     Expected outcome: the label "Iridium L-band max-outcome (every device class)", the 15.4 m^2
-    panel, 16 per launch, d = 0.67, the five prices, the all-in share and the flat costs (a
+    panel, 16 per launch, d = 0.67, the three prices, the all-in share and the flat costs (a
     $13.0M launch at both cadence anchors and a $1.0M build); no metadata block (the default
     factory gives 2026 and a 10-year horizon); its run reaches 4,288 satellites at FY2036 with
     every class side by side.
