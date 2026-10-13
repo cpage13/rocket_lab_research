@@ -50,8 +50,9 @@ schema v8 dropped the `kw_on_orbit` and `pf_on_orbit` fields for
 (`.agent/lifecycle/review_fixes_session_state_09_24.md` (local)).
 
 **Tests.** `code/tests/common/`: `test_cadence_move.py` (both configs hold
-these very classes), `test_cohort.py`, `test_file_io.py` (the loader, the
-writer and its rollback), `test_input_manifest_move.py`,
+these very classes, and the shared blocks refuse a YAML boolean or a quoted
+number in both models), `test_cohort.py`, `test_file_io.py` (the loader,
+the writer and its rollback, the anchoring), `test_input_manifest_move.py`,
 `test_meta_move.py`, `test_provenance_move.py`, and
 `test_no_venture_imports.py` (the import guard). End to end, both models'
 frozen baselines exercise the spine. Missed: nothing specific to this
