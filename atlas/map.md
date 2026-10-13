@@ -148,8 +148,8 @@ document, the catalog (`research/LIBRARY.md`) and the tracker
 model keeps that citation: the assumptions page, Source classes); the model
 computes with it; the promoted JSON carries the value (data center: a provenance
 cell and an `inputs.assumption_index` entry with its claim; the product case:
-an input cell under `inputs` with its claim and status, and each headline
-value a provenance cell; Iridium: the
+an input cell under `inputs` with its claim and status, and each number
+under `headline.years` a provenance cell; Iridium: the
 value, its claim trail staying in `code/src/communications/constants.py`
 and the ledger, and the saturation curve's inputs in its `parameters`,
 which the Iridium artifact names by `saturation.input_hash`); the

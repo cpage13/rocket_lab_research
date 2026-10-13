@@ -19,16 +19,16 @@ test, and no IoT count is ever set. The candidates hold every price at its
 start price, so the pick chooses only each IoT class's usage: the highest
 median revenue over the reported years among the candidates usable in at
 least the robust floor's share of the drawn markets, or, when none is, the
-most usable candidate, warned.
-The headline is the pick at the central market; the spreads place it among
-the drawn markets.
+most usable candidate, warned. The headline is the pick at the central
+market; the spreads place it among the drawn markets.
 
 **Serves.** Objective 1 (what the network would sell in years 5 to 10, read
 beside the engineering case and never added to it), objective 2 (every input
-an input cell with its claim and status, every headline value a provenance
-cell, every published number named by a formula of the product case's own
-catalog), objective 3 (the market machinery lives only here and optimizes one
-thing) and objective 5 (the four classes side by side).
+an input cell with its claim and status, every number under the headline's
+years a provenance cell, every published number named by a formula of the
+product case's own catalog), objective 3 (the market machinery lives only
+here and optimizes one thing) and objective 5 (the four classes side by
+side).
 
 **Edges.**
 - In: `code/scenarios/product_case.yaml` (the prices, each class's usage path
@@ -71,9 +71,10 @@ terms.
 
 **State.**
 - Not yet promoted: no default artifact exists until the first promotion.
-- The method runs in nine steps, each written in the package docstring with
-  its formula in symbols and units, and each a catalog entry the artifact
-  publishes (`meta.formulas`).
+- The method runs in nine steps, listed in the package docstring; steps 3 to 9
+  carry their formulas in symbols and units in `monte_carlo.py`'s module
+  docstring, and each formula is a catalog entry the artifact publishes
+  (`meta.formulas`).
 - What stops the usage: the robust floor, the median's peak, or the top of an
   IoT class's usage list, where the pick then sits on an upper usage edge,
   warned. The stated line on it names this run's pick (`assumptions`).
@@ -81,14 +82,15 @@ terms.
   schema, stamp and SHA-256), `inputs` (every input an input cell: the
   scenario's, the constants' and the values read from the Iridium artifact),
   `network`, `choices` (every choice's summary), `fronts`, `pick`, `headline`
-  (the pick at the central market: the four classes side by side and each
-  year's totals, every number a provenance cell), `spreads` (each field over
-  the pick's usable draws and over all draws, with the headline's rank; the
-  all-draw basis's label, `spreads.all_draws_basis.label`), `meta` (the
-  formulas, the validation results, the data dictionary, the worked queries
-  and the source statuses) and `assumptions` (the stated lines, each built
-  from the run). No total of customers is published: people and devices
-  never add.
+  (the pick at the central market: the market's three responses, then each
+  reported year's four classes side by side and its totals, every number
+  under `headline.years` a provenance cell but the year), `spreads` (each
+  field over the pick's usable draws and over all draws, with the
+  headline's rank; the all-draw basis's label,
+  `spreads.all_draws_basis.label`), `meta` (the formulas, the validation
+  results, the data dictionary, the worked queries and the source statuses)
+  and `assumptions` (the stated lines, each built from the run). No total of
+  customers is published: people and devices never add.
 - The checks: believability per class and year, a warning that never
   refuses; the run's three warnings (an upper usage edge, the fallback, a
   central market unusable for the pick); and the invariants, which refuse
@@ -107,10 +109,10 @@ terms.
   product model (L3); every year FY2031 to FY2036, where the scenario reports
   four (L4); the terminals' upload in IoT's room, which waits on the
   terminal-uplink research (L5).
-- IoT's room rides the phone class's useful beams, the beams lit over
-  inhabited cells, so no IoT device is sold over oceans or empty land: a
-  conservative basis, which the Iridium artifact states and the product
-  case's stated lines do not yet name.
+- IoT's room, which the usable test holds IoT's sales to, rides the phone
+  class's useful beams, the beams lit over inhabited cells, so it counts no
+  beam over oceans or empty land: a conservative basis, which the Iridium
+  artifact states and the product case's stated lines do not yet name.
 - The public documents do not yet tell the product case, and
   `communications/assumptions.md` has no product-case section yet (the
   conclusions page, Open).
