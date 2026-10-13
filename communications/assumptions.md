@@ -118,8 +118,8 @@ investor's words quoted, is in its constant's docstring in
 | Minimal-packet IoT's price | $3 a month, held flat | `scenario`, investor-set | `COMM-722`: the investor, 2026-10-06 ("Let's go with the three and six for now"). |
 | Data IoT's price | twice minimal-packet IoT's: $6 | `scenario`, investor-set | `COMM-722`, `COMM-726`: the investor's proportion (2026-10-04), never a setting. |
 | Terminals' data a month | the small terminal 5.4, 6.7, 8.1 and 9 GB; the mounted terminal 54, 67, 81 and 90 GB | `scenario`, investor-set | `COMM-724`: FY2031's is the engineering usage; FY2035's the investor's bigger allotment (2026-10-05); FY2036's the investor's (2026-10-12: "go with 9 GB, 90 GB and 13 bursts"); FY2033's about half-way (a scenario value). |
-| Minimal-packet IoT's usage path | 48, 72, 96 and 96 messages a day | `scenario` | `COMM-724`: the engineering usage's 48, doubling to 96 by FY2035 and held. Each choice multiplies it by its usage scale, x1 to x16 (`COMM-723`). |
-| Data IoT's usage | 8, 10, 12 and 13 bursts a day, beside 48 messages; outside the busy hours from FY2033 | `scenario`, investor-set | `COMM-724`: the investor's 8 (2026-10-05) and 13 (2026-10-12) and the bursts' timing (2026-10-05); 10 and 12 are scenario values. Each choice multiplies the bursts by its usage scale, x1 to x8 (`COMM-723`). |
+| Minimal-packet IoT's usage path | 48, 72, 96 and 96 messages a day | `scenario` | `COMM-724`: the engineering usage's 48, doubling to 96 by FY2035 and held. Each choice multiplies it by a factor that rises on a straight line from x1 in FY2031 to its usage scale in FY2036, x1 to x16 (`COMM-723`): at the pick's x8, 48, 274, 634 and 768 messages a day. |
+| Data IoT's usage | 8, 10, 12 and 13 bursts a day, beside 48 messages; outside the busy hours from FY2033 | `scenario`, investor-set | `COMM-724`: the investor's 8 (2026-10-05) and 13 (2026-10-12) and the bursts' timing (2026-10-05); 10 and 12 are scenario values. Each choice multiplies the bursts by a factor on the same line, from x1 in FY2031 to its usage scale in FY2036, x1 to x8 (`COMM-723`); the pick's is x1. |
 | The demand anchors | 402,000 at $47; 16,100 at $259; 1,998,000 IoT devices at $7.78 | `certified` | `COMM-617`, `COMM-618`: Iridium's voice-and-data, broadband and commercial IoT customers and ARPU today. Minimal-packet IoT takes the IoT segment whole. |
 | Data IoT's anchor | 999,000 at $15.56 | `scenario`, investor-set | `COMM-726`: half the IoT segment's count at double its ARPU, the investor's proportion (2026-10-04). |
 | Busy hours, month, units | 4 busy hours a day; 30-day months; decimal GB and MB | `scenario`, investor-set (the 4 hours) | `COMM-724`: the investor, 2026-10-04, for the 4 hours; the rest are conventions. |
@@ -243,7 +243,7 @@ These values are read from the promoted JSON, not external facts. All are
 | Mounted terminal alone, FY2031 / FY2036 | 526,557 people, 315.9 million dollars, 39.4 percent / 3,527,090 people, 2,116.3 million dollars, 26.5 percent |
 | Phone class alone, FY2031 / FY2036 | 3,560,271 people, 640.8 million dollars, 70.1 percent / 20,823,193 people, 3,748.2 million dollars, 58.5 percent |
 | Saturation numbers | 19,995; not reached by 55,407; 20,652 |
-| Where the next satellite stops paying, at full price | from 6,006 (small terminal), 5,402 (mounted terminal) and 8,010 (phone class) satellites |
+| Where the next satellite stops paying, at full price | from about 6,006 (small terminal), 5,402 (mounted terminal) and 8,010 (phone class) satellites: rows of the curve, each crossing within a row's spacing |
 | The readings | the coverage floor (340, 123.25 million dollars a year); 2,000, the retired cap, kept for comparison (725.0); the horizon-end reach (4,288, 1,554.4); the steady state beyond the horizon (7,200, 2,610.0) |
 | IoT's room, FY2031 / FY2036 | payload 6.6 / 38.5 Gbps; access attempts 1.1 / 6.4 million a second; tones 13.5 / 78.9 million at once |
 | IoT capacity, each class alone, FY2031 / FY2036 | minimal-packet 1,965,864,139 / 11,497,881,052; data IoT 170,588,558 / 997,732,709 |
@@ -289,10 +289,10 @@ spectrum fundamentals, Iridium acquisition, band designations, Iridium
 capacity and modernization, the device gate, and MSS spectrum expansion were
 indexed as Waves 8 and 9 on 2026-07-08; the panel, the launch counts and the
 saturation module's inputs, `COMM-711` to `COMM-721`, landed 2026-10-05; the
-product case's five rows, `COMM-722` to `COMM-726`, on 2026-10-13). The only gaps in the id space are
-the documented reserved-unused ranges: `COMM-191..196`, `COMM-366..370`,
-`COMM-379..385`, `COMM-440..480`, `COMM-513..520`, `COMM-575..600`, and
-`COMM-677..685`.
+product case's five rows, `COMM-722` to `COMM-726`, on 2026-10-13). The only
+gaps in the id space are the documented reserved-unused ranges:
+`COMM-191..196`, `COMM-366..370`, `COMM-379..385`, `COMM-440..480`,
+`COMM-513..520`, `COMM-575..600`, and `COMM-677..685`.
 
 ## Maintenance Rule
 
