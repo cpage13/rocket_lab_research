@@ -28,10 +28,16 @@ It refuses, naming the field or the year, with :class:`EngineeringArtifactError`
 not JSON; another schema (naming ``iridium-v7``); a field it reads missing or of the wrong type; a
 null coverage floor year (no year of service in the horizon); a reported year absent from the
 artifact, or before its coverage floor year; a reported year in which a terminal class has no
-people (no seats, so the fill would divide by zero); a reported year whose IoT room is zero (a
-downlink share of 1 leaves the uplink no time); a beam pool, a message or burst size or the
-airtime that is not above 0 (each divides a quantity). The view is frozen and holds plain
-numbers, so a test can build one from pinned values.
+people (no seats, so the fill would divide by zero); a reported year whose payload or tone room
+is zero (a downlink share of 1 leaves the uplink no time) or whose access room or phone-class
+beams are zero (the phone class has no useful beams for IoT to ride); a beam pool, a message or
+burst size or the airtime that is not above 0 (each divides a quantity); a value derived from
+them that is not a finite number above 0 (a pool's people a beam or busy-hour data, the class
+split, which must also be below 1), naming the fields it came from; people beyond the range of
+a double. With those held, each year's seats and scale are finite and above 0. The view is
+frozen and holds plain numbers, so a test can build one from pinned values; a view built so must
+hold the class split and the busy-hour data its pools give (within
+:data:`~product_case.constants.RELATIVE_TOLERANCE`), which it checks.
 """
 
 from __future__ import annotations
@@ -39,6 +45,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Final  # typing-acceptable: Any types the parsed JSON before validation
@@ -53,6 +60,7 @@ from product_case.constants import (
     DAYS_PER_MONTH,
     ENGINEERING_SCHEMA_VERSION,
     PHONE_DEVICE_CLASS,
+    RELATIVE_TOLERANCE,
     SECONDS_PER_HOUR,
     TERMINAL_CUSTOMERS_TODAY,
     TERMINAL_DEVICE_CLASS,
@@ -66,11 +74,14 @@ logger = logging.getLogger(__name__)
 class EngineeringArtifactError(ValueError):
     """The engineering artifact cannot carry the product case.
 
-    Raised by :func:`engineering_view_from_bytes` and :func:`build_engineering_view` for bytes
-    that are not JSON, another schema, a field missing or of the wrong type, a null coverage
-    floor year, a reported year absent or before the floor, a terminal class with no people in a
-    reported year, a reported year whose IoT room is zero, or a pool, a size or the airtime that
-    is not above 0. The message is one line naming the artifact and the field or the year.
+    Raised by :func:`engineering_view_from_bytes`, :func:`build_engineering_view` and the
+    view's own construction for bytes that are not JSON, another schema, a field missing or of
+    the wrong type, a null coverage floor year, a reported year absent or before the floor, a
+    terminal class with no people in a reported year, a reported year whose IoT room or
+    phone-class beams are zero, a pool, a size or the airtime that is not above 0, a derived
+    value that is not a finite number above 0, people beyond the range of a double, or a view
+    whose class split or busy-hour data its pools do not give. The message is one line naming
+    the artifact and the field or the year.
     """
 
 
@@ -178,7 +189,14 @@ class EngineeringYear:
 class EngineeringView:
     """The network the product case sells on, every reported year (B1's output).
 
-    Constructible from plain numbers, so a test can build one from pinned values.
+    Constructible from plain numbers, so a test can build one from pinned values. Its pools must
+    give its class split and its busy-hour data: a view built directly (the reproduction of
+    round 3 builds one from pinned floats) passes pools whose people a beam and engineering
+    usage give ``small_terminal_share`` and the two busy-hour figures, which the construction
+    checks within :data:`~product_case.constants.RELATIVE_TOLERANCE` (the committed artifact's
+    pools, 214.4 and 26.8 people a beam, and round 1's, 320 and 40, both give round 3's
+    0.757347400150716 exactly, with 2.7 and 27 GB). A pool, a size or the airtime not above 0 is
+    refused first.
 
     Attributes:
         path: The engineering artifact's path as the scenario names it.
@@ -211,6 +229,39 @@ class EngineeringView:
     burst_bytes: int
     airtime_high_s: float
     years: tuple[EngineeringYear, ...]
+
+    def __post_init__(self) -> None:
+        """Refuse a view whose class split or busy-hour data its pools do not give."""
+        _refuse_unusable_sizes(
+            self.path,
+            {
+                TERMINAL_DEVICE_CLASS[ProductClass.SMALL_TERMINAL]: self.small_terminal_pool,
+                TERMINAL_DEVICE_CLASS[ProductClass.MOUNTED_TERMINAL]: self.mounted_terminal_pool,
+            },
+            self.message_bytes,
+            self.burst_bytes,
+            self.airtime_high_s,
+        )
+        given = {
+            "small_terminal_share": (
+                self.small_terminal_share,
+                class_split(self.small_terminal_pool, self.mounted_terminal_pool),
+            ),
+            "busy_hour_gb_per_month_small": (
+                self.busy_hour_gb_per_month_small,
+                self.small_terminal_pool.busy_hour_gb_per_month,
+            ),
+            "busy_hour_gb_per_month_mounted": (
+                self.busy_hour_gb_per_month_mounted,
+                self.mounted_terminal_pool.busy_hour_gb_per_month,
+            ),
+        }
+        for field, (held, from_pools) in given.items():
+            if not math.isclose(held, from_pools, rel_tol=RELATIVE_TOLERANCE, abs_tol=0.0):
+                raise EngineeringArtifactError(
+                    f"{self.path}: the view's {field} is {held!r}, but its pools give "
+                    f"{from_pools!r} (they must agree within a relative {RELATIVE_TOLERANCE:g})"
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -259,17 +310,35 @@ def _refuse_unsellable(path: str, floor_year: int, reading: EngineeringYearReadi
                 f".people_served is {count!r}), so it has no seats and the fill would divide "
                 "by zero"
             )
-    rooms = {
-        "years[].iot.uplink_payload_bits_per_second": reading.iot_payload_bits_per_second,
-        "years[].iot.access_attempts_per_second_low": reading.iot_access_attempts_per_second,
-        "years[].iot.single_tone_seconds_per_second": reading.iot_single_tone_seconds_per_second,
-        f"years[].classes[].useful_beams of {PHONE_DEVICE_CLASS}": reading.phone_useful_beams,
-    }
-    for field, room in rooms.items():
+    no_uplink_time = "a downlink share of 1 leaves the uplink no time"
+    no_beams = "the phone class has no useful beams for IoT to ride"
+    rooms = (
+        (
+            "years[].iot.uplink_payload_bits_per_second",
+            reading.iot_payload_bits_per_second,
+            no_uplink_time,
+        ),
+        (
+            "years[].iot.access_attempts_per_second_low",
+            reading.iot_access_attempts_per_second,
+            no_beams,
+        ),
+        (
+            "years[].iot.single_tone_seconds_per_second",
+            reading.iot_single_tone_seconds_per_second,
+            no_uplink_time,
+        ),
+        (
+            f"years[].classes[].useful_beams of {PHONE_DEVICE_CLASS}",
+            reading.phone_useful_beams,
+            no_beams,
+        ),
+    )
+    for field, room, cause in rooms:
         if not room > 0:
             raise EngineeringArtifactError(
-                f"{path}: FY{year}: IoT's room is zero ({field} is {room!r}): a downlink share "
-                "of 1 leaves the uplink no time, so no IoT device fits"
+                f"{path}: FY{year}: IoT's room is zero ({field} is {room!r}): {cause}, so no IoT "
+                "device fits"
             )
 
 
@@ -280,7 +349,8 @@ def _refuse_unusable_sizes(
     burst_bytes: int,
     airtime_high_s: float,
 ) -> None:
-    """Refuse a pool, a size or the airtime not above 0 (each divides a quantity), naming it."""
+    """Refuse a pool, a size or the airtime not above 0 (each divides a quantity), and a pool
+    whose people a beam or busy-hour data is not a finite number above 0, naming the fields."""
     values: dict[str, float] = {
         "iridium_physics.iot_message_bytes": message_bytes,
         "iridium_physics.iot_burst_bytes": burst_bytes,
@@ -295,6 +365,30 @@ def _refuse_unusable_sizes(
             raise EngineeringArtifactError(
                 f"{path}: {field} is {value!r}; the product case needs it above 0"
             )
+    for device_class, pool in pools.items():
+        derived = {
+            "people a beam": (
+                pool.people_per_beam,
+                "beam_pool_mbps, active_user_rate_mbps and concurrency_peak",
+            ),
+            "busy-hour data a month": (
+                pool.busy_hour_gb_per_month,
+                "active_user_rate_mbps and concurrency_peak",
+            ),
+        }
+        for quantity, (value, fields) in derived.items():
+            _refuse_unless_finite_and_positive(
+                path, f"{device_class}'s {quantity}", value, f"its classes[].{fields}"
+            )
+
+
+def _refuse_unless_finite_and_positive(path: str, name: str, value: float, source: str) -> None:
+    """Refuse a derived value that is not a finite number above 0, naming its source fields."""
+    if not (math.isfinite(value) and value > 0):
+        raise EngineeringArtifactError(
+            f"{path}: {name} is {value!r}, from {source}; the product case needs a finite number "
+            "above 0 (a value too large or too small for the arithmetic)"
+        )
 
 
 def build_engineering_view(
@@ -338,14 +432,15 @@ def build_engineering_view(
     Raises:
         EngineeringArtifactError: If a pool, a size or the airtime is not above 0, a reported year
             is before the coverage floor year, a terminal class has no people in it, or its IoT
-            room or the phone class's beams are zero.
+            room or the phone class's beams are zero; or a derived value (a pool's people a beam
+            or busy-hour data, the class split) is not a finite number above 0, or the split not
+            below 1, naming the fields it came from.
     """
+    small_class = TERMINAL_DEVICE_CLASS[ProductClass.SMALL_TERMINAL]
+    mounted_class = TERMINAL_DEVICE_CLASS[ProductClass.MOUNTED_TERMINAL]
     _refuse_unusable_sizes(
         path,
-        {
-            TERMINAL_DEVICE_CLASS[ProductClass.SMALL_TERMINAL]: small_terminal_pool,
-            TERMINAL_DEVICE_CLASS[ProductClass.MOUNTED_TERMINAL]: mounted_terminal_pool,
-        },
+        {small_class: small_terminal_pool, mounted_class: mounted_terminal_pool},
         message_bytes,
         burst_bytes,
         airtime_high_s,
@@ -353,6 +448,15 @@ def build_engineering_view(
     for reading in readings:
         _refuse_unsellable(path, coverage_floor_reached_year, reading)
     share = class_split(small_terminal_pool, mounted_terminal_pool)
+    if not 0.0 < share < 1.0:
+        raise EngineeringArtifactError(
+            f"{path}: the class split s is {share!r}, from classes[].beam_pool_mbps, "
+            f"active_user_rate_mbps and concurrency_peak of {small_class} and {mounted_class}; "
+            "the product case needs it strictly between 0 and 1 (each terminal some beams)"
+        )
+    # With s strictly between 0 and 1 and each year's people a finite number of at least 1,
+    # each seat count lies above 0 and at most its people, so the seats and k are finite and
+    # above 0: no further check can fire.
     years = tuple(_engineering_year(share, reading) for reading in readings)
     view = EngineeringView(
         path=path,
@@ -548,12 +652,21 @@ def _reading(path: str, entry: _YearSlice) -> EngineeringYearReading:
             raise EngineeringArtifactError(
                 f"{path}: FY{entry.year}: years[].classes[] has no {device_class} entry"
             )
+    people: list[float] = []
+    for device_class in needed[:2]:
+        try:
+            people.append(float(by_class[device_class].people_served))
+        except OverflowError as error:
+            raise EngineeringArtifactError(
+                f"{path}: FY{entry.year}: years[].classes[].people_served of {device_class} is "
+                "beyond the range of a double"
+            ) from error
     return EngineeringYearReading(
         year=entry.year,
         living_fleet=entry.living_fleet,
         annual_cost_musd=entry.annual_cost_musd,
-        people_small_terminal=float(by_class[needed[0]].people_served),
-        people_mounted_terminal=float(by_class[needed[1]].people_served),
+        people_small_terminal=people[0],
+        people_mounted_terminal=people[1],
         phone_useful_beams=by_class[PHONE_DEVICE_CLASS].useful_beams,
         iot_payload_bits_per_second=entry.iot.uplink_payload_bits_per_second,
         iot_access_attempts_per_second=entry.iot.access_attempts_per_second_low,

@@ -8,6 +8,7 @@ and gives round 1's class split to the bit.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import math
@@ -20,6 +21,7 @@ import pytest
 from product_case.constants import TERMINAL_CUSTOMERS_TODAY, VOICE_DATA_CUSTOMERS_TODAY
 from product_case.engineering import (
     EngineeringArtifactError,
+    EngineeringView,
     TerminalPool,
     class_split,
     engineering_view_from_bytes,
@@ -202,6 +204,30 @@ def _no_phone_beams(artifact: dict[str, Any]) -> None:
     year["classes"] = [entry for entry in year["classes"] if entry["device_class"] != "phone_class"]
 
 
+def _zero_access_room(artifact: dict[str, Any]) -> None:
+    """FY2033 with no random-access room (the room is 57 attempts a second on each useful beam)."""
+    _year(artifact, 2033)["iot"]["access_attempts_per_second_low"] = 0.0
+
+
+def _zero_tone_room(artifact: dict[str, Any]) -> None:
+    """FY2032 with no single-tone room alone (its payload room still published)."""
+    _year(artifact, 2032)["iot"]["single_tone_seconds_per_second"] = 0.0
+
+
+def _set_pool(index: int, **values: float) -> Mutation:
+    """A mutation that sets values of one ``classes[]`` entry (0 the small terminal, 1 mounted)."""
+
+    def mutate(artifact: dict[str, Any]) -> None:
+        artifact["classes"][index].update(values)
+
+    return mutate
+
+
+def _people_beyond_a_double(artifact: dict[str, Any]) -> None:
+    """FY2032 with more small-terminal people than a double holds (10^400)."""
+    _year_class(artifact, 2032, "small_terminal_class")["people_served"] = 10**400
+
+
 REFUSALS: list[tuple[str, Mutation, tuple[int, ...], tuple[str, ...]]] = [
     (
         "iridium-v6",
@@ -292,7 +318,68 @@ REFUSALS: list[tuple[str, Mutation, tuple[int, ...], tuple[str, ...]]] = [
         "no phone-class beams under a room",
         _zero_phone_beams,
         (2031, 2032, 2033),
-        ("FY2031: IoT's room is zero", "useful_beams of phone_class is 0.0"),
+        (
+            "FY2031: IoT's room is zero",
+            "useful_beams of phone_class is 0.0",
+            "the phone class has no useful beams for IoT to ride",
+        ),
+    ),
+    (
+        "a zero access room",
+        _zero_access_room,
+        (2031, 2032, 2033),
+        (
+            "FY2033: IoT's room is zero",
+            "years[].iot.access_attempts_per_second_low is 0.0",
+            "the phone class has no useful beams for IoT to ride",
+        ),
+    ),
+    (
+        "a zero tone room",
+        _zero_tone_room,
+        (2031, 2032, 2033),
+        (
+            "FY2032: IoT's room is zero",
+            "years[].iot.single_tone_seconds_per_second is 0.0",
+            "a downlink share of 1 leaves the uplink no time",
+        ),
+    ),
+    (
+        "a pool whose split leaves the doubles",
+        _set_pool(0, beam_pool_mbps=1e-300, active_user_rate_mbps=1e10, concurrency_peak=1e10),
+        (2031, 2032, 2033),
+        (
+            "the class split s is nan",
+            "beam_pool_mbps, active_user_rate_mbps and concurrency_peak of small_terminal_class "
+            "and mounted_terminal_class",
+        ),
+    ),
+    (
+        "a pool whose people a beam underflows to 0",
+        _set_pool(0, beam_pool_mbps=1e-300, active_user_rate_mbps=1e100, concurrency_peak=1e100),
+        (2031, 2032, 2033),
+        (
+            "small_terminal_class's people a beam is 0.0",
+            "its classes[].beam_pool_mbps, active_user_rate_mbps and concurrency_peak",
+        ),
+    ),
+    (
+        "a rate whose busy-hour data leaves the doubles",
+        _set_pool(1, active_user_rate_mbps=1e300),
+        (2031, 2032, 2033),
+        (
+            "mounted_terminal_class's busy-hour data a month is inf",
+            "its classes[].active_user_rate_mbps and concurrency_peak",
+        ),
+    ),
+    (
+        "people beyond a double",
+        _people_beyond_a_double,
+        (2031, 2032, 2033),
+        (
+            "FY2032: years[].classes[].people_served of small_terminal_class is beyond the range "
+            "of a double",
+        ),
     ),
     (
         "the phone class's beams absent",
@@ -320,8 +407,11 @@ def test_every_refusal_of_an_engineering_artifact_names_the_field_or_the_year(
     one line naming the artifact and the field or the year: another schema (naming
     ``iridium-v7``); a field it reads missing, of the wrong type or not finite; a null coverage
     floor year; a reported year absent from the artifact or before its floor year; a reported
-    year whose IoT room or phone-class beams are zero (d = 1); a terminal class with no people in
-    a reported year; a pool, a size or the airtime not above 0; a class the reader needs absent.
+    year whose payload or tone room is zero (d = 1) or whose access room or phone-class beams
+    are zero (no useful beams), each with its own cause; a terminal class with no people in a
+    reported year; a pool, a size or the airtime not above 0; a value derived from the pools
+    (people a beam, busy-hour data, the class split) that leaves the finite numbers above 0;
+    people beyond a double; a class the reader needs absent.
 
     Sample: the synthetic artifact with one change, read for the reported years shown.
 
@@ -403,3 +493,50 @@ def test_the_committed_artifact_reads_to_round_one_class_split_to_the_bit(
         assert year.iot_payload_bits_per_second == iot["uplink_payload_bits_per_second"]
         assert year.iot_access_attempts_per_second == iot["access_attempts_per_second_low"]
         assert year.iot_single_tone_seconds_per_second == iot["single_tone_seconds_per_second"]
+
+
+def test_a_view_built_directly_holds_the_split_and_busy_data_its_pools_give() -> None:
+    """Objective: a view built from plain numbers (as the reproduction of round 3 builds one
+    from pinned floats) must hold the class split and the busy-hour data its pools give, checked
+    at its construction within the invariants' tolerance (the spec lens's m6), so the pool cells
+    the artifact publishes cannot contradict s; round 3's pinned split passes.
+
+    Sample: round 3's split at full precision (0.757347400150716, the plan's probe pB3) with 2.7
+    and 27 GB of busy-hour data, once with the committed artifact's pools (10.72 Mbps a beam at 2
+    Mbps and 2.5 percent busy; 13.4 at 5 Mbps and 10 percent) and once with round 1's (16 and 20
+    Mbps a beam at the same usage, 320 and 40 people a beam); then that view with the split 0.75,
+    and with the small terminal's busy-hour data 2.8 GB.
+
+    Expected outcome: both pinned views build; the two changed ones raise
+    ``EngineeringArtifactError`` naming the field, its value and the value the pools give.
+    """
+    pools = {
+        "committed": (TerminalPool(10.72, 2.0, 0.025), TerminalPool(13.4, 5.0, 0.1)),
+        "round 1": (TerminalPool(16.0, 2.0, 0.025), TerminalPool(20.0, 5.0, 0.1)),
+    }
+    views = [
+        EngineeringView(
+            path="round3/pinned",
+            sha256="0" * 64,
+            schema_version="iridium-v7",
+            version_stamp="2026-10-06",
+            coverage_floor_reached_year=2031,
+            small_terminal_pool=small,
+            mounted_terminal_pool=mounted,
+            small_terminal_share=PB3_CLASS_SPLIT,
+            busy_hour_gb_per_month_small=2.7,
+            busy_hour_gb_per_month_mounted=27.0,
+            message_bytes=340,
+            burst_bytes=100_000,
+            airtime_high_s=7.0,
+            years=(),
+        )
+        for small, mounted in pools.values()
+    ]
+    assert [view.small_terminal_share for view in views] == [PB3_CLASS_SPLIT] * len(pools)
+    with pytest.raises(EngineeringArtifactError, match=r"small_terminal_share is 0\.75, but"):
+        dataclasses.replace(views[0], small_terminal_share=0.75)
+    with pytest.raises(
+        EngineeringArtifactError, match=r"busy_hour_gb_per_month_small is 2\.8, but its pools"
+    ):
+        dataclasses.replace(views[1], busy_hour_gb_per_month_small=2.8)
