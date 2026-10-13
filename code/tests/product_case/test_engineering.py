@@ -467,16 +467,17 @@ def test_bytes_that_are_not_json_are_refused() -> None:
         pytest.param(0.5, id="half a person"),
     ],
 )
-def test_a_direct_build_refuses_people_not_finite_or_below_one(people: float) -> None:
-    """Objective: a view built from plain numbers refuses a terminal's people that are not a
-    finite number of at least 1, naming the field and the year, so each year's seats and scale
-    are finite and above 0 on a direct build as on the reader's path (the re-check's n3: people
-    of inf gave seats and a scale of inf, and 1e-320 a scale of 0, unrefused).
+def test_build_engineering_view_refuses_people_not_finite_or_below_one(people: float) -> None:
+    """Objective: ``build_engineering_view``, which derives a view from plain numbers, refuses
+    a terminal's people that are not a finite number of at least 1, naming the field and the
+    year, so each year's seats and scale are finite and above 0 from a caller's own numbers as
+    on the reader's path (the re-check's n3: people of inf gave seats and a scale of inf, and
+    1e-320 a scale of 0, unrefused).
 
-    Sample: a direct build of one reported year, FY2031, with the synthetic artifact's pools,
-    sizes, beams and rooms (20,000 phone beams; 7e9 bits, 1.14 million attempts and 1.4e7
-    tone-seconds a second), the mounted terminal at 500,000 people and the small terminal's
-    people as shown.
+    Sample: ``build_engineering_view`` over one reported year, FY2031, with the synthetic
+    artifact's pools, sizes, beams and rooms (20,000 phone beams; 7e9 bits, 1.14 million
+    attempts and 1.4e7 tone-seconds a second), the mounted terminal at 500,000 people and the
+    small terminal's people as shown.
 
     Expected outcome: an ``EngineeringArtifactError`` naming FY2031, the small terminal's
     ``people_served`` with its value, and the finite number of at least 1 it needs.

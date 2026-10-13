@@ -36,10 +36,11 @@ the beams it scales with (an inconsistent artifact, naming the room); a beam poo
 burst size or the airtime that is not above 0 (each divides a quantity); a value derived from
 them that is not a finite number above 0 (a pool's people a beam or busy-hour data, the class
 split, which must also be below 1), naming the fields it came from; people beyond the range of
-a double. With those held, on the reader's path and on a direct build alike, each year's seats
-lie above 0 and at most its people, and its scale is finite and above 0. The view is frozen and
-holds plain numbers, so a test can build one from pinned values; a view built so must hold the
-class split and the busy-hour data its pools give (within
+a double. With those held, on the reader's path and through :func:`build_engineering_view` from
+plain numbers alike, each year's seats lie above 0 and at most its people, and its scale is
+finite and above 0. The view is frozen and holds plain numbers, so a test can also construct one
+from pinned values, its years' seats and scale then the test's own; a view constructed so must
+hold the class split and the busy-hour data its pools give (within
 :data:`~product_case.constants.RELATIVE_TOLERANCE`), which it checks.
 """
 
@@ -299,13 +300,13 @@ def _refuse_unsellable(path: str, floor_year: int, reading: EngineeringYearReadi
 
     The people come first: each terminal class's must be a finite number of at least 1 (none is
     no seats, and the fill would divide by zero), so every year's seats and scale are finite
-    and above 0 on every path, the reader's and a direct build's. Then IoT's rooms, in part A's
-    terms: each scales with the phone class's useful beams L, the payload and tone rooms also
-    with the uplink's share 1 - d. So L is checked first (none, and every room is zero: the phone
-    class has no useful beams for IoT to ride); with L above 0, the payload and tone rooms zero
-    together are a downlink share of 1; a room zero alone (the access room, or one of the payload
-    and tone rooms) contradicts the beams it scales with, and is refused as an inconsistent
-    artifact naming its field.
+    and above 0 on both paths through :func:`build_engineering_view`, the reader's and a caller's
+    own plain numbers. Then IoT's rooms, in part A's terms: each scales with the phone class's
+    useful beams L, the payload and tone rooms also with the uplink's share 1 - d. So L is
+    checked first (none, and every room is zero: the phone class has no useful beams for IoT to
+    ride); with L above 0, the payload and tone rooms zero together are a downlink share of 1; a
+    room zero alone (the access room, or one of the payload and tone rooms) contradicts the beams
+    it scales with, and is refused as an inconsistent artifact naming its field.
     """
     year = reading.year
     if year < floor_year:
