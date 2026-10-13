@@ -67,7 +67,9 @@ the terminals' fill in the same weak markets, and IoT's own failures (its room o
 strong markets, which earn the most) may take only the draws between the fill's share and the
 robust floor. The pick's usage therefore rises while its median summed revenue rises and its usable
 share stays at or above the floor, and stops at whichever comes first: the floor, or the median's
-peak. It can move with a price or a terminal change, in steps; the prices never move.
+peak. It can move with a price or a terminal change, in steps; the prices never move. When no
+candidate reaches the floor, the pick is the most usable candidate, the first on the candidates'
+front (ties to the higher median), and its usage is that candidate's, warned (the design's D19).
 
 **Operation order.** Every quantity floored or compared with a threshold is computed in round 3's
 operation order (round 3 of the product case's scratch exploration, local): the curve, multiplied
