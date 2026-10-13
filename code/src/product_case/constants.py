@@ -542,12 +542,14 @@ class ProductCaseFormula(StrEnum):
     """The product case's formulas, the key type of :data:`FORMULA_CATALOG`.
 
     Each value is its catalog entry's ``formula_id`` and the ``formula_name`` of every
-    provenance cell it computes. The members run in the method's order: the network (step 1),
-    the offers (step 2), the demand curve and the sales (steps 3 and 4), a year's numbers
-    (step 5), usable (step 6), each choice over the draws (step 7), the grid, the fronts and
-    the pick (step 8), the headline and the spreads (step 9).
+    provenance cell it computes. The members run in the method's order: the reported years and
+    the network (step 1), the offers (step 2), the demand curve and the sales (steps 3 and 4), a
+    year's numbers (step 5), usable (step 6), each choice over the draws (step 7), the grid, the
+    fronts and the pick (step 8), the headline and the spreads (step 9), then the source-status
+    summary of the run's inputs.
     """
 
+    REPORTED_YEARS = "reported_years"
     CLASS_SPLIT = "class_split"
     SEATS = "seats"
     NETWORK_SCALE = "network_scale"
@@ -592,12 +594,23 @@ class ProductCaseFormula(StrEnum):
     MID_RANK = "mid_rank"
     EVERY_SEAT_SHARES = "every_seat_shares"
     DRAWS_PAST_IOT_ROOM = "draws_past_iot_room"
+    SOURCE_STATUS_SUMMARY = "source_status_summary"
 
 
 PATH_SEPARATOR: Final[str] = "; "
 """How a catalog entry's ``output_path_pattern`` (and ``input_path_pattern``) separates the paths
-it names: each path is a data-dictionary path (a list's items as ``[]``), and ``*`` stands for any
-one key."""
+it names. A definition, not an input. Each path is written as the data-dictionary walker
+(:func:`common.meta.build_data_dictionary`) writes the artifact's leaves, and a test of every
+published number reads it so: dotted field names; a list's or a map's records or cells as ``[]``
+after its name (``headline.years[].totals``); a list or a map of plain values as one leaf at its
+own name (``choices[].draws_failing``, ``choices[].central_revenue_musd``); never ``*``. A path
+that ends at a record, a list of records or a map names every leaf under it
+(``headline.market``, ``meta.source_status_summary``). An input is named by its input path, the
+key of its cell in ``inputs.scenario``, ``inputs.constants`` or ``inputs.engineering`` (maps of
+cells, which the walker lists as ``inputs.scenario[]`` and the like); a path that is a prefix of
+input paths names each of them (``inputs.scenario.usage``), and a value read in each reported
+year is named once, without its year (``inputs.engineering.people_small_terminal``). Two
+patterns are prose, saying what an entry reads or publishes outside the artifact's leaves."""
 
 
 def _entry(
@@ -635,6 +648,21 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
     dict(
         (
             _entry(
+                ProductCaseFormula.REPORTED_YEARS,
+                text=(
+                    "the reported fiscal years t0 < ... < t1, as the scenario sets them; each "
+                    "reported year's entry in the network, the headline and the spreads carries "
+                    "its year"
+                ),
+                description=(
+                    "The years the method runs on, in order: the price and usage lines run from "
+                    "the first to the last, and the summed revenue and the usable test over them."
+                ),
+                inputs=("inputs.scenario.reported_years",),
+                outputs=("network.years[].year", "headline.years[].year", "spreads.years[].year"),
+                units="fiscal year",
+            ),
+            _entry(
                 ProductCaseFormula.CLASS_SPLIT,
                 text=(
                     "s = (n_v / u_small) / ((n_v / u_small) + (n_b / u_mounted)), with n_v = "
@@ -651,8 +679,8 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 inputs=(
                     "inputs.constants.anchors.small_terminal.customers",
                     "inputs.constants.anchors.mounted_terminal.customers",
-                    "inputs.engineering.small_terminal.*",
-                    "inputs.engineering.mounted_terminal.*",
+                    "inputs.engineering.small_terminal",
+                    "inputs.engineering.mounted_terminal",
                 ),
                 outputs=("network.small_terminal_share",),
                 units="a share of the terminals' beams (unitless, 0 to 1)",
@@ -670,8 +698,8 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 ),
                 inputs=(
                     "network.small_terminal_share",
-                    "inputs.engineering.years.*.people_small_terminal",
-                    "inputs.engineering.years.*.people_mounted_terminal",
+                    "inputs.engineering.people_small_terminal",
+                    "inputs.engineering.people_mounted_terminal",
                 ),
                 outputs=(
                     "network.years[].seats_small_terminal",
@@ -714,10 +742,10 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 ),
                 inputs=("the engineering artifact (iridium-v7), at its recorded SHA-256",),
                 outputs=(
-                    "inputs.engineering.years.*.iot_payload_bits_per_second",
-                    "inputs.engineering.years.*.iot_access_attempts_per_second",
-                    "inputs.engineering.years.*.iot_single_tone_seconds_per_second",
-                    "inputs.engineering.years.*.phone_useful_beams",
+                    "inputs.engineering.iot_payload_bits_per_second",
+                    "inputs.engineering.iot_access_attempts_per_second",
+                    "inputs.engineering.iot_single_tone_seconds_per_second",
+                    "inputs.engineering.phone_useful_beams",
                 ),
                 units="bits a second; attempts a second; tone-seconds a second; beams",
             ),
@@ -731,7 +759,7 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     "The fleet's annual cost, read from the engineering artifact: the cost every "
                     "margin and the cost per GB carried are measured against."
                 ),
-                inputs=("inputs.engineering.years.*.annual_cost_musd",),
+                inputs=("inputs.engineering.annual_cost_musd",),
                 outputs=(f"{_HEADLINE_TOTALS}.fleet_annual_cost_musd",),
                 units="$M a year",
             ),
@@ -743,8 +771,8 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 ),
                 description="A terminal's rate while active, read from the engineering artifact.",
                 inputs=(
-                    "inputs.engineering.small_terminal.*",
-                    "inputs.engineering.mounted_terminal.*",
+                    "inputs.engineering.small_terminal.active_user_rate_mbps",
+                    "inputs.engineering.mounted_terminal.active_user_rate_mbps",
                 ),
                 outputs=(f"{_HEADLINE_CLASS}.terminal.active_rate_mbps",),
                 units="Mbps",
@@ -761,8 +789,10 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     "hours, so its busy-hour load and its seats are the engineering case's."
                 ),
                 inputs=(
-                    "inputs.engineering.small_terminal.*",
-                    "inputs.engineering.mounted_terminal.*",
+                    "inputs.engineering.small_terminal.active_user_rate_mbps",
+                    "inputs.engineering.small_terminal.concurrency_peak",
+                    "inputs.engineering.mounted_terminal.active_user_rate_mbps",
+                    "inputs.engineering.mounted_terminal.concurrency_peak",
                     "inputs.constants.busy_hours_per_day",
                     "inputs.constants.days_per_month",
                     "inputs.constants.bytes_per_gb",
@@ -798,8 +828,10 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     "prices are flat."
                 ),
                 inputs=(
-                    "inputs.scenario.prices.*.start_usd_month",
-                    "choices[].end_prices.*",
+                    "inputs.scenario.prices.small_terminal.start_usd_month",
+                    "inputs.scenario.prices.mounted_terminal.start_usd_month",
+                    "inputs.scenario.prices.minimal_packet_iot.start_usd_month",
+                    "choices[].end_prices",
                     "inputs.constants.data_iot_price_multiple",
                 ),
                 outputs=(f"{_HEADLINE_CLASS}.price_usd_per_month",),
@@ -860,7 +892,7 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     "service term of the demand curve."
                 ),
                 inputs=(
-                    "inputs.scenario.usage.*",
+                    "inputs.scenario.usage",
                     f"{_HEADLINE_CLASS}.iot.bytes_per_day",
                 ),
                 outputs=(f"{_HEADLINE_CLASS}.service",),
@@ -923,7 +955,7 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 description="What a customer pays for each unit of what it gets.",
                 inputs=(
                     f"{_HEADLINE_CLASS}.price_usd_per_month",
-                    "inputs.scenario.usage.*",
+                    "inputs.scenario.usage",
                     f"{_HEADLINE_CLASS}.iot.bytes_per_day",
                 ),
                 outputs=(f"{_HEADLINE_CLASS}.price_per_unit",),
@@ -942,11 +974,11 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     "scale, the price against today's and the service."
                 ),
                 inputs=(
-                    "inputs.constants.anchors.*",
+                    "inputs.constants.anchors",
                     "network.years[].network_scale",
                     f"{_HEADLINE_CLASS}.price_usd_per_month",
                     f"{_HEADLINE_CLASS}.service",
-                    "headline.market.*",
+                    "headline.market",
                 ),
                 outputs=(f"{_HEADLINE_CLASS}.demand",),
                 units="customers (people or devices), unrounded",
@@ -1035,7 +1067,7 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 ),
                 inputs=(
                     f"{_HEADLINE_CLASS}.customers",
-                    "inputs.engineering.years.*.iot_payload_bits_per_second",
+                    "inputs.engineering.iot_payload_bits_per_second",
                 ),
                 outputs=(
                     f"{_HEADLINE_TOTALS}.iot_uplink_use_busy",
@@ -1056,7 +1088,7 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 ),
                 inputs=(
                     f"{_HEADLINE_CLASS}.customers",
-                    "inputs.engineering.years.*.iot_access_attempts_per_second",
+                    "inputs.engineering.iot_access_attempts_per_second",
                 ),
                 outputs=(f"{_HEADLINE_TOTALS}.access_use",),
                 units="a share of the room (unitless; above 1 is past it)",
@@ -1073,7 +1105,7 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 ),
                 inputs=(
                     f"{_HEADLINE_CLASS}.customers",
-                    "inputs.engineering.years.*.phone_useful_beams",
+                    "inputs.engineering.phone_useful_beams",
                 ),
                 outputs=(f"{_HEADLINE_TOTALS}.access_attempts_per_second_per_beam",),
                 units="attempts a second a beam",
@@ -1088,7 +1120,7 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 inputs=(
                     f"{_HEADLINE_CLASS}.customers",
                     "inputs.engineering.iot_message_airtime_high_s",
-                    "inputs.engineering.years.*.iot_single_tone_seconds_per_second",
+                    "inputs.engineering.iot_single_tone_seconds_per_second",
                 ),
                 outputs=(f"{_HEADLINE_TOTALS}.single_tone_use",),
                 units="a share of the room (unitless; above 1 is past it)",
@@ -1106,7 +1138,7 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 ),
                 inputs=(
                     f"{_HEADLINE_CLASS}.customers",
-                    "inputs.scenario.usage.*",
+                    "inputs.scenario.usage",
                     f"{_HEADLINE_CLASS}.iot.bytes_per_day",
                 ),
                 outputs=(f"{_HEADLINE_TOTALS}.gb_carried_per_year",),
@@ -1138,7 +1170,7 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 inputs=(
                     "inputs.scenario.floors.fill",
                     "inputs.scenario.floors.margin_pct",
-                    f"{_HEADLINE_TOTALS}.*",
+                    _HEADLINE_TOTALS,
                 ),
                 outputs=("headline.usable", "headline.failing_tests", "choices[].central_usable"),
                 units="a flag, and the tests failed",
@@ -1157,7 +1189,9 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     "scale combined, the candidates holding the investor's prices flat."
                 ),
                 inputs=(
-                    "inputs.scenario.prices.*.end_usd_month",
+                    "inputs.scenario.prices.small_terminal.end_usd_month",
+                    "inputs.scenario.prices.mounted_terminal.end_usd_month",
+                    "inputs.scenario.prices.minimal_packet_iot.end_usd_month",
                     "inputs.scenario.usage.minimal_packet_iot.scales",
                     "inputs.scenario.usage.data_iot.scales",
                 ),
@@ -1176,11 +1210,15 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
             _entry(
                 ProductCaseFormula.USABLE_DRAWS,
                 text=(
-                    "usable draws = the number of drawn markets in which the choice is usable; "
-                    "usable share = usable draws / draws"
+                    "usable draws = the number of drawn markets in which the choice is usable (the "
+                    "usable test applied in each drawn market); usable share = usable draws / "
+                    "draws"
                 ),
-                description="How many of the drawn markets a choice works in.",
-                inputs=("inputs.scenario.market.*", "headline.usable"),
+                description=(
+                    "How many of the drawn markets a choice works in. The draws' own usable flags "
+                    "are not published, only these counts and the central market's flag."
+                ),
+                inputs=("inputs.scenario.market", "inputs.scenario.floors"),
                 outputs=("choices[].usable_draws", "choices[].usable_share"),
                 units="draws; a share of the draws",
             ),
@@ -1191,8 +1229,8 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     "fail several)"
                 ),
                 description="Which tests a choice fails, and in how many markets.",
-                inputs=("inputs.scenario.market.*",),
-                outputs=("choices[].draws_failing.*",),
+                inputs=("inputs.scenario.market", "inputs.scenario.floors"),
+                outputs=("choices[].draws_failing",),
                 units="draws",
             ),
             _entry(
@@ -1310,7 +1348,11 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     "its median over the population of markets (in the drawn sample, within "
                     "sampling error)."
                 ),
-                inputs=("inputs.scenario.market.*",),
+                inputs=(
+                    "inputs.scenario.market.gamma",
+                    "inputs.scenario.market.epsilon",
+                    "inputs.scenario.market.eta",
+                ),
                 outputs=("headline.market.gamma", "headline.market.epsilon", "headline.market.eta"),
                 units="the responses' exponents (unitless)",
             ),
@@ -1325,7 +1367,7 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     "The headline: the adopted case in the typical market, a reading, not a gate "
                     "(an unusable central market is published and warned)."
                 ),
-                inputs=("pick.choice_id", "headline.market.*"),
+                inputs=("pick.choice_id", "headline.market"),
                 outputs=("headline.years[]",),
                 units="per its cells",
             ),
@@ -1338,7 +1380,7 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     "(the exclusive method)"
                 ),
                 description="The spread of the pick's outcomes over the drawn markets.",
-                inputs=("pick.choice_id", "inputs.scenario.market.*"),
+                inputs=("pick.choice_id", "inputs.scenario.market"),
                 outputs=(
                     f"{_SPREAD_FIELD}.usable_draws.p10",
                     f"{_SPREAD_FIELD}.usable_draws.p50",
@@ -1394,9 +1436,23 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     "The all-draw basis's label: in how many markets the pick sells IoT past its "
                     "room or access, markets the usable draws leave out."
                 ),
-                inputs=("pick.choice_id", "inputs.scenario.market.*"),
+                inputs=("pick.choice_id", "inputs.scenario.market"),
                 outputs=("spreads.all_draws_basis",),
                 units="draws",
+            ),
+            _entry(
+                ProductCaseFormula.SOURCE_STATUS_SUMMARY,
+                text=(
+                    "the number of the run's input cells in each source status, by "
+                    "common.meta.summarize_source_statuses over every input cell"
+                ),
+                description=(
+                    "How the run's inputs are sourced: a count of input cells per status, "
+                    "certified, scenario and derived estimates among them."
+                ),
+                inputs=("inputs.scenario", "inputs.constants", "inputs.engineering"),
+                outputs=("meta.source_status_summary",),
+                units="input cells",
             ),
         )
     )
@@ -1405,7 +1461,8 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
 the method (a read-only mapping, keyed by :class:`ProductCaseFormula`, in the method's order).
 The artifact's ``meta.formulas`` is built from it alone; every provenance cell the artifact
 publishes names one of its keys as its ``formula_name``; each entry's ``output_path_pattern``
-names the paths it computes, plain fields among them (:data:`PATH_SEPARATOR` between them).
+names the paths it computes, plain fields among them, in the walker's form
+(:data:`PATH_SEPARATOR` says it and separates them).
 :data:`common.provenance.FORMULAS` stays the data center's catalog."""
 
 

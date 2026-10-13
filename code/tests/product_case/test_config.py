@@ -33,6 +33,7 @@ from product_case.constants import (
     FORMULA_CATALOG,
     IOT_ARPU_USD_MONTH,
     IOT_CUSTOMERS_TODAY,
+    PATH_SEPARATOR,
     TERMINAL_CUSTOMERS_TODAY,
     ClassKind,
     ProductCaseFormula,
@@ -618,3 +619,38 @@ def test_the_formula_catalog_holds_one_entry_per_formula() -> None:
     assert "round_half_up" in usage_line
     assert "72 x 3.8 = 273.6, so 274" in usage_line
     assert "What stops the usage" in FORMULA_CATALOG[ProductCaseFormula.PICK].description
+
+
+def test_the_catalog_paths_are_in_the_walkers_form() -> None:
+    """Objective: every catalog path is written as the data-dictionary walker writes the
+    artifact's leaves (``PATH_SEPARATOR``'s rule: ``[]`` for a list's or map's records, a list or
+    map of plain values one leaf, never ``*``), and the reported years and the source-status
+    summary, which every numeric leaf check reaches, each have an entry (the spec lens's m5).
+
+    Sample: every entry of ``FORMULA_CATALOG``, its input and output patterns split at
+    ``PATH_SEPARATOR``.
+
+    Expected outcome: no path holds ``*``; ``[]`` only ends a name; the years entry outputs each
+    reported year's ``year`` under ``network``, ``headline`` and ``spreads``; the summary entry
+    outputs ``meta.source_status_summary``; the draws' failures are one leaf,
+    ``choices[].draws_failing``.
+    """
+    for formula, entry in FORMULA_CATALOG.items():
+        for pattern in (entry.input_path_pattern, entry.output_path_pattern):
+            for path in pattern.split(PATH_SEPARATOR):
+                assert "*" not in path, (formula, path)
+                assert all(part.count("[]") <= 1 for part in path.split(".")), (formula, path)
+                assert all(part.endswith("[]") or "[]" not in part for part in path.split(".")), (
+                    formula,
+                    path,
+                )
+    years = FORMULA_CATALOG[ProductCaseFormula.REPORTED_YEARS].output_path_pattern
+    assert years.split(PATH_SEPARATOR) == [
+        "network.years[].year",
+        "headline.years[].year",
+        "spreads.years[].year",
+    ]
+    summary = FORMULA_CATALOG[ProductCaseFormula.SOURCE_STATUS_SUMMARY].output_path_pattern
+    assert summary == "meta.source_status_summary"
+    draws = FORMULA_CATALOG[ProductCaseFormula.DRAWS_FAILING].output_path_pattern
+    assert draws == "choices[].draws_failing"
