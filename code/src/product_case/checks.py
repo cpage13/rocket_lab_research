@@ -448,6 +448,25 @@ def believability_results(
 # ---------------------------------------------------------------------------
 
 
+def robust_floor_text(config: ProductCaseConfig) -> str:
+    """The robust floor in words, its own count beside its share, the one form the warnings and
+    the stated assumptions print: "the robust floor's 1,500 (75 percent of the draws)".
+
+    The count is :func:`~product_case.monte_carlo.robust_floor_draws`'s, the fewest usable draws
+    that reach the floor; the share is printed with ``:g``, so a floor of 0.745 reads 74.5.
+
+    Args:
+        config: The scenario (its draws and its robust floor).
+
+    Returns:
+        The phrase.
+    """
+    return (
+        f"the robust floor's {robust_floor_draws(config):,} "
+        f"({PERCENT * config.floors.robust:g} percent of the draws)"
+    )
+
+
 def warning_results(
     config: ProductCaseConfig, pick: Pick, summary: ChoiceSummary, headline: MarketOutcome
 ) -> tuple[ValidationResult, ...]:
@@ -465,10 +484,7 @@ def warning_results(
     edges = ", ".join(str(product_class) for product_class in pick.usage_edges)
     failing = "; ".join(f"{test} {count:,}" for test, count in summary.draws_failing.items())
     draws = config.market.draws
-    floor = (
-        f"the robust floor's {robust_floor_draws(config):,} "
-        f"({PERCENT * config.floors.robust:g} percent of the draws)"
-    )
+    floor = robust_floor_text(config)
     return (
         _result(
             "warning.pick_on_upper_usage_edge",
@@ -769,5 +785,6 @@ __all__ = [
     "check_revenue",
     "check_terminals_within_seats",
     "check_whole_customers",
+    "robust_floor_text",
     "warning_results",
 ]

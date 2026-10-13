@@ -86,6 +86,7 @@ from common.meta import (
     summarize_source_statuses,
 )
 from common.provenance import ProvenanceCell
+from product_case.checks import robust_floor_text
 from product_case.config import (
     CONSTANT_INPUT_PREFIX,
     CONSTANT_INPUTS,
@@ -104,7 +105,6 @@ from product_case.constants import (
     IOT_CUSTOMERS_TODAY,
     MONTHS_PER_YEAR,
     PATH_SEPARATOR,
-    PERCENT,
     PHONE_DEVICE_CLASS,
     PRODUCT_CASE_SCHEMA_VERSION,
     TERMINAL_CUSTOMERS_TODAY,
@@ -122,6 +122,7 @@ from product_case.engine import ProductCaseRun, most_failed_test, run_product_ca
 from product_case.engineering import EngineeringView, engineering_view_from_bytes
 from product_case.monte_carlo import (
     BasisSpread,
+    ChoiceSummary,
     ClassOutcome,
     MarketOutcome,
     Spreads,
@@ -1015,6 +1016,45 @@ def _money(value_musd: float) -> str:
     return f"${value_musd:,.1f}M"
 
 
+def _usage_stop_line(run: ProductCaseRun, chosen: ChoiceSummary) -> str:
+    """The stated line on what stops the usage, as this run's pick came: by the robust floor, or,
+    when no candidate reaches it, by the fallback (the design's D19), every number the run's.
+
+    Args:
+        run: A run with a pick.
+        chosen: The pick's summary.
+
+    Returns:
+        The line.
+
+    Raises:
+        ValueError: If the run has no pick.
+    """
+    pick = run.pick
+    if pick is None:
+        raise ValueError("a run with no pick has no usage to state")
+    config = run.config
+    floor = robust_floor_text(config)
+    if pick.basis is PickBasis.ROBUST_FLOOR_MET:
+        why = (
+            "What stops the usage: the pick's IoT usage rises while its median summed revenue "
+            f"rises and its usable draws stay at or above {floor}; every candidate shares the "
+            "terminals' fill, so IoT's own failures may take only the draws between the fill's "
+            "share and that floor."
+        )
+    else:
+        why = (
+            f"What stops the usage: no candidate reaches {floor}, so the pick is the most usable "
+            "candidate, the first on the candidates' front, ties to the higher median, and its "
+            "usage is that candidate's; the run warns of it and never lowers a price."
+        )
+    return (
+        f"{why} This run's pick: minimal-packet IoT x{chosen.choice.minimal_packet_scale:g} and "
+        f"data IoT x{chosen.choice.data_iot_scale:g}, usable in {chosen.usable_draws:,} of "
+        f"{config.market.draws:,} draws ({pick.basis})."
+    )
+
+
 def _assumptions(run: ProductCaseRun, headline: MarketOutcome, spreads: Spreads) -> list[str]:
     """The stated assumptions, one line each, every value the run's or a named constant's."""
     config, view = run.config, run.engineering
@@ -1049,8 +1089,8 @@ def _assumptions(run: ProductCaseRun, headline: MarketOutcome, spreads: Spreads)
         "Data IoT is anchored beside that segment at the investor's proportion (2026-10-04), half "
         f"the count at double the ARPU, {DATA_IOT_ANCHOR_CUSTOMERS:,.0f} at "
         f"${DATA_IOT_ANCHOR_ARPU_USD_MONTH:g} (COMM-726), so the two IoT classes start from twice "
-        f"Iridium's IoT revenue today ({_money(iot_today + data_anchor)} a year against "
-        f"{_money(iot_today)}).",
+        "Iridium's IoT revenue today, a run rate at today's count and ARPU "
+        f"({_money(iot_today + data_anchor)} a year against {_money(iot_today)}).",
         "The network's scale k is the terminals' seats over Iridium's "
         f"{TERMINAL_CUSTOMERS_TODAY:,} terminal customers today, the seats read from the "
         f"engineering artifact: k = {first.network_scale:.1f} in FY{first.year} and "
@@ -1070,14 +1110,7 @@ def _assumptions(run: ProductCaseRun, headline: MarketOutcome, spreads: Spreads)
         "IoT is uncapped: each IoT class sells every device its demand curve gives, bounded by its "
         "uplink room, its random access and its single-tone time, which the usable test checks; "
         "no IoT count is ever set.",
-        "What stops the usage: the pick's IoT usage rises while its median summed revenue rises "
-        "and its usable share stays at or above the robust floor "
-        f"({PERCENT * config.floors.robust:.0f} percent of the draws); every candidate shares the "
-        "terminals' fill, so IoT's own failures may take only the draws between the fill's share "
-        "and that floor. This run's pick: minimal-packet IoT "
-        f"x{chosen.choice.minimal_packet_scale:g} and data IoT "
-        f"x{chosen.choice.data_iot_scale:g}, usable in {chosen.usable_draws:,} of "
-        f"{market.draws:,} draws ({pick.basis}).",
+        _usage_stop_line(run, chosen),
         "Each IoT class's usage and time basis differ from the engineering capacity's: the "
         "engineering artifact counts each class's devices alone at its reference usage, averaged "
         "over the day; the product case sells at the pick's usage by period "

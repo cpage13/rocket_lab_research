@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from common.cli import EXIT_OK
-from product_case.config import load_product_case_config
+from product_case.config import ProductCaseConfig, load_product_case_config
 from product_case.constants import FORMULA_CATALOG, PATH_SEPARATOR, ProductClass
 from product_case.engineering import engineering_view_from_bytes
 from product_case.json_output import QUERY_EXAMPLES, main
@@ -125,50 +125,217 @@ def test_the_last_data_iot_line_recomputes_by_hand(promoted: tuple[dict[str, Any
     assert _value(data["customers"]) == math.floor(demand)
 
 
-def test_the_stated_assumptions_are_the_runs(
-    promoted: tuple[dict[str, Any], Path],
+type Change = Callable[[dict[str, Any]], None]
+"""A change to a scenario's or an engineering artifact's mapping."""
+
+
+def _anchors_prices(scenario: dict[str, Any]) -> None:
+    """The terminals at their anchors' prices, $47 and $259, held flat (E6's sample)."""
+    scenario["prices"]["small_terminal"] = {"start_usd_month": 47.0, "end_usd_month": [47.0]}
+    scenario["prices"]["mounted_terminal"] = {"start_usd_month": 259.0, "end_usd_month": [259.0]}
+
+
+def _tone_room_a_hundredth(engineering: dict[str, Any]) -> None:
+    """A hundredth of IoT's single-tone room in every year, so the tone room binds."""
+    for year in engineering["years"]:
+        year["iot"]["single_tone_seconds_per_second"] /= 100
+
+
+def _no_change(_: dict[str, Any]) -> None:
+    """No change."""
+
+
+STATED_SAMPLES: tuple[tuple[str, Change, Change, str, bool], ...] = (
+    ("the synthetic case", _no_change, _no_change, "robust_floor_met", False),
+    ("the anchors' prices, E6", _anchors_prices, _no_change, "most_usable_fallback", False),
+    (
+        "a hundredth of the tone room",
+        _no_change,
+        _tone_room_a_hundredth,
+        "most_usable_fallback",
+        True,
+    ),
+)
+"""Each sample of the stated lines' test: its scenario change, its engineering change, the pick's
+basis it reaches, and whether some draws pass the single-tone room alone."""
+
+
+def _floor_draws(draws: int, robust: float) -> int:
+    """The fewest usable draws that reach the robust floor, by the pick's own comparison."""
+    return next(count for count in range(draws + 1) if count / draws >= robust)
+
+
+def _stated_lines(artifact: dict[str, Any], config: ProductCaseConfig) -> list[str]:
+    """The 13 stated lines as this run must state them, each number read from the artifact's
+    published values (its constants' input cells, network, choices, pick, headline, spreads and
+    metadata) or the scenario, never the shipped run's, so a line true only at the shipped
+    settings fails."""
+    constants = {key: cell["value"] for key, cell in artifact["inputs"]["constants"].items()}
+
+    def anchor(product_class: str) -> str:
+        customers = constants[f"anchors.{product_class}.customers"]
+        return f"{customers:,.0f} at ${constants[f'anchors.{product_class}.arpu_usd_month']:g}"
+
+    minimal_today = (
+        constants["anchors.minimal_packet_iot.customers"]
+        * constants["anchors.minimal_packet_iot.arpu_usd_month"]
+        * 12
+        / 1e6
+    )
+    data_anchor = (
+        constants["anchors.data_iot.customers"] * constants["anchors.data_iot.arpu_usd_month"] * 12
+    ) / 1e6
+    network = artifact["network"]["years"]
+    market, prices = config.market, config.prices
+    pick = artifact["pick"]
+    chosen = next(c for c in artifact["choices"] if c["choice_id"] == pick["choice_id"])
+    floor = (
+        f"the robust floor's {_floor_draws(market.draws, config.floors.robust):,} "
+        f"({100 * config.floors.robust:g} percent of the draws)"
+    )
+    if pick["basis"] == "robust_floor_met":
+        why = (
+            "What stops the usage: the pick's IoT usage rises while its median summed revenue "
+            f"rises and its usable draws stay at or above {floor}; every candidate shares the "
+            "terminals' fill, so IoT's own failures may take only the draws between the fill's "
+            "share and that floor."
+        )
+    else:
+        why = (
+            f"What stops the usage: no candidate reaches {floor}, so the pick is the most usable "
+            "candidate, the first on the candidates' front, ties to the higher median, and its "
+            "usage is that candidate's; the run warns of it and never lowers a price."
+        )
+    last = artifact["headline"]["years"][-1]
+    iot = {entry["product_class"]: entry["iot"] for entry in last["classes"] if entry["iot"]}
+    basis = artifact["spreads"]["all_draws_basis"]
+    engineering = artifact["metadata"]["engineering_artifact"]
+    return [
+        "Each class's customers come from the demand curve D = N x k^gamma x (A / p)^epsilon x "
+        "v^eta, anchored on Iridium's customers and ARPU today (COMM-617, COMM-618): the small "
+        f"terminal {anchor('small_terminal')}, the mounted terminal {anchor('mounted_terminal')}, "
+        f"minimal-packet IoT {anchor('minimal_packet_iot')} (Iridium's one reported commercial "
+        "IoT segment, taken whole).",
+        "Data IoT is anchored beside that segment at the investor's proportion (2026-10-04), half "
+        f"the count at double the ARPU, {anchor('data_iot')} (COMM-726), so the two IoT classes "
+        "start from twice Iridium's IoT revenue today, a run rate at today's count and ARPU "
+        f"(${minimal_today + data_anchor:,.1f}M a year against ${minimal_today:,.1f}M).",
+        "The network's scale k is the terminals' seats over Iridium's "
+        f"{constants['terminal_customers_today']:,} terminal customers today, the seats read from "
+        f"the engineering artifact: k = {network[0]['network_scale']:.1f} in "
+        f"FY{network[0]['year']} and {network[-1]['network_scale']:.1f} in "
+        f"FY{network[-1]['year']}.",
+        "The prices are held flat in nominal dollars at the scenario's start prices (the small "
+        f"terminal ${prices.small_terminal.start_usd_month:g}, the mounted terminal "
+        f"${prices.mounted_terminal.start_usd_month:g}, minimal-packet IoT "
+        f"${prices.minimal_packet_iot.start_usd_month:g}, data IoT "
+        f"${constants['data_iot_price_multiple'] * prices.minimal_packet_iot.start_usd_month:g}); "
+        "inflation is not modeled.",
+        "The market's three responses are drawn independently and uniformly over their ranges "
+        f"(gamma {market.gamma.low:g} to {market.gamma.high:g}, epsilon {market.epsilon.low:g} to "
+        f"{market.epsilon.high:g}, eta {market.eta.low:g} to {market.eta.high:g}; "
+        f"{market.draws:,} draws, seed {market.seed}), so each class's customers at the central "
+        f"market are its median over the population of markets and, in the {market.draws:,} "
+        "drawn markets, within sampling error of it.",
+        "IoT is uncapped: each IoT class sells every device its demand curve gives, bounded by its "
+        "uplink room, its random access and its single-tone time, which the usable test checks; "
+        "no IoT count is ever set.",
+        f"{why} This run's pick: minimal-packet IoT x{chosen['minimal_packet_scale']:g} and data "
+        f"IoT x{chosen['data_iot_scale']:g}, usable in {chosen['usable_draws']:,} of "
+        f"{market.draws:,} draws ({pick['basis']}).",
+        "Each IoT class's usage and time basis differ from the engineering capacity's: the "
+        "engineering artifact counts each class's devices alone at its reference usage, averaged "
+        "over the day; the product case sells at the pick's usage by period "
+        f"({iot['minimal_packet_iot']['messages_per_day']['value']:,} messages a day for "
+        f"minimal-packet IoT and {iot['data_iot']['bursts_per_day']['value']:,} bursts a day for "
+        f"data IoT in FY{last['year']}), so its devices are never divided by that capacity.",
+        "IoT's room is the whole uplink in its share of the frame after the MAC efficiency, with "
+        "the random-access window and the single-tone room; the terminals' own upload is not "
+        "subtracted.",
+        "The all-draw spreads cover every drawn market, the usable test not applied: in "
+        f"{basis['draws_past_iot_room']:,} of the {basis['draws']:,} drawn markets the pick sells "
+        "IoT past its uplink, access or single-tone room in some reported year.",
+        "People and devices are never added: no total of customers is published; bytes add "
+        "across the classes in the GB carried.",
+        "Government is left out of revenue.",
+        f"The engineering inputs are read from {engineering['path']} "
+        f"({engineering['schema_version']}, stamp {engineering['version_stamp']}) at SHA-256 "
+        f"{engineering['sha256']}; the product case never feeds the engineering model.",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "scenario_change", "engineering_change", "basis", "tone_binds"),
+    STATED_SAMPLES,
+    ids=[sample[0] for sample in STATED_SAMPLES],
+)
+def test_the_stated_assumptions_are_the_runs_line_by_line(
+    name: str,
+    scenario_change: Change,
+    engineering_change: Change,
+    basis: str,
+    tone_binds: bool,
+    synthetic_scenario: dict[str, Any],
     synthetic_engineering: dict[str, Any],
+    write_scenario: Writer,
+    write_engineering: Writer,
     as_engineering_bytes: Callable[[dict[str, Any]], bytes],
+    tmp_path: Path,
 ) -> None:
-    """Objective: each stated line is present and built from the run: the data IoT anchor at twice
-    Iridium's IoT revenue today; the population sentence; the all-draw count equal to the count
-    recomputed from the pick's room and access uses in each of the 50 draws (montecarlo M2).
+    """Objective: every stated line is the run's, line by line (task 9's list; a line true only at
+    the shipped settings is the failure code_switch M1 found in p6): the 13 lines equal the lines
+    this test writes from the artifact's own published values and the scenario, never the shipped
+    run's; the usage-stop line follows the pick's basis (the spec lens's M1: the robust floor's
+    mechanism, or the fallback in the design's D19 words); the data IoT anchor at twice Iridium's
+    IoT revenue today, a run rate (montecarlo M1, the spec lens's m1); the population sentence
+    (m5); the all-draw count equal to the count this test recomputes from the pick's four uses in
+    each of the 50 draws (montecarlo M2), the single-tone room among them (the numerics lens's
+    m4).
 
-    Sample: the synthetic case (50 draws, so the shipped run's 73 cannot pass).
+    Sample: the synthetic case (robust_floor_met), the anchors' prices, $47 and $259 held flat
+    (E6, most_usable_fallback), and a hundredth of the single-tone room (most_usable_fallback,
+    some draws past the tone room alone); each 50 draws, so a count copied from the shipped 73
+    cannot pass.
 
-    Expected outcome: 13 lines; the anchor, population, usage-stop and engineering-hash lines as
-    stated; the M2 line's count equal to the recount.
+    Expected outcome: the pick's basis as the sample reaches it; the artifact's assumptions equal
+    the 13 lines written from the run; the label's count equal to the recount; where the tone room
+    binds, the recount without it smaller (the tone room counted).
     """
-    artifact, scenario_path = promoted
-    lines = artifact["assumptions"]
-    assert len(lines) == 13
-    text = " ".join(lines)
-    assert "twice Iridium's IoT revenue today ($373.1M a year against $186.5M)" in text
-    assert "over the population of markets" in text and "within sampling error" in text
-    assert artifact["metadata"]["engineering_artifact"]["sha256"] in text
+    scenario_change(synthetic_scenario)
+    engineering_change(synthetic_engineering)
+    artifact, scenario_path = _promote(
+        synthetic_scenario,
+        synthetic_engineering,
+        write_scenario,
+        write_engineering,
+        tmp_path / "stated.json",
+    )
     config = load_product_case_config(scenario_path)
+    assert artifact["pick"]["basis"] == basis
+    assert artifact["assumptions"] == _stated_lines(artifact, config)
     view = engineering_view_from_bytes(
         as_engineering_bytes(synthetic_engineering),
         path="synthetic",
         reported_years=config.reported_years,
     )
     choice = choice_grid(config)[artifact["pick"]["choice_id"]]
-    past = 0
+    past = past_room_or_access = 0
     for market in draw_markets(config):
         years = outcome_in_market(config, view, choice, market).years
-        if any(
+        room_or_access = any(
             not use <= 1
             for year in years
             for use in (
                 year.totals.iot_uplink_use_busy,
                 year.totals.iot_uplink_use_offpeak,
                 year.totals.access_use,
-                year.totals.single_tone_use,
             )
-        ):
-            past += 1
+        )
+        tone = any(not year.totals.single_tone_use <= 1 for year in years)
+        past += room_or_access or tone
+        past_room_or_access += room_or_access
     assert artifact["spreads"]["all_draws_basis"]["draws_past_iot_room"] == past
-    assert f"in {past:,} of the 50 drawn markets" in text
+    assert (past_room_or_access < past) is tone_binds
 
 
 def _leaves(node: Any, path: str) -> list[tuple[str, Any]]:
