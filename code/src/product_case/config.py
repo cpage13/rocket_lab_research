@@ -673,9 +673,9 @@ _IOT_PRICE_WORDS: Final[str] = '(2026-10-06 19:52: "Let\'s go with the three and
 """The investor's words that set the two IoT prices, quoted in their specs' rationales."""
 
 _APPROVALS: Final[str] = (
-    'the code design the investor approved at its gate (2026-10-07 13:03, Q1 to Q5 yes: "So '
-    'actually, I think we\'re on yes. I think this is yes") and the plan (2026-10-12 20:27: "yes, '
-    'approved, go ahead with the plan")'
+    'the code design the investor approved at its gate (2026-10-07 13:03: "So actually, I think '
+    'we\'re on yes. I think this is yes") and the plan (2026-10-12 20:27: "yes, approved, go ahead '
+    'with the plan")'
 )
 """The two approvals that made a value the product case's where the investor's words say less
 than the value (a usage, a rough allotment, a question), quoted in those specs' rationales."""

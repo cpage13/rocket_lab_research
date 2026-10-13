@@ -31,9 +31,9 @@
 # Where the investor's words say less than a value (the FY2031 and FY2035
 # totals, data IoT's 48 messages, its 8 bursts and their timing), the value
 # became the product case's with the code design the investor approved at its
-# gate (2026-10-07 13:03, Q1 to Q5 yes: "So actually, I think we're on yes. I
-# think this is yes") and the plan (2026-10-12 20:27: "yes, approved, go ahead
-# with the plan").
+# gate (2026-10-07 13:03: "So actually, I think we're on yes. I think this is
+# yes") and the plan (2026-10-12 20:27: "yes, approved, go ahead with the
+# plan").
 
 scenario_name: "The product case at the investor's prices, held flat"  # the shipped run's own label (the artifact's metadata), not an input
 engineering_artifact_path: communications/models/iridium/default.json  # the promoted Iridium artifact, repository-relative

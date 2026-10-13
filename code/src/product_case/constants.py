@@ -404,9 +404,9 @@ in your monthly allotment ... this is just a rough estimate right now"). FY2036'
 set (2026-10-12 15:56: "go with 9 GB, 90 GB and 13 bursts"). FY2033's 6.7 GB is about half-way
 (round 1's 2.7 + 4.0 GB). The words of 2026-10-04 and 2026-10-05 give a usage and a rough
 allotment, not these totals; the totals became the product case's values with the code design the
-investor approved at its gate (2026-10-07 13:03, Q1 to Q5 yes: "So actually, I think we're on yes.
-I think this is yes") and the plan (2026-10-12 20:27: "yes, approved, go ahead with the plan"),
-which keeps FY2035 at 8.1 GB."""
+investor approved at its gate (2026-10-07 13:03: "So actually, I think we're on yes. I think this
+is yes") and the plan (2026-10-12 20:27: "yes, approved, go ahead with the plan"), which keeps
+FY2035 at 8.1 GB."""
 
 MOUNTED_TERMINAL_GB_PER_MONTH_DEFAULT: Final[tuple[float, ...]] = (54.0, 67.0, 81.0, 90.0)
 """INVESTOR_SET for FY2031, FY2035 and FY2036; SCENARIO for FY2033 (COMM-724): the mounted
@@ -420,9 +420,9 @@ monthly allotment ... this is just a rough estimate right now"). FY2036's 90 GB 
 (2026-10-12 15:56: "go with 9 GB, 90 GB and 13 bursts"). FY2033's 67 GB is about half-way (round
 1's 27 + 40 GB). The words of 2026-10-04 and 2026-10-05 give a usage and a rough allotment, not
 these totals; the totals became the product case's values with the code design the investor
-approved at its gate (2026-10-07 13:03, Q1 to Q5 yes: "So actually, I think we're on yes. I think
-this is yes") and the plan (2026-10-12 20:27: "yes, approved, go ahead with the plan"), which keeps
-FY2035 at 81 GB."""
+approved at its gate (2026-10-07 13:03: "So actually, I think we're on yes. I think this is yes")
+and the plan (2026-10-12 20:27: "yes, approved, go ahead with the plan"), which keeps FY2035 at
+81 GB."""
 
 MINIMAL_PACKET_IOT_MESSAGES_PER_DAY_DEFAULT: Final[tuple[int, ...]] = (48, 72, 96, 96)
 """SCENARIO (round 1 of the scratch exploration, 2026-10-06; COMM-724): minimal-packet IoT's
