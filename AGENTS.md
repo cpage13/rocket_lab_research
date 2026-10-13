@@ -56,10 +56,9 @@ everything a knob, it's just absolutely overwhelming."
   capacity in the engineering model, which carries no IoT count, price or
   revenue (ADR 011): built (`iridium-v7`). The product case as its own model
   on the engineering artifact, selling the terminals and the two IoT classes
-  at the investor's prices held flat (ADR 012): built (`product-case-v1`),
-  its first promotion after the public documents' rewrite. Open until the
-  product case is promoted, the public documents tell both and the work is
-  accepted.
+  at the investor's prices held flat (ADR 012): built and promoted
+  (`product-case-v1`). Open until the public documents tell both and the
+  work is accepted.
 - **Agent documentation.** The charter, atlas and glossary are true to the
   code; the older agent guides are folded in and retired.
 - **Data center.** Rename the space artifact's `gross_profit_*` fields, which

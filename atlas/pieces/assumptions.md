@@ -46,7 +46,7 @@ objective 2 (each input traces to a claim ID or says investor-set).
 | `ai1_equivalent.yaml` | AI-1's specs on the model's dials; it fails the `pf_per_kw_in_band` rule by design, so it cannot be promoted |
 | `volume_stress.yaml` | a fixture on the co-mounted radiator that trips validation rule V15; quote nothing from it |
 | `iridium.yaml` | the Iridium default, promoted as `communications/models/iridium/default.json`; the saturation command reads its held spectrum |
-| `product_case.yaml` | the product case's shipped scenario (the investor's prices held flat and FY2036 usage), equal to its code defaults; its first promotion writes communications/models/product_case/default.json, the one path reserved for it |
+| `product_case.yaml` | the product case's shipped scenario (the investor's prices held flat and FY2036 usage), equal to its code defaults; promoted as `communications/models/product_case/default.json`, the one path reserved for it |
 
 **The ledgers.**
 - `data_center/assumptions.md`: a table of claim ID, assumption, source
@@ -205,9 +205,10 @@ public source-status taxonomy (`CONTEXT.md`, Ambiguities).
    break-even price alone in every reported year (its price times one minus
    its own margin, `own_margin_pct`, in the Iridium artifact).
 4. Promote it with its command (the promotion page), always after the
-   Iridium artifact; from its first promotion on, its regeneration test
-   fails until it is re-promoted. Re-freeze on purpose any test that pins a
-   moved value, then run the test command.
+   Iridium artifact: its regeneration test
+   (`test_the_committed_product_case_equals_a_fresh_promotion`) fails until
+   it is re-promoted. Re-freeze on purpose any test that pins a moved value,
+   then run the test command.
 5. Read the artifact's stated lines (`_assumptions` in
    `code/src/product_case/json_output.py`) for text the moved value leaves
    stale. Check the investor's margin floor in its three parts, each where it

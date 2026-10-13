@@ -20,11 +20,10 @@ agent-first contract of ADR 002.
   Iridium command, also the promoted curve its scenario names; for the
   product case's command, the promoted Iridium artifact its scenario names,
   its bytes read once and hashed.
-- Out: the four promoted files (the map, Final objects), read by the people
+- Out: the five promoted files (the map, Final objects), read by the people
   who review the conclusions and by agents; the Iridium command also reads
   the curve back, and the product case's command reads the Iridium artifact.
-  The product case's first promotion writes a fifth file. Scratch runs go to
-  `code/outputs/data_center/runs/`, which git ignores.
+  Scratch runs go to `code/outputs/data_center/runs/`, which git ignores.
 
 **Commands** (from `code/`; `code/README.md` lists all four: the
 data-center commands and, in its section "Run The Communications Models",
@@ -40,12 +39,11 @@ the Iridium command, the product case's and the saturation command):
 - `uv run python -m communications.json_output scenarios/iridium.yaml communications/models/iridium/default.json --version-stamp <stamp>`
   writes the Iridium artifact from the scenario and the curve its
   `iridium.saturation.curve_path` names.
-- `uv run python -m product_case.json_output scenarios/product_case.yaml <output.json> --version-stamp <stamp>`
+- `uv run python -m product_case.json_output scenarios/product_case.yaml communications/models/product_case/default.json --version-stamp <stamp>`
   writes the product case's artifact from the scenario and the Iridium
-  artifact its `engineering_artifact_path` names. Its default output,
-  communications/models/product_case/default.json, is written only from the
-  shipped scenario; a side run writes to a path of its own, outside the
-  tracked folders. It runs after the Iridium command, every time: the
+  artifact its `engineering_artifact_path` names. That default output is
+  written only from the shipped scenario; a side run writes to a path of its
+  own, outside the tracked folders. It runs after the Iridium command, every time: the
   artifact records the SHA-256 of the Iridium bytes it read.
 - For the communications commands and the product case's, a relative output
   path anchors to the repository root, and the stamp defaults to today's
@@ -120,9 +118,9 @@ Iridium artifact carries no worked queries; read it by block, for example
 `jq '.classes[] | {device_class, saturation_number, saturation_not_reached_by, binding_limit_at_horizon_end}' communications/models/iridium/default.json`,
 or the final year's IoT capacities,
 `jq '.years[-1].iot.classes[] | {iot_class, device_capacity, binding_view}' communications/models/iridium/default.json`.
-The product case's artifact carries its worked queries in
-`meta.query_examples`, each tagged `product_case` in its `applies_to`; list
-them as the space artifact's, once it is promoted.
+The product case's artifact carries its worked queries too, each tagged
+`product_case` in its `applies_to`:
+`jq -r '.meta.query_examples[] | .name + " :: " + .jq_expression' communications/models/product_case/default.json`.
 
 **The headline reads.**
 - Data center: the space artifact's worked queries
@@ -144,7 +142,7 @@ them as the space artifact's, once it is promoted.
   (ADR 006; the map's invariants); each IoT class's capacity is the whole
   room given to that class alone, never a count sold, and the two are never
   added (ADR 011).
-- Product case, once promoted: its worked queries
+- Product case: its worked queries
   `headline_last_year_revenue_and_margin`, `classes_side_by_side_last_year`,
   `pick_and_basis`, `pick_usable_share`, `spreads_last_year` and
   `engineering_artifact_read`. Its four classes run side by side and are
@@ -162,10 +160,6 @@ objects).
   commands, not `rklb-value` flags, run in order (the curve, the Iridium
   artifact, then the product case), and no project-level runner covers them
   (`data_center/CURRENT_STATE.md` names the runner as future work).
-- The product case is not yet promoted: its first promotion writes its
-  artifact and adds its regeneration test (the committed artifact against a
-  fresh promotion at its own stamp, naming both SHA-256s when the Iridium
-  artifact moved).
 - The communications artifacts' shortfall against ADR 002: the map, Open.
 
 **Tests.** `code/tests/data_center/test_cli_promote.py` (roles, names,
@@ -181,15 +175,18 @@ drift tests), the product case's command tests in
 (`test_each_refusal_is_one_error_line_exit_1_and_no_file`,
 `test_the_file_refusals`,
 `test_the_synthetic_case_promotes_and_a_second_promotion_is_byte_identical`),
+its regeneration test and committed worked queries in
+`code/tests/product_case/test_committed_artifact.py`
+(`test_the_committed_product_case_equals_a_fresh_promotion`,
+`test_the_committed_artifacts_worked_queries_answer_in_their_stated_shape`),
 `code/tests/data_center/test_committed_meta.py` (the committed data-center
 data dictionaries and the space artifact's formula definitions against a
 fresh build's), and `code/tests/common/test_file_io.py` (the loader and the
 writer). Missed: no test compares the committed data-center artifacts whole
 with a fresh promotion (`test_committed_meta.py` compares their data
 dictionaries and the space artifact's formula definitions); the Iridium
-suite compares its own, and the drift tests rebuild the committed curve's
-check rows rather than run the saturation command in full; the product case
-has no committed artifact to compare until its first promotion.
+suite and the product case's each compare their own, and the drift tests rebuild the committed curve's
+check rows rather than run the saturation command in full.
 
 **If this changes, update here.** A command, flag, gate rule, writer
 behavior, query recipe or headline query.

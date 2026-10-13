@@ -52,8 +52,8 @@ read the resume point it names: it holds what is decided but not built.
   the promoted JSON (query recipes on the promotion page); the claim's
   status in `research/SOURCE_INDEX.md`. A haircut of an engineering case is
   a linear division in the conclusion (the charter), never a model change;
-  the market view is the product case's artifact (ADR 012), once promoted
-  (the product-case page).
+  the market view is the product case's artifact (ADR 012; the product-case
+  page).
 - **Start new research, a new feasibility study or a new document:** the
   research-wiki page and its rules, then a search of `research/LIBRARY.md`
   and `research/SOURCE_INDEX.md`; only gaps get new research.
@@ -70,8 +70,8 @@ read the resume point it names: it holds what is decided but not built.
   `communications/conclusion.md`, `communications/design.md`), which tell
   both built models, the engineering case and the product case.
 - **Touch shared code:** the shared-core page; the frozen baselines of the
-  data center and the Iridium model, and the product case's tests, must
-  hold.
+  data center, the Iridium model and the product case (its regeneration
+  test) must hold.
 - **Review or test:** the invariants and their guards below, the suite view
   under Open, each page's Tests heading, and the charter's Quality bar.
 - **Local research wikis**, each a folder directly in `.agent/other/` (local)
@@ -111,7 +111,6 @@ then the product case, which reads that artifact:
       --Iridium command-->     communications/models/iridium/default.json
   the product-case scenario and that artifact, its bytes hashed
       --product-case command-->  communications/models/product_case/default.json
-                                 (written by its first promotion)
 
 .agent/other/ research (local) --validated, investor's go--> research/
 ```
@@ -196,8 +195,8 @@ a communications family's steps.
   `iridium-v7`); IoT is capacity (ADR 011): each year and each reading
   carries IoT's room and each IoT class's capacity alone (`years[].iot`,
   `saturation.readings[].iot`), never a count sold or revenue.
-- communications/models/product_case/default.json, written by the product
-  case's first promotion: the product case's artifact (`metadata`,
+- `communications/models/product_case/default.json`: the product case's
+  artifact (`metadata`,
   `inputs`, `network`, `choices`, `fronts`, `pick`, `headline`, `spreads`,
   `meta`, `assumptions`; schema `product-case-v1`); every numeric leaf under
   `headline.years` is a provenance cell, except each year's `year` index;
@@ -271,7 +270,9 @@ Iridium artifact's `provenance.schema_version`; the curve's top-level
   number that is not finite. The regeneration test guards the Iridium
   artifact (`test_regenerated_default_artifact_matches_committed`) and the
   drift tests the curve (the frozen baselines, below); the product case's
-  regeneration test comes with its first promotion.
+  regeneration test guards its artifact and names both SHA-256s when the
+  Iridium artifact moved
+  (`test_the_committed_product_case_equals_a_fresh_promotion`).
 - A people class's saturation number, where its rows reach one, is a
   spectrum bound reported beside the launch cadence, never a build target
   or a cap on the build, and a fleet past a class's last computed row is
@@ -368,8 +369,8 @@ Iridium artifact's `provenance.schema_version`; the curve's top-level
   both families alike fails too. The product case's method is locked by
   round 3 of its scratch exploration, reproduced on its own fixtures
   (`test_round_3s_four_and_eight_grid_is_reproduced`,
-  `test_round_3s_three_and_six_grid_is_reproduced`); its published numbers
-  get their regeneration test with its first promotion.
+  `test_round_3s_three_and_six_grid_is_reproduced`), and its published
+  numbers by its regeneration test.
 - No em-dashes in the files `code/tests/test_no_em_dashes.py` covers: the
   code, tests and scenarios, the promoted JSON, the root documents
   (`CLAUDE.md` among them), every document under `atlas/`, `docs/`,
@@ -415,8 +416,8 @@ Iridium artifact's `provenance.schema_version`; the curve's top-level
   importlib mode, set in `code/pyproject.toml`, because the model test
   packages share module names.
 - **Artifact contracts.** The data-center artifacts meet ADR 002, and so
-  does the product case's (its command builds every block ADR 002 names; not
-  yet promoted); the Iridium artifact and the saturation curve carry no
+  does the product case's (its command builds every block ADR 002 names);
+  the Iridium artifact and the saturation curve carry no
   per-value provenance cells, data dictionary, query examples or validation
   results, so they fall short of it (the curve has its own Pydantic contract
   and completeness check instead).

@@ -1,9 +1,9 @@
 # 012 - The Product Case Is Its Own Model On The Engineering Artifact; Its Headline Is The Central Market
 
 Status: Accepted (2026-10-07, the investor's approval of the product-case design, restated that
-day at the investor's terminal prices; written 2026-10-12, before its code; its code built
-2026-10-13, `code/src/product_case/` with its artifact's schema `product-case-v1`, the artifact
-not yet promoted).
+day at the investor's terminal prices; written 2026-10-12, before its code; its code built and
+its artifact promoted 2026-10-13, `code/src/product_case/` and `default.json` as
+`product-case-v1`).
 
 ## Context
 

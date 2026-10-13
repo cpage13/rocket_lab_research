@@ -1,9 +1,8 @@
 # Product case
 
-**Maturity.** Built, not yet promoted: the package, its shipped scenario and
-its tests stand; its promoted artifact and the regeneration test that guards
-it come with its first promotion. Checked against `part-b-product-case` at
-77a4133, 2026-10-13.
+**Maturity.** Built and promoted: the package, its shipped scenario and its
+tests stand, and a regeneration test guards its promoted artifact. Checked
+against `part-p7-documents` at d478e9f, 2026-10-13.
 
 **Role.** The communications market view, its own model on the engineering
 artifact (ADR 012): what the network the Iridium model builds would sell at
@@ -44,8 +43,8 @@ side).
   burst sizes, the airtime and the coverage floor year.
 - Out: the product case's artifact (schema `product-case-v1`), written by
   `python -m product_case.json_output` (the promotion page). Its default
-  path, communications/models/product_case/default.json, is reserved for the
-  shipped scenario; its first promotion writes it. In code,
+  path, `communications/models/product_case/default.json`, is reserved for
+  the shipped scenario. In code,
   `run_product_case(config, engineering)` returns a `ProductCaseRun`.
 - It imports `common` alone (the shared-core page), never `communications` or
   `data_center`, and none of those three imports it (ADR 012).
@@ -70,7 +69,8 @@ the pick) are defined in the package docstring; they are not yet glossary
 terms.
 
 **State.**
-- Not yet promoted: no default artifact exists until the first promotion.
+- Promoted: the default artifact is the shipped scenario's run on the
+  committed Iridium artifact, whose SHA-256 it records.
 - The method runs in nine steps, listed in the package docstring; steps 3 to 9
   carry their formulas in symbols and units in `monte_carlo.py`'s module
   docstring, and each formula is a catalog entry the artifact publishes
@@ -107,9 +107,6 @@ terms.
   differ).
 
 **Open.**
-- **Not yet promoted.** The first promotion writes the artifact and adds the
-  regeneration test (the committed artifact against a fresh promotion at its
-  own stamp, naming both SHA-256s when the Iridium artifact moved).
 - **Boxes to come**, each in `.agent/LATER.md` (local): the phone as its own
   product model (L3); every year FY2031 to FY2036, where the scenario reports
   four (L4); the terminals' upload in IoT's room, which waits on the
@@ -126,6 +123,11 @@ through the command to the artifact
 (`test_the_synthetic_case_promotes_and_a_second_promotion_is_byte_identical`,
 `test_each_refusal_is_one_error_line_exit_1_and_no_file`). Round 3 of the
 scratch exploration is reproduced on its own fixtures (`test_reproduction.py`).
+The promoted artifact has `test_committed_artifact.py`: the regeneration
+test (`test_the_committed_product_case_equals_a_fresh_promotion`, the only
+test that freezes its numbers; it names both SHA-256s when the Iridium
+artifact moved) and its worked queries
+(`test_the_committed_artifacts_worked_queries_answer_in_their_stated_shape`).
 The code defaults equal the shipped scenario
 (`test_the_code_defaults_equal_the_shipped_scenario_file`); no IoT count is
 ever set (`test_an_iot_count_in_the_scenario_is_refused_naming_the_field`,
@@ -137,16 +139,14 @@ apart (`test_the_product_case_imports_common_alone`,
 `test_config.py`, `test_engineering.py`, `test_offers.py`,
 `test_monte_carlo.py`, `test_fronts_and_spreads.py`, `test_checks.py`,
 `test_run_product_case.py` and `test_claim_citations.py`. Missed: no test
-runs the shipped scenario through the Monte Carlo until the regeneration
-test comes with the first promotion; no test checks that `data_center`
+checks that `data_center`
 never imports the product case; no test ties the terminals' prices to the
 Iridium scenario's (one price list, the assumptions page).
 
 **If this changes, update here.** A module, a step of the method or the
 pick's rule; the artifact's blocks or schema; the command or its refusals;
 the Iridium fields it reads or the schema it pins
-(`ENGINEERING_SCHEMA_VERSION`); the first promotion (Maturity, State, Open
-and Tests).
+(`ENGINEERING_SCHEMA_VERSION`).
 
 **Drill down.** The `code/src/product_case/__init__.py` docstring (the nine
 steps, what stops the usage, the investor's words, how to run it, where each
