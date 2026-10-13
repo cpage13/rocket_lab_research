@@ -34,7 +34,13 @@ What it checks, on every line of every page:
     source class a docstring opens with (``SOURCED_FACT``), a word of the scenarios or of the
     four promoted JSON artifacts, or a name a test module defines at its top level. A word
     the code keeps only in a comment or a docstring (a history note naming a removed field)
-    is not a code word.
+    is not a code word. The level names the commands print (``ERROR``) count as names;
+  - a code-name pattern matches at least one code word (``*_SPECS``), and a dotted one part
+    by part (``satellite.*``: each part a code word, or a pattern some code word matches);
+  - in a span that is not a command, the names its shape holds, each as above: an import
+    line's module and the names it imports (``from common.provenance import cell``), a call's
+    callee (``run_iridium_model(config, curve)``) and a key before ``:`` (``iridium:``,
+    ``metadata.radiator_architecture: deployed_double_sided``).
 
 What counts as success: no span fails, and every page and source the guard reads exists, so
 it cannot pass vacuously. On failure the message lists each ``page:line``, the span and why.
@@ -42,8 +48,11 @@ it cannot pass vacuously. On failure the message lists each ``page:line``, the s
 What it misses: a name that exists but is placed wrongly (a field said to live in the wrong
 artifact, a dial that is an artifact field); numbers, counts and prose claims; a name written
 outside backticks; a command's flags, an entry point that follows a flag
-(``uv run --project code pytest``) and the values a ``jq`` filter compares against. The
-human documents (the root ``README.md`` and the folders' documents) are not its pages.
+(``uv run --project code pytest``) and the values a ``jq`` filter compares against; a call's
+arguments and a key's value (a path among a spaced span's words is still looked up), a
+keyword argument (``extra="forbid"``), a claim family's pattern (``COMM-*``) and any word of a
+span with none of the shapes above that is not a command (``anonymous <>``). The human
+documents (the root ``README.md`` and the folders' documents) are not its pages.
 
 Decided, not built: an accepted ADR may name a path or a field before the code that makes it
 exists. :data:`_DECIDED_NOT_BUILT` lists each such span with the ADR that decides it; a
@@ -66,6 +75,7 @@ from __future__ import annotations
 import ast
 import fnmatch
 import json
+import logging
 import os
 import re
 import shlex
@@ -141,6 +151,11 @@ _COMMAND_TOOLS = frozenset(
 """Command-line tools a page may name, in a span of its own or right after ``uv run``: names,
 but not the code's."""
 
+_LOG_LEVELS = frozenset(logging.getLevelNamesMapping())
+"""The level names ``logging`` prints, which the commands print before each status line
+(``common.cli.CLI_LOG_FORMAT``, ``%(levelname)s: %(message)s``), so a page may quote ``ERROR:``:
+names, but not the code's (the code spells them only through ``logging``)."""
+
 _OUTPUT_WORDS = frozenset({"tee", ">", ">>"})
 """Words after which a command's next word is the output it writes, not an input."""
 
@@ -161,6 +176,24 @@ _CODE_NAME = re.compile(rf"{_IDENTIFIER_PART}(\.{_IDENTIFIER_PART})*")
 
 _CODE_NAME_GLOB = re.compile(r"[A-Za-z0-9_*]*\*[A-Za-z0-9_*]*")
 """A code-name pattern such as ``*_DEFAULT`` or ``*_SPECS``."""
+
+_DOTTED_GLOB = re.compile(r"[A-Za-z0-9_*]+(\.[A-Za-z0-9_*]+)+")
+"""A dotted code-name pattern such as ``satellite.*``: parts joined by dots, one of them a glob."""
+
+_DOTTED_NAME = r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*"
+"""A dotted code name with no suffix: the callee of a call, a key, a module."""
+
+_CALL = re.compile(rf"({_DOTTED_NAME})\((.*)\)")
+"""A span that is a call: a code name, then its arguments in parentheses
+(``run_iridium_model(config, curve)``)."""
+
+_KEY = re.compile(rf"({_DOTTED_NAME}):(?:\s+(.*))?")
+"""A span that is a key before ``:``, alone or with a value after white space: a YAML line
+(``iridium:``, ``metadata.radiator_architecture: deployed_double_sided``) or a line's prefix
+(``ERROR:``)."""
+
+_IMPORT_LINE = re.compile(r"from\s+(\S+)\s+import\s+(.+)|import\s+(\S+)(?:\s+as\s+\S+)?")
+"""A span that is an import line: ``from <module> import <names>`` or ``import <module>``."""
 
 _WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 """A word of the code's vocabulary."""
@@ -556,11 +589,13 @@ def _name_problem(repo_dir: Path, span: str) -> str | None:
         return None if span in _claim_ids(repo_dir) else "no row of the source ledger"
     if _TEST_NAME.fullmatch(span):
         return None if span in _test_names(repo_dir) else "no test function of that name"
-    if span in _COMMAND_TOOLS:
+    if span in _COMMAND_TOOLS or span in _LOG_LEVELS:
         return None
     if _CODE_NAME_GLOB.fullmatch(span) and _WORD.search(span):
         hits = [word for word in _vocabulary(repo_dir) if fnmatch.fnmatchcase(word, span)]
         return None if hits else "no word of the code matches the pattern"
+    if "*" in span and _DOTTED_GLOB.fullmatch(span):
+        return _dotted_glob_problem(repo_dir, span)
     if not _CODE_NAME.fullmatch(span):
         return None
     parts = [re.sub(r"(\[\*?\]|\(\))$", "", part) for part in span.split(".")]
@@ -570,6 +605,48 @@ def _name_problem(repo_dir: Path, span: str) -> str | None:
         return None
     missing = [part for part in parts if part not in _vocabulary(repo_dir)]
     return f"{missing[0]} is no word of the code, scenarios or artifacts" if missing else None
+
+
+def _dotted_glob_problem(repo_dir: Path, span: str) -> str | None:
+    """Return why a dotted code-name pattern (``satellite.*``) does not resolve, or None when it
+    does: each part is a code word, or a pattern some code word matches (a bare ``*`` matches
+    any)."""
+    vocabulary = _vocabulary(repo_dir)
+    for part in span.split("."):
+        if "*" not in part:
+            if part not in vocabulary:
+                return f"{part} is no word of the code, scenarios or artifacts"
+        elif _WORD.search(part) and not any(fnmatch.fnmatchcase(word, part) for word in vocabulary):
+            return f"no word of the code matches {part}"
+    return None
+
+
+def _shaped_names(span: str) -> list[str] | None:
+    """Return the code names a span that is not a command holds by its shape, or None when it
+    has none of these shapes: an import line's module, then each name it imports as a dotted
+    name under it (``from common.provenance import cell``); a call's callee
+    (``run_iridium_model(config, curve)``); a key before ``:`` (``iridium:``,
+    ``metadata.radiator_architecture: deployed_double_sided``). A call's arguments and a key's
+    value are no names here; a callee or key that is a file name keeps the path rules."""
+    text = span.strip()
+    if (imported := _IMPORT_LINE.fullmatch(text)) is not None:
+        module = imported.group(1) or imported.group(3)
+        listed = (imported.group(2) or "").replace("(", " ").replace(")", " ").split(",")
+        names = [entry.split()[0] for entry in listed if entry.split()]
+        return [module, *(f"{module}.{name}" for name in names if _WORD.fullmatch(name))]
+    for shape in (_CALL, _KEY):
+        if (shaped := shape.fullmatch(text)) is not None and not _is_path_like(shaped.group(1)):
+            return [shaped.group(1)]
+    return None
+
+
+def _shaped_problems(repo_dir: Path, names: list[str]) -> Iterator[tuple[str, str]]:
+    """Yield (name, why) for the first of a shaped span's names that does not resolve: an import
+    line's names are not looked up once its module fails."""
+    for name in names:
+        if (why := _name_problem(repo_dir, name)) is not None:
+            yield name, why
+            return
 
 
 def _command_words(span: str) -> list[str]:
@@ -584,8 +661,16 @@ def _span_problems(
     repo_dir: Path, page: Path, span: str, *, history: bool = False
 ) -> Iterator[tuple[str, str]]:
     """Yield (word, why) for each part of a span that does not resolve; on a superseded ADR
-    (``history``) its code names are not checked, its paths and claim IDs are."""
+    (``history``) its code names are not checked, its paths and claim IDs are. A span shaped as
+    an import line, a call or a key (:func:`_shaped_names`) has those names checked; with no
+    white space that is all it holds, and with white space its words are then checked as a
+    command's are, so a path among them is still looked up."""
+    shaped = _shaped_names(span)
+    if shaped is not None and not history:
+        yield from _shaped_problems(repo_dir, shaped)
     if not any(ch.isspace() for ch in span):
+        if shaped is not None:
+            return
         why = _single_problem(repo_dir, page, span, history=history)
         if why is not None:
             yield span, why
