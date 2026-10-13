@@ -476,7 +476,7 @@ DRAWS_DEFAULT: Final[int] = 2_000
 product-case code design at its gate on 2026-10-07; COMM-723): the market draws. What 2,000 buy:
 another seed or draw count moves the drawn markets, never the central market; the headline, the
 pick read there, moves only when the pick does (it holds at seeds 1 to 5, the same choice usable
-in 1,719 to 1,754 of the 2,000 draws, the plan's probe pB2, local). The spreads' 10th and 90th
+in 1,719 to 1,754 of the 2,000 draws, the plan's probe, local). The spreads' 10th and 90th
 percentiles need at least 9 (:data:`MIN_DRAWS`)."""
 
 SEED_DEFAULT: Final[int] = 20_261_006

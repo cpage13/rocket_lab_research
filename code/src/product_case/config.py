@@ -891,7 +891,7 @@ SCENARIO_SPECS: Final[Mapping[str, CellSpec]] = MappingProxyType(
             "with the product-case code design at its gate on 2026-10-07). What 2,000 draws buy: "
             "another seed or draw count moves the drawn markets, never the central market; the "
             "headline, the pick read there, moves only when the pick does (it holds at seeds 1 to "
-            "5, the same choice usable in 1,719 to 1,754 of the 2,000 draws, the plan's probe pB2, "
+            "5, the same choice usable in 1,719 to 1,754 of the 2,000 draws, the plan's probe, "
             "local).",
         ),
         "market.seed": _scenario_spec(

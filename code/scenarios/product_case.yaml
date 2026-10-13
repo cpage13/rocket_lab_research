@@ -73,7 +73,7 @@ usage:
 # research grounds the three ranges: a modeling choice of round 2, approved by
 # the investor with the product-case code design at its gate on 2026-10-07.
 market:
-  draws: 2000  # SCENARIO, round 2: another seed or draw count moves the drawn markets, never the central market; the headline, the pick read there, moves only when the pick does (it holds at seeds 1 to 5, 1,719 to 1,754 usable, the plan's probe pB2, local)
+  draws: 2000  # SCENARIO, round 2: another seed or draw count moves the drawn markets, never the central market; the headline, the pick read there, moves only when the pick does (it holds at seeds 1 to 5, 1,719 to 1,754 usable, the plan's probe, local)
   seed: 20261006  # SCENARIO, round 2: the same markets every run
   gamma:  # the network response
     low: 0.5  # SCENARIO, round 2: four times the network only doubles the customers

@@ -520,7 +520,7 @@ def warning_results(
         _result(
             "warning.central_market_unusable_for_pick",
             headline.usable,
-            "The central market is usable for the pick (E6).",
+            "The central market is usable for the pick.",
             "headline.usable true",
             "usable"
             if headline.usable
