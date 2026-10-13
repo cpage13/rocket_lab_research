@@ -23,7 +23,8 @@ The GPU-first per-node formulas (the heart of the model):
 The public surface:
 
 * :mod:`data_center.config`: the Pydantic config (the locked anchors, the generation
-  slopes and the fleet, volume, cadence and revenue-band dial blocks).
+  slopes, the run metadata, and the cadence, fleet, volume, revenue-band and launch-cost dial
+  blocks).
 * :mod:`data_center.generations`: `KNOWN_GENS`, `extend_generations`, `frontier_at`.
 * :mod:`data_center.engine`: the GPU-first engine + `run_valuation`.
 * :mod:`data_center.output`: the typed Pydantic models of the space artifact.

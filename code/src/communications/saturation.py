@@ -10,9 +10,8 @@ the mounted terminal, by the saturation strategy's sky-sector rules D1 to D6). L
 the fleet, then flattens as every inhabited place is served by its best satellites (for a
 directional class it can fall slightly, since rule D6's dropped beams stay spent, while its
 capacity still rises); the knee of capacity is the class's spectrum bound (ADR 005).
-Everything is computed with the band in
-full-time use (d = 1, ADR 008) at the reference panel; the engine applies d and the
-scenario's panel when it reads the curve.
+Everything is computed with the band in full-time use (d = 1, ADR 008) at the reference panel;
+the engine applies d and the scenario's panel when it reads the curve.
 
 The stages, numbered as the saturation strategy's locked stage order numbers them (its § 2),
 for one class on one set of inputs; this version runs stages 2 to 11 for every class (stage
@@ -85,14 +84,16 @@ for one class on one set of inputs; this version runs stages 2 to 11 for every c
     ignored).
 11. **The markers**, on the rows: the elasticity of capacity, d ln C / d ln N, at each
     interval's geometric midpoint; the saturation number is the first crossing under 0.10,
-    interpolated in ln N between the midpoints that straddle it and rounded half up (when it is
-    not reached there is none, and the last midpoint the rows measure, rounded half up, is
-    published as the fleet it is not reached by); beside it the crossing under 0.25 and the fleet at
-    which L reaches 90 percent of maximum use (log-log between rows), each None when not
-    reached, or when the rows cannot place it: the 0.25 crossing when it lies before the
+    interpolated in ln N between the midpoints that straddle it and rounded half up (when it
+    is not reached there is none, and the last midpoint the rows measure, rounded half up, is
+    published as the fleet it is not reached by); beside it the crossing under 0.25 and the
+    fleet at which L reaches 90 percent of maximum use (log-log between rows), each None when
+    not reached, or when the rows cannot place it: the 0.25 crossing when it lies before the
     first midpoint (the geometric mean of the first two rows), the 90 percent fleet when the
     first row already reaches it (the curve's limits then say so). The markers read maximum
-    use, never a sweep-dependent ceiling.
+    use, never a sweep-dependent ceiling. Before any is read, the crossings must hold: a
+    capacity that falls between two rows, or an elasticity that is under 0.10 or 0.25 at one
+    midpoint and at or above it again at a later one, is refused (the fourth check below).
 12. **The interference trim** (the phone class's central curve; a reported band the engine's
     people never read), at every row on the first snapshots of the draw: power control gives
     every beam equal flux at its target, so its power goes as r^2 / g(eta), g = cos^n of its
@@ -110,16 +111,20 @@ the central curve but for one changed input (two for the taper with wider spacin
 bands' snapshots over the same fleets, with its own rows, maximum use and markers: the taper
 (the beam's half-power width); the taper with wider co-channel spacing (that width and the
 ground a co-channel beam occupies over its 3 dB footprint, the spacing scaling the area per
-beam in the fill, the two bounds and maximum use alike); 10
-and 100 people per km^2 (the demand threshold); the 0.5 degree grid (the shipped cells summed
-2 x 2); and 48 beams per satellite. They carry no trim.
+beam in the fill, the two bounds and maximum use alike); 10 and 100 people per km^2 (the
+demand threshold); the 0.5 degree grid (the shipped cells summed 2 x 2); and 48 beams per
+satellite. They carry no trim.
 
 The checks raise :class:`SaturationInvariantError`: the bounds (L at most min(ceiling,
 supply) and the ceiling at most maximum use, at every snapshot of every class and band
 point, 1e-9 relative); the stall floor (the phone class's central L at least the sweep's
 floor x min(ceiling, supply) from 20,000 satellites up, at every snapshot and in the means;
 not the band points); capacity per satellite never rising between consecutive rows of any
-class or band point by more than 2 percent of the earlier row (the snapshots' noise).
+class or band point by more than 2 percent of the earlier row (the snapshots' noise); and
+the markers' crossings (capacity never falling between consecutive rows of any class or band
+point, and the elasticity of capacity, once under 0.10 or 0.25, under it at every later
+midpoint), checked before the markers are read. A failed check stops the run before anything
+is written.
 
 The curves' snapshots run in separate processes, each task in a fresh worker of its own (a
 process keeps memory its tasks freed, so a worker kept for several would peak above any one of
@@ -510,10 +515,12 @@ worker (measured on 2026-10-12)."""
 
 _WORKER_PEAK_MARGIN: Final[float] = 1.25
 """The factor the worker count takes each worker's peak at, over its tier's reading. A fresh
-worker's peak varies between runs of one task (the mounted terminal's snapshot at 20,000
-satellites read 1,352.1 to 1,625.7 MB in five fresh workers on 2026-10-12, a ratio of 1.20), so
-one reading can fall short of another task's peak in its tier; the rest covers the parent's growth
-after the pools are sized (every curve's maximum use, 9.8 MB on the shipped inputs)."""
+worker's peak varies between runs of one task: the mounted terminal's snapshot at 20,000
+satellites read 1,383.9 to 1,625.7 MB in three fresh workers on this code, a ratio of 1.17, and
+1,352.1 and 1,421.8 MB in two on the code before the footprint bands' radix sort and the serving
+index's band-by-band merge, 1.20 over all five (measured on 2026-10-12). So one reading can fall
+short of another task's peak in its tier; the rest covers the parent's growth after the pools
+are sized (every curve's maximum use, 9.8 MB on the shipped inputs)."""
 
 _SWEEP_TIER_FLEET_RATIO: Final[float] = 2.0
 """A memory tier of the sweep spans one class's largest remaining requested fleet down to
@@ -3754,8 +3761,10 @@ def compute_saturation(
     wider spacing), at the bands' snapshots. Every curve's tasks share one sweep. Checks the
     bounds and capacity per satellite for every class and band point and the stall floor for
     the phone class's central curve; reads each curve's markers on its rows (the 90 percent
-    fleet against its own maximum use), states any supporting marker the rows cannot place
-    among the limits, and records the run's wall time and peak-memory bound. Logs, once each,
+    fleet against its own maximum use) once its crossings hold (capacity never falling between
+    rows, and the elasticity never back at or above 0.10 or 0.25 after crossing under it),
+    states any supporting marker the rows cannot place among the limits, and records the run's
+    wall time and peak-memory bound. Logs, once each,
     every curve's maximum use and its saturation number (or the last measured fleet it is not
     reached by), then the run's workers, peak-memory bound and wall time: the command's summary.
 
@@ -3770,9 +3779,10 @@ def compute_saturation(
     Raises:
         PopulationGridError: If the grid is not the one the inputs name, not global, or not
             divisible by a band point's aggregation.
-        SaturationInvariantError: If a check fails, the realized fleets do not strictly
-            increase, a saturation number lies before the rows can place it, or the trim asks
-            for more snapshots than the phone class's central curve computes.
+        SaturationInvariantError: If a check fails (the markers' crossings among them), the
+            realized fleets do not strictly increase, a saturation number lies before the rows
+            can place it, or the trim asks for more snapshots than the phone class's central
+            curve computes.
         SaturationSweepError: If a saturation worker dies or runs out of memory, or the sweep's
             process pool breaks with a stated cause.
     """

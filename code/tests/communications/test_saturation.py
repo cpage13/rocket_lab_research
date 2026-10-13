@@ -30,6 +30,13 @@ specification, each naming what it exercises and what counts as success:
   re-derived exactly; the coarse promotion, byte-identical but for its measurement; the curve
   loader's refusals; the saturation command's refusals and its writes (over an existing curve,
   under missing folders, a relative output anchored at the repository root);
+* the markers' rules worked by hand: the first crossing under 0.10, interpolated in ln N
+  (1,046 on rows at 342, 992 and 1,980; an elasticity of exactly 0.10 no crossing), a
+  saturation number not reached named by the rows' last midpoint (2,803), and the crossings
+  refused when capacity falls between rows or the elasticity crosses back over a threshold;
+* the sweep's schedule: the memory tiers change no number, the worker count takes each
+  worker at its reading times the margin (worked by hand), and every task runs in a fresh
+  worker of its own, a pool's bound the sum of its largest task peaks, as many as its workers;
 * numpy confinement (a subprocess), the people-per-beam arithmetic, the class constants,
   the checks' refusals, the grid loader's refusals and the contract's validators;
 * the engine's side of the curve: the identity check, which names the first field of a run's
