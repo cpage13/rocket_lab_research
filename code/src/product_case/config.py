@@ -955,9 +955,10 @@ _ANCHOR_RATIONALE: Final[str] = (
 _DATA_IOT_ANCHOR_RATIONALE: Final[str] = (
     "INVESTOR_SET (the investor's proportion, 2026-10-04: \"Is it going to have more than the "
     "small terminal, double the price? Yes\"): half of Iridium's IoT customers today at double "
-    "their ARPU, on COMM-617 and COMM-618. Iridium sells no data tier today, so this anchor sits "
-    "beside minimal-packet IoT's, which is all of Iridium's IoT base, and the two IoT classes "
-    "start from twice Iridium's IoT revenue today. The curve's starting point, never a count of "
+    "their ARPU, on COMM-617 and COMM-618. Iridium reports one commercial IoT segment (1,998,000 "
+    "at $7.78, COMM-617, COMM-618); the product case takes it whole as minimal-packet IoT's "
+    "anchor and anchors data IoT beside it, so the two IoT classes start from twice Iridium's IoT "
+    "revenue today ($373.1M a year against $186.5M). The curve's starting point, never a count of "
     "devices: data IoT's customers in every market and year come from the demand curve."
 )
 """The rationale of data IoT's two anchor values (montecarlo M1's sentence)."""
