@@ -135,13 +135,12 @@ summed peaks of the largest set of workers alive at once).
     uv run python -m communications.saturation scenarios/iridium.yaml \\
         communications/models/iridium/saturation_curve.json --version-stamp <stamp>
 
-The full promotion of 2026-10-06 (the shipped scenario, 160 footprint bands, a shared machine
-of 16 CPUs and 32 GB, contended by other work throughout: ``time -l`` counted 74.4 million
-involuntary context switches, against 4.5 million in the 40-band run, which its wall time
-reflects) measured 2,792.5 s of wall time, about 47 minutes, and a peak-memory bound of
-12,108 MB, under the 16 GB budget (the bound is the budget's figure; ``time -l`` reported a
-largest resident set of 3.24 GB); the curve's ``provenance.run_measurement`` carries the same
-two figures.
+The full promotion of 2026-10-12 (the shipped scenario, 160 footprint bands, a shared machine
+of 16 CPUs and 32 GB, contended by other work: ``time -l`` counted 46.4 million involuntary
+context switches) measured 1,740.5 s of wall time, about 29 minutes, and a peak-memory bound of
+16,077 MB, 77 MB over the 16 GB budget, which it logged as a warning (the bound is the budget's
+figure; ``time -l`` reported a largest resident set of 3.50 GB); the curve's
+``provenance.run_measurement`` carries the same two figures.
 
 It loads the scenario, narrows it to its Iridium dials (a scenario without an ``iridium:``
 block is refused before anything runs), refuses a destination the shared writer would refuse

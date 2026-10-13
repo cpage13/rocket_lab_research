@@ -230,7 +230,7 @@ FROZEN_PEOPLE = {
 }
 FROZEN_STEADY_STATE_PEOPLE = (33_755_488, 5_197_846, 28_622_500)
 FROZEN_SATURATION_NUMBERS = (19_995, None, 20_652)
-FROZEN_MOUNTED_NOT_REACHED_BY = 64_009
+FROZEN_MOUNTED_NOT_REACHED_BY = 55_407
 FROZEN_BAND_SATURATION_NUMBERS = {
     "taper": 13_810,
     "taper_and_spacing": 10_223,
@@ -655,7 +655,7 @@ def test_iridium_class_physics_frozen_at_the_default(
     1.4784, 1.848 and 0.48048 Gbps; pools
     10.72, 13.4 and 3.484 Mbps; peak rates 2.0, 5.0 and 0.75; off-peak 10.0, 13.4 and 3.484;
     the maximum use the curve's times 0.616 and every marker the curve's own (the saturation
-    numbers 19,995, not reached by 64,009, and 20,652); every class bound by the launch cadence
+    numbers 19,995, not reached by 55,407, and 20,652); every class bound by the launch cadence
     at the horizon's end (4,288 satellites, below every saturation number).
     """
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
@@ -1591,7 +1591,7 @@ def test_a_saturation_number_is_reported_beside_the_cadence_never_a_cap(
 
     Expected outcome: every year flies every launch the cadence share allows; the living fleet
     keeps growing past both numbers; the small terminal and the phone class read spectrum as the
-    limit at the horizon's end and the mounted terminal (not reached by 64,009) the launch
+    limit at the horizon's end and the mounted terminal (not reached by 55,407) the launch
     cadence; people are read past the numbers, still rising.
     """
     data = load_comms_config(iridium_yaml).model_dump()
