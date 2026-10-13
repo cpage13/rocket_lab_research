@@ -45,7 +45,7 @@ assumptions).
   them) and the shipped population grid
   `communications/data/ghs_pop_e2030_0p25deg.npz` (ADR 009). Its published
   texts (the method and stated limits among them) are code too, so an edit
-  to one also re-promotes the curve (the same checklist, step 3).
+  to one calls for re-promoting the curve (the same checklist, step 3).
 - Out: `communications/models/iridium/saturation_curve.json`, written by
   `python -m communications.saturation` (a heavy run, the charter's Project
   rules), and `communications/models/iridium/default.json`, written by
