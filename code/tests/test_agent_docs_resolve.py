@@ -15,9 +15,12 @@ What it checks, on every line of every page:
 * every backticked span, word by word when it holds a command:
 
   - a path or a file name resolves: from the repository root, from ``code/`` (where the
-    commands run) or from the page's folder; a bare file name anywhere in the repository; a
-    glob matches at least one file. An absolute path, and a command's output after ``tee``,
-    are not looked up;
+    commands run) or from the page's folder, a ``./`` or ``../`` path too; a bare file name
+    anywhere in the repository; a glob matches at least one file. Each is looked up without
+    its line suffix (``iridium.py:146-151``), a key's trailing colon and a call's ``(``,
+    ``)`` and ``,``, so a file named as a key or a callee (``x.json:``, ``x.py(x)``), or among
+    a call's arguments, is looked up too. An absolute path, a command's output after ``tee``
+    and a ``jq`` filter are not looked up;
   - a module path (``communications.saturation``, ``common.file_io.load_yaml_mapping``, the
     word after ``-m``) names a module under ``code/src/`` and then a name that module defines
     at its top level;
@@ -49,10 +52,10 @@ What it misses: a name that exists but is placed wrongly (a field said to live i
 artifact, a dial that is an artifact field); numbers, counts and prose claims; a name written
 outside backticks; a command's flags, an entry point that follows a flag
 (``uv run --project code pytest``) and the values a ``jq`` filter compares against; a call's
-arguments and a key's value (a path among a spaced span's words is still looked up), a
-keyword argument (``extra="forbid"``), a claim family's pattern (``COMM-*``) and any word of a
-span with none of the shapes above that is not a command (``anonymous <>``). The human
-documents (the root ``README.md`` and the folders' documents) are not its pages.
+arguments and a key's value as names (a path among them is still looked up), a keyword
+argument (``extra="forbid"``), a claim family's pattern (``COMM-*``) and any word of a span
+with none of the shapes above that is not a command (``anonymous <>``). The human documents
+(the root ``README.md`` and the folders' documents) are not its pages.
 
 Decided, not built: an accepted ADR may name a path or a field before the code that makes it
 exists. :data:`_DECIDED_NOT_BUILT` lists each such span with the ADR that decides it; a
@@ -200,6 +203,13 @@ _WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 _LINE_SUFFIX = re.compile(r":\d+(-\d+)?$")
 """A ``:line`` or ``:line-line`` suffix after a cited file."""
+
+_PATH_WRAP = re.compile(r"^\(+|[),:]+$")
+"""What a call or a key puts around a path: a call's "(" before it and its ")" or "," after it,
+a key's ":" after it."""
+
+_CALL_PUNCTUATION = re.compile(r"[(),]")
+"""A call's punctuation, which parts the paths in a word from the rest (``f(code/x.yaml)``)."""
 
 _SPAN = re.compile(r"`([^`\n]+)`")
 """A backticked span on one line."""
@@ -487,24 +497,58 @@ def _module_problem(repo_dir: Path, dotted: str) -> str | None:
     return "no such module under code/src"
 
 
+def _unwrapped(word: str) -> str:
+    """Return a word without what a call or a key puts around a path, then without its line
+    suffix: ``code/x.yaml)`` gives ``code/x.yaml``, ``x.json:`` gives ``x.json`` and
+    ``x.py:146-151`` gives ``x.py``."""
+    return _LINE_SUFFIX.sub("", _PATH_WRAP.sub("", word))
+
+
 def _is_path_like(span: str) -> bool:
-    """Return whether a span is a path or a file name rather than a code name."""
-    return "/" in span or span.endswith(_FILE_EXTENSIONS)
+    """Return whether a span is a path or a file name rather than a code name: it holds a "/",
+    or it ends with a known file extension once a call's or a key's punctuation and a line
+    suffix are removed (:func:`_unwrapped`)."""
+    return "/" in span or _unwrapped(span).endswith(_FILE_EXTENSIONS)
+
+
+def _never_looked_up(word: str) -> bool:
+    """Return whether a word is looked up neither as a path nor as a name: a flag, an absolute
+    path, a quoted word, a placeholder (``<stamp>``), a ``.agent`` path (its line's mark is
+    checked instead), and a word that starts with "." other than a ``./`` or ``../`` path (a
+    ``jq`` filter such as ``.classes[]``)."""
+    return (
+        word.startswith(("-", "/", "'", '"'))
+        or (word.startswith(".") and not word.startswith(("./", "../")))
+        or _PLACEHOLDER.search(word) is not None
+        or _LOCAL_PATH.search(word) is not None
+    )
+
+
+def _path_problems(repo_dir: Path, page: Path, word: str) -> Iterator[tuple[str, str]]:
+    """Yield (path, why) for each path a word holds that does not resolve: the word split at a
+    call's "(", ")" and "," (``load_yaml_mapping(code/x.yaml)``, ``code/x.yaml)``), each piece
+    looked up when it is path-like (:func:`_is_path_like`) and not excluded
+    (:func:`_never_looked_up`)."""
+    for piece in _CALL_PUNCTUATION.split(word):
+        if not piece or not _is_path_like(piece) or _never_looked_up(piece):
+            continue
+        if (why := _path_problem(repo_dir, page, piece)) is not None:
+            yield piece, why
 
 
 def _path_problem(repo_dir: Path, page: Path, span: str) -> str | None:
-    """Return why a path or file name does not resolve, or None when it does."""
+    """Return why a path or file name does not resolve, or None when it does (looked up without
+    what a call or a key puts around it and its line suffix, :func:`_unwrapped`)."""
     tree = _repo_tree(repo_dir)
-    clean = _LINE_SUFFIX.sub("", span.split("#")[0]).rstrip("/")
+    clean = _unwrapped(span.split("#")[0]).rstrip("/")
     if not clean:
         return None
     root = repo_dir.resolve()
     bases = [root, root / "code", page.parent.resolve()]
     if "*" in clean:
+        normalized = [Path(os.path.normpath(base / clean)) for base in bases]
         patterns = [
-            (base / clean).relative_to(root).as_posix()
-            for base in bases
-            if (base / clean).is_relative_to(root)
+            path.relative_to(root).as_posix() for path in normalized if path.is_relative_to(root)
         ]
         hits = [
             name
@@ -627,7 +671,9 @@ def _shaped_names(span: str) -> list[str] | None:
     name under it (``from common.provenance import cell``); a call's callee
     (``run_iridium_model(config, curve)``); a key before ``:`` (``iridium:``,
     ``metadata.radiator_architecture: deployed_double_sided``). A call's arguments and a key's
-    value are no names here; a callee or key that is a file name keeps the path rules."""
+    value are no names here, and a callee or key that is a file name (``x.py(x)``, ``x.json:``)
+    is none either: it is looked up as a path, as every path among the span's words or pieces
+    is (:func:`_path_problems`)."""
     text = span.strip()
     if (imported := _IMPORT_LINE.fullmatch(text)) is not None:
         module = imported.group(1) or imported.group(3)
@@ -635,8 +681,9 @@ def _shaped_names(span: str) -> list[str] | None:
         names = [entry.split()[0] for entry in listed if entry.split()]
         return [module, *(f"{module}.{name}" for name in names if _WORD.fullmatch(name))]
     for shape in (_CALL, _KEY):
-        if (shaped := shape.fullmatch(text)) is not None and not _is_path_like(shaped.group(1)):
-            return [shaped.group(1)]
+        if (shaped := shape.fullmatch(text)) is not None:
+            name = shaped.group(1)
+            return [] if _is_path_like(name) else [name]
     return None
 
 
@@ -662,14 +709,15 @@ def _span_problems(
 ) -> Iterator[tuple[str, str]]:
     """Yield (word, why) for each part of a span that does not resolve; on a superseded ADR
     (``history``) its code names are not checked, its paths and claim IDs are. A span shaped as
-    an import line, a call or a key (:func:`_shaped_names`) has those names checked; with no
-    white space that is all it holds, and with white space its words are then checked as a
-    command's are, so a path among them is still looked up."""
+    an import line, a call or a key (:func:`_shaped_names`) has those names checked, and every
+    path it holds is looked up (:func:`_path_problems`): with no white space, the span's own
+    pieces; with white space, its words, which are checked as a command's are."""
     shaped = _shaped_names(span)
     if shaped is not None and not history:
         yield from _shaped_problems(repo_dir, shaped)
     if not any(ch.isspace() for ch in span):
         if shaped is not None:
+            yield from _path_problems(repo_dir, page, span)
             return
         why = _single_problem(repo_dir, page, span, history=history)
         if why is not None:
@@ -699,9 +747,8 @@ def _span_problems(
             or _PLACEHOLDER.search(word)
         ):
             continue
-        elif _is_path_like(word) and not word.startswith(("'", '"', ".")):
-            why = _path_problem(repo_dir, page, word)
         else:
+            yield from _path_problems(repo_dir, page, word)
             continue
         if why is not None:
             yield word, why
@@ -718,7 +765,7 @@ def _single_problem(repo_dir: Path, page: Path, span: str, *, history: bool = Fa
         if history:
             return _path_problem(repo_dir, page, file_part)
         return _path_problem(repo_dir, page, file_part) or _name_problem(repo_dir, test_part)
-    if span.startswith((".", "-", "'", '"', "/")) or _PLACEHOLDER.search(span):
+    if _never_looked_up(span):
         return None
     if _is_path_like(span):
         return _path_problem(repo_dir, page, span)

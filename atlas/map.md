@@ -342,9 +342,11 @@ curve's or the current Iridium schema (the promotion page, Open).
 - **The documents guard's reach.** It resolves names in backticks (in a
   span that is not a command, the names its shape holds: an import line's
   module and names, a call's callee, a key before a colon, a dotted
-  pattern's parts), not numbers, counts, claims, a command's flags, a
-  call's arguments or a key's value, and a name it finds may still sit in
-  the wrong place (its docstring says what it misses). The
+  pattern's parts) and every path among them, looked up without a line
+  suffix, a key's colon or a call's punctuation; not numbers, counts,
+  claims, a command's flags, or a call's arguments and a key's value as
+  names; and a name it finds may still sit in the wrong place (its
+  docstring says what it misses). The
   human documents (the root `README.md`, `code/README.md` and the folders'
   documents) are outside it: no test resolves their links, paths or
   numbers.
