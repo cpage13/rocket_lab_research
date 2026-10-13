@@ -181,6 +181,21 @@ def _no_mounted_pool(artifact: dict[str, Any]) -> None:
     ]
 
 
+def _zero_pool(artifact: dict[str, Any]) -> None:
+    """A small terminal whose rate while active is 0 (its people a beam would divide by 0)."""
+    artifact["classes"][0]["active_user_rate_mbps"] = 0.0
+
+
+def _zero_message(artifact: dict[str, Any]) -> None:
+    """A message of 0 bytes (an IoT device's service would divide by 0)."""
+    artifact["iridium_physics"]["iot_message_bytes"] = 0
+
+
+def _zero_phone_beams(artifact: dict[str, Any]) -> None:
+    """FY2031 with no phone-class beams under its rooms (attempts a beam would divide by 0)."""
+    _year_class(artifact, 2031, "phone_class")["useful_beams"] = 0.0
+
+
 def _no_phone_beams(artifact: dict[str, Any]) -> None:
     """FY2033 without the phone class's entry, whose useful beams IoT rides."""
     year = _year(artifact, 2033)
@@ -262,6 +277,24 @@ REFUSALS: list[tuple[str, Mutation, tuple[int, ...], tuple[str, ...]]] = [
         ("classes[] has no mounted_terminal_class entry",),
     ),
     (
+        "a pool's rate of zero",
+        _zero_pool,
+        (2031, 2032, 2033),
+        ("classes[].active_user_rate_mbps of small_terminal_class is 0.0", "above 0"),
+    ),
+    (
+        "a message of zero bytes",
+        _zero_message,
+        (2031, 2032, 2033),
+        ("iridium_physics.iot_message_bytes is 0", "above 0"),
+    ),
+    (
+        "no phone-class beams under a room",
+        _zero_phone_beams,
+        (2031, 2032, 2033),
+        ("FY2031: IoT's room is zero", "useful_beams of phone_class is 0.0"),
+    ),
+    (
         "the phone class's beams absent",
         _no_phone_beams,
         (2031, 2032, 2033),
@@ -287,8 +320,8 @@ def test_every_refusal_of_an_engineering_artifact_names_the_field_or_the_year(
     one line naming the artifact and the field or the year: another schema (naming
     ``iridium-v7``); a field it reads missing, of the wrong type or not finite; a null coverage
     floor year; a reported year absent from the artifact or before its floor year; a reported
-    year whose IoT room is zero (d = 1); a terminal class with no people in a reported year; a
-    class the reader needs absent.
+    year whose IoT room or phone-class beams are zero (d = 1); a terminal class with no people in
+    a reported year; a pool, a size or the airtime not above 0; a class the reader needs absent.
 
     Sample: the synthetic artifact with one change, read for the reported years shown.
 

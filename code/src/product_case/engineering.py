@@ -29,8 +29,9 @@ not JSON; another schema (naming ``iridium-v7``); a field it reads missing or of
 null coverage floor year (no year of service in the horizon); a reported year absent from the
 artifact, or before its coverage floor year; a reported year in which a terminal class has no
 people (no seats, so the fill would divide by zero); a reported year whose IoT room is zero (a
-downlink share of 1 leaves the uplink no time). The view is frozen and holds plain numbers, so a
-test can build one from pinned values.
+downlink share of 1 leaves the uplink no time); a beam pool, a message or burst size or the
+airtime that is not above 0 (each divides a quantity). The view is frozen and holds plain
+numbers, so a test can build one from pinned values.
 """
 
 from __future__ import annotations
@@ -68,8 +69,8 @@ class EngineeringArtifactError(ValueError):
     Raised by :func:`engineering_view_from_bytes` and :func:`build_engineering_view` for bytes
     that are not JSON, another schema, a field missing or of the wrong type, a null coverage
     floor year, a reported year absent or before the floor, a terminal class with no people in a
-    reported year, or a reported year whose IoT room is zero. The message is one line naming the
-    artifact and the field or the year.
+    reported year, a reported year whose IoT room is zero, or a pool, a size or the airtime that
+    is not above 0. The message is one line naming the artifact and the field or the year.
     """
 
 
@@ -262,12 +263,37 @@ def _refuse_unsellable(path: str, floor_year: int, reading: EngineeringYearReadi
         "years[].iot.uplink_payload_bits_per_second": reading.iot_payload_bits_per_second,
         "years[].iot.access_attempts_per_second_low": reading.iot_access_attempts_per_second,
         "years[].iot.single_tone_seconds_per_second": reading.iot_single_tone_seconds_per_second,
+        f"years[].classes[].useful_beams of {PHONE_DEVICE_CLASS}": reading.phone_useful_beams,
     }
     for field, room in rooms.items():
         if not room > 0:
             raise EngineeringArtifactError(
                 f"{path}: FY{year}: IoT's room is zero ({field} is {room!r}): a downlink share "
                 "of 1 leaves the uplink no time, so no IoT device fits"
+            )
+
+
+def _refuse_unusable_sizes(
+    path: str,
+    pools: dict[str, TerminalPool],
+    message_bytes: int,
+    burst_bytes: int,
+    airtime_high_s: float,
+) -> None:
+    """Refuse a pool, a size or the airtime not above 0 (each divides a quantity), naming it."""
+    values: dict[str, float] = {
+        "iridium_physics.iot_message_bytes": message_bytes,
+        "iridium_physics.iot_burst_bytes": burst_bytes,
+        "iridium_physics.iot_message_airtime_high_s": airtime_high_s,
+    }
+    for device_class, pool in pools.items():
+        values[f"classes[].beam_pool_mbps of {device_class}"] = pool.beam_pool_mbps
+        values[f"classes[].active_user_rate_mbps of {device_class}"] = pool.active_user_rate_mbps
+        values[f"classes[].concurrency_peak of {device_class}"] = pool.concurrency_peak
+    for field, value in values.items():
+        if not value > 0:
+            raise EngineeringArtifactError(
+                f"{path}: {field} is {value!r}; the product case needs it above 0"
             )
 
 
@@ -310,9 +336,20 @@ def build_engineering_view(
         The frozen view.
 
     Raises:
-        EngineeringArtifactError: If a reported year is before the coverage floor year, a
-            terminal class has no people in it, or its IoT room is zero.
+        EngineeringArtifactError: If a pool, a size or the airtime is not above 0, a reported year
+            is before the coverage floor year, a terminal class has no people in it, or its IoT
+            room or the phone class's beams are zero.
     """
+    _refuse_unusable_sizes(
+        path,
+        {
+            TERMINAL_DEVICE_CLASS[ProductClass.SMALL_TERMINAL]: small_terminal_pool,
+            TERMINAL_DEVICE_CLASS[ProductClass.MOUNTED_TERMINAL]: mounted_terminal_pool,
+        },
+        message_bytes,
+        burst_bytes,
+        airtime_high_s,
+    )
     for reading in readings:
         _refuse_unsellable(path, coverage_floor_reached_year, reading)
     share = class_split(small_terminal_pool, mounted_terminal_pool)
@@ -545,7 +582,8 @@ def engineering_view_from_bytes(
         EngineeringArtifactError: If the bytes are not JSON or not ``iridium-v7``, a field read is
             missing or invalid, the coverage floor year is null, a reported year is absent from
             the artifact or before its floor year, a terminal class has no people in a reported
-            year, or a reported year's IoT room is zero.
+            year, a reported year's IoT room or the phone class's beams are zero, or a pool, a size
+            or the airtime is not above 0.
     """
     sha256 = hashlib.sha256(data).hexdigest()
     artifact = _parse(path, data)
