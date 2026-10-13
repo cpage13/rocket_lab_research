@@ -721,11 +721,16 @@ def engineering_view_from_bytes(
         The frozen view.
 
     Raises:
-        EngineeringArtifactError: If the bytes are not JSON or not ``iridium-v7``, a field read is
-            missing or invalid, the coverage floor year is null, a reported year is absent from
-            the artifact or before its floor year, a terminal class has no people in a reported
-            year, a reported year's IoT room or the phone class's beams are zero, or a pool, a size
-            or the airtime is not above 0.
+        EngineeringArtifactError: If the bytes are not JSON or not ``iridium-v7``; a field read
+            is missing or invalid; a class the reader needs is absent from ``classes[]`` or from
+            a reported year's ``years[].classes[]``; the coverage floor year is null; a reported
+            year is absent from the artifact, or a terminal's people in it are beyond the range
+            of a double; or :func:`build_engineering_view` refuses the readings: a reported year
+            before the floor year, a terminal class with no people in it, the phone class's
+            beams zero, the payload and tone rooms zero together, or a room zero alone (an
+            inconsistent artifact); a pool, a size or the airtime not above 0; a derived value (a
+            pool's people a beam or busy-hour data, the class split) not a finite number above
+            0, or the split not below 1.
     """
     sha256 = hashlib.sha256(data).hexdigest()
     artifact = _parse(path, data)

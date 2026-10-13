@@ -13,9 +13,10 @@ Per choice, reported year t (t0 the first, t1 the last) and class:
   month, in fiscal years (montecarlo m3), data IoT's 2 x minimal-packet IoT's;
 - a terminal's data a month: its busy-hour part the engineering usage's (the view's 2.7 or 27 GB,
   so its seats are the engineering case's), its off-peak part the scenario's monthly total less
-  that (a total below the busy-hour part is refused, naming the field); its busy-hour rate
-  r_busy = busy GB x 10^9 x 8 / (4 h x 3,600 s x 30 days) and off-peak rate
-  r_off(t) = off-peak GB x 10^9 x 8 / (20 h x 3,600 s x 30 days), bits a second, the rates a
+  that (a total below the busy-hour part by more than the invariants' tolerance of it is refused,
+  naming the field; a smaller shortfall, the float rounding of that part, leaves an off-peak part
+  of 0); its busy-hour rate r_busy = busy GB x 10^9 x 8 / (4 h x 3,600 s x 30 days) and off-peak
+  rate r_off(t) = off-peak GB x 10^9 x 8 / (20 h x 3,600 s x 30 days), bits a second, the rates a
   terminal's downlink use is measured with;
 - an IoT class's usage: its scenario path (minimal-packet IoT's messages a day, data IoT's bursts
   a day; data IoT's messages are one value) times the choice's usage scale's line factor
