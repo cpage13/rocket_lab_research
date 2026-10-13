@@ -79,6 +79,124 @@ def test_the_synthetic_case_promotes_and_a_second_promotion_is_byte_identical(
     assert classes == ["small_terminal", "mounted_terminal", "minimal_packet_iot", "data_iot"]
 
 
+def test_every_block_holds_the_foundations_keys_in_order(
+    synthetic_scenario: dict[str, Any],
+    synthetic_engineering: dict[str, Any],
+    write_scenario: Writer,
+    write_engineering: Writer,
+    tmp_path: Path,
+) -> None:
+    """Objective: the artifact is the foundation's ``product-case-v1``, key by key in its order
+    below the top level too (the spec lens's S2 and m4): each block's keys, the classes and the
+    spread fields in their enums' orders, a terminal's or an IoT class's block by its kind, the
+    all-draw basis's record, and so no key the foundation does not name (no total of customers).
+
+    Sample: the synthetic case's artifact.
+
+    Expected outcome: every block's keys equal the foundation's list, in order.
+    """
+    output = tmp_path / "keys.json"
+    assert (
+        _promote(
+            synthetic_scenario, synthetic_engineering, write_scenario, write_engineering, output
+        )
+        == EXIT_OK
+    )
+    artifact = json.loads(output.read_text(encoding="utf-8"))
+    classes = ["small_terminal", "mounted_terminal", "minimal_packet_iot", "data_iot"]
+    tests = [
+        "fill", "margin", "iot_uplink_busy", "iot_uplink_offpeak", "random_access",
+        "single_tone_time", "revenue_rising",
+    ]  # fmt: skip
+    fields = [
+        "small_terminal.customers", "small_terminal.revenue_musd", "mounted_terminal.customers",
+        "mounted_terminal.revenue_musd", "minimal_packet_iot.customers",
+        "minimal_packet_iot.revenue_musd", "data_iot.customers", "data_iot.revenue_musd",
+        "revenue_musd", "margin_pct", "iot_uplink_use_busy", "iot_uplink_use_offpeak",
+    ]  # fmt: skip
+    assert list(artifact["metadata"]) == [
+        "model", "schema_version", "scenario_name", "source_scenario_path", "version_stamp",
+        "engineering_artifact",
+    ]  # fmt: skip
+    assert list(artifact["metadata"]["engineering_artifact"]) == [
+        "path", "schema_version", "version_stamp", "sha256",
+    ]  # fmt: skip
+    assert list(artifact["inputs"]) == ["scenario", "constants", "engineering"]
+    assert list(artifact["network"]) == ["small_terminal_share", "years"]
+    for year in artifact["network"]["years"]:
+        assert list(year) == [
+            "year", "seats_small_terminal", "seats_mounted_terminal", "network_scale",
+        ]  # fmt: skip
+    for choice in artifact["choices"]:
+        assert list(choice) == [
+            "choice_id", "end_prices", "minimal_packet_scale", "data_iot_scale",
+            "at_start_prices", "usable_draws", "usable_share", "median_summed_revenue_musd",
+            "median_last_year_revenue_musd", "central_revenue_musd",
+            "central_summed_revenue_musd", "central_usable", "draws_failing",
+        ]  # fmt: skip
+        assert list(choice["end_prices"]) == classes
+        assert list(choice["draws_failing"]) == tests
+    assert list(artifact["fronts"]) == ["all_prices", "at_start_prices"]
+    assert list(artifact["pick"]) == [
+        "choice_id",
+        "basis",
+        "usage_edges",
+        "dominated_in_context_by",
+    ]
+    headline = artifact["headline"]
+    assert list(headline) == ["market", "usable", "failing_tests", "years"]
+    assert list(headline["market"]) == ["gamma", "epsilon", "eta"]
+    for year in headline["years"]:
+        assert list(year) == ["year", "classes", "totals"]
+        assert [entry["product_class"] for entry in year["classes"]] == classes
+        for entry in year["classes"]:
+            assert list(entry) == [
+                "product_class", "kind", "price_usd_per_month", "service", "demand",
+                "customers", "revenue_musd", "price_per_unit", "terminal", "iot",
+            ]  # fmt: skip
+            if entry["kind"] == "terminal":
+                assert entry["iot"] is None
+                assert list(entry["terminal"]) == [
+                    "seats", "seats_filled", "busy_hour_gb_per_month", "offpeak_gb_per_month",
+                    "active_rate_mbps", "offpeak_downlink_use",
+                ]  # fmt: skip
+            else:
+                assert entry["terminal"] is None
+                assert list(entry["iot"]) == [
+                    "messages_per_day", "bursts_per_day", "bursts_outside_busy_hours",
+                    "bytes_per_day", "uplink_use_busy", "uplink_use_offpeak",
+                ]  # fmt: skip
+        assert list(year["totals"]) == [
+            "revenue_musd", "fleet_annual_cost_musd", "margin_pct", "profit_musd",
+            "busy_hour_beams_filled", "iot_uplink_use_busy", "iot_uplink_use_offpeak",
+            "access_use", "access_attempts_per_second_per_beam", "single_tone_use",
+            "gb_carried_per_year", "cost_per_gb_carried_usd",
+        ]  # fmt: skip
+    spreads = artifact["spreads"]
+    assert list(spreads) == ["all_draws_basis", "years"]
+    assert list(spreads["all_draws_basis"]) == ["label", "draws", "draws_past_iot_room"]
+    for year in spreads["years"]:
+        assert list(year) == ["year", "fields"]
+        assert [field["field"] for field in year["fields"]] == fields
+        for field in year["fields"]:
+            assert list(field) == ["field", "usable_draws", "all_draws", "every_seat"]
+            assert list(field["usable_draws"]) == [
+                "p10", "p50", "p90", "headline_rank", "null_reason",
+            ]  # fmt: skip
+            assert list(field["all_draws"]) == ["p10", "p50", "p90", "headline_rank"]
+            if field["field"].split(".")[0] in classes[:2]:
+                assert list(field["every_seat"]) == [
+                    "headline_sells_every_seat", "usable_draws_share", "all_draws_share",
+                ]  # fmt: skip
+            else:
+                assert field["every_seat"] is None
+    assert list(artifact["meta"]) == [
+        "formulas", "validation_results", "data_dictionary", "query_examples",
+        "source_status_summary",
+    ]  # fmt: skip
+    assert all(isinstance(line, str) for line in artifact["assumptions"])
+
+
 def _set(path: tuple[str, ...], value: object) -> Callable[[dict[str, Any]], None]:
     """A change setting one key of a nested mapping."""
 

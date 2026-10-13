@@ -355,36 +355,76 @@ def _leaves(node: Any, path: str) -> list[tuple[str, Any]]:
     return [(path, node)]
 
 
-def test_every_number_is_linked_to_its_formula(promoted: tuple[dict[str, Any], Path]) -> None:
-    """Objective: every numeric leaf outside ``inputs`` and ``metadata`` is a provenance cell whose
-    formula is in the product case's catalog, or a plain field an entry's output names (the
-    counterpart of the data center's V13).
+COUNT_MAPS: tuple[str, ...] = ("choices[].draws_failing", "meta.source_status_summary")
+"""The two catalog outputs that name a map of counts, each count under one linked by its prefix:
+the draws failing each usable test, and the input cells counted by source status. Every other
+plain number is linked only by an output path that names it exactly (the spec lens's m4: a
+prefix such as ``headline.years[]`` would admit any number under a headline year)."""
 
-    Sample: the synthetic case's artifact.
 
-    Expected outcome: no unlinked number; every cell's ``formula_name`` a catalog entry.
-    """
-    artifact, _ = promoted
-    outputs = [
+def _unlinked(artifact: dict[str, Any]) -> list[str]:
+    """Each plain number (or list of numbers) outside ``inputs`` and ``metadata`` that no catalog
+    output names, exactly or under one of the count maps; provenance cells are left to the
+    caller."""
+    outputs = {
         pattern
         for entry in FORMULA_CATALOG.values()
         for pattern in entry.output_path_pattern.split(PATH_SEPARATOR)
-    ]
-    names = {entry.formula_id for entry in FORMULA_CATALOG.values()}
+    }
+    under_maps = tuple(f"{prefix}." for prefix in COUNT_MAPS)
     unlinked = []
     for path, leaf in _leaves(
         {k: v for k, v in artifact.items() if k not in ("inputs", "metadata")}, ""
     ):
         if isinstance(leaf, dict):
-            assert leaf["formula_name"] in names, path
             continue
         numeric = isinstance(leaf, (int, float)) and not isinstance(leaf, bool)
-        if (numeric or isinstance(leaf, list)) and not any(
-            path == pattern or path.startswith((f"{pattern}.", f"{pattern}["))
-            for pattern in outputs
+        if (
+            (numeric or isinstance(leaf, list))
+            and path not in outputs
+            and not path.startswith(under_maps)
         ):
             unlinked.append(path)
-    assert not unlinked, sorted(set(unlinked))
+    return unlinked
+
+
+def test_every_number_is_linked_to_its_formula(promoted: tuple[dict[str, Any], Path]) -> None:
+    """Objective: every numeric leaf outside ``inputs`` and ``metadata`` is a provenance cell whose
+    formula is in the product case's catalog, or a plain field an entry's output names exactly,
+    or a count in one of the two maps of counts (the counterpart of the data center's V13); and
+    the check is not vacuous: a plain number added where no output names it is reported (the
+    spec lens's m4: a customers total under a headline year, a number under the all-draw basis,
+    a number under a choice).
+
+    Sample: the synthetic case's artifact, then three copies each with one plain number added.
+
+    Expected outcome: no unlinked number and every cell's ``formula_name`` a catalog entry; each
+    added number reported unlinked at its own path.
+    """
+    artifact, _ = promoted
+    names = {entry.formula_id for entry in FORMULA_CATALOG.values()}
+    for path, leaf in _leaves(
+        {k: v for k, v in artifact.items() if k not in ("inputs", "metadata")}, ""
+    ):
+        if isinstance(leaf, dict):
+            assert leaf["formula_name"] in names, path
+    assert _unlinked(artifact) == []
+    added: tuple[tuple[tuple[str | int, ...], str, str], ...] = (
+        (("headline", "years", 0), "customers_total", "headline.years[].customers_total"),
+        (
+            ("spreads", "all_draws_basis"),
+            "draws_at_seats",
+            "spreads.all_draws_basis.draws_at_seats",
+        ),
+        (("choices", 0), "typical_draw", "choices[].typical_draw"),
+    )
+    for where, key, path in added:
+        changed = json.loads(json.dumps(artifact))
+        node: Any = changed
+        for step in where:
+            node = node[step]
+        node[key] = 1
+        assert _unlinked(changed) == [path], path
 
 
 def _resolve(document: dict[str, Any], ref: str) -> Any:

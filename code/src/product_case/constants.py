@@ -621,7 +621,10 @@ input paths names each of them (``inputs.scenario.usage``), and a value read in 
 year, which has one cell a year keyed ``<field>.<year>``
 (``inputs.engineering.people_small_terminal.2031``), is named once by that key's prefix
 (``inputs.engineering.people_small_terminal``), which names each year's cell. Two
-patterns are prose, saying what an entry reads or publishes outside the artifact's leaves."""
+patterns are prose, saying what an entry reads or publishes outside the artifact's leaves. The
+test of every published number links a plain number by an output that ends above it only for a
+map of counts (``choices[].draws_failing``, ``meta.source_status_summary``); every other plain
+number an output names by its own path, so no number slips in under a record's path."""
 
 
 def _entry(
@@ -1448,10 +1451,15 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 ),
                 description=(
                     "The all-draw basis's label: in how many markets the pick sells IoT past its "
-                    "uplink, access or single-tone room, markets the usable draws leave out."
+                    "uplink, access or single-tone room, markets the usable draws leave out; the "
+                    "basis record publishes the label, the drawn markets and that count."
                 ),
                 inputs=("pick.choice_id", "inputs.scenario.market"),
-                outputs=("spreads.all_draws_basis",),
+                outputs=(
+                    "spreads.all_draws_basis.label",
+                    "spreads.all_draws_basis.draws",
+                    "spreads.all_draws_basis.draws_past_iot_room",
+                ),
                 units="draws",
             ),
             _entry(
