@@ -18,13 +18,15 @@ outside (0, 100) percent.
 Every default is a named constant of :mod:`product_case.constants`, and the shipped scenario
 holds exactly the defaults, its own label aside (a test ties the two). Each scenario value has
 one :class:`~common.input_manifest.CellSpec` in :data:`SCENARIO_SPECS`, and each named constant
-that is a model input one in :data:`CONSTANT_INPUTS` with its value: the artifact's input cells are
-built from them by :func:`common.input_manifest._spec_cell`'s rule, so a value that differs from
-its default is a scenario override (status ``scenario``, the scenario YAML its only source) and a
-side run's price never inherits the investor's words. Every spec's status is one of the shared
-statuses: the investor's values and the design's settings are ``scenario`` (each rationale opens
-INVESTOR_SET or SCENARIO with its date), Iridium's customers and ARPU today ``certified``
-(COMM-617, COMM-618). A field's description says what the field is; its basis is its spec's.
+that is a model input one in :data:`CONSTANT_INPUTS` with its value: the artifact's input cells
+are built from them by :func:`common.input_manifest._spec_cell`'s rule, each scenario value
+handed to it by :func:`scenario_inputs` beside its default in a cell's form, so a value that
+differs from its default is a scenario override (status ``scenario``, the scenario YAML its only
+source) and a side run's price never inherits the investor's words. Every spec's status is one
+of the shared statuses: the investor's values and the design's settings are ``scenario`` (each
+rationale opens INVESTOR_SET or SCENARIO with its date), Iridium's customers and ARPU today
+``certified`` (COMM-617, COMM-618). A field's description says what the field is; its basis is
+its spec's.
 """
 
 from __future__ import annotations
@@ -50,7 +52,15 @@ from pydantic import (
 )
 
 from common.file_io import load_yaml_mapping
-from common.input_manifest import AssumptionRole, CellSpec, SourceStatus, SupportingClaim
+from common.input_manifest import (
+    AssumptionRole,
+    CellSpec,
+    InputScalar,
+    InputValue,
+    SourceStatus,
+    SupportingClaim,
+    _field_description,
+)
 from product_case.constants import (
     BROADBAND_ARPU_USD_MONTH,
     BROADBAND_CUSTOMERS_TODAY,
@@ -992,6 +1002,93 @@ the artifact's ``metadata``, not inputs."""
 
 
 @dataclass(frozen=True)
+class ScenarioInput:
+    """One scenario value ready for its input cell: the run's value beside the default it is
+    compared with, both in the form an input cell holds.
+
+    The config holds a list setting as a tuple and an input cell holds a list, and
+    :func:`common.input_manifest._spec_cell` compares the run's value with the default by ``==``:
+    a tuple against a list never compares equal, so a builder that turned only one side would
+    publish the investor's defaults as scenario overrides, their claims and words dropped. Here
+    both sides are lists (fresh ones, so nothing reaches the config), so the shipped values stay
+    defaults.
+
+    Attributes:
+        path: The value's path in the scenario, a key of :data:`SCENARIO_SPECS`; its input
+            cell's path is :data:`SCENARIO_INPUT_PREFIX` and this.
+        value: The run's value, a list where the config holds a tuple.
+        default: The code default at the same path, in the same form.
+        description: What the field is, its config field's description.
+        spec: The value's cell spec, describing the default.
+    """
+
+    path: str
+    value: InputValue
+    default: InputValue
+    description: str
+    spec: CellSpec
+
+
+def _input_value(value: object, path: str) -> InputValue:
+    """A config leaf in an input cell's form: a tuple as a list of its scalars, a scalar as is."""
+    if isinstance(value, tuple):
+        return [_input_scalar(item, path) for item in value]
+    return _input_scalar(value, path)
+
+
+def _input_scalar(value: object, path: str) -> InputScalar:
+    """A config scalar as an input cell holds it; anything else is a spec naming no leaf."""
+    if isinstance(value, (bool, int, float, str)):
+        return value
+    raise TypeError(f"{path} names no scalar or list of scalars of the config: {type(value)!r}")
+
+
+def _leaf(config: BaseModel, path: str) -> tuple[BaseModel, str, object]:
+    """The block that holds a dotted path's leaf, the leaf's field name and its value."""
+    *blocks, name = path.split(".")
+    block = config
+    for key in blocks:
+        nested = getattr(block, key)
+        if not isinstance(nested, BaseModel):
+            raise TypeError(f"{path}: {key} is not a config block")
+        block = nested
+    return block, name, getattr(block, name)
+
+
+def scenario_inputs(config: ProductCaseConfig) -> tuple[ScenarioInput, ...]:
+    """Each scenario value of a run with its default, description and spec, ready for its cell.
+
+    Walks :data:`SCENARIO_SPECS` in order, reading each path on the run's config and on the code
+    defaults (``ProductCaseConfig()``), both sides in an input cell's form (a tuple as a list),
+    so :func:`common.input_manifest._spec_cell` sees a value equal to its default as the
+    default, with its claim and the investor's words, and any other value as a scenario
+    override. The scenario's name and the engineering artifact's path are the run's identity,
+    not inputs, and have no entry.
+
+    Args:
+        config: The run's config.
+
+    Returns:
+        One :class:`ScenarioInput` per scenario value, in :data:`SCENARIO_SPECS`'s order.
+    """
+    defaults = ProductCaseConfig()
+    entries: list[ScenarioInput] = []
+    for path, spec in SCENARIO_SPECS.items():
+        block, name, value = _leaf(config, path)
+        _, _, default = _leaf(defaults, path)
+        entries.append(
+            ScenarioInput(
+                path=path,
+                value=_input_value(value, path),
+                default=_input_value(default, path),
+                description=_field_description(type(block), name),
+                spec=spec,
+            )
+        )
+    return tuple(entries)
+
+
+@dataclass(frozen=True)
 class ConstantInput:
     """A named constant the product case publishes as an input cell under ``inputs.constants``.
 
@@ -1240,7 +1337,9 @@ __all__ = [
     "PriceDials",
     "ProductCaseConfig",
     "ResponseRange",
+    "ScenarioInput",
     "TerminalUsageDials",
     "UsageDials",
     "load_product_case_config",
+    "scenario_inputs",
 ]

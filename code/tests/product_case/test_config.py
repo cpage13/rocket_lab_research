@@ -19,12 +19,15 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 import product_case.constants as constants_module
-from common.input_manifest import AssumptionRole, SourceStatus
+from common.input_manifest import AssumptionRole, InputCell, SourceStatus, _spec_cell
 from product_case.config import (
     CONSTANT_INPUTS,
+    SCENARIO_INPUT_PREFIX,
     SCENARIO_SPECS,
     ProductCaseConfig,
+    ResponseRange,
     load_product_case_config,
+    scenario_inputs,
 )
 from product_case.constants import (
     CLASS_KIND,
@@ -458,6 +461,62 @@ def test_every_scenario_value_has_one_cell_spec() -> None:
     """
     paths = {path for path in _leaf_paths(ProductCaseConfig()) if path not in IDENTITY_FIELDS}
     assert set(SCENARIO_SPECS) == paths
+
+
+def test_scenario_inputs_keep_the_shipped_values_defaults(product_case_yaml: Path) -> None:
+    """Objective: the helper that walks ``SCENARIO_SPECS`` hands each scenario value to its input
+    cell beside its default, both sides in an input cell's form (a tuple of the config as a
+    list), so every input cell of the shipped run is a default with its claim and the
+    investor's words, and a changed value, alone, a scenario override (the spec lens's m10: a
+    list against its tuple default reads as an override, silently).
+
+    Sample: the shipped scenario as loaded; the same with the small terminal's end prices
+    [10.0, 9.0]; each entry through ``common.input_manifest._spec_cell``.
+
+    Expected outcome: one entry per ``SCENARIO_SPECS`` key, in its order; every list setting a
+    list on both sides (the reported years [2031, 2033, 2035, 2036]); each description its config
+    field's; every cell of the shipped run of role ``default`` citing its spec's claim first; in
+    the side run only the small terminal's end prices a scenario override.
+    """
+    shipped = load_product_case_config(product_case_yaml)
+    scenario_path = "code/scenarios/product_case.yaml"
+
+    def cells(config: ProductCaseConfig) -> list[tuple[str, InputCell]]:
+        return [
+            (
+                entry.path,
+                _spec_cell(
+                    f"{SCENARIO_INPUT_PREFIX}.{entry.path}",
+                    entry.value,
+                    entry.default,
+                    entry.description,
+                    entry.spec,
+                    scenario_path,
+                ),
+            )
+            for entry in scenario_inputs(config)
+        ]
+
+    entries = scenario_inputs(shipped)
+    assert [entry.path for entry in entries] == list(SCENARIO_SPECS)
+    by_path = {entry.path: entry for entry in entries}
+    years = by_path["reported_years"]
+    assert years.value == years.default == [2031, 2033, 2035, 2036]
+    for entry in entries:
+        assert isinstance(entry.value, list) == isinstance(entry.default, list), entry.path
+    low = by_path["market.gamma.low"]
+    assert low.description == ResponseRange.model_fields["low"].description
+    for path, cell in cells(shipped):
+        assert cell.assumption_role is AssumptionRole.DEFAULT, path
+        assert cell.source_refs[0].claim_id == SCENARIO_SPECS[path].claim_id, path
+    side = shipped.model_dump()
+    side["prices"]["small_terminal"]["end_usd_month"] = [10.0, 9.0]
+    overrides = [
+        path
+        for path, cell in cells(ProductCaseConfig.model_validate(side))
+        if cell.assumption_role is AssumptionRole.SCENARIO_OVERRIDE
+    ]
+    assert overrides == ["prices.small_terminal.end_usd_month"]
 
 
 def test_each_scenario_spec_states_its_status_claim_and_basis() -> None:
