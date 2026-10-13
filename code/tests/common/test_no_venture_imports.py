@@ -50,6 +50,11 @@ def test_common_modules_do_not_import_communications(path: Path) -> None:
 
 @pytest.mark.parametrize("path", _COMMON_FILES, ids=lambda p: p.name)
 def test_common_modules_do_not_import_the_product_case(path: Path) -> None:
+    """Objective: the shared core never depends on the product case (ADR 012: it is its own model).
+
+    Sample: each module under ``code/src/common``. Expected outcome: none of its import
+    statements names ``product_case``.
+    """
     assert "product_case" not in _imported_modules(path.read_text())
 
 

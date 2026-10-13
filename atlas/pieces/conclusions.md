@@ -43,7 +43,7 @@ output-anchor sections of both assumptions ledgers.
   before publication. Data center:
   `git diff -- data_center/models/space/default.json data_center/models/ground/default.json data_center/conclusion.md`;
   communications: the same over `communications/models/iridium/default.json`,
-  the product case's promoted artifact beside it, and
+  `communications/models/product_case/default.json` and
   `communications/conclusion.md`.
 - **Source rules.** A model output cites its promoted JSON path and, in
   public prose, its claim ID. A scenario or source assumption cites its
@@ -105,11 +105,9 @@ Iridium artifact (`iridium-v7`) and the product case's (`product-case-v1`),
 the two cases side by side (2026-10-13), and names all three promoted files
 in its Source Snapshot.
 
-**Open.**
-- The communications documents cite the product case's artifact, which is
-  promoted after them: until that promotion lands, their links to it do not
-  resolve, and its stamp in the Source Snapshot, the ledger's anchors and
-  the handoff is the build run's (2026-10-13).
+**Open.** Nothing open on this page: the product case's artifact the
+communications documents cite is promoted (stamp 2026-10-13), and their links
+to it resolve.
 
 **Tests.** The em-dash guard covers every `*.md` in `data_center/`,
 `communications/` and `docs/`, and the root documents;

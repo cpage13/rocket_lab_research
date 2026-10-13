@@ -34,8 +34,9 @@ the Iridium command, the product case's and the saturation command):
   writes a named space artifact (local only, no ground artifact).
 - `uv run python -m communications.saturation scenarios/iridium.yaml communications/models/iridium/saturation_curve.json --version-stamp <stamp>`
   writes the saturation curve. It is a heavy run (the charter's Project
-  rules), and it reads no curve, so a stale curve never blocks it. It runs first whenever an
-  input of the curve moves (the assumptions page's Iridium checklist).
+  rules), and it reads no curve, so a stale curve never blocks it. It runs
+  first whenever an input of the curve moves (the assumptions page's Iridium
+  checklist).
 - `uv run python -m communications.json_output scenarios/iridium.yaml communications/models/iridium/default.json --version-stamp <stamp>`
   writes the Iridium artifact from the scenario and the curve its
   `iridium.saturation.curve_path` names.
@@ -43,8 +44,8 @@ the Iridium command, the product case's and the saturation command):
   writes the product case's artifact from the scenario and the Iridium
   artifact its `engineering_artifact_path` names. That default output is
   written only from the shipped scenario; a side run writes to a path of its
-  own, outside the tracked folders. It runs after the Iridium command, every time: the
-  artifact records the SHA-256 of the Iridium bytes it read.
+  own, outside the tracked folders. It runs after the Iridium command, every
+  time: the artifact records the SHA-256 of the Iridium bytes it read.
 - For the communications commands and the product case's, a relative output
   path anchors to the repository root, and the stamp defaults to today's
   date, so a re-promotion with no model change still diffs: after a change,
@@ -185,8 +186,9 @@ fresh build's), and `code/tests/common/test_file_io.py` (the loader and the
 writer). Missed: no test compares the committed data-center artifacts whole
 with a fresh promotion (`test_committed_meta.py` compares their data
 dictionaries and the space artifact's formula definitions); the Iridium
-suite and the product case's each compare their own, and the drift tests rebuild the committed curve's
-check rows rather than run the saturation command in full.
+suite and the product case's each compare their own, and the drift tests
+rebuild the committed curve's check rows rather than run the saturation
+command in full.
 
 **If this changes, update here.** A command, flag, gate rule, writer
 behavior, query recipe or headline query.
