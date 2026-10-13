@@ -2,7 +2,8 @@
 
 Every scenario loader in the repository (the data-center config and the
 generations file it may reference, the ground reference, the communications
-config) reads YAML through :func:`load_yaml_mapping`. Every published JSON
+config, the product case's config) reads YAML through
+:func:`load_yaml_mapping`. Every published JSON
 artifact (the space model, the ground reference, the Iridium model, the
 saturation curve) is serialized by :func:`render_artifact_json`, and the three
 commands that publish them (``rklb-value --promote``, the Iridium promotion

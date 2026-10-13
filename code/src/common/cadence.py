@@ -6,7 +6,9 @@ the eight cadence and launch-cost defaults, the two validated dial blocks
 ``launch_cost`` blocks of the data-center and communications configs), the
 two cell functions that turn them into provenance cells
 (:func:`compute_launches_per_year` and :func:`compute_launch_cost_musd`), and
-:func:`round_half_up`, the one half-up rounding the models use.
+:func:`round_half_up`, the one half-up rounding the models use: the launch ramp's
+mission counts, the communications counts and markers, and the product case's IoT
+usage paths (a choice's messages or bursts a day in each reported year).
 
 The launch ramp is a logistic curve fit through the year-5 and year-10
 scenario anchors. Those anchors are source-indexed as model scenarios
