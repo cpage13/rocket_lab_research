@@ -328,18 +328,20 @@ class IotRoomRecord:
     """IoT's room at one fleet, and each IoT class's capacity in it alone (ADR 011).
 
     IoT rides the phone class's useful beams (IoT devices are low gain, so their reuse follows
-    the phone rule) in the uplink's share of the frame, 1 - d (ADR 008). The room is published at
-    every fleet (0.0 at a fleet of 0); each class's capacity only at or above the coverage floor.
+    the phone rule) in the uplink's share of the frame, 1 - d (ADR 008). Those are the beams lit
+    over inhabited cells (the phone class's ocean factor of the fleet's beams), so IoT over
+    oceans and empty land is not counted: a conservative basis. The room is published at every
+    fleet (0.0 at a fleet of 0); each class's capacity only at or above the coverage floor.
 
     Attributes:
         uplink_bits_per_second: The phone class's useful beams x the held width x the phone
             class's central spectral efficiency x (1 - d), bits a second.
         uplink_payload_bits_per_second: That x the MAC efficiency, bits a second.
-        access_attempts_per_second_low: The beams x the random-access window's low end x the
-            windows a second.
+        access_attempts_per_second_low: The phone class's useful beams x the random-access
+            window's low end x the windows a second.
         access_attempts_per_second_high: The same at the window's high end.
-        single_tone_seconds_per_second: The beams x the held width over the NB-IoT tone x
-            (1 - d): the single-tone seconds the uplink holds a second.
+        single_tone_seconds_per_second: The phone class's useful beams x the held width over
+            the NB-IoT tone x (1 - d): the single-tone seconds the uplink holds a second.
         classes: Each IoT class's capacity alone, in IoT class order.
     """
 
@@ -1023,9 +1025,10 @@ def iot_room(
     """Return IoT's room at a fleet and each IoT class's capacity in it alone (ADR 011).
 
     With L the phone class's useful beams at the fleet (times the panel factor, as
-    :func:`~communications.saturation_curve.read_fleet` gives them), W the held width in Hz, SE the
-    phone class's central spectral efficiency and d the downlink share, each at its conservative
-    end::
+    :func:`~communications.saturation_curve.read_fleet` gives them: the beams lit over inhabited
+    cells, so IoT over oceans and empty land is not counted, a conservative basis), W the held
+    width in Hz, SE the phone class's central spectral efficiency and d the downlink share (the
+    views below each read at its conservative end)::
 
         uplink bits a second       = L x W x SE x (1 - d)            (the uplink's share, ADR 008)
         payload bits a second      = that x the MAC efficiency       (0.20, COMM-659)
@@ -1038,10 +1041,10 @@ def iot_room(
     (7 s, COMM-719); its capacity is the least, rounded down, and that view binds (a tie to the
     earliest in :class:`~communications.constants.IotView`'s order). The two capacities never add.
     At d = 1 the payload and tone rooms are 0, so each capacity is 0 with the payload view
-    binding. Worked at FY2036 of the shipped scenario (L = 112,065.11747, W = 8 MHz, d = 0.67):
-    payload 38,460,748,316.2 bits a second, access 6,387,711.7 to 184,907,443.8 attempts a second,
-    tone time 78,893,842.7 seconds a second; minimal-packet IoT 11,497,881,052 devices (random
-    access binds) and data IoT 997,732,709 (payload bits bind).
+    binding. The worked case, FY2031 and FY2036 of the shipped scenario, is pinned in the tests
+    (``IOT_WORKED_ROOMS`` in ``tests/communications/test_iridium_model.py``, the build's own print
+    at full precision) rather than quoted here, so a re-promotion of the curve re-freezes it in
+    one place.
 
     Args:
         phone_useful_beams: The phone class's useful beams at the fleet, times the panel factor.
@@ -1349,9 +1352,12 @@ def _assumptions(
         (
             "IoT is two device classes, minimal-packet IoT and data IoT, carried on the phone "
             "class's useful beams (IoT devices are low gain, so their reuse follows the phone "
-            "rule) in the uplink's share of the frame, 1 - d. For every year and reading the "
-            "model publishes the IoT room and each IoT class's device capacity alone at its "
-            f"engineering usage (minimal-packet IoT {minimal_iot.messages_per_day} messages of "
+            "rule) in the uplink's share of the frame, 1 - d. Those are the beams lit over "
+            "inhabited cells, the phone class's ocean factor of the fleet's beams (each reading "
+            "publishes it), so IoT over oceans and empty land is not counted: a conservative "
+            "basis. For every year and reading the model publishes the IoT room and each IoT "
+            "class's device capacity alone at its engineering usage (minimal-packet IoT "
+            f"{minimal_iot.messages_per_day} messages of "
             f"{MINIMAL_PACKET_IOT_MESSAGE_BYTES} bytes a day; data IoT "
             f"{data_iot.bursts_per_day} bursts of {DATA_IOT_BURST_BYTES // _BYTES_PER_KB} KB a "
             f"day beside {data_iot.messages_per_day} messages): the least of the payload-bits, "

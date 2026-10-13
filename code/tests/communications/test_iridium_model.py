@@ -2143,8 +2143,10 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
     prices held flat (the small terminal $10, the mounted terminal $50 and the phone class $15 a
     month) and the phone class's floor, $15, apart from its price; a haircut as a division with
     every margin re-derived; each class's own margin with no IoT clause; each class's usage; IoT
-    as two device classes, each with its capacity alone at its engineering usage and never a
-    count sold or revenue (ADR 011); the floor rule, IoT's capacity null below the floor; the
+    as two device classes on the phone class's useful beams, those lit over inhabited cells, so
+    IoT over oceans and empty land is not counted (a conservative basis), each class with its
+    capacity alone at its engineering usage and never a count sold or revenue (ADR 011); the
+    floor rule, IoT's capacity null below the floor; the
     room's formulas and constants with their claim IDs (COMM-659, COMM-654, COMM-714 and
     COMM-719), each view at its conservative end; the whole IoT uplink, the terminals' upload not
     subtracted; each capacity at its engineering usage over the day, never divided by the
@@ -2186,6 +2188,9 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
         "the mounted terminal 5 mbps",
         "the phone class 0.75 mbps",
         "iot is two device classes, minimal-packet iot and data iot",
+        "in the uplink's share of the frame, 1 - d. those are the beams lit over inhabited cells, "
+        "the phone class's ocean factor of the fleet's beams (each reading publishes it), so iot "
+        "over oceans and empty land is not counted: a conservative basis.",
         "each iot class's device capacity alone at its engineering usage (minimal-packet iot 48 "
         "messages of 340 bytes a day; data iot 4 bursts of 100 kb a day beside 48 messages)",
         "the two capacities never add",

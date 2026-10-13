@@ -520,25 +520,30 @@ class IotClassCapacityBlock(BaseModel):
 
 class IotRoomBlock(BaseModel):
     """IoT's room at one fleet, on the phone class's useful beams in the uplink's share of the
-    frame (1 - d), and each IoT class's capacity in it alone (ADR 011). The room is published
-    at every fleet (0.0 at a fleet of 0), each class's capacity only at or above the coverage
-    floor."""
+    frame (1 - d), and each IoT class's capacity in it alone (ADR 011). Those are the beams lit
+    over inhabited cells (the phone class's ocean factor of the fleet's beams), so IoT over
+    oceans and empty land is not counted: a conservative basis. The room is published at every
+    fleet (0.0 at a fleet of 0), each class's capacity only at or above the coverage floor."""
 
     model_config = _BLOCK_CONFIG
 
     uplink_bits_per_second: float = Field(
         description=(
-            "The phone class's useful beams x the held width x the phone class's central "
-            "spectral efficiency x (1 - d), bits a second."
+            "The phone class's useful beams (lit over inhabited cells only, so oceans and empty "
+            "land are not counted) x the held width x the phone class's central spectral "
+            "efficiency x (1 - d), bits a second."
         )
     )
     uplink_payload_bits_per_second: float = Field(
-        description="That x the MAC efficiency, bits a second: the payload IoT can carry."
+        description=(
+            "That x the MAC efficiency, bits a second: the payload IoT can carry on those beams."
+        )
     )
     access_attempts_per_second_low: float = Field(
         description=(
-            "The useful beams x the random-access window's low end x its windows a second: the "
-            "access attempts a second, at the conservative end."
+            "The phone class's useful beams (lit over inhabited cells only) x the random-access "
+            "window's low end x its windows a second: the access attempts a second, at the "
+            "conservative end."
         )
     )
     access_attempts_per_second_high: float = Field(
@@ -546,8 +551,8 @@ class IotRoomBlock(BaseModel):
     )
     single_tone_seconds_per_second: float = Field(
         description=(
-            "The useful beams x the held width over the NB-IoT tone x (1 - d): the single-tone "
-            "seconds the uplink holds a second."
+            "The phone class's useful beams (lit over inhabited cells only) x the held width over "
+            "the NB-IoT tone x (1 - d): the single-tone seconds the uplink holds a second."
         )
     )
     classes: tuple[IotClassCapacityBlock, ...] = Field(
