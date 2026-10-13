@@ -269,8 +269,8 @@ FORMULAS: Final[dict[FormulaName, FormulaSpec]] = {
     ),
     # ---- Per-node cost-breakdown lines (cycle-2 Phase 2; the five build
     # lines the engine's CostBreakdown emits as individual cells). These
-    # extend plan section 0.8, added when first used (plan section 0.8:
-    # "sub-agents adding any new formula must also add it to FORMULAS").
+    # extend plan section 0.8, added when first used, as the data center's
+    # catalog requires.
     "compute_cost_from_n_and_usd_per_pkg": FormulaSpec(
         formula="N x usd_per_pkg / 1_000_000",
         description="Per-node compute build cost (all packages), $M.",
@@ -292,8 +292,8 @@ FORMULAS: Final[dict[FormulaName, FormulaSpec]] = {
         description="Total per-node build + launch cost (sum of the five lines), $M.",
     ),
     # ---- Output-assembly formula names (cycle-2 Phase 4A). Added when
-    # first used by the PhysicalYear cells (plan section 0.8: "sub-agents
-    # adding any new formula must also add it to FORMULAS").
+    # first used by the PhysicalYear cells, as the data center's catalog
+    # requires (plan section 0.8).
     "frontier_generation_from_cadence": FormulaSpec(
         formula="latest generation with year_available <= FY (18-month cadence rule)",
         description="The frontier GPU generation selected for a model year (D7).",
