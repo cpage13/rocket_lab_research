@@ -1274,8 +1274,12 @@ def _assumptions(
         ),
         (
             f"The downlink share d is {dials.saturation.downlink_share:g}, the time-division "
-            "duplex band's downlink time share (ADR 008): every people and capacity figure but "
-            "the satellite's peak scales with it, and the uplink holds the rest of the frame."
+            "duplex band's downlink time share (ADR 008): every people figure and every downlink "
+            "capacity figure but the satellite's peak scales with it, and the uplink holds the "
+            "rest of the frame, 1 - d. IoT's uplink, payload and single-tone rooms scale with "
+            "1 - d and its random-access room with neither, so an IoT class's capacity follows "
+            "1 - d while its payload or single-tone view binds and does not move with d while its "
+            "random-access view binds."
         ),
         (
             f"The panel is {dials.aperture_m2:g} m^2, applied linearly on the curve: a panel "
@@ -1302,9 +1306,10 @@ def _assumptions(
             "today (COMM-712)."
         ),
         (
-            "Every seat is sold: each year each device class serves every person its living "
-            "fleet carries, and each class's column is the whole fleet sold to that class "
-            "alone, so revenue rises with the fleet."
+            "Every seat is sold: each year each people class (the small terminal, the mounted "
+            "terminal and the phone class) serves every person its living fleet carries, and "
+            "each class's column is the whole fleet sold to that class alone, so revenue rises "
+            "with the fleet."
         ),
         (
             "Each class's price is held flat: the small terminal "

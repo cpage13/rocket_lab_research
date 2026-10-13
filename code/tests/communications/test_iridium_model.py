@@ -1456,13 +1456,18 @@ def test_near_zero_share_does_not_publish_a_full_margin_on_an_empty_fleet(
 def test_halving_the_downlink_share_halves_people_capacity_and_the_pool_only(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
-    """Objective: d scales people, useful capacity and the pool, and nothing else (ADR 008).
+    """Objective: d scales people, each class's capacity and the pool (ADR 008), while the rest
+    of the frame, 1 - d, scales IoT's uplink, payload and single-tone rooms and IoT's
+    random-access room moves with neither: what the stated line on d says.
 
     Sample: the shipped scenario at d = 0.67 and at d = 0.335, read at the 2,000 reading.
 
     Expected outcome: at half d every class's people at 2,000 are half (within one person's
     rounding), its capacity there (``read_fleet``) half and its pool half; useful beams, the
-    share of maximum use, U, maximum use, the satellite's peak and the markers unchanged.
+    share of maximum use, U, maximum use, the satellite's peak and the markers unchanged. IoT's
+    uplink, payload and single-tone rooms there grow by (1 - 0.335) / (1 - 0.67), about 2.015,
+    and its two access rooms stay equal, so minimal-packet IoT's capacity (random access binding
+    at both) is unchanged and data IoT's payload view (binding at both) grows by that ratio.
     """
     config = load_comms_config(iridium_yaml)
     full = run_iridium_model(config, committed_saturation_curve)
@@ -1498,6 +1503,27 @@ def test_halving_the_downlink_share_halves_people_capacity_and_the_pool_only(
         )
         for marker in markers:
             assert getattr(half_block, marker) == getattr(full_block, marker), marker
+    uplink_growth = (1.0 - 0.335) / (1.0 - 0.67)
+    full_room = full.iridium.saturation.readings[1].iot
+    half_room = half.iridium.saturation.readings[1].iot
+    for room_field in (
+        "uplink_bits_per_second",
+        "uplink_payload_bits_per_second",
+        "single_tone_seconds_per_second",
+    ):
+        assert getattr(half_room, room_field) == pytest.approx(
+            getattr(full_room, room_field) * uplink_growth, rel=1e-12
+        ), room_field
+    assert half_room.access_attempts_per_second_low == full_room.access_attempts_per_second_low
+    assert half_room.access_attempts_per_second_high == full_room.access_attempts_per_second_high
+    (full_minimal, full_data), (half_minimal, half_data) = full_room.classes, half_room.classes
+    assert full_minimal.binding_view is half_minimal.binding_view is IotView.RANDOM_ACCESS
+    assert half_minimal.device_capacity == full_minimal.device_capacity
+    assert full_data.binding_view is half_data.binding_view is IotView.PAYLOAD_BITS
+    assert full_data.devices_by_payload_bits is not None
+    assert half_data.devices_by_payload_bits == pytest.approx(
+        full_data.devices_by_payload_bits * uplink_growth, rel=1e-12
+    )
 
 
 def test_the_panel_setting_scales_people_beams_capacity_and_maximum_use_linearly(
@@ -2107,10 +2133,13 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
     among it (the phone class's tier is in-chipset, and no unmodified phone is reached), and
     operations at zero; the curve,
     the reuse calibration (0.15 at the 25 m^2 reference panel, an estimate, COMM-410 and
-    COMM-411), d, and the panel with the rule's measured limits (``PANEL_RULE_LIMITS_NOTE``:
-    every class carries at least what the rule gives below the reference panel); the cadence
-    fleet with no target and no cap; this run's 16 per launch beside the validated counts (16
-    with the block upgrade and its two conditions, 15 without it); every seat sold; the class
+    COMM-411), d (every people figure and every downlink capacity scale with it; IoT's uplink,
+    payload and single-tone rooms with 1 - d and its random-access room with neither, so an IoT
+    class's capacity follows its binding view), and the panel with the rule's measured limits
+    (``PANEL_RULE_LIMITS_NOTE``: every class carries at least what the rule gives below the
+    reference panel); the cadence fleet with no target and no cap; this run's 16 per launch
+    beside the validated counts (16 with the block upgrade and its two conditions, 15 without
+    it); every seat of the three people classes sold; the class
     prices held flat (the small terminal $10, the mounted terminal $50 and the phone class $15 a
     month) and the phone class's floor, $15, apart from its price; a haircut as a division with
     every margin re-derived; each class's own margin with no IoT clause; each class's usage; IoT
@@ -2135,7 +2164,12 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
         "promoted saturation curve (saturation-v1)",
         "the reuse calibration is 0.15 gbps per mhz per unit of spectral efficiency at the 25 "
         "m^2 reference panel, an estimate (comm-410, comm-411)",
-        "the downlink share d is 0.67",
+        "the downlink share d is 0.67, the time-division duplex band's downlink time share (adr "
+        "008): every people figure and every downlink capacity figure but the satellite's peak "
+        "scales with it, and the uplink holds the rest of the frame, 1 - d.",
+        "iot's uplink, payload and single-tone rooms scale with 1 - d and its random-access room "
+        "with neither, so an iot class's capacity follows 1 - d while its payload or single-tone "
+        "view binds and does not move with d while its random-access view binds.",
         "a panel factor of 0.616",
         "every class carries at least what the rule gives",
         "no fleet target and no cap",
@@ -2143,7 +2177,8 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
         "16 with the neutron block upgrade",
         "rod-held base",
         "15 without the upgrade",
-        "every seat is sold",
+        "every seat is sold: each year each people class (the small terminal, the mounted "
+        "terminal and the phone class) serves every person its living fleet carries",
         "the small terminal $10, the mounted terminal $50 and the phone class $15 a month",
         "the phone class's floor is the investor's $15 a month",
         "re-derived against the same fleet cost, never divided or averaged",
@@ -2181,6 +2216,7 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
     margin = _line_with(lines, "Each class's own margin is its own revenue")
     assert margin.endswith("null in a year with no revenue."), margin
     assert "gross" not in joined
+    assert "every people and capacity figure" not in joined
     assert "(its floor)" not in joined
     assert "exact in beams" not in joined
     assert APERTURE_STACK_CAVEAT_NOTE not in lines
