@@ -889,9 +889,10 @@ SCENARIO_SPECS: Final[Mapping[str, CellSpec]] = MappingProxyType(
             "The Monte Carlo's settings: the number of drawn markets.",
             "SCENARIO (round 2 of the scratch exploration, 2026-10-06; approved by the investor "
             "with the product-case code design at its gate on 2026-10-07). What 2,000 draws buy: "
-            "the pick holds across seeds (at seeds 1 to 5 the same choice, usable in 1,719 to "
-            "1,754 of the 2,000 draws, the plan's probe pB2, local), and the headline, read at the "
-            "central market, moves with neither the draws nor the seed.",
+            "another seed or draw count moves the drawn markets, never the central market; the "
+            "headline, the pick read there, moves only when the pick does (it holds at seeds 1 to "
+            "5, the same choice usable in 1,719 to 1,754 of the 2,000 draws, the plan's probe pB2, "
+            "local).",
         ),
         "market.seed": _scenario_spec(
             "Market seed",
@@ -942,7 +943,7 @@ SCENARIO_SPECS: Final[Mapping[str, CellSpec]] = MappingProxyType(
             "is centred on 1, so at the central market, where the headline is read, the price "
             "response is exactly 1: for a given usage an uncapped class's price change shows there "
             "as customers, not revenue, and a terminal at its seats shows it as revenue; the "
-            "headline moves with a price only through the usage the pick then takes. "
+            "headline also moves with a price through the usage the pick then takes. "
             + _RANGES_CHOICE,
         ),
         "market.eta.low": _scenario_spec(

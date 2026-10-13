@@ -73,14 +73,14 @@ usage:
 # research grounds the three ranges: a modeling choice of round 2, approved by
 # the investor with the product-case code design at its gate on 2026-10-07.
 market:
-  draws: 2000  # SCENARIO, round 2: the pick holds at seeds 1 to 5 (1,719 to 1,754 usable); the headline moves with neither the draws nor the seed
+  draws: 2000  # SCENARIO, round 2: another seed or draw count moves the drawn markets, never the central market; the headline, the pick read there, moves only when the pick does (it holds at seeds 1 to 5, 1,719 to 1,754 usable, the plan's probe pB2, local)
   seed: 20261006  # SCENARIO, round 2: the same markets every run
   gamma:  # the network response
     low: 0.5  # SCENARIO, round 2: four times the network only doubles the customers
     high: 1.0  # SCENARIO, round 2: the investor's "eight times the network ... about eight times the revenue"
   epsilon:  # the price response
     low: 0.5  # SCENARIO, round 2: a price half today's brings 1.41 times the customers
-    high: 1.5  # SCENARIO, round 2: 2.83 times; the range centred on 1, so at the central market an uncapped class's price change shows as customers, not revenue
+    high: 1.5  # SCENARIO, round 2: 2.83 times; the range centred on 1, so at the central market, for a given usage, an uncapped class's price change shows as customers, not revenue
   eta:  # the service response
     low: 0.0  # SCENARIO, round 2: more service brings no customers
     high: 0.5  # SCENARIO, round 2: half again the service brings 22 percent more customers

@@ -469,10 +469,10 @@ scales a choice may take for data IoT by the last reported year, each step doubl
 DRAWS_DEFAULT: Final[int] = 2_000
 """SCENARIO (round 2 of the scratch exploration, 2026-10-06, approved by the investor with the
 product-case code design at its gate on 2026-10-07; COMM-723): the market draws. What 2,000 buy:
-the pick holds across seeds (at seeds 1 to 5 it is the same choice, usable in 1,719 to 1,754 of
-the 2,000 draws, the plan's probe pB2, local), and the headline, read at the central market, moves
-with neither the draws nor the seed; the spreads' 10th and 90th percentiles need at least 9
-(:data:`MIN_DRAWS`)."""
+another seed or draw count moves the drawn markets, never the central market; the headline, the
+pick read there, moves only when the pick does (it holds at seeds 1 to 5, the same choice usable
+in 1,719 to 1,754 of the 2,000 draws, the plan's probe pB2, local). The spreads' 10th and 90th
+percentiles need at least 9 (:data:`MIN_DRAWS`)."""
 
 SEED_DEFAULT: Final[int] = 20_261_006
 """SCENARIO (round 2, 2026-10-06; COMM-723): the seed of the standard generator that draws the
@@ -507,7 +507,7 @@ today's brings 2.83 times the customers and the revenue rises 41 percent (a pric
 1.84 times the customers). The range is centred on 1, so at the central market, where the
 headline is read, the price response is exactly 1: for a given usage an uncapped class's price
 change shows there as customers, not revenue, and a terminal at its seats shows it as revenue; the
-headline moves with a price only through the usage the pick then takes (the design's D7, ADR 012).
+headline also moves with a price through the usage the pick then takes (the design's D7, ADR 012).
 A modeling choice (no market research grounds it), approved with the code design on 2026-10-07."""
 
 ETA_LOW_DEFAULT: Final[float] = 0.0
