@@ -1,7 +1,8 @@
 # Conclusions
 
 **Maturity.** Stable discipline; the prose is reviewed by hand whenever a
-default changes. Checked against `main` at 1570350, 2026-10-12.
+default changes. Checked against `part-p7-documents` at baa4c04 with p7's
+documents, 2026-10-13.
 
 **Role.** Each application's feasibility verdict and the public documents
 around it: static prose a person writes against the promoted JSON, never
@@ -26,12 +27,12 @@ output-anchor sections of both assumptions ledgers.
 | `data_center/conclusion.md` * | the data-center verdict and headline numbers |
 | `data_center/structural_case.md` * | the pitch: the engine, what the numbers refuse to count, the runway |
 | `data_center/ai1_comparison.md` * | SpaceX's AI-1 design run through the same model |
-| `communications/conclusion.md` * | the Iridium verdict and numbers |
-| `communications/design.md` * | the family structure, the derivation spine, the promotion flow, naming |
+| `communications/conclusion.md` * | the communications verdict: the engineering case and the product case side by side, never added |
+| `communications/design.md` * | the family structure, the saturation curve and the run, the product case, the promotion flow, naming |
 | `README.md` * | the public front page for both applications |
 | `data_center/README.md` *, `communications/README.md` | front pages and reading paths |
 | `data_center/CURRENT_STATE.md` *, `communications/CURRENT_STATE.md` * | short handoffs |
-| `rocket_lab_primer.md` | a one-page catch-up on Rocket Lab and its rockets, linked from the README; it quotes Neutron's published figures (the research page, Open) |
+| `rocket_lab_primer.md` | a one-page catch-up on Rocket Lab and its rockets, linked from the README; it quotes Neutron's published figures (the research page, Open) and names the communications application |
 
 **Rules.**
 - **Source Snapshot.** Each conclusion carries a Source Snapshot section
@@ -41,7 +42,8 @@ output-anchor sections of both assumptions ledgers.
   default semantics has changed; update it deliberately, or label it stale
   before publication. Data center:
   `git diff -- data_center/models/space/default.json data_center/models/ground/default.json data_center/conclusion.md`;
-  Iridium: the same over `communications/models/iridium/default.json` and
+  communications: the same over `communications/models/iridium/default.json`,
+  the product case's promoted artifact beside it, and
   `communications/conclusion.md`.
 - **Source rules.** A model output cites its promoted JSON path and, in
   public prose, its claim ID. A scenario or source assumption cites its
@@ -98,31 +100,18 @@ investor-set (see `CONTEXT.md`).
 
 **State.** Both applications have a conclusion; the data center's is
 reviewed against its promoted JSON and has the structural case and the
-AI-1 comparison beside it; the communications one was reviewed against the
-model before the saturation work and is stale until its rewrite (Open).
+AI-1 comparison beside it; the communications one was rewritten against the
+Iridium artifact (`iridium-v7`) and the product case's (`product-case-v1`),
+the two cases side by side (2026-10-13), and names all three promoted files
+in its Source Snapshot.
 
 **Open.**
-- The README frames the Iridium highlights "under the same all-in
-  deployment scenario the data-center model uses", and no public document
-  states the charter's rule that the all-in headlines never add (Objective
-  1; the 09-23 review's COMMS-AG-23 sentence was never added). The Iridium
-  verdict also says the whole modeled Neutron manifest flies communications
-  satellites (under its headline table and in How It Deploys), though its
-  ledger says the mature fleet frees most of the manifest. A public-document
-  edit for the investor.
-- The communications documents (`communications/conclusion.md`,
-  `communications/assumptions.md`, `communications/CURRENT_STATE.md`,
-  `communications/README.md`, `communications/design.md`) and the root
-  README's Iridium section still describe the model before the saturation
-  work, and wait for a deliberate rewrite to the built one: they publish a
-  25 m^2 panel (the investor's panel is 15.4 m^2, the validated Flatellite
-  body), the retired four-bucket price sheet with a government bucket, one
-  device class a run, a 340 or 2,000 satellite fleet, 2,000 satellites
-  called the point where the spectrum saturates (in code 2,000 is only a
-  reading, the retired cap, and each class's saturation number is derived:
-  the communications page), and a table row linking the retired companion
-  scenario. Until the rewrite lands, quote nothing about the Iridium model
-  from them.
+- The communications documents cite the product case's artifact, which is
+  promoted after them: until that promotion lands, their links to it do not
+  resolve, and its stamp in the Source Snapshot, the ledger's anchors and
+  the handoff is the build run's (2026-10-13).
+- The rewrite's one review (every changed line, at the end) is pending; its
+  bolder lines have had no adversarial check yet.
 
 **Tests.** The em-dash guard covers every `*.md` in `data_center/`,
 `communications/` and `docs/`, and the root documents;
