@@ -211,8 +211,8 @@ The public evidence class of a claim or input; public documents never cite `plac
   the retired 2,000 cap; in code 2,000 is only a reading and each people class's saturation number is derived,
   so agents would quote a cap as physics.
 - **Sheet A, ARPU buckets.** Retired with the four-bucket revenue case (mix shares of one pool, a government
-  bucket among them); the words now live only in the changelog's history and superseded ADR 007; the built
-  model sells every seat of each people class at its own price.
+  bucket among them); the words now live in the changelog's history, superseded ADR 007 and the history notes
+  of the code's docstrings; the built model sells every seat of each people class at its own price.
 - **floor.** The coverage floor (which gates every Iridium sale; the cadence sizes the fleet), the conservative
   floor (the most conservative published reading, shown but never leading), the phone class's price floor (no
   price haircut goes below it), the margin floors (rule V3 in the data center; the investor's floor on the
