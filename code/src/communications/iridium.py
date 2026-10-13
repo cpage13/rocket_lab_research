@@ -59,7 +59,7 @@ from __future__ import annotations
 
 import logging
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields, is_dataclass
 from enum import StrEnum
 from types import MappingProxyType
@@ -129,6 +129,7 @@ from communications.saturation_curve import (
     BandName,
     ClassCurve,
     CurveBeyondLastRowError,
+    FleetReading,
     SaturationCurve,
     SaturationCurveError,
     check_curve_matches,
@@ -384,6 +385,8 @@ class ClassYearRecord:
 
     Attributes:
         device_class: The class.
+        useful_beams: The class's busy-hour useful beams at the year's living fleet (L times the
+            panel factor), read in every year, below the coverage floor too: beams are physical.
         people_served: Every person the living fleet carries for the class, rounded half up;
             0 below the coverage floor.
         revenue_musd: Those people at the class's price for the year, $M; 0.0 below the floor.
@@ -392,6 +395,7 @@ class ClassYearRecord:
     """
 
     device_class: DeviceClass
+    useful_beams: float
     people_served: int
     revenue_musd: float
     own_margin_pct: float | None
@@ -406,12 +410,15 @@ class YearRecord:
         minimal_packet_iot_revenue_musd: Minimal-packet IoT's book, $M; 0.0 below the floor.
         data_iot_revenue_musd: Data IoT's book, $M; 0.0 below the floor.
         classes: Each class's line, in class order.
+        iot: IoT's room on the year's phone-class useful beams and each IoT class's capacity in
+            it alone (:func:`iot_room`), the capacities null below the coverage floor.
     """
 
     year: int
     minimal_packet_iot_revenue_musd: float
     data_iot_revenue_musd: float
     classes: tuple[ClassYearRecord, ...]
+    iot: IotRoomRecord
 
 
 @dataclass(frozen=True)
@@ -472,12 +479,15 @@ class ReadingRecord:
         fleet_annual_cost_musd: The reading's cost, $M a year: the final year's annualized
             cost at the horizon-end reach, else the fleet times the cost per satellite-year.
         classes: Each class's reading, in class order.
+        iot: IoT's room on the reading's phone-class useful beams and each IoT class's capacity
+            in it alone (:func:`iot_room`), the capacities null below the coverage floor.
     """
 
     label: str
     fleet: int
     fleet_annual_cost_musd: float
     classes: tuple[ClassReadingRecord, ...]
+    iot: IotRoomRecord
 
 
 @dataclass(frozen=True)
@@ -841,22 +851,23 @@ def _class_sale(
     )
 
 
-def _people_served(
+def _year_reading(
     curve: SaturationCurve,
     device_class: DeviceClass,
     fleet_year: FleetYear,
     *,
     downlink_share: float,
     panel_factor: float,
-) -> int:
-    """Return every person a year's living fleet carries for a class, rounded half up.
+) -> FleetReading:
+    """Return a class's readings at a year's living fleet, from one bracketing of the fleet: its
+    useful beams and its people (unrounded) among them.
 
     Raises:
         CurveBeyondLastRowError: If the year's fleet lies past the class's last row, naming the
             year beside the reading's own message (the fleet, the class and the last row).
     """
     try:
-        people = people_at(
+        return read_fleet(
             curve,
             device_class,
             fleet_year.living_fleet,
@@ -865,7 +876,6 @@ def _people_served(
         )
     except CurveBeyondLastRowError as exc:
         raise CurveBeyondLastRowError(f"FY{fleet_year.year}'s living fleet: {exc}") from exc
-    return round_half_up(people)
 
 
 def _years(
@@ -873,28 +883,32 @@ def _years(
     curve: SaturationCurve,
     *,
     coverage_floor: int,
+    spectrum_mhz: float,
     downlink_share: float,
     panel_factor: float,
     prices: Mapping[DeviceClass, float],
     books: FixedBooksRecord,
 ) -> tuple[YearRecord, ...]:
-    """Each model year's Iridium lines: every seat sold at or above the floor, nothing below it."""
+    """Each model year's Iridium lines: every seat sold at or above the floor, nothing below it.
+
+    Each class is read once a year (:func:`_year_reading`), below the floor too, since beams are
+    physical: its useful beams in every year; its people, rounded half up, and its revenue only
+    from the year the living fleet reaches the coverage floor (0 and 0.0 before it). The year's
+    IoT room is read on its phone-class useful beams (:func:`iot_room`).
+    """
     years: list[YearRecord] = []
     for fleet_year in fleet.years:
         sold = _sells(fleet_year.living_fleet, coverage_floor)
         lines: list[ClassYearRecord] = []
         for device_class in DeviceClass:
-            people = (
-                _people_served(
-                    curve,
-                    device_class,
-                    fleet_year,
-                    downlink_share=downlink_share,
-                    panel_factor=panel_factor,
-                )
-                if sold
-                else 0
+            reading = _year_reading(
+                curve,
+                device_class,
+                fleet_year,
+                downlink_share=downlink_share,
+                panel_factor=panel_factor,
             )
+            people = round_half_up(reading.people) if sold else 0
             sale = _class_sale(
                 people,
                 sold=sold,
@@ -904,6 +918,7 @@ def _years(
             lines.append(
                 ClassYearRecord(
                     device_class=device_class,
+                    useful_beams=reading.useful_beams,
                     people_served=people,
                     revenue_musd=sale.revenue_musd,
                     own_margin_pct=sale.own_margin_pct,
@@ -919,9 +934,21 @@ def _years(
                     books.data_iot_annual_revenue_musd if sold else _NOTHING_SOLD_MUSD
                 ),
                 classes=tuple(lines),
+                iot=iot_room(
+                    _phone_useful_beams(lines),
+                    spectrum_mhz=spectrum_mhz,
+                    downlink_share=downlink_share,
+                    at_or_above_floor=sold,
+                ),
             )
         )
     return tuple(years)
+
+
+def _phone_useful_beams(lines: Sequence[ClassYearRecord | ClassReadingRecord]) -> float:
+    """The phone class's useful beams among a year's or a reading's class lines: the beams IoT
+    rides (IoT devices are low gain, so their reuse follows the phone rule)."""
+    return next(line.useful_beams for line in lines if line.device_class is DeviceClass.PHONE_CLASS)
 
 
 @dataclass(frozen=True)
@@ -997,11 +1024,14 @@ def _reading(
     reported: _ReportedFleet,
     *,
     coverage_floor: int,
+    spectrum_mhz: float,
     downlink_share: float,
     panel_factor: float,
     prices: Mapping[DeviceClass, float],
 ) -> ReadingRecord:
     """Every class at one reported fleet; below the floor it carries people and sells nothing.
+    IoT's room is read on the reading's phone-class useful beams (:func:`iot_room`), each IoT
+    class's capacity null below the floor.
 
     Raises:
         CurveBeyondLastRowError: If the reported fleet lies past a class's last row, naming the
@@ -1047,6 +1077,12 @@ def _reading(
         fleet=reported.fleet,
         fleet_annual_cost_musd=reported.annual_cost_musd,
         classes=tuple(lines),
+        iot=iot_room(
+            _phone_useful_beams(lines),
+            spectrum_mhz=spectrum_mhz,
+            downlink_share=downlink_share,
+            at_or_above_floor=sold,
+        ),
     )
 
 
@@ -1723,6 +1759,7 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
         fleet,
         curve,
         coverage_floor=coverage_floor,
+        spectrum_mhz=dials.spectrum_mhz,
         downlink_share=downlink_share,
         panel_factor=panel_factor,
         prices=prices,
@@ -1740,6 +1777,7 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
             curve,
             reported,
             coverage_floor=coverage_floor,
+            spectrum_mhz=dials.spectrum_mhz,
             downlink_share=downlink_share,
             panel_factor=panel_factor,
             prices=prices,

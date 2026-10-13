@@ -267,8 +267,6 @@ _ADR_012 = "docs/adr/012-product-case-is-its-own-model.md"
 """ADR 012: the product case as its own model."""
 
 _DECIDED_NOT_BUILT: tuple[DecidedNotBuilt, ...] = (
-    DecidedNotBuilt(_ADR_011, "years[].iot", "ADR 011, the Iridium artifact's IoT capacity"),
-    DecidedNotBuilt(_ADR_011, "saturation.readings[].iot", "ADR 011, the readings' IoT capacity"),
     DecidedNotBuilt(_ADR_012, "code/src/product_case/", "ADR 012, the product case's package"),
 )
 """Each span that names what an accepted ADR decided and no code has built yet."""

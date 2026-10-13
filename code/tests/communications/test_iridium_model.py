@@ -787,6 +787,93 @@ def test_an_iot_room_past_what_a_float_holds_leaves_the_capacity_unrounded() -> 
         assert not all(view is not None and math.isfinite(view) for view in views)
 
 
+def test_each_class_useful_beams_and_the_iot_room_in_every_year(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
+    """Objective: each people class's busy-hour useful beams are published in every year, below
+    the coverage floor too (beams are physical), from the reading that gives its people; each
+    year carries IoT's room on its phone-class beams, each IoT class's capacity null below the
+    floor (IoT needs continuous coverage).
+
+    Sample: the shipped scenario on the committed curve (fleets 0, 32, 80, 160, 304, then 528 to
+    4,288 from FY2031, the floor year).
+
+    Expected outcome: every year's beams for every class equal ``read_fleet``'s at the year's
+    living fleet, d and the panel factor (the same reading, exactly), 0.0 at a fleet of 0 and
+    above 0 after; each year's IoT block equals ``iot_room`` at its phone-class beams, the room
+    0.0 at a fleet of 0; FY2026 to FY2030 publish the room with every class's five capacity
+    fields null, FY2031 on both capacities; FY2036's beams and IoT block equal the horizon-end
+    reading's, both at 4,288 satellites (capacities 11,497,881,052 and 997,732,709).
+    """
+    run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
+    panel_factor = run.iridium.saturation.panel_factor
+    for fleet_year, iridium_year in zip(run.fleet.years, run.iridium.years, strict=True):
+        for line in iridium_year.classes:
+            assert (
+                line.useful_beams
+                == read_fleet(
+                    committed_saturation_curve,
+                    line.device_class,
+                    fleet_year.living_fleet,
+                    downlink_share=DEFAULT_DOWNLINK_SHARE,
+                    panel_factor=panel_factor,
+                ).useful_beams
+            )
+            assert line.useful_beams > 0.0 or fleet_year.living_fleet == 0
+        sold = fleet_year.year >= FLOOR_YEAR
+        assert iridium_year.iot == iot_room(
+            iridium_year.classes[2].useful_beams,
+            spectrum_mhz=HELD_SPECTRUM_MHZ,
+            downlink_share=DEFAULT_DOWNLINK_SHARE,
+            at_or_above_floor=sold,
+        )
+        for entry in iridium_year.iot.classes:
+            if sold:
+                assert entry.device_capacity is not None and entry.device_capacity > 0
+            else:
+                assert dataclasses.astuple(entry)[1:] == (None, None, None, None, None)
+    first = run.iridium.years[0]
+    assert [line.useful_beams for line in first.classes] == [0.0, 0.0, 0.0]
+    assert dataclasses.astuple(first.iot)[:5] == (0.0, 0.0, 0.0, 0.0, 0.0)
+    horizon, fy2036 = run.iridium.saturation.readings[2], run.iridium.years[-1]
+    assert horizon.fleet == run.fleet.years[-1].living_fleet == LIVING_FLEET[-1]
+    assert [line.useful_beams for line in fy2036.classes] == [
+        line.useful_beams for line in horizon.classes
+    ]
+    assert fy2036.iot == horizon.iot
+    assert [entry.device_capacity for entry in fy2036.iot.classes] == [11_497_881_052, 997_732_709]
+
+
+def test_each_reading_carries_the_iot_room_and_both_capacities(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
+    """Objective: each reported fleet carries IoT's room on its phone-class useful beams and, at
+    or above the coverage floor, each IoT class's capacity alone.
+
+    Sample: the shipped scenario's four readings (340, 2,000, 4,288 and 7,200 satellites, each at
+    or above the floor).
+
+    Expected outcome: each reading's IoT block equals ``iot_room`` at its phone-class beams, in
+    IoT class order, with both capacities published and rising with the fleet.
+    """
+    run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
+    readings = run.iridium.saturation.readings
+    assert [reading.fleet for reading in readings] == [340, 2_000, 4_288, STEADY_STATE_FLEET]
+    for reading in readings:
+        assert reading.iot == iot_room(
+            reading.classes[2].useful_beams,
+            spectrum_mhz=HELD_SPECTRUM_MHZ,
+            downlink_share=DEFAULT_DOWNLINK_SHARE,
+            at_or_above_floor=True,
+        )
+        assert [entry.iot_class for entry in reading.iot.classes] == IOT_CLASS_ORDER
+    for index in range(len(IOT_CLASS_ORDER)):
+        capacities = [reading.iot.classes[index].device_capacity for reading in readings]
+        assert all(capacity is not None for capacity in capacities)
+        assert capacities == sorted(capacities), capacities
+        assert len(set(capacities)) == len(capacities), capacities
+
+
 # ---------------------------------------------------------------------------
 # The two entries and the identity check.
 # ---------------------------------------------------------------------------
