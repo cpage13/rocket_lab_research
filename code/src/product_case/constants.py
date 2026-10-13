@@ -618,7 +618,9 @@ that ends at a record, a list of records or a map names every leaf under it
 key of its cell in ``inputs.scenario``, ``inputs.constants`` or ``inputs.engineering`` (maps of
 cells, which the walker lists as ``inputs.scenario[]`` and the like); a path that is a prefix of
 input paths names each of them (``inputs.scenario.usage``), and a value read in each reported
-year is named once, without its year (``inputs.engineering.people_small_terminal``). Two
+year, which has one cell a year keyed ``<field>.<year>``
+(``inputs.engineering.people_small_terminal.2031``), is named once by that key's prefix
+(``inputs.engineering.people_small_terminal``), which names each year's cell. Two
 patterns are prose, saying what an entry reads or publishes outside the artifact's leaves."""
 
 

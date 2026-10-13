@@ -3,8 +3,8 @@
 The validation-check, data-dictionary, query-example, and formula-definition
 models, their enums, and the source-status counter
 (:func:`summarize_source_statuses`), used by the data-center space and ground
-artifacts' ``meta`` blocks and by the product case, whose formula catalog's
-entries are formula definitions.
+artifacts' ``meta`` blocks and by the product case's artifact's ``meta`` block
+(its formula catalog's entries are formula definitions).
 
 The one data-dictionary walker, :func:`build_data_dictionary`, with its unit
 constants: every artifact that meets ADR 002's contract builds its
@@ -120,7 +120,7 @@ def summarize_source_statuses(statuses: Iterable[SourceStatus]) -> SourceStatusS
     """Count input assumptions by source status.
 
     The one counter behind every artifact's ``meta.source_status_summary``
-    (the space model and the ground reference).
+    (the space model, the ground reference and the product case).
 
     Args:
         statuses: The source status of every input cell to count.

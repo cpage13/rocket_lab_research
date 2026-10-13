@@ -4,10 +4,12 @@ Every scenario loader in the repository (the data-center config and the
 generations file it may reference, the ground reference, the communications
 config, the product case's config) reads YAML through :func:`load_yaml_mapping`.
 Every published JSON artifact (the space model, the ground reference, the Iridium
-model, the saturation curve) is serialized by :func:`render_artifact_json`, and
-the three commands that publish them (``rklb-value --promote``, the Iridium
-promotion command ``python -m communications.json_output`` and the saturation
-command ``python -m communications.saturation``) write theirs as
+model, the saturation curve, the product case) is serialized by
+:func:`render_artifact_json`, and the four commands that publish them
+(``rklb-value --promote``, the Iridium promotion command
+``python -m communications.json_output``, the saturation command
+``python -m communications.saturation`` and the product case's command
+``python -m product_case.json_output``) write theirs as
 :func:`artifact_write` entries through :func:`write_files_with_rollback` (every
 file is written, or the destinations already replaced are restored and the error
 says which, if any, could not be) and find the repository through
@@ -173,8 +175,8 @@ def render_artifact_json(artifact: BaseModel) -> str:
     """Serialize a typed artifact as the house JSON: indented, without a trailing newline.
 
     The one serializer for the space model, the ground reference, the Iridium
-    model and the saturation curve, whether printed (``rklb-value --json``) or
-    promoted (:func:`artifact_write`).
+    model, the saturation curve and the product case, whether printed
+    (``rklb-value --json``) or promoted (:func:`artifact_write`).
 
     Args:
         artifact: The built artifact model.
