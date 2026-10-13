@@ -11,8 +11,9 @@ the assumptions ledgers, `data_center/assumptions.md` and
 `communications/assumptions.md` (their shapes under The ledgers), with the
 stated rows that set no dial. And, for communications, the
 stated-assumption lines its artifact publishes, written by `_assumptions`
-in `code/src/communications/iridium.py`: part dial values, part text
-written for the shipped settings.
+in `code/src/communications/iridium.py`: part values read from the run,
+part text tied to the named constants (dates, claims, the investor's
+words).
 This is where the investor's "state assumptions instead of knobs" lives.
 
 **Serves.** Objective 3 (simple models with stated assumptions) and
@@ -141,7 +142,13 @@ public source-status taxonomy (`CONTEXT.md`, Ambiguities).
    busy-hour share, its directivity and sky sectors; the link anchor and the
    pattern floor; the shell and the beam; the demand map; the sweep; the
    trim; the band points). Until then the Iridium command refuses the
-   committed curve (the identity check). The saturation command is a heavy
+   committed curve (the identity check). The curve's published texts are
+   code too (its method, checks, citations, licence and stated limits,
+   `PANEL_RULE_LIMITS_NOTE` among the limits, which the Iridium artifact's
+   `saturation.limits` and its panel line repeat): an edit to one fails
+   `test_committed_curve_has_not_drifted_in_its_derived_fields` until the
+   curve is re-promoted, though the identity check passes (no
+   `SaturationInputs` field holds them). The saturation command is a heavy
    run (the charter's Project rules); re-freeze on purpose the saturation
    suite's values the moved input changes. The panel, the downlink share,
    the prices, the off-peak shares, the IoT lines, satellites per launch,
@@ -182,10 +189,11 @@ review alone; nothing checks it automatically (Tests, below).
   `ambitious.yaml` is less favourable than the default, despite its name;
   its nominally favourable cost dials are the investor's open decision D5
   (`.agent/lifecycle/review_fixes_session_state_09_24.md` (local)).
-- The Iridium artifact's stated-assumption lines carry text written for the
-  shipped settings (dates, claims, the investor's words) beside the values
-  they read, so a dial change is followed by a read of them (the Iridium
-  checklist, step 5).
+- The Iridium artifact's stated-assumption lines are built from the run and
+  hold at every setting the config accepts; their text tied to named
+  constants (dates, claims, the investor's words) moves only with those
+  constants, so a changed default is followed by a read of them (the
+  Iridium checklist, step 5).
 
 **Tests.** `test_code_defaults_equal_the_default_scenario_file`
 (`code/tests/data_center/test_parity.py`), `test_scenario_drift.py`,
@@ -193,6 +201,9 @@ review alone; nothing checks it automatically (Tests, below).
 `test_the_iridium_entry_runs_only_on_a_curve_computed_for_its_inputs` (the
 Iridium dials and constants against the curve's parameters),
 `test_committed_curve_has_not_drifted` (the curve against the code),
+`test_the_per_launch_and_price_lines_state_the_run_beside_the_validated_values`
+and `test_a_phone_price_below_the_floor_is_named_in_the_price_line` (two
+stated lines read at other settings),
 `test_bundled_generations_yaml_matches_known_gens`,
 `test_input_manifest.py` (statuses match the ledger; overrides drop the
 default's claim), and `test_validation_results.py` (each shipped scenario's
