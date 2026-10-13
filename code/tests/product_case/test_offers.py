@@ -476,19 +476,34 @@ def _set_prices(block: str, start: float, end: list[float]) -> Mutation:
 
 NON_FINITE_OFFERS: list[tuple[str, Mutation, str]] = [
     (
-        "a usage scale beyond a double",
+        "a data IoT usage scale beyond a double",
         _set_usage("data_iot", "scales", [1.0, 1e308]),
-        "usage.data_iot: FY2033's usage at the scale x1e+308 is beyond the range of a double",
+        "usage.data_iot.bursts_per_day: FY2033's usage at the scale x1e+308 "
+        "(usage.data_iot.scales) is beyond the range of a double",
+    ),
+    (
+        "a minimal-packet usage scale beyond a double",
+        _set_usage("minimal_packet_iot", "scales", [1.0, 2.0, 4.0, 8.0, 1e307]),
+        "usage.minimal_packet_iot.messages_per_day: FY2033's usage at the scale x1e+307 "
+        "(usage.minimal_packet_iot.scales) is beyond the range of a double",
     ),
     (
         "minimal-packet messages beyond a double",
         _set_usage("minimal_packet_iot", "messages_per_day", [10**400, 72, 96, 96]),
-        "usage.minimal_packet_iot: FY2031's usage at the scale x1.0 is beyond the range",
+        "usage.minimal_packet_iot.messages_per_day: FY2031's usage at the scale x1.0 "
+        "(usage.minimal_packet_iot.scales) is beyond the range",
+    ),
+    (
+        "data IoT bursts beyond a double",
+        _set_usage("data_iot", "bursts_per_day", [8, 10, 12, 10**400]),
+        "usage.data_iot.bursts_per_day: FY2036's usage at the scale x1.0 (usage.data_iot.scales) "
+        "is beyond the range",
     ),
     (
         "data IoT messages beyond a double",
         _set_usage("data_iot", "messages_per_day", 10**400),
-        "usage.data_iot: FY2031's messages and bursts a day are beyond the range of a double",
+        "usage.data_iot.messages_per_day and usage.data_iot.bursts_per_day (the bursts at the "
+        "scale x1.0, usage.data_iot.scales): FY2031's usage is beyond the range of a double",
     ),
     (
         "a monthly total whose off-peak rate is not finite",
@@ -520,12 +535,15 @@ def test_a_usage_price_or_rate_that_is_not_finite_is_refused_naming_the_field(
 ) -> None:
     """Objective: a finite setting whose usage, price or rate leaves the finite numbers is refused
     by the offers in one line naming its field and the year, never a bare ``OverflowError`` or an
-    infinite number carried into the Monte Carlo (the numerics lens's m3).
+    infinite number carried into the Monte Carlo (the numerics lens's m3); a usage overflow names
+    the setting of the path that overflowed (``usage.<class>.messages_per_day`` or
+    ``.bursts_per_day``) with the scale beside it and its own setting (the re-check's n4).
 
-    Sample: the shipped scenario with one extreme but finite value (a usage scale of 1e308; 10^400
-    messages a day for either IoT class; 1e300 GB a month; a $1e308 start price falling to $1; a
-    $1e308 minimal-packet price, whose data IoT price doubles past the largest double), its whole
-    grid offered on an engineering view of round numbers.
+    Sample: the shipped scenario with one extreme but finite value (a data IoT usage scale of
+    1e308 or a minimal-packet one of 1e307; 10^400 messages a day for either IoT class, or 10^400
+    data IoT bursts; 1e300 GB a month; a $1e308 start price falling to $1; a $1e308
+    minimal-packet price, whose data IoT price doubles past the largest double), its whole grid
+    offered on an engineering view of round numbers.
 
     Expected outcome: an ``OfferError`` whose one-line message starts as shown.
     """

@@ -408,19 +408,26 @@ def _finite(value: float, quantity: str, field: str, year: int) -> float:
 
 
 def _usage_on_line(
-    path_value: int, scale: float, years: tuple[int, ...], index: int, field: str
+    path_value: int,
+    scale: float,
+    years: tuple[int, ...],
+    index: int,
+    path_field: str,
+    scales_field: str,
 ) -> int:
     """The usage a choice sends a day in the reported year at ``index`` (:func:`scaled_usage`).
 
-    A product beyond the range of a double is refused, naming the field and the year.
+    A product beyond the range of a double is refused, naming the path's setting
+    (``usage.<class>.messages_per_day`` or ``.bursts_per_day``) and the year, with the scale
+    beside it and its own setting (``usage.<class>.scales``).
     """
     year = years[index]
     try:
         return scaled_usage(path_value, usage_factor(scale, year, years[0], years[-1]))
     except OverflowError as error:
         raise OfferError(
-            f"{field}: FY{year}'s usage at the scale x{scale!r} is beyond the range of a double "
-            "(a setting too large for the arithmetic)"
+            f"{path_field}: FY{year}'s usage at the scale x{scale!r} ({scales_field}) is beyond "
+            "the range of a double (a setting too large for the arithmetic)"
         ) from error
 
 
@@ -493,6 +500,7 @@ def _iot_offer(
     first_bytes_per_day: int,
     engineering: EngineeringView,
     year: int,
+    usage_fields: str,
 ) -> IotOffer:
     """An IoT class's offer in a reported year: its usage, bytes, service and per-device loads.
 
@@ -501,9 +509,9 @@ def _iot_offer(
     attempts a second the same way, one per message or burst; tone messages a second, the
     messages over the day (round 1's order). A class that sends no bursts (minimal-packet IoT)
     carries None for their timing. A usage whose loads or service are beyond the range of a
-    double, or a price that is not finite, is refused, naming the field and the year.
+    double is refused naming ``usage_fields`` (the class's usage settings, with the choice's
+    scale beside them) and the year; a price that is not finite, naming its price setting.
     """
-    usage_field = f"usage.{product_class}"
     try:
         message_bits = (
             messages_per_day * engineering.message_bytes * BITS_PER_BYTE / SECONDS_PER_DAY
@@ -525,8 +533,8 @@ def _iot_offer(
         service = bytes_per_day / first_bytes_per_day
     except OverflowError as error:
         raise OfferError(
-            f"{usage_field}: FY{year}'s messages and bursts a day are beyond the range of a "
-            "double in its loads (a setting too large for the arithmetic)"
+            f"{usage_fields}: FY{year}'s usage is beyond the range of a double in its loads (a "
+            "setting too large for the arithmetic)"
         ) from error
     checked = (
         ("busy-hour uplink bits a second", bits_busy),
@@ -537,7 +545,7 @@ def _iot_offer(
         ("service", service),
     )
     for quantity, value in checked:
-        _finite(value, quantity, usage_field, year)
+        _finite(value, quantity, usage_fields, year)
     return IotOffer(
         product_class=product_class,
         price_usd_month=_finite(
@@ -593,12 +601,30 @@ def choice_offers(
     minimal_messages = usage.minimal_packet_iot.messages_per_day
     data_bursts = usage.data_iot.bursts_per_day
     data_messages = usage.data_iot.messages_per_day
-    minimal_field = "usage.minimal_packet_iot"
-    data_field = "usage.data_iot"
-    minimal_first = _usage_on_line(
-        minimal_messages[0], choice.minimal_packet_scale, years, 0, minimal_field
+    minimal_messages_field = "usage.minimal_packet_iot.messages_per_day"
+    minimal_scales_field = "usage.minimal_packet_iot.scales"
+    data_messages_field = "usage.data_iot.messages_per_day"
+    data_bursts_field = "usage.data_iot.bursts_per_day"
+    data_scales_field = "usage.data_iot.scales"
+    minimal_fields = (
+        f"{minimal_messages_field} (at the scale x{choice.minimal_packet_scale!r}, "
+        f"{minimal_scales_field})"
     )
-    data_first = _usage_on_line(data_bursts[0], choice.data_iot_scale, years, 0, data_field)
+    data_fields = (
+        f"{data_messages_field} and {data_bursts_field} (the bursts at the scale "
+        f"x{choice.data_iot_scale!r}, {data_scales_field})"
+    )
+    minimal_first = _usage_on_line(
+        minimal_messages[0],
+        choice.minimal_packet_scale,
+        years,
+        0,
+        minimal_messages_field,
+        minimal_scales_field,
+    )
+    data_first = _usage_on_line(
+        data_bursts[0], choice.data_iot_scale, years, 0, data_bursts_field, data_scales_field
+    )
     minimal_first_bytes = minimal_first * engineering.message_bytes
     data_first_bytes = (
         data_messages * engineering.message_bytes + data_first * engineering.burst_bytes
@@ -641,25 +667,33 @@ def choice_offers(
                         choice.minimal_packet_scale,
                         years,
                         index,
-                        minimal_field,
+                        minimal_messages_field,
+                        minimal_scales_field,
                     ),
                     0,
                     None,
                     minimal_first_bytes,
                     engineering,
                     year,
+                    minimal_fields,
                 ),
                 data_iot=_iot_offer(
                     ProductClass.DATA_IOT,
                     DATA_IOT_PRICE_MULTIPLE * minimal_price,
                     data_messages,
                     _usage_on_line(
-                        data_bursts[index], choice.data_iot_scale, years, index, data_field
+                        data_bursts[index],
+                        choice.data_iot_scale,
+                        years,
+                        index,
+                        data_bursts_field,
+                        data_scales_field,
                     ),
                     usage.data_iot.bursts_outside_busy_hours[index],
                     data_first_bytes,
                     engineering,
                     year,
+                    data_fields,
                 ),
             )
         )
