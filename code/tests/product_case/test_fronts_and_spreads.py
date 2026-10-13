@@ -1,9 +1,9 @@
 """The Monte Carlo's tricky logic: the fronts, the pick, the percentiles and the ranks (B3).
 
 Constructed summaries and values, so each rule is read alone (the design's E9 and D10; the
-probes' walk W3 the fallback's model); the single-tone test's dominance and a terminal's off-peak
-downlink use on the synthetic run. Each test names what it exercises, its sample and what counts
-as success.
+probes' walk W3 the fallback's model); the percentiles' exact cuts on every range a point, the
+single-tone test's dominance and a terminal's off-peak downlink use on the synthetic run. Each
+test names what it exercises, its sample and what counts as success.
 """
 
 from __future__ import annotations
@@ -16,10 +16,23 @@ import numpy as np
 import pytest
 
 from product_case.config import ProductCaseConfig, load_product_case_config
-from product_case.constants import PickBasis, ProductClass, SpreadNullReason, UsableTest
+from product_case.constants import (
+    PickBasis,
+    ProductClass,
+    SpreadField,
+    SpreadNullReason,
+    UsableTest,
+)
 from product_case.engine import run_product_case
 from product_case.engineering import engineering_view_from_bytes
-from product_case.monte_carlo import ChoiceSummary, Fronts, _basis_spread, fronts_of, pick_of
+from product_case.monte_carlo import (
+    ChoiceSummary,
+    Fronts,
+    YearOutcome,
+    _basis_spread,
+    fronts_of,
+    pick_of,
+)
 from product_case.offers import Choice
 
 
@@ -137,6 +150,72 @@ def test_the_percentiles_are_null_below_9_values(count: int, stands: bool) -> No
     else:
         assert (spread.p10, spread.p50, spread.p90) == (None, None, None)
         assert spread.null_reason is SpreadNullReason.TOO_FEW_USABLE_DRAWS
+
+
+def test_the_cuts_are_exact_so_nine_values_give_the_lowest_and_highest() -> None:
+    """Objective: D10's exclusive method computed exactly: at 9 values the 10th percentile is the
+    lowest value and the 90th the highest, to the bit, and the three fall in order (the numerics
+    lens's M1: the standard library's float arithmetic gives 903.4968 x 10 / 10 =
+    903.4968000000001 and 3659.343708 x 10 / 10 = 3659.3437079999994).
+
+    Sample: 9 values that are not round, from 903.4968 to 3659.343708, unsorted.
+
+    Expected outcome: p10 903.4968 and p90 3659.343708 exactly; p50 the fifth value, 1,800.9;
+    p10 <= p50 <= p90.
+    """
+    values = np.array(
+        [2236.32984, 903.4968, 1500.3, 3659.343708, 1000.1, 2500.5, 1800.9, 1200.7, 3000.25],
+        dtype=np.float64,
+    )
+    spread = _basis_spread(values, 1800.9)
+    assert (spread.p10, spread.p50, spread.p90) == (903.4968, 1800.9, 3659.343708)
+    assert spread.p10 is not None and spread.p50 is not None and spread.p90 is not None
+    assert spread.p10 <= spread.p50 <= spread.p90
+
+
+def _headline_value(year: YearOutcome, field: SpreadField) -> float:
+    """The headline's value a spread field names: a class's customers or revenue, or a total."""
+    owner, _, attribute = field.value.rpartition(".")
+    if owner:
+        entry = next(entry for entry in year.classes if entry.product_class == owner)
+        return float(getattr(entry, attribute))
+    return float(getattr(year.totals, attribute))
+
+
+def test_every_range_a_point_gives_each_spread_its_one_value(
+    synthetic_scenario: dict[str, Any],
+    write_scenario: Callable[[dict[str, Any]], Path],
+    synthetic_engineering: dict[str, Any],
+    as_engineering_bytes: Callable[[dict[str, Any]], bytes],
+) -> None:
+    """Objective: with every market response's range a point, every drawn market is the central
+    market, so each spread over either basis is the one value every draw holds: its 10th, 50th
+    and 90th equal the headline's value exactly (the exclusive method computed exactly, D10),
+    and the headline's mid-rank is a half.
+
+    Sample: the synthetic case with gamma 0.75 to 0.75, epsilon 1 to 1 and eta 0.25 to 0.25 (the
+    small scenario's midpoints), 50 draws.
+
+    Expected outcome: the run picks, usable in all 50 draws; in every reported year and spread
+    field, both bases' p10, p50 and p90 equal the headline's value, and the rank is 0.5.
+    """
+    for response, middle in (("gamma", 0.75), ("epsilon", 1.0), ("eta", 0.25)):
+        synthetic_scenario["market"][response] = {"low": middle, "high": middle}
+    config = load_product_case_config(write_scenario(synthetic_scenario))
+    view = engineering_view_from_bytes(
+        as_engineering_bytes(synthetic_engineering),
+        path="synthetic",
+        reported_years=config.reported_years,
+    )
+    run = run_product_case(config, view)
+    assert run.headline is not None and run.spreads is not None
+    assert run.spreads.usable_draws == run.spreads.draws == 50
+    for headline_year, spread_year in zip(run.headline.years, run.spreads.years, strict=True):
+        for spread in spread_year.fields:
+            value = _headline_value(headline_year, spread.field)
+            for basis in (spread.usable_draws, spread.all_draws):
+                assert (basis.p10, basis.p50, basis.p90) == (value, value, value), spread.field
+                assert basis.headline_rank == 0.5, spread.field
 
 
 def test_the_mid_rank_treats_ties_evenly() -> None:

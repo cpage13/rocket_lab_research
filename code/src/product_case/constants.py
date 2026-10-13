@@ -1387,8 +1387,11 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 text=(
                     "per reported year and spread field, over the pick's usable draws (null below "
                     "9 usable draws, reason too_few_usable_draws) and over all draws: the 50th by "
-                    "statistics.median, the 10th and 90th by statistics.quantiles(values, n=10) "
-                    "(the exclusive method)"
+                    "statistics.median; the 10th and 90th the exclusive method's first and last "
+                    "cuts at statistics.quantiles(values, n=10)'s indices, with the values sorted "
+                    "x_1 <= ... <= x_c, m = c + 1, j = floor(i x m / 10) clamped to 1 .. c - 1 "
+                    "and d = i x m - 10 j for i = 1 and 9, each cut (x_j x (10 - d) + x_(j+1) x "
+                    "d) / 10 computed exactly and rounded once, so p10 <= p50 <= p90"
                 ),
                 description="The spread of the pick's outcomes over the drawn markets.",
                 inputs=("pick.choice_id", "inputs.scenario.market"),

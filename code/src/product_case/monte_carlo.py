@@ -56,7 +56,10 @@ takes the highest median among the candidates usable in at least the robust floo
 draws, ties to the higher share, then the earlier choice; else the candidates' front's first member
 (the most usable candidate, which the checks warn of); else no pick. The pick is evaluated again at
 the central market for the headline (:func:`outcome_in_market`) and over the draws for its spreads
-(:func:`spreads_of`).
+(:func:`spreads_of`): each spread's 50th percentile by ``statistics.median``, its 10th and 90th the
+exclusive method's first and last cuts at ``statistics.quantiles``' own indices, each computed
+exactly from the values and rounded once (the design's D10, computed exactly), so the three fall in
+order.
 
 **What stops the usage.** Every candidate holds the same terminal prices, so every candidate fails
 the terminals' fill in the same weak markets, and IoT's own failures (its room or access, in the
@@ -92,6 +95,7 @@ import random
 import statistics
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 from itertools import pairwise
 from typing import Final
 
@@ -140,8 +144,9 @@ FULL_USE: Final[float] = 1.0
 so the usable test holds each at or below it (a definition)."""
 
 PERCENTILE_GROUPS: Final[int] = 10
-"""``statistics.quantiles``' ``n`` for the spreads: ten groups, whose first cut is the 10th
-percentile and whose last is the 90th (round 3's spread; a definition)."""
+"""The exclusive method's ``n`` for the spreads: ten groups, whose first cut is the 10th percentile
+and whose last is the 90th (round 3's spread, ``statistics.quantiles(values, n=10)``, whose
+indices :func:`_exclusive_cuts` keeps; a definition)."""
 
 SPREAD_MIN_VALUES: Final[int] = MIN_DRAWS
 """The fewest values a spread's percentiles are published over, 9: below it the exclusive
@@ -483,10 +488,12 @@ class BasisSpread:
     """One spread field over one basis (the pick's usable draws, or all draws) in one year.
 
     Attributes:
-        p10: The 10th percentile, ``statistics.quantiles(values, n=10)``'s first cut (the
-            exclusive method); None below :data:`SPREAD_MIN_VALUES` values.
+        p10: The 10th percentile, the exclusive method's first cut at
+            ``statistics.quantiles(values, n=10)``'s indices, computed exactly and rounded once
+            (:func:`_exclusive_cuts`); None below :data:`SPREAD_MIN_VALUES` values.
         p50: ``statistics.median``; None below :data:`SPREAD_MIN_VALUES` values.
-        p90: The 90th percentile, the last cut; None below :data:`SPREAD_MIN_VALUES` values.
+        p90: The 90th percentile, the last cut, the same way; None below
+            :data:`SPREAD_MIN_VALUES` values. The three fall in order, p10 <= p50 <= p90.
         headline_rank: The headline's mid-rank among the values: the share strictly below plus
             half the share equal.
         null_reason: Why the percentiles are null, or None when they stand.
@@ -1325,12 +1332,48 @@ def _terminal_position(field: SpreadField) -> int | None:
     return None
 
 
+def _exclusive_cuts(values: Sequence[float], groups: int) -> tuple[float, ...]:
+    """The exclusive method's cuts at ``statistics.quantiles(values, n=groups)``'s indices, each
+    computed exactly and rounded once (the design's D10, computed exactly).
+
+    With the values sorted, x_1 <= ... <= x_c, and m = c + 1, cut i (i = 1 .. groups - 1) takes
+    the standard library's indices: j = floor(i x m / groups), clamped to 1 .. c - 1, and
+    d = i x m - j x groups. The cut is (x_j x (groups - d) + x_(j+1) x d) / groups, taken in exact
+    fractions of the two floats and rounded once to the nearest float, where the standard library
+    rounds each product, the sum and the quotient. So a cut is its data point exactly when d is 0
+    or its two points are equal (every value equal gives that value; 9 values give the lowest and
+    the highest as the 10th and the 90th), and the cuts and the median, the method's middle cut,
+    fall in order. A cut between points that are not finite is taken in floats, so it stays not
+    finite and the run's walk of its numbers refuses it, naming the field.
+
+    Args:
+        values: The values, at least two.
+        groups: The number of groups, n (the cuts are n - 1).
+
+    Returns:
+        The n - 1 cuts, in order.
+    """
+    data = sorted(values)
+    count = len(data)
+    span = count + 1
+    cuts: list[float] = []
+    for index in range(1, groups):
+        j = min(max(index * span // groups, 1), count - 1)
+        d = index * span - j * groups
+        low, high = data[j - 1], data[j]
+        if math.isfinite(low) and math.isfinite(high):
+            cuts.append(float((Fraction(low) * (groups - d) + Fraction(high) * d) / groups))
+        else:
+            cuts.append((low * (groups - d) + high * d) / groups)
+    return tuple(cuts)
+
+
 def _basis_spread(values: _Floats, headline: float) -> BasisSpread:
     """The percentiles of ``values`` and the headline's mid-rank among them (D10).
 
     rank = (below + 0.5 x equal) / count, with below and equal the values strictly below and equal
-    to the headline; p50 by ``statistics.median``; p10 and p90 the first and last cut of
-    ``statistics.quantiles(values, n=10)`` (exclusive); the three null below
+    to the headline; p50 by ``statistics.median``; p10 and p90 the first and last of the exclusive
+    method's cuts for ten groups, computed exactly (:func:`_exclusive_cuts`); the three null below
     :data:`SPREAD_MIN_VALUES` values, with the reason.
     """
     count = int(values.size)
@@ -1346,7 +1389,7 @@ def _basis_spread(values: _Floats, headline: float) -> BasisSpread:
             null_reason=SpreadNullReason.TOO_FEW_USABLE_DRAWS,
         )
     listed: list[float] = values.tolist()
-    cuts = statistics.quantiles(listed, n=PERCENTILE_GROUPS)
+    cuts = _exclusive_cuts(listed, PERCENTILE_GROUPS)
     return BasisSpread(
         p10=cuts[0],
         p50=statistics.median(listed),

@@ -100,12 +100,7 @@ def test_every_choice_reads_in_one_market_and_the_headline_is_the_pick_there(
         for field in year["fields"]:
             for basis in (field["usable_draws"], field["all_draws"]):
                 if basis["p10"] is not None:
-                    # Ordered within float precision: in a tied distribution (a terminal at its
-                    # seats) the quantiles' interpolation can land a unit in the last place off
-                    # the median (the design's D10: the two functions may differ in the last bits).
-                    low, mid, high = basis["p10"], basis["p50"], basis["p90"]
-                    assert low <= mid or math.isclose(low, mid, rel_tol=1e-9)
-                    assert mid <= high or math.isclose(mid, high, rel_tol=1e-9)
+                    assert basis["p10"] <= basis["p50"] <= basis["p90"], (year["year"], field)
 
 
 def test_the_last_data_iot_line_recomputes_by_hand(promoted: tuple[dict[str, Any], Path]) -> None:
