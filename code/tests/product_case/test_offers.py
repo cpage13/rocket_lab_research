@@ -134,7 +134,7 @@ def test_a_choice_and_its_offers_are_values(product_case_yaml: Path) -> None:
     Expected outcome: equal copies hash equal and fall in one set; a deep copy and a pickle
     round trip equal the original; ``asdict`` writes the end prices by class name ($10, $50, $3,
     $6) for the choice and inside its offers; the dict-built choice equals the grid's, holds
-    ``EndPrices`` and reads as a mapping in class order.
+    ``EndPrices`` equal to the dict it was built from and reads as a mapping in class order.
     """
     config = load_product_case_config(product_case_yaml)
     choice = choice_grid(config)[ADOPTED_CHOICE]
@@ -162,6 +162,7 @@ def test_a_choice_and_its_offers_are_values(product_case_yaml: Path) -> None:
         at_start_prices=True,
     )
     assert isinstance(rebuilt.end_prices, EndPrices)
+    assert rebuilt.end_prices == {ProductClass(name): price for name, price in prices.items()}
     assert rebuilt == choice
     assert hash(rebuilt) == hash(choice)
     assert list(rebuilt.end_prices.items()) == [(ProductClass(n), p) for n, p in prices.items()]

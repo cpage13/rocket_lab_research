@@ -85,7 +85,9 @@ class EndPrices(Mapping[ProductClass, float]):
     A small immutable ``Mapping[ProductClass, float]`` in :class:`ProductClass` order that is also
     a value: it hashes, deep-copies and pickles, and ``dataclasses.asdict`` writes it as the four
     prices by class name, so a :class:`Choice` that holds it is a value too (a set or a cache can
-    key on a choice).
+    key on a choice). It compares as a mapping: equal to any mapping with the same items (a dict of
+    the four prices by class among them), so a choice built from a dict holds prices equal to that
+    dict; its hash is the dataclass's, of the four prices, which equal end prices share.
 
     Attributes:
         small_terminal: The small terminal's price a month by the last reported year.
@@ -119,6 +121,13 @@ class EndPrices(Mapping[ProductClass, float]):
     def __len__(self) -> int:
         """Four: one end price per class."""
         return len(ProductClass)
+
+    def __eq__(self, other: object) -> bool:
+        """Equal to a mapping with the same items, as ``Mapping`` compares (the dataclass's own
+        comparison would hold end prices unequal to a dict of the same prices)."""
+        if isinstance(other, Mapping):
+            return dict(self.items()) == dict(other.items())
+        return NotImplemented
 
     @classmethod
     def from_mapping(cls, prices: Mapping[ProductClass, float]) -> EndPrices:
