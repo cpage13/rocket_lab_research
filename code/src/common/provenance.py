@@ -4,9 +4,13 @@ The data-center model wraps every leaf numeric value of its yearly output (the
 space artifact's ``physical.years`` and ``business.years``, but each year's
 ``year`` index) in a :class:`ProvenanceCell`, carrying value + unit + formula +
 formula_name + uses + sources + description; the ground reference builds its
-cells with the same factory. The communications artifacts (the Iridium
-artifact and the saturation curve) carry plain numbers, and the communications
-code reads only :func:`as_float` and :func:`as_int` from here. A cell's
+cells with the same factory. The product case wraps every numeric leaf under its
+headline's years (``headline.years``, but each year's ``year`` index; the
+headline's market, its three responses, stays plain) in a :class:`ProvenanceCell`
+from its own catalog, built in its artifact module, since :func:`cell` reads the
+data center's. The communications artifacts (the Iridium artifact and the saturation
+curve) carry plain numbers, and the communications code reads only
+:func:`as_float` and :func:`as_int` from here. A cell's
 ``formula_name`` resolves through the formula catalog of the artifact that
 publishes it. :data:`FORMULAS` is the data center's catalog, which
 :func:`cell` reads: :func:`cell` refuses a name the catalog lacks, and V13
@@ -83,7 +87,7 @@ class FormulaSpec(BaseModel):
 
 
 class ProvenanceCell(BaseModel):
-    """A typed wrapper for every leaf numeric value in the output JSON.
+    """A typed wrapper for a published numeric value (the data center's and the product case's).
 
     Carries the value alongside its provenance: the unit, the formula that
     produced it (both human-readable text and the stable ``formula_name``

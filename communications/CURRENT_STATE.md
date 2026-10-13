@@ -1,83 +1,73 @@
-# Current State - Communications Workstream
+# Current State: Communications
 
-This workstream asks what a Neutron-launched communications fleet could
-deliver, organized as model families by communication paradigm. The current
-public surface is the Iridium model: a promoted default and a static reviewed
-conclusion.
+This application asks what a Neutron-launched fleet could deliver on Iridium's
+owned L-band, and what that network would sell. Its public surface is two
+models side by side, the engineering case (the Iridium model) and the product
+case, with their promoted artifacts and a static reviewed conclusion.
 
 ## What Is Current
 
 - The static conclusion is `communications/conclusion.md`.
-- The promoted Iridium model is `communications/models/iridium/default.json`.
-- The default assumptions live in `code/scenarios/iridium.yaml`; the
-  saturation companion (the 2,000-satellite build-out at the same all-in
-  share) is `code/scenarios/iridium_saturation.yaml`, a model run rather
-  than a promoted artifact.
-- The active model code lives in `code/src/communications/`: five modules
-  (constants, config, engine, ground, json_output) carrying both model
-  families.
-- The test suite is green: the frozen Iridium suite, the High-Bandwidth
-  Cellular Pure Play suites, the cross-import guard, and the data-center
-  parity gate (779 whole-tree tests as of 2026-09-24; mypy strict and ruff
-  clean).
+- The Iridium model's artifact is `communications/models/iridium/default.json`
+  (schema `iridium-v7`, stamp 2026-10-13). It reads the saturation curve,
+  `communications/models/iridium/saturation_curve.json` (schema
+  `saturation-v1`, stamp 2026-10-12).
+- The product case's artifact is `communications/models/product_case/default.json`
+  (schema `product-case-v1`, stamp 2026-10-13). It reads the Iridium artifact.
+- The scenarios are `code/scenarios/iridium.yaml` and
+  `code/scenarios/product_case.yaml`.
+- The code: `code/src/communications/`, eight modules (config, constants,
+  engine, iridium, saturation, saturation_curve, ground, json_output) carrying
+  the Iridium model, the saturation curve's computation, the shared engine and
+  the cellular family; and `code/src/product_case/`, the product case.
+- The full test suite passes from the repository root, with mypy strict and
+  ruff clean.
 - The evidence library lives in `research/` under the `COMM-*` claim ledger.
 
 ## Current Read
 
-The Iridium baseline is coverage-bound, not capacity-bound: 340 satellites by
-2031 at the all-in cadence share (pedal to the metal, investor-set
-2026-07-14; the saturation companion reaches 2,000 satellites in 2035) serve
-about 10 million subscribers at 31,200 per satellite on the owned 8 MHz, at
-1.0 Mbps peak and 5.0 off peak to a phone. The cost model is investor-flat
-(simplification 2026-07-09): satellites 1.0 million dollars each and launches
-13.0 million at any cadence, scenario overrides only (the shared-spine
-defaults untouched), giving a 1,450.0 million dollar build-and-hold through
-FY2036 (the 29-launch 2031 build plus one full five-year fleet replacement)
-and a 145.0 million dollar steady-state annual cost. The model publishes the four-bucket ARPU case (Sheet
-A, investor-set 2026-07-09): about 8,250.8 million
-dollars per year at the baseline under full sell-through on capacity, about a
-98.2 percent margin against the built fleet's annualized cost (operating-style:
-measured against the built fleet's full build, launch, and replacement cost
-spread over the satellite life, 145.0 million dollars a year at the baseline,
-with operations the explicit zero and corporate overhead excluded; the
-promoted artifact carries the metric). Treat those as traceable model outputs from
-`communications/models/iridium/default.json`, not a final recommendation. A
-two-round traceability audit (converged 2026-07-08) verified 91 numbers with
-zero numeric discrepancies and four citation ids corrected in code (one of
-them re-corrected 2026-07-09: the build-cost anchor is `COMM-080`, the
-consolidated unit-cost trajectory row).
+Every Neutron launch on the shared ramp flies communications satellites, 16 to
+a launch. The fleet passes the 340-satellite coverage floor in FY2031, with
+528 satellites flying, and reaches 4,288 in FY2036. The fleet costs $191.4M a
+year in FY2031 and $1,554.4M in FY2036. The cost model is investor-flat
+(2026-07-09): satellites $1.0M each and launches $13.0M at any cadence.
+
+The engineering case sells every seat of each people class, each class alone.
+In FY2036 the small terminal alone serves 24,607,046 people for $2,952.8M a
+year, at a 47.4 percent own margin. The mounted terminal alone serves
+3,527,090 for $2,116.3M, at 26.5 percent. IoT is a capacity there, not a
+forecast: in FY2036 the room fits 11,497,881,052 minimal-packet IoT devices or
+997,732,709 data IoT devices, each class alone at its engineering usage.
+
+The product case sells four classes at the investor's prices, held flat. In
+FY2036, in the typical market, it would earn $13,156.2M a year at an 88.2
+percent margin, 79.1 percent of it from IoT. That headline sits a little below
+the median of the markets where the case is usable. It is usable in 1,744 of
+2,000 drawn markets. The two cases are never added.
+
+Treat these as traceable model outputs from the artifacts, not a final
+recommendation.
 
 ## What Is Not Current
 
-- The ARPU revenue case is now PUBLISHED (the four-bucket Sheet A). What is not
-  yet current in that case: a time-varying per-year mix (the investor's "IoT
-  grows in volume at a smaller percentage over time") and a per-year revenue
-  trajectory are documented v2 extensions; v1 publishes the built-fleet point
-  at a constant mix under full sell-through on capacity.
-- Operations cost is explicitly zero, a stated assumption and a fixed line to
+- Operations cost is explicitly zero, a stated assumption and a line to
   research and add later.
-- The cash cost per subscriber (25.00 dollars per year under the all-in
-  share) is the final-year replacement-cost artifact (FY2036 replaces the
-  large 2031 cohort, 250.0 million dollars). As of schema iridium-v4 the
-  promoted artifact names both bases directly (the final-year cash pair plus
-  the 14.50-dollar annualized line) and exposes the fleet, launch, and
-  capacity denominators and the labeled orbit scenario block. Schema
-  iridium-v5 (2026-09-23, the current promoted schema) adds the built fleet's
-  annualized cost (the margin's basis) and whether the build completes inside
-  the horizon, with the published values unchanged.
-- The old pre-rewrite communications tree (the former CLI, output, comparison,
-  and validation layers and their tests) was retired 2026-07-07. The live tree
-  is the five-module engine plus its per-family tests.
-- The High-Bandwidth Cellular Pure Play model is kept as the second family,
-  with its own pending items: its ground-versus-space conclusions material,
-  its revenue cases, and the 50-million and 100-million subscriber
+- The phone class is sized in the engineering case, but a phone needs a chip
+  for the band: the phone is a later, separate model.
+- The terminals' upload speeds and their share of IoT's room are not stated
+  until the uplink research is validated.
+- The product case reports four years (FY2031, FY2033, FY2035, FY2036), not
+  every year.
+- The High-Bandwidth Cellular Pure Play model is kept as the second family and
+  is on hold, with its own pending items: its ground-versus-space conclusions
+  material, its revenue cases, and the 50-million and 100-million subscriber
   projections.
 
-## How To Read This Workstream
+## How To Read This Application
 
-Start with `conclusion.md`. Use `models/iridium/default.json` for actual
-values. Use `assumptions.md` for where every dial comes from and
-`design.md` for how the families, folders, and derivations fit together.
+Start with `conclusion.md`. Use the three artifacts under `models/` for actual
+values. Use `assumptions.md` for where every dial comes from and `design.md`
+for how the models, folders, and derivations fit together.
 
 Use `research/LIBRARY.md` and `research/RESEARCH_TRACKER.md` to understand
 where assumptions came from and what research is still open. Research
@@ -86,11 +76,13 @@ JSON and the static conclusion are the current communications output.
 
 ## Open Work
 
-- Keep `conclusion.md` tied to the promoted default JSON through deliberate
-  review, not automatic promotion output.
-- The ARPU case v2: a time-varying per-year mix and a per-year revenue
-  trajectory (v1 publishes the built-fleet point at a constant mix).
-- Operations cost: research the fixed line and replace the explicit zero.
+- Keep `conclusion.md` tied to the promoted JSON through deliberate review,
+  not automatic promotion output. Promote the product case again whenever the
+  Iridium artifact changes.
+- The phone as its own model, once a phone chip speaks the band.
+- The terminals' upload, once the uplink research is validated.
+- The product case's other years (FY2032 and FY2034), which need usage values.
+- Operations cost: research the line and replace the explicit zero.
 - Keep the three lanes exact in all prose: cellular phones, broadband dish,
   MSS on Iridium L-band. Subscribers are people; IoT are devices.
 - Track the external clocks: the Rocket Lab-Iridium close (mid-2027), the

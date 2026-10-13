@@ -2,15 +2,17 @@
 
 Every scenario loader in the repository (the data-center config and the
 generations file it may reference, the ground reference, the communications
-config) reads YAML through :func:`load_yaml_mapping`. Every published JSON
-artifact (the space model, the ground reference, the Iridium model, the
-saturation curve) is serialized by :func:`render_artifact_json`, and the three
-commands that publish them (``rklb-value --promote``, the Iridium promotion
-command ``python -m communications.json_output`` and the saturation command
-``python -m communications.saturation``) write theirs as :func:`artifact_write`
-entries through :func:`write_files_with_rollback` (every file is written, or
-the destinations already replaced are restored and the error says which, if
-any, could not be) and find the repository through
+config, the product case's config) reads YAML through :func:`load_yaml_mapping`.
+Every published JSON artifact (the space model, the ground reference, the Iridium
+model, the saturation curve, the product case) is serialized by
+:func:`render_artifact_json`, and the four commands that publish them
+(``rklb-value --promote``, the Iridium promotion command
+``python -m communications.json_output``, the saturation command
+``python -m communications.saturation`` and the product case's command
+``python -m product_case.json_output``) write theirs as
+:func:`artifact_write` entries through :func:`write_files_with_rollback` (every
+file is written, or the destinations already replaced are restored and the error
+says which, if any, could not be) and find the repository through
 :func:`locate_source_checkout`. The loader, the writer and the finder each
 report failure as one :class:`ModelFileError` carrying the path and a one-line
 reason: the single file-boundary error type every command-line entry point
@@ -173,8 +175,8 @@ def render_artifact_json(artifact: BaseModel) -> str:
     """Serialize a typed artifact as the house JSON: indented, without a trailing newline.
 
     The one serializer for the space model, the ground reference, the Iridium
-    model and the saturation curve, whether printed (``rklb-value --json``) or
-    promoted (:func:`artifact_write`).
+    model, the saturation curve and the product case, whether printed
+    (``rklb-value --json``) or promoted (:func:`artifact_write`).
 
     Args:
         artifact: The built artifact model.
@@ -547,7 +549,7 @@ def locate_source_checkout(module_file: str | Path) -> SourceCheckout:
     """Locate the source checkout a model module was imported from.
 
     The scenarios and the promoted artifacts are repository files, not package
-    data: the wheel ships only the three Python packages. The command-line
+    data: the wheel ships only the four Python packages. The command-line
     entry points therefore work only from a source checkout, where ``uv run``
     installs the package in editable mode and a module's ``__file__`` stays at
     ``code/src/<package>/<module>.py``. From an installed wheel the module

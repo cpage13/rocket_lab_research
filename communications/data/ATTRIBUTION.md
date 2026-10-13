@@ -56,7 +56,7 @@ The result holds about 8.546 billion people.
 | `lat_top_deg` | 90.0, the grid's northern edge |
 | `lon_left_deg` | -180.0, the grid's western edge |
 | `cell_deg` | 0.25, the cell size in degrees |
-| `source` | the source dataset and the change, as one string |
+| `source` | the source dataset and the main change, as one string |
 | `citation` | the dataset citation, as one string |
 
 It loads with numpy's `allow_pickle=False`. The file is 705,701 bytes, SHA-256

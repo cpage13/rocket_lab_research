@@ -1,10 +1,12 @@
-"""Architecture guard: the comms src must not import the data_center venture (T1.10).
+"""Architecture guard: the comms src imports neither data_center (T1.10) nor the product case.
 
 The comms package may depend on common (the shared spine), but not on the DC
-venture. The data_center check is IMPORT-based (an AST scan), not a raw-substring
-scan, because comms docstrings legitimately name the data-center model in prose
-(this package mirrors it); a prose mention is not a dependency, an ``import`` of the
-venture would be (the same rationale as the Phase 0 common/ guard, finding
+venture, and never on the product case, which reads the engineering model's promoted
+artifact and never feeds the engineering model (ADR 012). Both checks are
+IMPORT-based (an AST scan), not raw-substring scans, because comms docstrings
+legitimately name the data-center model and the product case in prose (this package
+mirrors the one and is read by the other); a prose mention is not a dependency, an
+``import`` would be (the same rationale as the Phase 0 common/ guard, finding
 F-P0-EXEC-4). It also locks the config-time disaster tokens (starship, capture or
 market share, market-size or demand-lever machinery) out of the comms src and the
 default YAML; those ARE raw-substring scans because the tokens must never appear at
@@ -61,6 +63,14 @@ def test_comms_src_does_not_import_data_center(src_file: Path) -> None:
     """No comms src file IMPORTS the data_center venture (prose mentions are allowed)."""
     assert "data_center" not in _imported_modules(src_file.read_text()), (
         f"{src_file.name} imports data_center"
+    )
+
+
+@pytest.mark.parametrize("src_file", _COMMS_SRC_FILES, ids=lambda p: p.name)
+def test_comms_src_does_not_import_the_product_case(src_file: Path) -> None:
+    """No comms src file IMPORTS the product case (ADR 012): the engineering never reads it."""
+    assert "product_case" not in _imported_modules(src_file.read_text()), (
+        f"{src_file.name} imports product_case"
     )
 
 

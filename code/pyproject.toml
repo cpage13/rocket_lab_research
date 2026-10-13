@@ -18,7 +18,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/data_center", "src/communications", "src/common"]
+packages = ["src/data_center", "src/communications", "src/common", "src/product_case"]
 
 [dependency-groups]
 dev = [
@@ -66,9 +66,10 @@ ignore = ["ANN401"]  # Allow Any in narrow places with comment
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-# importlib import mode lets the data-center and communications test packages
-# carry same-basename modules (conftest.py, test_config.py, and test_engine.py
-# exist in both) without an __init__.py in either test directory. The default
+# importlib import mode lets the data-center, communications and product-case
+# test packages carry same-basename modules (conftest.py and test_config.py in
+# all three, test_engine.py in the first two, test_claim_citations.py in the
+# last two) without an __init__.py in any test directory. The default
 # "prepend" mode would collide on the shared basenames. Tests anchor every path
 # to their own file, so the suite also runs from the repository root:
 # `uv run --project code pytest code/tests`.

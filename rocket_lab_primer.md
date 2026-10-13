@@ -1,14 +1,14 @@
 # Rocket Lab: A Quick Primer
 
-*Last updated: June 2026. Written for readers who are new to the company. Years and specs are verified against current sources; targets that have not yet happened are flagged as targets.*
+*Last updated: June 2026 (the Iridium section: October 2026). Written for readers who are new to the company. Years and specs are verified against current sources; targets that have not yet happened are flagged as targets.*
 
-If you arrived here wondering what "Rocket Lab," "Electron," and "Neutron" are, this page is your catch-up. It explains who the company is and why a data center launched on a Rocket Lab rocket is a serious idea rather than science fiction.
+If you arrived here wondering what "Rocket Lab," "Electron," and "Neutron" are, this page is your catch-up. It explains who the company is and why the two applications this repository studies, an orbital data center and a modernized Iridium communications network, both launched on Rocket Lab rockets, are serious ideas rather than science fiction.
 
 ## Who Rocket Lab is
 
 Rocket Lab was founded in **June 2006** by **Peter Beck**, a self-taught New Zealand engineer who became convinced there was a real market for cheap, frequent launches of small satellites. The company started in New Zealand, re-domiciled to the United States in 2013, and today is headquartered in **Long Beach, California**. It went public in **August 2021** and trades on the Nasdaq under the ticker **RKLB**.
 
-The single most important thing to understand about Rocket Lab is that it is **vertically integrated**: it does not just launch rockets, it also designs and builds spacecraft and the components that go inside them. That full-stack reach matters a lot for the data-center idea this repo studies, and we will come back to it.
+The single most important thing to understand about Rocket Lab is that it is **vertically integrated**: it does not just launch rockets, it also designs and builds spacecraft and the components that go inside them. That full-stack reach matters a lot for both applications this repository studies, and we will come back to it.
 
 ## Electron: the rocket that proved it could fly
 
@@ -27,7 +27,7 @@ Here is the part many newcomers miss. Rocket Lab is **also a space hardware comp
 - **Satellite buses and platforms** (the body of a spacecraft that everything else bolts onto),
 - and a long catalog of **subsystems**: solar panels, reaction wheels, star trackers, radios, separation systems, and more.
 
-In plain terms, Rocket Lab can supply most of a working spacecraft from its own shelves and then launch it on its own rocket. For a project that imagines building and deploying many similar orbital nodes, that in-house breadth is a meaningful advantage: fewer outside vendors, more control over the whole stack.
+In plain terms, Rocket Lab can supply most of a working spacecraft from its own shelves and then launch it on its own rocket. For a project that imagines building and deploying many similar spacecraft, data-center nodes or communications satellites, that in-house breadth is a meaningful advantage: fewer outside vendors, more control over the whole stack.
 
 ## Neutron: the next, much bigger rocket
 
@@ -37,11 +37,15 @@ Neutron's reuse strategy is worth understanding, because it is not just a smalle
 
 The first flight is **targeted for late 2026** (the schedule has slipped more than once, so treat the date as a goal, not a guarantee).
 
-Why does Neutron matter so much? Because **reusable medium-lift at low cost** has, until now, effectively meant one rocket from one company. Neutron aims to bring a **Falcon-9-class capability to a second provider**. A reusable booster is what turns launch from a rare, expensive event into something you can do frequently and affordably. That, in turn, is what makes ambitious plans realistic: lofting heavy payloads, and doing it again and again, on a schedule. Deploying a fleet of orbital data-center nodes is exactly the kind of mission that only becomes plausible once high-cadence, large-payload, low-cost launch exists.
+Why does Neutron matter so much? Because **reusable medium-lift at low cost** has, until now, effectively meant one rocket from one company. Neutron aims to bring a **Falcon-9-class capability to a second provider**. A reusable booster is what turns launch from a rare, expensive event into something you can do frequently and affordably. That, in turn, is what makes ambitious plans realistic: lofting heavy payloads, and doing it again and again, on a schedule. Deploying a fleet of orbital data-center nodes, or thousands of communications satellites, is exactly the kind of mission that only becomes plausible once high-cadence, large-payload, low-cost launch exists.
+
+## Iridium: the communications application
+
+On June 29, 2026, Rocket Lab announced an agreement to acquire Iridium Communications, the satellite voice, data and IoT operator (COMM-601). The deal is expected to close in mid-2027, subject to its conditions (COMM-606). With it comes Iridium's owned, globally coordinated L-band spectrum. This repository's communications application asks what that spectrum could carry on a new fleet of Neutron-launched satellites, and what such a network would sell. It answers with two cases side by side, never added: an engineering case (every seat the fleet could carry) and a product case (what the network would sell at the investor's prices).
 
 ## The arc, in one breath
 
-Electron proved Rocket Lab can build and fly rockets reliably and at a high cadence. **Neutron scales that proven track record up to reusable medium-lift**, and reusable medium-lift is the enabler for the larger, repeatable missions, like an orbital data center, that the rest of this repo explores.
+Electron proved Rocket Lab can build and fly rockets reliably and at a high cadence. **Neutron scales that proven track record up to reusable medium-lift**, and reusable medium-lift is the enabler for the larger, repeatable missions, like an orbital data center or a modernized satellite network, that the rest of this repository explores.
 
 ---
 

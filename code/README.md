@@ -1,13 +1,13 @@
 # rklb-value Code Guide
 
-`code/` contains the runnable Python models for two workstreams. It turns YAML
-scenarios into typed JSON artifacts and text reports. The data-center model is
-the first application; `communications` holds the communications model families
-(the Iridium model first, with the High-Bandwidth Cellular Pure Play model as
-the second family). The Iridium promotion command, run from `code/` (a relative
-output path anchors to the repository root):
-`uv run python -m communications.json_output scenarios/iridium.yaml
-communications/models/iridium/default.json`.
+`code/` contains the runnable Python models for two applications. It turns
+YAML scenarios into typed JSON artifacts and text reports. The data-center
+model is the first application. `communications` holds the communications
+application's engineering model, the Iridium model, with the saturation curve
+it reads, and the High-Bandwidth Cellular Pure Play model as a second family,
+kept and on hold. `product_case` holds the product case, its own model on the
+Iridium model's artifact. The communications commands are under
+[Run The Communications Models](#run-the-communications-models).
 
 The project configuration in `pyproject.toml` requires Python `>=3.14` and uses
 `uv` for environment and command execution. No `uvx` or `uvnx` command is
@@ -124,12 +124,55 @@ That writes `../data_center/models/space/conservative.json` with role
 promotion. Named artifacts stay local: `.gitignore` tracks only the two
 `default.json` files under `../data_center/models/`.
 
-The Iridium promotion command (`python -m communications.json_output`) follows
-the same conventions: one `ERROR:` line and exit status 1 on a bad scenario or
-a failed write, exit status 2 on a usage error, and its status line on stderr.
-It writes one artifact through the same writer, so its single atomic rename
-leaves the existing artifact untouched when the write fails, and it refuses a
-symbolic-link or non-regular destination the same way.
+## Run The Communications Models
+
+Three commands, each run from `code/` (a relative output path anchors to the
+repository root), each following the conventions above: status on stderr, one
+`ERROR:` line and exit status 1 on an expected failure, exit status 2 on a
+usage error, and its one artifact written through the same writer, so a failed
+write leaves the existing artifact untouched and a symbolic-link or
+non-regular destination is refused.
+
+The Iridium model reads the promoted saturation curve its scenario names
+(`iridium.saturation.curve_path`) and writes the engineering artifact:
+
+```sh
+uv run python -m communications.json_output scenarios/iridium.yaml \
+    communications/models/iridium/default.json
+```
+
+A scenario without an `iridium:` block is refused with one `ERROR:` line and
+exit status 1, writing nothing; so is a curve computed for other inputs, or a
+fleet past a class's last computed row.
+
+The product case reads the engineering artifact (its schema pinned, its
+SHA-256 recorded) and writes its own, every time the engineering artifact
+changes:
+
+```sh
+uv run python -m product_case.json_output scenarios/product_case.yaml \
+    communications/models/product_case/default.json
+```
+
+It refuses an invalid scenario (a key that sets an IoT count among them), the
+default artifact's path written from any scenario but
+`scenarios/product_case.yaml` (a side run writes to a path of its own), an
+engineering artifact missing or of another schema, a run with no usable
+choice, and a run that would hold a number that is not finite.
+
+The saturation command computes the curve and writes it, needed only when one
+of the curve's inputs changes:
+
+```sh
+uv run python -m communications.saturation scenarios/iridium.yaml \
+    communications/models/iridium/saturation_curve.json
+```
+
+Its usage is `python -m communications.saturation [-h] [--version-stamp
+VERSION_STAMP] scenario output`. Its last measured run took about 30 minutes
+with a 14 GB peak-memory bound (the curve's `provenance.run_measurement`
+holds the figures), so it is never run casually: one at a time, on a machine
+with the memory for it.
 
 ## Edit Scenarios
 
@@ -284,22 +327,27 @@ code/
 │   ├── default.yaml
 │   ├── ground_default.yaml
 │   ├── iridium.yaml
+│   ├── product_case.yaml
 │   └── scenario variants
 ├── src/
 │   ├── common/                shared by both applications
 │   │   ├── cadence.py         the launch ramp, launch cost, and their dials
-│   │   ├── cli.py             exit codes, logging, and error lines for both commands
+│   │   ├── cli.py             exit codes, logging, and error lines for every command
 │   │   ├── cohort.py          the service-life cohort cliff
 │   │   ├── file_io.py         the YAML loader, artifact writer, and source checkout
 │   │   ├── input_manifest.py  input-cell vocabulary and builders
-│   │   ├── meta.py            validation and source-status types for meta blocks
+│   │   ├── meta.py            validation and source-status types for meta blocks, the data-dictionary walker
 │   │   └── provenance.py      provenance cells and the FORMULAS table
 │   ├── communications/
 │   │   ├── config.py
 │   │   ├── constants.py
-│   │   ├── engine.py
+│   │   ├── engine.py          the shared fleet-and-cost loop and the cellular family
 │   │   ├── ground.py
-│   │   └── json_output.py     the Iridium artifact and its promotion command
+│   │   ├── iridium.py         the Iridium family: its entry, full-cadence rule, record
+│   │   ├── json_output.py     the Iridium artifact and its promotion command
+│   │   ├── saturation.py      the saturation curve's computation and its command (numpy)
+│   │   └── saturation_curve.py  the curve's contract, loader, identity check, readings
+│   ├── product_case/          the product case: its config, offers, Monte Carlo (numpy), artifact
 │   └── data_center/
 │       ├── cli.py             the rklb-value command
 │       ├── config.py
@@ -318,7 +366,8 @@ code/
 ├── tests/
 │   ├── common/
 │   ├── communications/
-│   └── data_center/
+│   ├── data_center/
+│   └── product_case/
 └── outputs/data_center/runs/
 ```
 

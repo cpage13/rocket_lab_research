@@ -35,7 +35,7 @@ What it checks, on every line of every page:
     ``comms_cadence.share_of_fleet``) is, each dotted part, a code word: an identifier of the
     code (``code/src/``) or a word of a string literal there that is not a docstring, the
     source class a docstring opens with (``SOURCED_FACT``), a word of the scenarios or of the
-    four promoted JSON artifacts, or a name a test module defines at its top level. A word
+    five promoted JSON artifacts, or a name a test module defines at its top level. A word
     the code keeps only in a comment or a docstring (a history note naming a removed field)
     is not a code word. The level names the commands print (``ERROR``) count as names;
   - a code-name pattern matches at least one code word (``*_SPECS``), and a dotted one part
@@ -113,8 +113,9 @@ _PROMOTED_ARTIFACTS = (
     "data_center/models/ground/default.json",
     "communications/models/iridium/default.json",
     "communications/models/iridium/saturation_curve.json",
+    "communications/models/product_case/default.json",
 )
-"""The four promoted JSON artifacts, whose keys and values are code names a page may cite."""
+"""The five promoted JSON artifacts, whose keys and values are code names a page may cite."""
 
 _SCENARIOS_DIR = "code/scenarios"
 """The scenario files, whose keys are the dials a page may cite."""
@@ -131,7 +132,7 @@ _LOCAL_MARK = "(local)"
 _LOCAL_PATH = re.compile(r"(?<![\w.-])\.agent(?![\w-])[^\s`)\]]*")
 """A ``.agent`` path in any form (plain text, a span, a link's target, ``../.agent/``)."""
 
-_PACKAGES = ("common", "communications", "data_center")
+_PACKAGES = ("common", "communications", "data_center", "product_case")
 """The top-level packages under ``code/src/``; a dotted name headed by one is a module path."""
 
 _FILE_EXTENSIONS = (
@@ -260,12 +261,7 @@ class DecidedNotBuilt:
     decided_by: str
 
 
-_ADR_012 = "docs/adr/012-product-case-is-its-own-model.md"
-"""ADR 012: the product case as its own model."""
-
-_DECIDED_NOT_BUILT: tuple[DecidedNotBuilt, ...] = (
-    DecidedNotBuilt(_ADR_012, "code/src/product_case/", "ADR 012, the product case's package"),
-)
+_DECIDED_NOT_BUILT: tuple[DecidedNotBuilt, ...] = ()
 """Each span that names what an accepted ADR decided and no code has built yet."""
 
 
@@ -593,7 +589,7 @@ def _jq_problems(repo_dir: Path, page: Path, arguments: list[str]) -> Iterator[t
 
     ``arguments`` are the command's words after ``jq``: flags, the filter, then the files it
     reads, up to the next command. With no file that resolves to a JSON file, the fields are
-    looked up in the four promoted artifacts.
+    looked up in the five promoted artifacts.
     """
     operands: list[str] = []
     for word in arguments:

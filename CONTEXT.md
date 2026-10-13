@@ -19,9 +19,9 @@ product case, never added to it).
 - **Relates to:** product case, full sell-through, all-in deployment
 
 ### product case
-The communications market view (ADR 012), decided and not yet built: its own model on the Iridium model's
-promoted JSON, of what the network would sell (the terminals and the two IoT classes) at the investor's prices
-held flat; it never feeds the engineering model.
+The communications market view (ADR 012): its own model on the Iridium model's promoted JSON, of what the
+network would sell (the terminals and the two IoT classes) at the investor's prices held flat; it never feeds
+the engineering model.
 - **Relates to:** engineering case, minimal-packet IoT, data IoT
 
 ### the Iridium model
@@ -61,8 +61,8 @@ The data-center rule: a cohort's revenue is its annualized full cost times R, so
 
 ### margin
 The percentage of revenue left after the full build and launch cost spread over the service life (in
-communications, each class's own revenue against the year's whole living fleet's annualized cost); a dollar
-figure is profit.
+communications, against the year's whole living fleet's annualized cost: each class's own revenue in the
+engineering case, the whole business's revenue in the product case); a dollar figure is profit.
 - **Avoid:** gross margin, gross profit
 
 ### device class
@@ -74,13 +74,12 @@ data IoT are two more (ADR 011); IoT counts devices, never people, and no model 
 
 ### minimal-packet IoT
 The IoT device class that sends short messages only; with data IoT, a capacity in the engineering case, which
-the Iridium artifact publishes (ADR 011), and a market in the product case (ADR 012), decided and not yet built.
+the Iridium artifact publishes (ADR 011), and a market in the product case (ADR 012).
 - **Relates to:** data IoT, device class, engineering case, product case
 
 ### data IoT
 The IoT device class that sends bursts of data beside its messages; with minimal-packet IoT, a capacity in the
-engineering case, which the Iridium artifact publishes (ADR 011), and a market in the product case (ADR 012),
-decided and not yet built.
+engineering case, which the Iridium artifact publishes (ADR 011), and a market in the product case (ADR 012).
 - **Relates to:** minimal-packet IoT, device class, engineering case, product case
 
 ### frequency versus bandwidth
@@ -141,8 +140,9 @@ random-access room with neither (ADR 011). The curve is computed at d = 1.
 - **Relates to:** saturation curve
 
 ### readings
-The Iridium model's people, revenue and margin at four reported fleets: the coverage floor, 2,000 (the retired
-cap, kept for comparison), the horizon-end full-cadence reach and the steady state beyond the horizon.
+The Iridium model's people, revenue and margin, with IoT's room and each IoT class's capacity, at four reported
+fleets: the coverage floor, 2,000 (the retired cap, kept for comparison), the horizon-end full-cadence reach and
+the steady state beyond the horizon.
 - **Relates to:** coverage floor, saturation
 
 ### marginal interval
@@ -189,7 +189,8 @@ A model output file (the code's "artifact") that promotion writes into `data_cen
 - **Avoid:** promoted model, model JSON
 
 ### provenance cell
-The wrapper on a data-center output value: value, unit, formula, uses, sources, status, description.
+The wrapper on an output value of the data center's artifacts and of the product case's headline: value, unit,
+formula, uses, sources, status, description. The Iridium artifact carries none.
 
 ### claim ID
 A row ID in `research/SOURCE_INDEX.md`, the source ledger (`RLDC-*`, `NTR-*`, `COMM-*` and others).
@@ -204,14 +205,14 @@ The public evidence class of a claim or input; public documents never cite `plac
 - **gross.** The `gross_profit_*` fields, their query questions, the `--brief` headline and the cellular
   record's margin fields (`arpu_gross_margin_pct`, `cost_plus_gross_margin_pct`) say gross for a full-cost
   figure; read as gross, margins compare wrongly.
-- **workstream, venture, application.** Folder front pages say workstream, docstrings and two test file names
-  say venture, the charter and README mostly application: three words split search and prose.
-- **saturation.** The public documents, until their rewrite, call the retired 2,000 cap the point where the
-  spectrum saturates; in code 2,000 is only a reading and each people class's saturation number is derived,
+- **workstream, venture, application.** The research write-ups say workstream, docstrings and two test file
+  names say venture, the charter and the public documents application: three words split search and prose.
+- **saturation.** Older research write-ups and the changelog's history speak of a saturation cap or ceiling,
+  the retired 2,000 cap; in code 2,000 is only a reading and each people class's saturation number is derived,
   so agents would quote a cap as physics.
 - **Sheet A, ARPU buckets.** Retired with the four-bucket revenue case (mix shares of one pool, a government
-  bucket among them) yet still in the communications documents until their rewrite; the built model sells
-  every seat of each people class at its own price.
+  bucket among them); the words now live in the changelog's history, superseded ADR 007 and the history notes
+  of the code's docstrings; the built model sells every seat of each people class at its own price.
 - **floor.** The coverage floor (which gates every Iridium sale; the cadence sizes the fleet), the conservative
   floor (the most conservative published reading, shown but never leading), the phone class's price floor (no
   price haircut goes below it), the margin floors (rule V3 in the data center; the investor's floor on the

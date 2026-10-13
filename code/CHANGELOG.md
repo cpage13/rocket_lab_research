@@ -3,7 +3,109 @@
 All notable changes to the `code/` model package: the `rklb-value` orbital
 data-center valuation calculator and, from July 2026, the communications model
 families. Versions track each output JSON **schema version** (the data center:
-space v9 and ground reference ground-v2; the Iridium model: iridium-v5).
+space v9 and ground reference ground-v2; the communications application: the
+saturation curve saturation-v1, the Iridium model iridium-v7 and the product
+case product-case-v1).
+
+## The communications application, schemas saturation-v1, iridium-v6, iridium-v7 and product-case-v1 (2026-10-04 to 2026-10-13)
+
+The communications work since `iridium-v5`, in four schemas. The Iridium model
+now reads its people from a promoted saturation curve and flies the full launch
+cadence; it publishes every device class side by side, each class alone, and
+IoT as capacity. The product case is a new model on the Iridium model's
+artifact. The published numbers moved with the model, as the conclusion
+states: in FY2036 the fleet flies 4,288 satellites at $1,554.4M a year, the
+small terminal alone serves 24,607,046 people for $2,952.8M a year at a 47.4
+percent own margin, and the product case reads $13,156.2M at an 88.2 percent
+margin in the central market, a little below its usable markets' median. The
+curve was promoted on 2026-10-12 and the Iridium artifact on 2026-10-13; the
+product case's artifact is new.
+
+### Added
+
+- **The saturation curve, schema saturation-v1** (ADRs 005, 008 and 009):
+  `communications/models/iridium/saturation_curve.json`, computed by the new
+  command `python -m communications.saturation`. For each people class, at 24
+  requested fleets from 340 to 40,000 satellites (the mounted terminal also at
+  48,000 and 64,000), it holds the useful beams a shell keeps lit over the
+  inhabited cells of a shipped population grid (`communications/data/`,
+  GHS-POP R2023A, CC BY 4.0), at the 25 m^2 reference panel with the band in
+  full-time use; each class's markers; the phone class's band points and
+  interference trim; the parameters, the input hash, the run's measurement and
+  the stated limits. New modules: `communications/saturation.py` (the
+  computation and its command) and `communications/saturation_curve.py` (the
+  contract, the loader, the identity check and the readings).
+- **The Iridium family's own module**, `communications/iridium.py`: its entry
+  `run_iridium_model(config, curve)`, the full-cadence rule
+  (`full_cadence_rule`: every comms launch the cadence share allows, times the
+  satellites per launch, with no target, hold or cap), its record and its
+  economics.
+- **The product case, schema product-case-v1** (ADR 012): the package
+  `code/src/product_case/` and its command `python -m product_case.json_output`,
+  with `code/scenarios/product_case.yaml`. It reads the Iridium artifact (its
+  schema pinned, its SHA-256 recorded) and sells the small terminal, the
+  mounted terminal, minimal-packet IoT and data IoT at the investor's prices,
+  held flat, over 2,000 drawn markets; its headline is the central market. Its
+  ledger rows are COMM-722 to COMM-726.
+- **numpy as a runtime dependency, in two modules** (ADR 010, its scope widened
+  by ADR 012): `communications/saturation.py` and `product_case/monte_carlo.py`.
+- **ADRs 005 to 012.**
+
+### Changed
+
+- **Schema iridium-v5 to iridium-v6** (2026-10-06, the saturation module's
+  switch). The artifact publishes every device class side by side
+  (`classes`, each with its price, usage, physics, markers, binding limit and
+  marginal intervals), each model year's people, revenue and own margin per
+  class beside the shared fleet and cost (`years`), and the curve's identity,
+  readings, band saturation numbers and limits (`saturation`). In
+  `trajectory_summary`, `total_build_and_hold_cost_musd` became
+  `total_cost_through_final_year_musd`, `steady_state_annual_cost_musd` became
+  `final_year_annual_cost_musd`, `full_coverage_reached_year` became
+  `coverage_floor_reached_year`, and `cost_per_satellite_year_musd` was added;
+  in the physics block `effective_satellites_per_launch` became
+  `satellites_per_launch`.
+- **Schema iridium-v6 to iridium-v7** (2026-10-13, ADR 011, IoT as capacity).
+  Each model year and each reading carries IoT's room on the phone class's
+  useful beams and each IoT class's device capacity alone at its engineering
+  usage (`years[].iot`, `saturation.readings[].iot`), null below the coverage
+  floor; each year's class lines carry the class's useful beams;
+  `iot_classes` publishes each IoT class's engineering usage; the physics block
+  gains the IoT room's nine constants. No people, revenue, own margin, fleet,
+  cost or curve value moved.
+- **The settings.** The panel is 15.4 m^2 (COMM-711), scaled from the curve's
+  25 m^2 reference by 0.616 (ADR 005); 16 satellites a launch with the Neutron
+  block upgrade assumed (COMM-713); the downlink share 0.67 (ADR 008); the
+  small terminal $10, the mounted terminal $50 and the phone class $15 a month,
+  held flat; government out of revenue (ADR 007). The scenario's label now
+  names every device class (it named one class before).
+- **The shared contract helpers.** The data-dictionary walker,
+  `build_data_dictionary`, moved byte for byte from `data_center/json_output.py`
+  into `common/meta.py`, and `QueryAppliesTo` gains `PRODUCT_CASE`; the data
+  center's two promoted artifacts are byte-identical.
+- **The review since the push's fixes.** The curve was re-promoted on
+  2026-10-12 with no computed value moved: the mounted terminal's label moved
+  from 64,009 to 55,407, the last fleet its rows measure the elasticity of
+  capacity to (the geometric midpoint of its last two rows), and the 48-beam
+  band point's from 40,000 to 36,900; the method, the checks and the limits
+  were rewritten (the panel rule's limits as measured at 15.4 m^2). The Iridium
+  artifact was re-promoted with that label, the limits' texts and the curve's
+  stamp. `pyproject.toml`'s description names the communications application.
+
+### Removed
+
+- **From the Iridium artifact at iridium-v6:** the target, regime, completion
+  and built-fleet fields; the per-person cost fields; the density and the
+  fleet aggregate; the IoT passthrough; the one device class and its physics
+  (each class's are in `classes`); the served base `subscribers_served` and
+  `people_capacity_living_fleet_final_year` (each class's people are in
+  `years` and the readings); the four-bucket `revenue_arpu_buckets` block.
+- **From the Iridium artifact at iridium-v7:** `fixed_books`, each year's
+  `minimal_packet_iot_revenue_musd` and `data_iot_revenue_musd`, and
+  `saturation.iot_check`; IoT's prices left the engineering config and are the
+  product case's.
+- **The companion scenario**, `code/scenarios/iridium_saturation.yaml`
+  (3381e25): it no longer loaded.
 
 ## Data center, space schema v9 and ground schema ground-v2 (2026-09-23), the review fix set
 

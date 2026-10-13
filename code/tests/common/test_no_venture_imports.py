@@ -1,12 +1,13 @@
-"""Architecture guard: ``common`` must not depend on either venture (Phase 0, T0.15).
+"""Architecture guard: ``common`` must not depend on a model package (Phase 0, T0.15).
 
-The binding invariant is that no ``common`` module IMPORTS the ``data_center`` or
-``communications`` package. The check is import-based rather than a raw-substring
-scan because the package docstrings legitimately name both ventures in prose
-(e.g. ``common/__init__.py``: "Shared code imported by both the data_center and
-communications models"), and ``common/cadence.py`` documents that its dial blocks
-are the ``cadence`` and ``launch_cost`` blocks of both ventures' configs. Those
-prose mentions are not dependencies; an ``import`` of a venture would be. See the
+The binding invariant is that no ``common`` module IMPORTS the ``data_center``,
+``communications`` or ``product_case`` package. The check is import-based rather
+than a raw-substring scan because the package docstrings legitimately name the
+models in prose (``common/__init__.py`` names the models it serves,
+``common/cadence.py`` documents that its dial blocks are the ``cadence`` and
+``launch_cost`` blocks of both ventures' configs, and ``common/input_manifest.py``
+and ``common/meta.py`` name the product case among their users). Those prose
+mentions are not dependencies; an ``import`` of a model package would be. See the
 Phase 0 report for the deviation rationale.
 """
 
@@ -45,6 +46,11 @@ def test_common_modules_do_not_import_data_center(path: Path) -> None:
 @pytest.mark.parametrize("path", _COMMON_FILES, ids=lambda p: p.name)
 def test_common_modules_do_not_import_communications(path: Path) -> None:
     assert "communications" not in _imported_modules(path.read_text())
+
+
+@pytest.mark.parametrize("path", _COMMON_FILES, ids=lambda p: p.name)
+def test_common_modules_do_not_import_the_product_case(path: Path) -> None:
+    assert "product_case" not in _imported_modules(path.read_text())
 
 
 def test_common_files_discovered() -> None:

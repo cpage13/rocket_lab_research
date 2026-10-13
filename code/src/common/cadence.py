@@ -6,7 +6,9 @@ the eight cadence and launch-cost defaults, the two validated dial blocks
 ``launch_cost`` blocks of the data-center and communications configs), the
 two cell functions that turn them into provenance cells
 (:func:`compute_launches_per_year` and :func:`compute_launch_cost_musd`), and
-:func:`round_half_up`, the one half-up rounding both models use.
+:func:`round_half_up`, the one half-up rounding the models use: the launch ramp's
+mission counts, the communications counts and markers, and the product case's IoT
+usage paths (a choice's messages or bursts a day in each reported year).
 
 The launch ramp is a logistic curve fit through the year-5 and year-10
 scenario anchors. Those anchors are source-indexed as model scenarios
@@ -281,12 +283,13 @@ def _logit_launch_anchor(launches: int, cadence_ceiling: int) -> float:
 def round_half_up(quantity: float) -> int:
     """Round a non-negative quantity to the nearest integer, half up.
 
-    ``floor(quantity + ROUND_TO_NEAREST_OFFSET)``: the one half-up rounding both
+    ``floor(quantity + ROUND_TO_NEAREST_OFFSET)``: the one half-up rounding the
     models use, where Python's ``round`` would round an exact half to even: the
     launch ramp's mission counts here; in communications, the cellular family's
     served base, the Iridium model's people per class in every year and reading,
     the saturation curve's markers, and the rows' geometric midpoints the curve's
-    loader checks those markers against.
+    loader checks those markers against; and in the product case, its IoT usage
+    paths (a choice's messages or bursts a day in each reported year).
 
     Args:
         quantity: A non-negative quantity, e.g. the smooth logistic launch rate.

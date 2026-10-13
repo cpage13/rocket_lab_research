@@ -1,0 +1,27 @@
+# Round 3 of the product case's scratch exploration (local): its own scenario, never the shipped
+# one. The terminals at round 3's prices ($15 and $100, with its lower end prices), minimal-packet
+# IoT held at $3 (data IoT $6), usage scales x1, x2 and x4, round 1's usage paths with FY2036
+# held at FY2035's, round 2's market and floors: 144 choices.
+scenario_name: Round 3, the $3 and $6 grid
+engineering_artifact_path: communications/models/iridium/default.json
+reported_years: [2031, 2033, 2035, 2036]
+prices:
+  small_terminal: {start_usd_month: 15.0, end_usd_month: [15.0, 12.0, 10.0, 8.0]}
+  mounted_terminal: {start_usd_month: 100.0, end_usd_month: [100.0, 80.0, 65.0, 50.0]}
+  minimal_packet_iot: {start_usd_month: 3.0, end_usd_month: [3.0]}
+usage:
+  small_terminal: {gb_per_month: [5.4, 6.7, 8.1, 8.1]}
+  mounted_terminal: {gb_per_month: [54.0, 67.0, 81.0, 81.0]}
+  minimal_packet_iot: {messages_per_day: [48, 72, 96, 96], scales: [1.0, 2.0, 4.0]}
+  data_iot:
+    messages_per_day: 48
+    bursts_per_day: [8, 10, 12, 12]
+    bursts_outside_busy_hours: [false, true, true, true]
+    scales: [1.0, 2.0, 4.0]
+market:
+  draws: 2000
+  seed: 20261006
+  gamma: {low: 0.5, high: 1.0}
+  epsilon: {low: 0.5, high: 1.5}
+  eta: {low: 0.0, high: 0.5}
+floors: {fill: 0.75, robust: 0.75, margin_pct: 50.0}

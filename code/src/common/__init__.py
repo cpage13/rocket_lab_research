@@ -1,4 +1,4 @@
-"""Shared code imported by both the `data_center` and `communications` models.
+"""Shared code imported by the `data_center`, `communications` and `product_case` models.
 
 The provenance/cell vocabulary and its strict unwrap (:mod:`common.provenance`),
 the cadence spine (:mod:`common.cadence`: the launch ramp, the launch cost, their

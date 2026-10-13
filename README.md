@@ -20,14 +20,14 @@ New to Rocket Lab, Electron, or Neutron? Start with the [primer](rocket_lab_prim
 | Application | Vehicle | Status |
 |---|---|---|
 | Orbital AI-inference data center | Neutron | Modeled (current) |
-| Communications: the Iridium model | Neutron | Modeled (current) |
+| Communications: the Iridium model and the product case | Neutron | Modeled (current) |
 
-Two applications are modeled today. The communications workstream holds model
-families by communication paradigm; the first is the Iridium model, exploring
-the maximum practical performance of Iridium's owned L-band spectrum on a
-Neutron-launched next generation fleet. Start with
+Two applications are modeled today. The communications application asks what
+Iridium's owned L-band could carry on a Neutron-launched next-generation fleet,
+and what that network would sell. Start with
 [communications/conclusion.md](communications/conclusion.md); the promoted
-default output is `communications/models/iridium/default.json`.
+artifacts are under `communications/models/`. The two applications' headlines
+never add: each runs as if it had the shared launch ramp to itself.
 
 ## Data Center
 
@@ -82,39 +82,53 @@ The full data-center case, with every number traced to a source:
 
 In June 2026 Rocket Lab agreed to acquire Iridium (closing expected
 mid-2027), and with it about 8 MHz of owned, globally coordinated L-band
-spectrum near 1.6 GHz. The band's position is the product: it holds through
+spectrum near 1.6 GHz (COMM-611). The band's position is the product: it holds through
 rain, clouds, and foliage, so it carries a decent, reliable link everywhere
-(voice, text, maps, photos, music, AI-agent traffic, and tens of millions of
-IoT devices) rather than video-grade broadband. The model asks what that
-spectrum could do on a modern Neutron-launched fleet: 25 square meter flat
-panels with laser crosslinks, about 12 per launch, replacing the 66-satellite
-Iridium NEXT fleet (launched 2017 to 2019) that moves about 174 Mbps today,
-less than one home internet connection.
+(voice, text, maps, photos, music, AI-agent traffic, and IoT devices) rather
+than video-grade broadband. It is first an IoT network. The model asks what
+that spectrum could do on a modern Neutron-launched fleet: flat 15.4 square
+meter panels with laser crosslinks, 16 to a launch with the Neutron block
+upgrade assumed, replacing the 66-satellite Iridium NEXT fleet (launched 2017
+to 2019) that moves about 174 Mbps today, less than one home internet
+connection (COMM-639).
 
-The highlights, all under the same all-in deployment scenario the data-center
-model uses (a modeling posture, stated as one):
+Two cases answer it, side by side and never added. The engineering case is
+every seat each people class could carry, each class alone, with IoT's room
+beside them. The product case is what the network would sell at the
+investor's prices, held flat. Its headline is the typical market (each
+response at the middle of its range), read beside 2,000 drawn markets.
 
-- **340 satellites by 2031** (29 Neutron launches, about $725M of hardware
-  and launch) serve about **10 million subscribers** at 31,200 per satellite,
-  plus about **51.7 million IoT devices**.
-- Kept going, the spectrum saturates near **2,000 satellites by 2035**: about
-  **62 million subscribers**, the most the 8 MHz can carry.
-- The published sheet reads about **$8.25B a year** at the baseline and about
-  **$48.5B** at the ceiling, against **$145M** and **$835M a year** of fleet
-  cost: margins near **98%** before the unmodeled operations line, under full
-  sell-through at investor-set prices.
-- The weakest device (a phone-class radio) gets about 1 Mbps at peak; a small
-  self-orienting antenna about 3, a mounted antenna about 4. A better antenna
-  does not widen the spectrum: it cleans the signal so each wave-change
-  carries more bits. Phone-class service needs the band in standard chipsets;
-  the antenna tiers and IoT need no one's permission.
+- **The fleet.** Every Neutron launch on the shared ramp flies communications
+  satellites. The fleet passes the 340-satellite coverage floor in FY2031, with
+  528 flying, and reaches 4,288 in FY2036, at $1,554.4M a year.
+- **The product case.** At $10 and $50 a month for the two terminals and $3
+  and $6 for the two IoT classes, the network would earn $2,194.6M in FY2031
+  and **$13,156.2M in FY2036 at an 88.2 percent margin**, about four fifths of
+  it from IoT. That is the typical market; it sits a little below the median
+  of the markets where the case works.
+- **The engineering case.** Each class could fill the fleet alone. In FY2036
+  the small terminal alone serves 24.6 million people ($2,952.8M a year, a
+  47.4 percent own margin) and the mounted terminal alone 3.5 million
+  ($2,116.3M, 26.5 percent). IoT's room fits 11.5 billion minimal-packet
+  devices, that class alone: a capacity, not a forecast.
+- **The spectrum bound.** Each class's saturation number is a spectrum bound
+  reported beside the launch cadence, never a cap: 19,995 satellites for the
+  small terminal. Inside the horizon the launch cadence binds every class.
+- **The devices.** The small terminal gets 2 Mbps while active (about 10
+  off-peak), the mounted terminal 5 (about 13.4). A better antenna does not
+  widen the spectrum: it cleans the signal so each wave-change carries more
+  bits. The terminals and IoT need no one's permission. Phones and voice are a
+  later, separate model that needs a phone chip for the band.
+- **Never added.** The two cases never add, and neither do the two
+  applications: both fly the same 301 Neutron launches through FY2036, each as
+  if it had the ramp to itself.
 
 The full case, with every number traced:
 
-- [communications/conclusion.md](communications/conclusion.md): the verdict, the 2031 and 2035 stories, the saturation ceiling, and the business breakdown.
-- [communications/assumptions.md](communications/assumptions.md): every dial with its source class, including the all-in deployment posture.
-- [communications/design.md](communications/design.md): the model-family structure and how future paradigms get added.
-- [`models/iridium/default.json`](communications/models/iridium/default.json): the current promoted generated output and model assumptions.
+- [communications/conclusion.md](communications/conclusion.md): the verdict, both cases side by side, IoT's room, and the plan by date.
+- [communications/assumptions.md](communications/assumptions.md): every dial of both models with its source class, including the all-in deployment posture.
+- [communications/design.md](communications/design.md): the model-family structure, the saturation curve, and the promotion flow.
+- [`models/iridium/default.json`](communications/models/iridium/default.json) and [`models/product_case/default.json`](communications/models/product_case/default.json): the two cases' promoted artifacts.
 
 ## Repository Map
 
@@ -122,7 +136,7 @@ The full case, with every number traced:
 rklb_space_data_center/
 ├── README.md            # this file: the program and its applications
 ├── data_center/         # the data-center application (conclusion, structural case, guide, models)
-├── communications/      # the communications application (Iridium model conclusion, assumptions, design, promoted models)
+├── communications/      # the communications application (conclusion, assumptions, design, promoted artifacts)
 ├── research/            # shared evidence wiki and source ledger
 ├── code/                # the model engine (rklb-value)
 ├── atlas/               # the agent map: pieces, flows, invariants (start at AGENTS.md)
@@ -145,6 +159,19 @@ nothing, if any validation check fails; the name `default` belongs to
 `--output-name`. Promotion does not rewrite the
 [conclusion](data_center/conclusion.md); after a model change, review the
 artifacts and update the conclusion deliberately.
+
+The communications models promote from `code/` too, the Iridium model first
+and then the product case, which reads it:
+
+```sh
+uv run python -m communications.json_output scenarios/iridium.yaml \
+    communications/models/iridium/default.json
+uv run python -m product_case.json_output scenarios/product_case.yaml \
+    communications/models/product_case/default.json
+```
+
+The Iridium command reads the promoted saturation curve; the curve's own
+command, a long run, is in [communications/README.md](communications/README.md).
 
 ## Disclaimer
 
