@@ -4,7 +4,9 @@ Status: Accepted (2026-10-04, with the saturation module's strategy, Revision 4)
 (2026-10-13, `iridium-v7`), the Consequences' "with the IoT lines on their own" describes the IoT
 lines ADR 011 removed, and, in ADR 011's words, its "with the IoT lines on their own and
 government left out of revenue (ADR 007)" now reads "with IoT as capacity, its revenue the
-product case's, and government left out of revenue".
+product case's, and government left out of revenue"; its Decision's "every device class" is the
+three people classes (`DeviceClass`), since IoT's two classes have no people capacity, only the
+devices IoT's room holds (ADR 011).
 
 ## Context
 
