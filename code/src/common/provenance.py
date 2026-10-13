@@ -4,10 +4,11 @@ The data-center model wraps every leaf numeric value of its yearly output (the
 space artifact's ``physical.years`` and ``business.years``, but each year's
 ``year`` index) in a :class:`ProvenanceCell`, carrying value + unit + formula +
 formula_name + uses + sources + description; the ground reference builds its
-cells with the same factory. The product case wraps every numeric leaf of its
-headline (but each year's ``year`` index) in a :class:`ProvenanceCell` from its
-own catalog, built in its artifact module, since :func:`cell` reads the data
-center's. The communications artifacts (the Iridium artifact and the saturation
+cells with the same factory. The product case wraps every numeric leaf under its
+headline's years (``headline.years``, but each year's ``year`` index; the
+headline's market, its three responses, stays plain) in a :class:`ProvenanceCell`
+from its own catalog, built in its artifact module, since :func:`cell` reads the
+data center's. The communications artifacts (the Iridium artifact and the saturation
 curve) carry plain numbers, and the communications code reads only
 :func:`as_float` and :func:`as_int` from here. A cell's
 ``formula_name`` resolves through the formula catalog of the artifact that

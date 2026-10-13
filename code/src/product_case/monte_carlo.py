@@ -778,6 +778,20 @@ def _year_arrays(
 ) -> _YearArrays:
     """One reported year's numbers in every market (method steps 3 to 5), in round 3's order.
 
+    In each market, with c over the four classes and i over the two IoT classes:
+    D_c = N_c x k^gamma x (A_c / p_c)^epsilon x v_c^eta (:func:`_demand`); a terminal's
+    n_c = floor(min(D_c, S_c)), an IoT class's n_i = floor(D_i); F = s x n_small / S_small +
+    (1 - s) x n_mounted / S_mounted; each class's revenue n_c x p_c x 12 / 10^6 and
+    Rev = (the sum of n_c x p_c) x 12 / 10^6, $M a year; the margin (1 - C / Rev) x 100, percent;
+    U_period = the sum of n_i x (b_i,period / R), bits a second over the payload room, for the
+    busy hours and off-peak; access = the larger period's sum of n_i x a_i,period over A (and over
+    L, the attempts a second a beam); tone = (the sum of n_i x q_i) x airtime / T; G = (n_small x
+    GB_small + n_mounted x GB_mounted) x 12 + (the sum of n_i x B_i) x 30 x 12 / 10^9, GB a year;
+    the cost per GB C x 10^6 / G, dollars. Here p_c is the price a month, v_c the service, S_c the
+    seats, C the fleet's annual cost ($M), R, A and T IoT's rooms, L the phone class's beams,
+    b_i, a_i and q_i a device's uplink bits, access attempts and messages a second, B_i its bytes
+    a day and GB_c a terminal's data a month in all.
+
     Args:
         network: The year's network: seats, scale, cost and IoT's rooms.
         offered: The choice's offers in the year (prices, services and per-device loads).

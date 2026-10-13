@@ -36,6 +36,10 @@ t a reported year, c a class):
 9. The headline, the pick at the central market (each response at the middle of its range),
    and the pick's spreads over its usable draws and all draws, with the headline's rank.
 
+Steps 3 to 9 are written with their formulas, in symbols and units, in the module docstring of
+:mod:`product_case.monte_carlo` (the year's numbers in its ``_year_arrays``), and each step's
+formula is a catalog entry the artifact publishes in ``meta.formulas``.
+
 **What stops the usage.** Every candidate shares the terminals' fill, so IoT's own failures may
 take only the markets between the fill's share and the robust floor: the pick's usage rises
 while its median rises and its share holds above the floor, and stops at whichever comes
@@ -66,8 +70,20 @@ promoted first, then the product case, every time):
     uv run python -m product_case.json_output scenarios/product_case.yaml \\
         communications/models/product_case/default.json [--version-stamp STAMP]
 
-or, in code, ``run_product_case(load_product_case_config(path), view)``
-(:mod:`product_case.engine`).
+or, in code, from ``code/`` (:mod:`product_case.engine`; the engineering artifact's path is the
+scenario's, repository-relative, and its bytes are read once):
+
+    from pathlib import Path
+    from product_case.config import load_product_case_config
+    from product_case.engine import run_product_case
+    from product_case.engineering import engineering_view_from_bytes
+
+    config = load_product_case_config("scenarios/product_case.yaml")
+    data = (Path("..") / config.engineering_artifact_path).read_bytes()
+    view = engineering_view_from_bytes(
+        data, path=config.engineering_artifact_path, reported_years=config.reported_years
+    )
+    run = run_product_case(config, view)
 
 **Where each number goes:** the inputs to ``inputs`` (scenario values, constants, the values read
 from ``iridium-v7``); the network to ``network``; each choice's summary to ``choices``; the

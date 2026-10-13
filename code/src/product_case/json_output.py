@@ -10,8 +10,9 @@ values ``derived_estimate`` with one ``model_derivation`` source whose ref names
 in ``iridium-v7`` by key and whose note is the file's SHA-256, a value read in each reported year
 one cell per year keyed ``<field>.<year>``); ``network``; ``choices`` (every choice's summary);
 ``fronts``; ``pick``; ``headline`` (the pick at the central market, the four classes side by side
-and the year's totals, every numeric leaf a provenance cell from the product case's own catalog,
-:data:`~product_case.constants.FORMULA_CATALOG`, but each year's ``year``); ``spreads``; ``meta``
+and the year's totals, every numeric leaf under ``headline.years`` a provenance cell from the
+product case's own catalog, :data:`~product_case.constants.FORMULA_CATALOG`, but each year's
+``year``; the market's three responses plain); ``spreads``; ``meta``
 (the catalog's formulas, the validation results, the data dictionary by the shared walker, the
 worked ``jq`` queries, the source-status summary); and the stated assumptions, each built from the
 run where a value is the run's. No total of customers is published: people and devices never add.
