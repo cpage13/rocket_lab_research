@@ -427,6 +427,35 @@ def test_every_number_is_linked_to_its_formula(promoted: tuple[dict[str, Any], P
         assert _unlinked(changed) == [path], path
 
 
+def test_every_validation_results_related_paths_are_the_artifacts(
+    promoted: tuple[dict[str, Any], Path],
+) -> None:
+    """Objective: each validation result's related JSON paths are the artifact's own paths, so a
+    reader can follow one (the spec lens's m7: the finite invariant named ``engineering``, which
+    the artifact does not have; the engineering view is published under ``inputs.engineering``
+    and ``network``).
+
+    Sample: the synthetic case's artifact, every validation result.
+
+    Expected outcome: every related path is a data-dictionary path or the path of a block above
+    one (followed by ``.`` or ``[``); the finite invariant names ``inputs.engineering`` and
+    ``network``.
+    """
+    artifact, _ = promoted
+    paths = [entry["path"] for entry in artifact["meta"]["data_dictionary"]]
+    for result in artifact["meta"]["validation_results"]:
+        for related in result["related_json_paths"]:
+            assert any(
+                path == related or path.startswith((f"{related}.", f"{related}[")) for path in paths
+            ), (result["validation_id"], related)
+    finite = next(
+        result
+        for result in artifact["meta"]["validation_results"]
+        if result["validation_id"] == "invariant.every_number_finite"
+    )
+    assert finite["related_json_paths"][:2] == ["inputs.engineering", "network"]
+
+
 def _resolve(document: dict[str, Any], ref: str) -> Any:
     """A ref such as ``years[year=2031].classes[device_class=x].people_served`` in a document."""
     node: Any = document

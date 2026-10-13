@@ -26,13 +26,16 @@ from product_case.checks import (
     check_revenue,
     check_terminals_within_seats,
     check_whole_customers,
+    refuse_not_finite,
     warning_results,
 )
 from product_case.config import ProductCaseConfig, load_product_case_config
-from product_case.constants import ClassKind, PickBasis, ProductClass, UsableTest
+from product_case.constants import ClassKind, PickBasis, ProductClass, SpreadField, UsableTest
 from product_case.monte_carlo import (
+    BasisSpread,
     ChoiceSummary,
     ClassOutcome,
+    FieldSpread,
     Fronts,
     IotOutcome,
     Market,
@@ -213,7 +216,7 @@ def test_a_believable_headline_passes_every_check(config: ProductCaseConfig) -> 
         check_pick_holds_start_prices(config, _summary(), headline),
         check_pick_on_candidates_front(pick, Fronts((12,), (12,))),
         check_headline_usable_flag(headline),
-        check_every_number_finite(config, [("headline", headline)]),
+        check_every_number_finite(config, [("headline", headline)], ["headline"]),
     ):
         assert result.severity is ValidationSeverity.OK
 
@@ -474,8 +477,51 @@ def test_a_number_that_is_not_finite_is_refused_naming_it_and_the_settings(
         _change_totals(1, cost_per_gb_carried_usd=math.inf)(_headline())
     )
     with pytest.raises(NotFiniteError) as refused:
-        check_every_number_finite(config, [("headline", broken)])
+        check_every_number_finite(config, [("headline", broken)], ["headline"])
     message = str(refused.value)
     assert message.startswith("the run's headline.years[1].totals.cost_per_gb_carried_usd is inf")
     assert "prices.small_terminal.start_usd_month (10.0)" in message
     assert "market.gamma.low (0.5)" in message
+
+
+def test_a_class_numbers_refusal_names_that_class_settings(config: ProductCaseConfig) -> None:
+    """Objective: E8 names the settings the field scales with: a class's own number (its headline
+    entry or its spread field) names that class's price and usage (data IoT's price is
+    minimal-packet IoT's) and the market's ranges, never another class's (the spec lens's m5: a
+    mounted terminal's field named all 25 settings, the small terminal's prices first).
+
+    Sample: the believable headline with FY2031's mounted terminal demand an infinity; with
+    FY2032's data IoT revenue a NaN; a data IoT customers spread whose usable-draw 10th is an
+    infinity.
+
+    Expected outcome: three refusals: the mounted terminal's field with its prices, usage and the
+    market, no other class's; data IoT's revenue and its spread each with minimal-packet IoT's
+    prices and data IoT's usage, no terminal's.
+    """
+    mounted = _change_class(0, ProductClass.MOUNTED_TERMINAL, demand=math.inf)(_headline())
+    with pytest.raises(NotFiniteError) as refused:
+        refuse_not_finite(config, [("headline", mounted)])
+    message = str(refused.value)
+    assert message.startswith(
+        "the run's headline.years[0].classes[1].demand is inf, not a finite number: "
+        "mounted_terminal's numbers scale with prices.mounted_terminal.start_usd_month (50.0), "
+    )
+    assert "usage.mounted_terminal.gb_per_month" in message and "market.eta.high (0.5)" in message
+    assert "small_terminal" not in message and "iot" not in message
+    data = _change_class(1, ProductClass.DATA_IOT, revenue_musd=math.nan)(_headline())
+    spread = FieldSpread(
+        field=SpreadField.DATA_IOT_CUSTOMERS,
+        usable_draws=BasisSpread(math.inf, 2.0, 3.0, 0.5, None),
+        all_draws=BasisSpread(1.0, 2.0, 3.0, 0.5, None),
+        every_seat=None,
+    )
+    for name, record, path in (
+        ("headline", data, "headline.years[1].classes[3].revenue_musd is nan"),
+        ("spreads", spread, "spreads.usable_draws.p10 is inf"),
+    ):
+        with pytest.raises(NotFiniteError) as refused:
+            refuse_not_finite(config, [(name, record)])
+        message = str(refused.value)
+        assert message.startswith(f"the run's {path}, not a finite number: data_iot's numbers ")
+        assert "prices.minimal_packet_iot.start_usd_month (3.0)" in message
+        assert "usage.data_iot.bursts_per_day" in message and "terminal" not in message

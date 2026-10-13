@@ -30,8 +30,10 @@ Every check is published as a :class:`common.meta.ValidationResult` in the artif
   the year's revenue to their sum; the pick holding the start prices; the pick on the candidates'
   front; the headline's usable flag agreeing with its failing tests; every number finite (the
   run's records walked in field order, the first non-finite field named with the settings it
-  scales with, E8). One that fails raises :class:`InvariantError`, naming the year and the class or
-  the field, and the run is refused; one that holds is a ``pass`` result.
+  scales with, its class's when it is one class's number, E8; a run with no pick is walked too,
+  :func:`refuse_not_finite`, before it is returned). One that fails raises
+  :class:`InvariantError`, naming the year and the class or the field, and the run is refused;
+  one that holds is a ``pass`` result.
 """
 
 from __future__ import annotations
@@ -39,7 +41,7 @@ from __future__ import annotations
 import logging
 import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from itertools import pairwise
 from types import MappingProxyType
 from typing import Final
@@ -55,11 +57,13 @@ from product_case.constants import (
     RELATIVE_TOLERANCE,
     PickBasis,
     ProductClass,
+    SpreadField,
 )
 from product_case.monte_carlo import (
     FULL_USE,
     ChoiceSummary,
     ClassOutcome,
+    FieldSpread,
     Fronts,
     MarketOutcome,
     Pick,
@@ -697,14 +701,70 @@ def check_headline_usable_flag(headline: MarketOutcome) -> ValidationResult:
     )
 
 
-def _first_not_finite(value: object, path: str) -> tuple[str, float] | None:
-    """The first float in a record that is an infinity or a NaN, with its path, else None.
+_SPREAD_FIELD_CLASS: Final[Mapping[SpreadField, ProductClass]] = MappingProxyType(
+    {
+        SpreadField.SMALL_TERMINAL_CUSTOMERS: ProductClass.SMALL_TERMINAL,
+        SpreadField.SMALL_TERMINAL_REVENUE: ProductClass.SMALL_TERMINAL,
+        SpreadField.MOUNTED_TERMINAL_CUSTOMERS: ProductClass.MOUNTED_TERMINAL,
+        SpreadField.MOUNTED_TERMINAL_REVENUE: ProductClass.MOUNTED_TERMINAL,
+        SpreadField.MINIMAL_PACKET_IOT_CUSTOMERS: ProductClass.MINIMAL_PACKET_IOT,
+        SpreadField.MINIMAL_PACKET_IOT_REVENUE: ProductClass.MINIMAL_PACKET_IOT,
+        SpreadField.DATA_IOT_CUSTOMERS: ProductClass.DATA_IOT,
+        SpreadField.DATA_IOT_REVENUE: ProductClass.DATA_IOT,
+    }
+)
+"""The class a spread field's numbers belong to (a read-only mapping); the year's totals, the
+margin and IoT's uplink uses belong to no single class."""
+
+_PRICE_SETTING_CLASS: Final[Mapping[ProductClass, ProductClass]] = MappingProxyType(
+    {
+        ProductClass.SMALL_TERMINAL: ProductClass.SMALL_TERMINAL,
+        ProductClass.MOUNTED_TERMINAL: ProductClass.MOUNTED_TERMINAL,
+        ProductClass.MINIMAL_PACKET_IOT: ProductClass.MINIMAL_PACKET_IOT,
+        ProductClass.DATA_IOT: ProductClass.MINIMAL_PACKET_IOT,
+    }
+)
+"""The class whose price setting prices each class (a read-only mapping): data IoT pays twice
+minimal-packet IoT's price, so its price is no setting of its own."""
+
+
+@dataclass(frozen=True)
+class _NotFinite:
+    """The first float a walk finds that is not finite.
+
+    Attributes:
+        path: Its path in the run's records.
+        value: The infinity or NaN.
+        product_class: The class whose record holds it (a class's headline entry or spread
+            field), or None when it is no single class's number.
+    """
+
+    path: str
+    value: float
+    product_class: ProductClass | None
+
+
+def _owner(value: object, owner: ProductClass | None) -> ProductClass | None:
+    """The class a record belongs to: a class's headline entry's own, a spread field's, else the
+    class of the record that holds it."""
+    if isinstance(value, ClassOutcome):
+        return value.product_class
+    if isinstance(value, FieldSpread):
+        return _SPREAD_FIELD_CLASS.get(value.field)
+    return owner
+
+
+def _first_not_finite(
+    value: object, path: str, owner: ProductClass | None = None
+) -> _NotFinite | None:
+    """The first float in a record that is an infinity or a NaN, with its path and class, else None.
 
     Depth first in field order: a dataclass by its fields, a mapping by its keys, a tuple or a
-    list by index; any other value (an int, a string, an enum, a flag, None) holds no float.
+    list by index; any other value (an int, a string, an enum, a flag, None) holds no float. A
+    class's headline entry or spread field passes its class to what it holds.
     """
     if isinstance(value, float):
-        return None if math.isfinite(value) else (path, value)
+        return None if math.isfinite(value) else _NotFinite(path, value, owner)
     children: Iterable[tuple[str, object]]
     if is_dataclass(value) and not isinstance(value, type):
         children = [(f"{path}.{field.name}", getattr(value, field.name)) for field in fields(value)]
@@ -714,16 +774,18 @@ def _first_not_finite(value: object, path: str) -> tuple[str, float] | None:
         children = [(f"{path}[{index}]", child) for index, child in enumerate(value)]
     else:
         return None
+    holder = _owner(value, owner)
     for child_path, child in children:
-        found = _first_not_finite(child, child_path)
+        found = _first_not_finite(child, child_path, holder)
         if found is not None:
             return found
     return None
 
 
-def _settings_text(config: ProductCaseConfig) -> str:
-    """The settings the run's numbers scale with, each with its value: the prices, the usage, the
-    market's ranges."""
+def _settings_text(config: ProductCaseConfig, product_class: ProductClass | None) -> str:
+    """The settings a number scales with, each with its value: its class's price and usage (data
+    IoT's price is minimal-packet IoT's, twice), or every class's when the number is no single
+    class's; then the market's ranges."""
     parts: list[str] = []
 
     def flatten(prefix: str, value: object) -> None:
@@ -733,44 +795,72 @@ def _settings_text(config: ProductCaseConfig) -> str:
         else:
             parts.append(f"{prefix} ({value!r})")
 
-    flatten("prices", config.prices.model_dump())
-    flatten("usage", config.usage.model_dump())
+    prices = config.prices.model_dump()
+    usage = config.usage.model_dump()
+    if product_class is None:
+        price_keys, usage_keys = list(prices), list(usage)
+    else:
+        price_keys = [str(_PRICE_SETTING_CLASS[product_class])]
+        usage_keys = [str(product_class)]
+    for key in price_keys:
+        flatten(f"prices.{key}", prices[key])
+    for key in usage_keys:
+        flatten(f"usage.{key}", usage[key])
     for response in ("gamma", "epsilon", "eta"):
         flatten(f"market.{response}", getattr(config.market, response).model_dump())
     return ", ".join(parts)
 
 
-def check_every_number_finite(
-    config: ProductCaseConfig, records: Sequence[tuple[str, object]]
-) -> ValidationResult:
-    """Every number of the run's records is finite (E8).
+def refuse_not_finite(config: ProductCaseConfig, records: Sequence[tuple[str, object]]) -> None:
+    """Refuse a run holding a number that is not finite (E8), at any point of the run.
 
     Args:
         config: The scenario (the settings named in a refusal).
-        records: The run's records, each with the path it is published under, walked in order.
+        records: The run's records, each with the name its paths start with, walked in order.
+
+    Raises:
+        NotFiniteError: Naming the first field that is not finite, its value, and the settings it
+            scales with, each with its value: its class's when the field is one class's (a
+            headline entry or a spread field), else every class's; no setting this far out is
+            one the model can compute.
+    """
+    for name, record in records:
+        found = _first_not_finite(record, name)
+        if found is not None:
+            whose = "the run's" if found.product_class is None else f"{found.product_class}'s"
+            raise NotFiniteError(
+                f"the run's {found.path} is {found.value!r}, not a finite number: {whose} "
+                f"numbers scale with {_settings_text(config, found.product_class)}, and one of "
+                "them is past what the model can compute"
+            )
+
+
+def check_every_number_finite(
+    config: ProductCaseConfig,
+    records: Sequence[tuple[str, object]],
+    json_paths: Sequence[str],
+) -> ValidationResult:
+    """Every number of the run's records is finite (E8): :func:`refuse_not_finite`, then its
+    ``pass`` result.
+
+    Args:
+        config: The scenario (the settings named in a refusal).
+        records: The run's records, each with the name its paths start with, walked in order.
+        json_paths: The artifact paths the records are published under (the result's related
+            paths: the engineering view's are ``inputs.engineering`` and ``network``).
 
     Returns:
         The ``pass`` result.
 
     Raises:
-        NotFiniteError: Naming the first field that is not finite, its value, and the settings the
-            run's numbers scale with, each with its value; no setting this far out is one the
-            model can compute.
+        NotFiniteError: As :func:`refuse_not_finite`.
     """
-    for name, record in records:
-        found = _first_not_finite(record, name)
-        if found is not None:
-            path, value = found
-            raise NotFiniteError(
-                f"the run's {path} is {value!r}, not a finite number: the run's numbers scale "
-                f"with {_settings_text(config)}, and one of them is past what the model can "
-                "compute"
-            )
+    refuse_not_finite(config, records)
     return _invariant_pass(
         "invariant.every_number_finite",
         "Every number of the run is finite (no infinity, no NaN).",
         "every float finite",
-        [name for name, _ in records],
+        json_paths,
     )
 
 
@@ -785,6 +875,7 @@ __all__ = [
     "check_revenue",
     "check_terminals_within_seats",
     "check_whole_customers",
+    "refuse_not_finite",
     "robust_floor_text",
     "warning_results",
 ]

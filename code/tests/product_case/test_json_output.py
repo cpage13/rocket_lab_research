@@ -263,7 +263,15 @@ REFUSALS: tuple[
         "a number that is not finite",
         _set(("prices", "small_terminal"), {"start_usd_month": 5e-324, "end_usd_month": [5e-324]}),
         _keep,
-        "not a finite number",
+        "not a finite number: small_terminal's numbers scale with prices.small_terminal.",
+    ),
+    (
+        "a number that is not finite, an IoT price",
+        _set(
+            ("prices", "minimal_packet_iot"), {"start_usd_month": 5e-324, "end_usd_month": [5e-324]}
+        ),
+        _keep,
+        "the run's choices[0].central_revenue_musd[0] is inf, not a finite number",
     ),
 )
 """Each refusal: its change to the scenario, its change to the engineering artifact, what the one
@@ -292,8 +300,11 @@ def test_each_refusal_is_one_error_line_exit_1_and_no_file(
 
     Sample: the synthetic case with one change each: an IoT device count in the scenario (an
     unknown key), ``iridium-v6``, a null floor year, a reported year before the floor, a zero
-    room at a downlink share of 1, a margin floor no draw reaches, and a small-terminal price of
-    5e-324 dollars (its demand overflows while it sells every seat, E8).
+    room at a downlink share of 1, a margin floor no draw reaches, a small-terminal price of
+    5e-324 dollars (its demand overflows while it sells every seat, E8: refused naming the field
+    and the small terminal's settings), and a minimal-packet IoT price of 5e-324 dollars (its
+    devices overflow, so no candidate is usable: refused as a number that is not finite, never as
+    no usable choice, the spec lens's m5).
 
     Expected outcome: exit 1; one ERROR record naming the cause; the output file absent.
     """

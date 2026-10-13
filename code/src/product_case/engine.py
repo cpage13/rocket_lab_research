@@ -8,7 +8,10 @@ invariants, which refuse a run that breaks one, the believability checks and the
 which never refuse). It returns a frozen :class:`ProductCaseRun` carrying its state to the end:
 when no candidate is usable in any draw the state is ``no_usable_choice``, with no pick, headline,
 spreads or checks, and nothing is raised (the command refuses to publish such a run, naming the
-test most of the candidates' draws fail, :func:`most_failed_test`).
+test most of the candidates' draws fail, :func:`most_failed_test`), unless the run holds a number
+that is not finite, which is refused naming its field in that state too
+(:func:`~product_case.checks.refuse_not_finite`), since such a number can leave every candidate
+unusable.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ from product_case.checks import (
     check_revenue,
     check_terminals_within_seats,
     check_whole_customers,
+    refuse_not_finite,
     warning_results,
 )
 from product_case.config import ProductCaseConfig
@@ -110,15 +114,15 @@ def run_product_case(config: ProductCaseConfig, engineering: EngineeringView) ->
 
     Returns:
         The run: ``picked`` with its pick, headline, spreads and validation results, or
-        ``no_usable_choice`` with none of them (nothing raised).
+        ``no_usable_choice`` with none of them (nothing raised but a number that is not finite).
 
     Raises:
         product_case.offers.OfferError: If the scenario's usage cannot be offered on the view
             (a monthly total below its busy-hour part, a value past what a float holds, the view's
             years not the scenario's), naming the field and the year.
         product_case.checks.InvariantError: If the run breaks an invariant, naming the year and
-            the class or the field; ``NotFiniteError`` (one) for a number that is not finite,
-            naming it and the settings the run's numbers scale with.
+            the class or the field; ``NotFiniteError`` (one) for a number that is not finite, in
+            either state, naming it and the settings it scales with.
     """
     grid = grid_offers(config, engineering)
     markets = draw_markets(config)
@@ -126,6 +130,12 @@ def run_product_case(config: ProductCaseConfig, engineering: EngineeringView) ->
     fronts = fronts_of(choices)
     pick = pick_of(choices, fronts, config)
     if pick is None:
+        # A number past what a float holds can leave every candidate unusable (an IoT price of
+        # 5e-324 sells infinite devices): it is refused naming its field, never published as
+        # no usable choice.
+        refuse_not_finite(
+            config, (("engineering", engineering), ("choices", choices), ("fronts", fronts))
+        )
         logger.info("no candidate is usable in any of the %d draws: no pick", len(markets))
         return ProductCaseRun(
             state=RunState.NO_USABLE_CHOICE,
@@ -152,6 +162,7 @@ def run_product_case(config: ProductCaseConfig, engineering: EngineeringView) ->
                 ("headline", headline),
                 ("spreads", spreads),
             ),
+            ("inputs.engineering", "network", "choices", "fronts", "pick", "headline", "spreads"),
         ),
         check_whole_customers(headline),
         check_terminals_within_seats(headline),
