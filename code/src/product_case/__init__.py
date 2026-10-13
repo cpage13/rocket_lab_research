@@ -51,12 +51,14 @@ its usage that candidate's, warned; no price is ever lowered.
 case kept apart from the engineering model (2026-10-05: "you don't want to mix your market with
 your engineering and your production ... Keep it separate"); the demand curve on cost and
 service (2026-10-06: "This will be a curve based on cost and on what kind of service you are
-giving them"); the four classes side by side (2026-10-06 18:26: "There is a small terminal, there
-are two classes of IoT, and then there is the mounted terminal"); the usage raised until the
-network is used, the Pareto front and the Monte Carlo (2026-10-06 18:26: "If we barely use any of
-the network, then we just increase usage as is, right? Right. So we just do a Pareto. That is why
-we do the Monte Carlo and see what makes sense"); IoT uncapped (2026-10-06 16:58: "Would I cap the
-data IoT? No, I don't think so. ... I don't think there's any reason to cap the data"). The
+giving them"); the four classes (2026-10-06 18:26: "There is a small terminal, there are two
+classes of IoT, and then there is the mounted terminal"), shown side by side by the charter's
+rule; the usage raised until the network is used, the Pareto front and the Monte Carlo
+(2026-10-06 18:26: "If we barely use any of the network, then we just increase usage as is,
+right? Right. So we just do a Pareto. That is why we do the Monte Carlo and see what makes
+sense"); data IoT uncapped (2026-10-06 16:58: "Would I cap the data IoT? No, I don't think so.
+... I don't think there's any reason to cap the data"), and minimal-packet IoT with it by the
+settlement recorded with those words in the 2026-10-05 product-case design. The
 values: the prices held flat (2026-10-06 19:38: "The prices will not go down, but they will not go
 up"); IoT at $3 and $6 (2026-10-06 19:52: "Let's go with the three and six for now"); the
 terminals at $10 and $50 (2026-10-07: "Yes, let's use the $10 and $50. Let's do that"); the margin
