@@ -2,15 +2,16 @@
 
 The one module that imports numpy (ADR 010). For each device class on one set of inputs
 (:class:`~communications.saturation_curve.SaturationInputs`) it computes, at each fleet of
-the sweep, L: the most co-channel beams the shell can keep lit over the places people live,
+the sweep, L: the co-channel beams the allocation keeps lit over the places people live,
 and their capacity. A 0 dBi phone-class device cannot tell satellites apart, so its
 co-channel footprints must not overlap on the same ground; a directional terminal can, so
 its class stacks further layers from satellites its beam separates (the small terminal and
 the mounted terminal, by the saturation strategy's sky-sector rules D1 to D6). L rises with
-the fleet, then flattens as every inhabited place is served by its best satellites; the
-knee is the class's spectrum bound (ADR 005). Everything is computed with the band in
-full-time use (d = 1, ADR 008) at the reference panel; the engine applies d and the
-scenario's panel when it reads the curve.
+the fleet, then flattens as every inhabited place is served by its best satellites (for a
+directional class it can fall slightly, since rule D6's dropped beams stay spent, while its
+capacity still rises); the knee of capacity is the class's spectrum bound (ADR 005).
+Everything is computed with the band in full-time use (d = 1, ADR 008) at the reference panel;
+the engine applies d and the scenario's panel when it reads the curve.
 
 The stages, numbered as the saturation strategy's locked stage order numbers them (its § 2),
 for one class on one set of inputs; this version runs stages 2 to 11 for every class (stage
@@ -44,9 +45,14 @@ for one class on one set of inputs; this version runs stages 2 to 11 for every c
    satellite's beams left, then by every cell's area and people left; the band is committed
    before the next. Limits: B beams per satellite; one co-channel layer per cell (its area);
    the cell's people cap; one layer per satellite per cell. Small overhead footprints fit
-   the most beams into the same land, so this order maximizes capacity; a proportional
-   fill stalls near saturation. At a directional class's own people cap it is that class's
-   first layer (rule D2).
+   the most beams into the same land, so this order puts the most beams into it first: a
+   heuristic, not the exact maximum (on the saturation design's prototype, at its settings,
+   it reached 95.6 to 97.8 percent of the exact fluid linear program's optimum at 992 to
+   10,000 satellites: ADR 010, and Section 2.3 of
+   ``research/direct_communication/iridium_saturation_module.md``), and the stall floor holds
+   the phone class within 2 percent of its upper bound, min(ceiling, supply), from 20,000
+   satellites up; a proportional fill stalls near saturation. At a directional class's own
+   people cap it is that class's first layer (rule D2).
 7. **The allocation, directional classes** (the strategy's rules D1 to D6). D1: the
    terminal's sky above the mask splits into sectors of equal solid angle, ring by ring from
    the zenith, each ring in equal azimuth wedges from north. D3: a satellite serves a cell
@@ -78,13 +84,16 @@ for one class on one set of inputs; this version runs stages 2 to 11 for every c
     ignored).
 11. **The markers**, on the rows: the elasticity of capacity, d ln C / d ln N, at each
     interval's geometric midpoint; the saturation number is the first crossing under 0.10,
-    interpolated in ln N between the midpoints that straddle it and rounded half up (or the
-    last fleet when it is not reached); beside it the crossing under 0.25 and the fleet at
-    which L reaches 90 percent of maximum use (log-log between rows), each None when not
-    reached, or when the rows cannot place it: the 0.25 crossing when it lies before the
+    interpolated in ln N between the midpoints that straddle it and rounded half up (when it
+    is not reached there is none, and the last midpoint the rows measure, rounded half up, is
+    published as the fleet it is not reached by); beside it the crossing under 0.25 and the
+    fleet at which L reaches 90 percent of maximum use (log-log between rows), each None when
+    not reached, or when the rows cannot place it: the 0.25 crossing when it lies before the
     first midpoint (the geometric mean of the first two rows), the 90 percent fleet when the
     first row already reaches it (the curve's limits then say so). The markers read maximum
-    use, never a sweep-dependent ceiling.
+    use, never a sweep-dependent ceiling. Before any is read, the crossings must hold: a
+    capacity that falls between two rows, or an elasticity that is under 0.10 or 0.25 at one
+    midpoint and at or above it again at a later one, is refused (the fourth check below).
 12. **The interference trim** (the phone class's central curve; a reported band the engine's
     people never read), at every row on the first snapshots of the draw: power control gives
     every beam equal flux at its target, so its power goes as r^2 / g(eta), g = cos^n of its
@@ -98,46 +107,55 @@ for one class on one set of inputs; this version runs stages 2 to 11 for every c
     the leak (a stated limit).
 
 **The band points.** Beside the phone class's central curve, one curve per band point, each
-the central curve but for one changed input, at the bands' snapshots over the same fleets,
-with its own rows, maximum use and markers: the taper (the beam's half-power width); the
-taper with wider co-channel spacing (the ground a co-channel beam occupies over its 3 dB
-footprint, scaling the area per beam in the fill, the two bounds and maximum use alike); 10
-and 100 people per km^2 (the demand threshold); the 0.5 degree grid (the shipped cells summed
-2 x 2); and 48 beams per satellite. They carry no trim.
+the central curve but for one changed input (two for the taper with wider spacing), at the
+bands' snapshots over the same fleets, with its own rows, maximum use and markers: the taper
+(the beam's half-power width); the taper with wider co-channel spacing (that width and the
+ground a co-channel beam occupies over its 3 dB footprint, the spacing scaling the area per
+beam in the fill, the two bounds and maximum use alike); 10 and 100 people per km^2 (the
+demand threshold); the 0.5 degree grid (the shipped cells summed 2 x 2); and 48 beams per
+satellite. They carry no trim.
 
 The checks raise :class:`SaturationInvariantError`: the bounds (L at most min(ceiling,
 supply) and the ceiling at most maximum use, at every snapshot of every class and band
 point, 1e-9 relative); the stall floor (the phone class's central L at least the sweep's
 floor x min(ceiling, supply) from 20,000 satellites up, at every snapshot and in the means;
 not the band points); capacity per satellite never rising between consecutive rows of any
-class or band point by more than 2 percent of the earlier row (the snapshots' noise).
+class or band point by more than 2 percent of the earlier row (the snapshots' noise); and
+the markers' crossings (capacity never falling between consecutive rows of any class or band
+point, and the elasticity of capacity, once under 0.10 or 0.25, under it at every later
+midpoint), checked before the markers are read. A failed check stops the run before anything
+is written.
 
-The curves' snapshots run in separate processes, each task sent its own curve's demand cells
-and limits. Each curve's largest task runs first and measures a worker's peak memory; then
-as many workers run at once as keep the parent's peak plus their summed peaks under the 16 GB
-budget, at most one per CPU: every other task in one pool when the budget allows a worker per
-CPU, otherwise each curve in memory tiers down its fleets, each tier sized by its own largest
-task (one process at a time only at the top of the grid). The curve records the wall time
-and that bound (each worker reports its own peak; the bound is the parent's peak plus the
-summed peaks of the largest set of workers alive at once).
+The curves' snapshots run in separate processes, each task in a fresh worker of its own (a
+process keeps memory its tasks freed, so a worker kept for several would peak above any one of
+them), sent its own curve's demand cells and limits. Each curve's largest task runs first,
+alone, and its peak memory is the reading; then as many workers run at once as keep the
+parent's peak plus their peaks under the 16 GB budget, each worker counted at the reading times
+a margin (a fresh worker's peak varies between runs of one task), at most one per CPU: every
+other task in one pool when the budget allows a worker per CPU, otherwise each curve in memory
+tiers down its fleets, each tier sized by its own largest task (one process at a time only at
+the top of the grid). The curve records the wall time and that bound (each task reports its
+worker's peak; the bound is the parent's peak plus the largest sum of task peaks that can be
+alive at once: a pool's largest, as many as its workers).
 
 **The command** promotes the curve, from ``code/``::
 
     uv run python -m communications.saturation scenarios/iridium.yaml \\
         communications/models/iridium/saturation_curve.json --version-stamp <stamp>
 
-The full promotion of 2026-10-06 (the shipped scenario, 160 footprint bands, a shared machine
-of 16 CPUs and 32 GB, contended by other work throughout: ``time -l`` counted 74.4 million
-involuntary context switches, against 4.5 million in the 40-band run, which its wall time
-reflects) measured 2,792.5 s of wall time, about 47 minutes, and a peak-memory bound of
-12,108 MB, under the 16 GB budget (the bound is the budget's figure; ``time -l`` reported a
-largest resident set of 3.24 GB); the curve's ``provenance.run_measurement`` carries the same
+The full promotion of 2026-10-12 (the shipped scenario, 160 footprint bands, a shared machine
+of 16 CPUs and 32 GB, contended by other work: ``time -l`` counted 35.7 million involuntary
+context switches) measured 1,794.2 s of wall time, about 30 minutes, and a peak-memory bound of
+14,095 MB, under the 16 GB budget (the bound is the budget's figure; ``time -l`` reported a
+largest resident set of 3.29 GB); the curve's ``provenance.run_measurement`` carries the same
 two figures.
 
 It loads the scenario, narrows it to its Iridium dials (a scenario without an ``iridium:``
 block is refused before anything runs), refuses a destination the shared writer would refuse
-(before the computation, so a bad path costs no run), computes the curve those dials imply,
-logs its summary, checks that it is complete and writes it through the shared writer. A
+(before the computation, so a bad path costs no run), computes the curve those dials imply
+(the computation logs each curve's maximum use and saturation number, or the last measured
+fleet it is not reached by, then the run's wall time and peak-memory bound, each once),
+checks that it is complete and writes it through the shared writer. A
 relative output path anchors to the repository root, a relative scenario path to the working
 directory; the stamp defaults to today's ISO date. It follows the shared command conventions
 (:mod:`common.cli`): status on stderr, an expected failure one ``ERROR:`` line and exit status
@@ -199,9 +217,9 @@ from common.file_io import (
 )
 from communications.config import load_comms_config
 from communications.constants import (
-    APERTURE_REFERENCE_M2,
     GBPS_TO_MBPS,
     GRID_AGGREGATION_SHIPPED,
+    PANEL_RULE_LIMITS_NOTE,
     DeviceClass,
 )
 from communications.iridium import iridium_dials_of
@@ -226,6 +244,7 @@ from communications.saturation_curve import (
     SweepInputs,
     TrimAtFloor,
     TrimInputs,
+    beams_per_satellite,
     check_curve_complete,
     curve_input_hash,
     exceeds_bound,
@@ -484,15 +503,31 @@ _RU_MAXRSS_UNIT_BYTES_OTHER: Final[int] = 1024
 """Linux and the other Unix systems report ``ru_maxrss`` in kibibytes."""
 
 _MIN_WORKERS: Final[int] = 1
-"""The fewest workers a sweep runs with, even when one worker's peak alone exceeds the
-budget (the bound then exceeds it too, and the run says so)."""
+"""The fewest workers a sweep runs with, even when one task's reading, with the margin, exceeds
+the budget (the bound may then exceed it too, and the run says so)."""
+
+_TASKS_PER_WORKER: Final[int] = 1
+"""The snapshot tasks a worker runs before a fresh worker replaces it, in a pool and alone. A
+process keeps memory its tasks freed, so a worker kept for several tasks peaks above any one of
+them, past the reading its pool is sized on: one worker running three of the mounted terminal's
+tasks at 20,000 satellites peaked at 1.43 to 1.49 times the heaviest one's peak in a fresh
+worker (measured on 2026-10-12)."""
+
+_WORKER_PEAK_MARGIN: Final[float] = 1.25
+"""The factor the worker count takes each worker's peak at, over its tier's reading. A fresh
+worker's peak varies between runs of one task: the mounted terminal's snapshot at 20,000
+satellites read 1,383.9 to 1,625.7 MB in three fresh workers on this code, a ratio of 1.17, and
+1,352.1 and 1,421.8 MB in two on the code before the footprint bands' radix sort and the serving
+index's band-by-band merge, 1.20 over all five (measured on 2026-10-12). So one reading can fall
+short of another task's peak in its tier; the rest covers the parent's growth after the pools
+are sized (every curve's maximum use, 9.8 MB on the shipped inputs)."""
 
 _SWEEP_TIER_FLEET_RATIO: Final[float] = 2.0
 """A memory tier of the sweep spans one class's largest remaining requested fleet down to
-that over this ratio. A worker's peak grows about linearly with the fleet (the strategy's
-budget, SR-21), so a tier's measured largest task bounds the rest of it, and each lower tier
-measures again and runs more workers at once (one process at a time only at the top of the
-grid, where one worker's peak nears the budget)."""
+that over this ratio. A task's peak grows about linearly with the fleet (the strategy's
+budget, SR-21), so a tier's measured largest task, with the margin, bounds the rest of it, and
+each lower tier measures again and runs more workers at once (one process at a time only at the
+top of the grid, where one task's peak nears the budget)."""
 
 _TRACEBACK_QUOTES: Final[str] = "'\""
 """The quote marks a process pool fences a cause's formatted traceback with (``'''`` or three
@@ -869,20 +904,6 @@ def _beam_model(shell: ShellInputs) -> _BeamModel:
     )
 
 
-def _beams_per_satellite(shell: ShellInputs) -> float:
-    """Return B: the calibration in effective reuses (x 1000), scaled to the curve's panel.
-
-    The calibration's 0.15 Gbps per (MHz x bps/Hz) is 150 effective full-band reuses at
-    :data:`~communications.constants.APERTURE_REFERENCE_M2`, linear in the panel's area.
-    """
-    return (
-        GBPS_TO_MBPS
-        * shell.reuse_calibration_gbps_per_mhz_per_se
-        * shell.reference_aperture_m2
-        / APERTURE_REFERENCE_M2
-    )
-
-
 def _people_per_beam(spectrum_mhz: float, class_inputs: ClassInputs) -> float:
     """Return the people one beam serves at d = 1.
 
@@ -996,8 +1017,9 @@ def _search_chunks(
     fewer when the chunk's windows would hold more than :data:`_PAIR_SEARCH_CHUNK_ELEMENTS`
     elements (never fewer than :data:`_MIN_CHUNK_SATELLITES`). Every satellite of a chunk
     searches the chunk's widest window: the columns its view spans at its poleward edge plus
-    the margin, or one full turn when the view reaches :data:`_WINDOW_LATITUDE_CAP_DEG`, never
-    more.
+    the margin, or a full turn when the view reaches :data:`_WINDOW_LATITUDE_CAP_DEG`, at most
+    one turn of longitude and one column (2 x ceil(columns / 2) + 1, which repeats one column
+    on an even grid; :func:`_pairs_in_view` keeps each pair once).
 
     Args:
         satellites: The satellites.
@@ -1048,7 +1070,7 @@ def _pairs_in_view(
     Each satellite searches a window of grid cells around the cell under it: every row the
     view reaches, and the columns the view spans at the window's poleward edge, plus a
     margin; when the view reaches :data:`_WINDOW_LATITUDE_CAP_DEG`, every column. A window
-    never spans more than one turn of longitude, and every satellite of a chunk searches the
+    spans at most one turn of longitude and one column, and every satellite of a chunk searches the
     chunk's widest window; a chunk holds at most :data:`_PAIR_SEARCH_CHUNK_SATELLITES`
     satellites, and fewer when their windows would hold more than
     :data:`_PAIR_SEARCH_CHUNK_ELEMENTS` elements (at least one satellite). The demand cells
@@ -1346,7 +1368,12 @@ class _FootprintBands:
 
 def _footprint_bands(footprint_km2: npt.NDArray[np.float64], bands: int) -> _FootprintBands:
     """Return the snapshot's footprint bands: edges ``geomspace(min footprint x 0.999, max
-    footprint x 1.001, bands + 1)`` over every pair in view (none when no pair is in view)."""
+    footprint x 1.001, bands + 1)`` over every pair in view (none when no pair is in view).
+
+    The pairs are sorted stably by their band index held in the smallest unsigned type that holds
+    it (an unsigned byte up to 256 bands), on which numpy's stable sort is a radix sort, many
+    times faster than the timsort it takes on 64-bit keys at a snapshot's millions of pairs; a
+    stable sort's order is unique, so it is the same order."""
     if footprint_km2.size == 0:
         return _FootprintBands(
             order=np.empty(0, dtype=np.int64), starts=np.zeros(bands + 1, dtype=np.int64)
@@ -1357,7 +1384,7 @@ def _footprint_bands(footprint_km2: npt.NDArray[np.float64], bands: int) -> _Foo
         bands + 1,
     )
     band = np.clip(np.searchsorted(edges, footprint_km2, side="right") - 1, 0, bands - 1)
-    order = np.argsort(band, kind="stable")
+    order = np.argsort(band.astype(np.min_scalar_type(bands - 1)), kind="stable")
     return _FootprintBands(order=order, starts=np.searchsorted(band[order], np.arange(bands + 1)))
 
 
@@ -1694,10 +1721,14 @@ def _maximum_use(cells: _DemandCells, limits: _AllocationLimits, inclination_deg
 class _ServingRule(StrEnum):
     """Which satellites serve a cell: the reference set of the pairwise admission (rule D3).
 
-    The module allocates at :attr:`AT_SERVING_SHARE`. The other two exist for the mounted
-    terminal's diagnostic (the saturation strategy's reproduction protocol), which reruns the
-    module's allocation with the set at the cell's main satellite only and at any positive
-    share.
+    The module allocates at :attr:`AT_SERVING_SHARE` (:func:`_directional_rules` always sets
+    it, so no curve number depends on the other two). The other two are the mounted terminal's
+    diagnostic (the saturation strategy's reproduction protocol), which reruns the module's own
+    allocation with the set at the cell's main satellite only and at any positive share, so a
+    difference from the design's prototype can be traced to rule D3's serving set rather than a
+    defect. They stay in the module because the serving set is read inside stage 2's band loop
+    (:func:`_stacked_layers`), where no caller can swap it without copying the stage; the seam
+    test of rule D3 runs all three.
     """
 
     AT_SERVING_SHARE = "at_serving_share"
@@ -1877,7 +1908,9 @@ class _ServingIndex:
     """The serving pairs grouped by cell, for the pairwise admission's lookups.
 
     Attributes:
-        pairs: The serving pairs, ordered by cell (by pair index within a cell).
+        pairs: The serving pairs, ordered by cell; within a cell, in the order they joined (the
+            initial serving set by pair index, then each band's joins by pair index), an order
+            the admission never reads (it tests every server of a cell at once).
         counts: Each cell's number of serving pairs.
         starts: Where each cell's serving pairs start in ``pairs``.
     """
@@ -1895,6 +1928,37 @@ def _serving_index(
     counts = np.bincount(cell, minlength=n_cells)
     return _ServingIndex(
         pairs=serving_pairs[np.argsort(cell, kind="stable")],
+        counts=counts,
+        starts=np.cumsum(counts) - counts,
+    )
+
+
+def _with_joins(
+    index: _ServingIndex, joins: npt.NDArray[np.int64], pair_cell: npt.NDArray[np.int64]
+) -> _ServingIndex:
+    """Return the serving index with a band's joins merged in, never sorting the whole set again.
+
+    The joins, in pair index order, are sorted stably by cell and each is placed after its
+    cell's servers (the index's cells are sorted, so ``searchsorted`` on its right side finds
+    the place; ``insert`` keeps joins of one cell in their order). The result is
+    :func:`_serving_index` of the serving pairs with the joins appended: the same pairs in the
+    same order, without its sort of every serving pair at each band.
+
+    Args:
+        index: The serving index so far.
+        joins: The band's pairs that join their cells' serving sets, in pair index order.
+        pair_cell: Every pair's cell.
+
+    Returns:
+        The index with the joins.
+    """
+    join_cell = pair_cell[joins]
+    by_cell = np.argsort(join_cell, kind="stable")
+    joins, join_cell = joins[by_cell], join_cell[by_cell]
+    places = np.searchsorted(pair_cell[index.pairs], join_cell, side="right")
+    counts = index.counts + np.bincount(join_cell, minlength=index.counts.size)
+    return _ServingIndex(
+        pairs=np.insert(index.pairs, places, joins),
         counts=counts,
         starts=np.cumsum(counts) - counts,
     )
@@ -2036,8 +2100,7 @@ def _stacked_layers(
     )
     stacked = np.zeros(footprint_km2.size)
     serving = _initial_serving_set(pairs, footprint_km2, cells, first.beams, rules)
-    serving_pairs = np.flatnonzero(serving)
-    serving_lookup = _serving_index(serving_pairs, pairs.cell, cells.count)
+    serving_lookup = _serving_index(np.flatnonzero(serving), pairs.cell, cells.count)
     cos_beamwidth = math.cos(rules.beamwidth_rad)
     for band in range(bands.count):
         members = bands.members(band)
@@ -2093,8 +2156,7 @@ def _stacked_layers(
         ]
         if joins.size:
             serving[joins] = True
-            serving_pairs = np.concatenate([serving_pairs, joins])
-            serving_lookup = _serving_index(serving_pairs, pairs.cell, cells.count)
+            serving_lookup = _with_joins(serving_lookup, joins, pairs.cell)
     return _StackedLayers(beams=stacked, serving=serving)
 
 
@@ -2127,8 +2189,10 @@ class _Pricing:
         beams: Its beams.
         interference: Its full-sum interference over its own signal: the sum over the cell's
             other sub-pairs p it counts of p's share of the cell x the gain toward p.
-        nearest_cosine: The cosine of the angle to the nearest served sub-pair of its cell in
-            another sector (:data:`_NO_NEIGHBOUR_COSINE` when there is none).
+        nearest_cosine: The cosine of the angle to the nearest other sub-pair its full sum
+            counts: in another sector of its cell, and, for a first-layer sub-pair, not a
+            first-layer one (:data:`_NO_NEIGHBOUR_COSINE` when there is none). Only stacked
+            sub-pairs' values are read (their separation statistic).
         spectral_efficiency: Its SE, anchor x log2(1 + SINR), SINR = 1 / (1 / SINR_1 +
             interference), bps/Hz.
         stacked_capacity: Each cell's sum of beams x SE over its sub-pairs (beams x bps/Hz;
@@ -2563,8 +2627,8 @@ class _SnapshotResult:
         supply_beams: The supply.
         statistics: A directional class's kept stacked layers; None for the phone class.
         trims: The interference trim at each floor, when the task prices it; None otherwise.
-        worker_pid: The worker's process id.
-        worker_peak_mb: The worker's peak resident memory so far, MB.
+        worker_peak_mb: The peak resident memory of the process that ran the task, up to the
+            task's end, MB (in a sweep, a fresh worker's: the task's own).
     """
 
     task: _SnapshotTask
@@ -2575,7 +2639,6 @@ class _SnapshotResult:
     supply_beams: float
     statistics: _StackStatistics | None
     trims: tuple[float, ...] | None
-    worker_pid: int
     worker_peak_mb: float
 
 
@@ -2606,7 +2669,6 @@ def _run_snapshot(task: _SnapshotTask, context: _SweepContext) -> _SnapshotResul
         supply_beams=allocation.supply_beams,
         statistics=None if allocation.directional is None else allocation.directional.statistics,
         trims=trims,
-        worker_pid=os.getpid(),
         worker_peak_mb=_own_peak_mb(),
     )
 
@@ -2647,8 +2709,10 @@ class _SweepRun:
     Attributes:
         results: Every task's result, in the tasks' order.
         workers: The most workers any tier ran at once.
-        workers_peak_mb: The largest summed peak of a set of workers alive at once, MB (the
-            tiers run one after another, so the largest of their bounds).
+        workers_peak_mb: The most memory the sweep's workers held at once, MB, as a bound: for
+            a pool, the sum of its largest task peaks, as many as its workers (each task runs in
+            a fresh worker, at most that many at once); for a task run alone, its peak; the
+            largest of them (the pools and the runs alone run one after another).
     """
 
     results: tuple[_SnapshotResult, ...]
@@ -2656,26 +2720,26 @@ class _SweepRun:
     workers_peak_mb: float
 
 
+def _affordable_workers(task_peak_mb: float) -> int:
+    """Return how many workers the budget holds at a task reading: the budget less this
+    process's peak, over the reading times :data:`_WORKER_PEAK_MARGIN`."""
+    return math.floor((_MEMORY_BUDGET_MB - _own_peak_mb()) / (task_peak_mb * _WORKER_PEAK_MARGIN))
+
+
 def _worker_count(task_peak_mb: float, remaining_tasks: int) -> int:
-    """Return how many workers may run at once: the budget over one worker's peak.
+    """Return how many workers may run at once: what the budget holds at this reading
+    (:func:`_affordable_workers`).
 
     At most one per CPU and one per remaining task, and at least one.
     """
-    affordable = math.floor((_MEMORY_BUDGET_MB - _own_peak_mb()) / task_peak_mb)
     cpus = os.process_cpu_count() or _MIN_WORKERS
-    return max(_MIN_WORKERS, min(affordable, cpus, remaining_tasks))
+    return max(_MIN_WORKERS, min(_affordable_workers(task_peak_mb), cpus, remaining_tasks))
 
 
 def _memory_binds(task_peak_mb: float) -> bool:
-    """Return whether the budget, not the CPUs, limits the workers at this worker peak."""
+    """Return whether the budget, not the CPUs, limits the workers at this task reading."""
     cpus = os.process_cpu_count() or _MIN_WORKERS
-    return math.floor((_MEMORY_BUDGET_MB - _own_peak_mb()) / task_peak_mb) < cpus
-
-
-def _sector_count(limits: _AllocationLimits) -> int:
-    """Return a curve's sky sectors (none for the phone class and its band points): the sweep
-    measures the curves in this order, the lightest first, since stage 2's keys grow with it."""
-    return 0 if limits.directional is None else limits.directional.layout.count
+    return _affordable_workers(task_peak_mb) < cpus
 
 
 def _run_pool(
@@ -2685,17 +2749,24 @@ def _run_pool(
     task_peak_mb: float,
     results: dict[int, _SnapshotResult],
 ) -> tuple[int, float]:
-    """Run the tasks at ``indices`` in a fresh pool sized to ``task_peak_mb``; store their results.
+    """Run the tasks at ``indices`` in a fresh pool sized to ``task_peak_mb``, each in a fresh
+    worker of its own; store their results.
 
-    Each task is sent with its own curve's context.
+    Each task is sent with its own curve's context. A worker runs :data:`_TASKS_PER_WORKER`
+    task and a fresh one replaces it, the finished worker joined before its replacement
+    starts, so at most the pool's workers run at once, each holding one task.
 
     Returns:
-        The pool's worker count and the summed peaks of its workers, MB (they are alive at
-        once; a process's peak only grows, so each worker's last report is its peak).
+        The pool's worker count and the most its workers can hold at once, MB: the sum of its
+        largest task peaks, as many as its workers.
     """
     workers = _worker_count(task_peak_mb, len(indices))
-    worker_peaks: dict[int, float] = {}
-    with ProcessPoolExecutor(max_workers=workers, mp_context=get_context("spawn")) as pool:
+    task_peaks: list[float] = []
+    with ProcessPoolExecutor(
+        max_workers=workers,
+        mp_context=get_context("spawn"),
+        max_tasks_per_child=_TASKS_PER_WORKER,
+    ) as pool:
         for index, result in zip(
             indices,
             pool.map(
@@ -2706,11 +2777,8 @@ def _run_pool(
             strict=True,
         ):
             results[index] = result
-            worker_peaks[result.worker_pid] = max(
-                worker_peaks.get(result.worker_pid, result.worker_peak_mb),
-                result.worker_peak_mb,
-            )
-    return workers, sum(worker_peaks.values())
+            task_peaks.append(result.worker_peak_mb)
+    return workers, sum(sorted(task_peaks, reverse=True)[:workers])
 
 
 def _run_alone(
@@ -2719,11 +2787,18 @@ def _run_alone(
     contexts: Mapping[_CurveKey, _SweepContext],
     results: dict[int, _SnapshotResult],
 ) -> None:
-    """Run the tasks at ``indices`` one after another in one fresh process; store their results.
+    """Run the tasks at ``indices`` one after another, each alone in a fresh worker of its own;
+    store their results.
 
-    The process's peak only grows, so each result's worker peak bounds its own task's.
+    A worker runs :data:`_TASKS_PER_WORKER` task, so each result's worker peak is its own
+    task's (a process keeps memory its tasks freed, so one kept for several would read each
+    later task above its own peak).
     """
-    with ProcessPoolExecutor(max_workers=_MIN_WORKERS, mp_context=get_context("spawn")) as alone:
+    with ProcessPoolExecutor(
+        max_workers=_MIN_WORKERS,
+        mp_context=get_context("spawn"),
+        max_tasks_per_child=_TASKS_PER_WORKER,
+    ) as alone:
         for index in indices:
             task = tasks[index]
             results[index] = alone.submit(
@@ -2736,17 +2811,18 @@ def _run_sweep(
 ) -> _SweepRun:
     """Run every task in separate processes, the largest tasks first and measured.
 
-    A worker's peak grows about linearly with the fleet and differs by curve. Each curve's
-    largest task runs first, the lightest curve's first, one after another in one fresh
-    process, so each one's reading bounds every other task of its curve. When the budget does
-    not limit the workers at the largest reading, every other task then runs in one pool
-    under it. Otherwise each curve runs from its largest fleet down in tiers: a tier holds the
-    tasks whose requested fleet exceeds its largest over :data:`_SWEEP_TIER_FLEET_RATIO` and
-    runs under its largest's reading, each lower tier's largest task running alone first in a
-    fresh process, until the budget no longer limits the workers and the rest of the curve
-    runs in one pool. Every pool is fresh, a pool's workers are alive at once so their peaks
-    sum, and the pools run one after another. The curves keep the order their tasks first
-    appear in.
+    A task's peak grows about linearly with the fleet and differs by curve. Each curve's
+    largest task runs first, one at a time, each alone in a fresh worker (:func:`_run_alone`),
+    so each reading is its own task's peak and, with the margin (:data:`_WORKER_PEAK_MARGIN`),
+    bounds every other task of its curve, each of which also runs in a fresh worker of its own
+    (:func:`_run_pool`). When the budget does not limit the workers at the largest reading,
+    every other task then runs in one pool under it. Otherwise each curve runs from its largest
+    fleet down in tiers: a tier holds the tasks whose requested fleet exceeds its largest over
+    :data:`_SWEEP_TIER_FLEET_RATIO` and runs under its largest's reading, each lower tier's
+    largest task running alone first, until the budget no longer limits the workers and the
+    rest of the curve runs in one pool. Every pool is fresh, its largest task peaks, as many as
+    its workers, are counted as if they ran at once, and the pools and the runs alone run one
+    after another. The curves keep the order their tasks first appear in.
 
     The sweep's failures are its own error, each naming the sweep's task count: a worker that
     dies (the pool breaks with no cause; most likely the system killed it out of memory), a
@@ -2766,12 +2842,7 @@ def _run_sweep(
         by_curve.setdefault(task.curve, []).append(index)
     for order in by_curve.values():
         order.sort(key=lambda i: (-tasks[i].requested_fleet, i))
-    tops = [
-        order[0]
-        for _, order in sorted(
-            by_curve.items(), key=lambda item: _sector_count(contexts[item[0]].limits)
-        )
-    ]
+    tops = [order[0] for order in by_curve.values()]
     widest = _MIN_WORKERS
     try:
         _run_alone(tops, tasks, contexts, results)
@@ -3119,6 +3190,49 @@ def _elasticity(curve: _CurveKey, rows: Sequence[CurveRow]) -> tuple[list[float]
     return midpoints, elasticity
 
 
+def _check_crossings_hold(
+    curve: _CurveKey,
+    rows: Sequence[CurveRow],
+    midpoints: Sequence[float],
+    elasticity: Sequence[float],
+) -> None:
+    """Refuse a curve whose capacity falls between two rows, or whose elasticity, once under a
+    marker's threshold (0.10 or 0.25), is at or above it again at a later midpoint.
+
+    The markers take the first crossing under each threshold as the fleet past which one more
+    satellite adds less than that share of an average satellite's capacity, which holds only
+    while the elasticity stays under it; and a capacity that falls between two rows (a negative
+    elasticity) would read as such a crossing. A converged curve shows neither. A curve whose
+    snapshot noise straddled a threshold would place its marker early, silently, so it is
+    refused instead, naming the curve and the midpoints.
+
+    Raises:
+        SaturationInvariantError: Naming the curve and the two rows whose capacity falls, or
+            the threshold, the midpoint where the elasticity first falls under it and the later
+            midpoint where it is back at or above it, with both elasticities.
+    """
+    name = _curve_label(curve)
+    for (low, high), value in zip(pairwise(rows), elasticity, strict=True):
+        if value < 0:
+            raise SaturationInvariantError(
+                f"{name}: capacity falls from {low.capacity_gbps} Gbps at {low.fleet} satellites "
+                f"to {high.capacity_gbps} Gbps at {high.fleet} (an elasticity of {value:.4f} at "
+                "their midpoint); a curve's capacity must not fall between rows"
+            )
+    for threshold in (_SATURATION_ELASTICITY, _SUPPORTING_ELASTICITY):
+        under = next((i for i, value in enumerate(elasticity) if value < threshold), None)
+        if under is None:
+            continue
+        for later in range(under + 1, len(elasticity)):
+            if elasticity[later] >= threshold:
+                raise SaturationInvariantError(
+                    f"{name}: the elasticity falls under {threshold:g} at the midpoint "
+                    f"{midpoints[under]:.0f} ({elasticity[under]:.4f}) and is back at "
+                    f"{elasticity[later]:.4f} at the later midpoint {midpoints[later]:.0f}, so "
+                    "the first crossing would place its marker early"
+                )
+
+
 def _crosses_before_first_midpoint(elasticity: Sequence[float], threshold: float) -> bool:
     """Return whether the elasticity is already under the threshold at the first midpoint."""
     return elasticity[0] < threshold
@@ -3130,23 +3244,30 @@ def _reached_at_first_row(useful_beams: Sequence[float], target: float) -> bool:
 
 
 def _markers(curve: _CurveKey, rows: Sequence[CurveRow], maximum_use: float) -> ClassMarkers:
-    """Return a curve's markers, read on its rows against maximum use.
+    """Return a curve's markers, read on its rows; maximum use is the 90 percent fleet's
+    denominator, reported beside the others, never a term of the elasticity.
 
     The saturation number, placed first, is the first crossing of the elasticity under 0.10,
-    rounded half up, or, when not reached, the last row's fleet as
-    ``saturation_not_reached_by``; it is the one marker that refuses a curve whose rows cannot
-    place it. Beside it, the first crossing under 0.25 and the fleet at which L reaches 90
-    percent of maximum use: each is None when not reached, and None too when the rows cannot
+    rounded half up. When the elasticity is under 0.10 at no midpoint there is none, and
+    ``saturation_not_reached_by`` names the last midpoint the rows measure the elasticity at
+    (the geometric mean of the last two rows' fleets, rounded half up), never the last row's
+    fleet: the rows measure nothing past that midpoint. The saturation number is the one marker
+    that refuses a curve whose rows cannot place it. Beside it, the first crossing under 0.25
+    and the fleet at which L reaches 90 percent of maximum use: each is None when not reached,
+    and None too when the rows cannot
     place it (the 0.25 crossing before the first midpoint, the 90 percent fleet at or before
     the first row; :func:`_unplaced_marker_limits` states that in the curve's limits).
 
     Raises:
         SaturationInvariantError: If a row's capacity is not positive (the elasticity needs
-            its logarithm), or the saturation number's crossing lies before the first
-            midpoint.
+            its logarithm), the capacity falls between two rows or the elasticity, once under
+            0.10 or 0.25, is at or above it again at a later midpoint
+            (:func:`_check_crossings_hold`), or the saturation number's crossing lies before
+            the first midpoint.
     """
     fleets = [row.fleet for row in rows]
     midpoints, elasticity = _elasticity(curve, rows)
+    _check_crossings_hold(curve, rows, midpoints, elasticity)
     name = _curve_label(curve)
     saturation = _first_crossing_under(
         midpoints, elasticity, _SATURATION_ELASTICITY, f"{name}, the saturation number"
@@ -3168,7 +3289,7 @@ def _markers(curve: _CurveKey, rows: Sequence[CurveRow], maximum_use: float) -> 
     return ClassMarkers(
         maximum_use_beams=maximum_use,
         saturation_number=None if saturation is None else round_half_up(saturation),
-        saturation_not_reached_by=fleets[-1] if saturation is None else None,
+        saturation_not_reached_by=round_half_up(midpoints[-1]) if saturation is None else None,
         elasticity_under_0p25_fleet=None if supporting is None else round_half_up(supporting),
         fleet_at_90pct_of_maximum_use=None if ninety is None else round_half_up(ninety),
     )
@@ -3183,10 +3304,9 @@ def _unplaced_marker_limits(
     the class or the band point.
     """
     _, elasticity = _elasticity(curve, rows)
-    name = _curve_label(curve)
+    curve_in_prose = _curve_label(curve).replace("_", " ")
     limits = []
     if _crosses_before_first_midpoint(elasticity, _SUPPORTING_ELASTICITY):
-        curve_in_prose = name.replace("_", " ")
         limits.append(
             f"The {curve_in_prose}'s crossing under {_SUPPORTING_ELASTICITY:g} lies before the "
             "first midpoint (the geometric mean of the first two rows), where the rows cannot "
@@ -3196,9 +3316,9 @@ def _unplaced_marker_limits(
         [row.useful_beams for row in rows], _MAXIMUM_USE_MARKER_SHARE * maximum_use
     ):
         limits.append(
-            f"The {name} useful beams already reach {_MAXIMUM_USE_MARKER_SHARE:g} of maximum "
-            "use at the first row, so the fleet at which they reach it lies at or before the "
-            "first row and is not reported; a sweep starting lower would place it."
+            f"The {curve_in_prose}'s useful beams already reach {_MAXIMUM_USE_MARKER_SHARE:g} of "
+            "maximum use at the first row, so the fleet at which they reach it lies at or before "
+            "the first row and is not reported; a sweep starting lower would place it."
         )
     return tuple(limits)
 
@@ -3254,7 +3374,7 @@ def _class_limits(inputs: SaturationInputs, device_class: DeviceClass) -> _Alloc
     """
     entry = next(entry for entry in inputs.classes if entry.device_class is device_class)
     return _AllocationLimits(
-        beams_per_satellite=_beams_per_satellite(inputs.shell),
+        beams_per_satellite=beams_per_satellite(inputs.shell),
         people_per_beam=_people_per_beam(inputs.spectrum_mhz, entry),
         take_up=inputs.demand.take_up,
         beam=_beam_model(inputs.shell),
@@ -3286,11 +3406,7 @@ def _band_limits(inputs: SaturationInputs, point: BandPoint) -> _AllocationLimit
     beam = _beam_model(inputs.shell.model_copy(update={"beamwidth_factor": point.beamwidth_factor}))
     return replace(
         phone,
-        beams_per_satellite=(
-            _beams_per_satellite(inputs.shell)
-            if point.beams_per_satellite is None
-            else float(point.beams_per_satellite)
-        ),
+        beams_per_satellite=beams_per_satellite(inputs.shell, point),
         beam=replace(beam, footprint_km2=beam.footprint_km2 * point.spacing_area_factor),
     )
 
@@ -3537,16 +3653,21 @@ def _method(inputs: SaturationInputs) -> str:
         "measured against the cell's main satellite alone. A circular Walker Delta shell at "
         f"{shell.altitude_km:g} km and {shell.inclination_deg:g} degrees (P = round(sqrt(N)) "
         "planes of S = round(N / P), the realized N = P x S, phasing F = 1) with a "
-        f"{shell.elevation_mask_deg:g} degree mask; a square {shell.reference_aperture_m2:g} "
-        f"m^2 aperture at {shell.carrier_hz / _HZ_PER_GHZ:g} GHz, half-power beamwidth "
-        f"{shell.beamwidth_factor:g} wavelengths over its side, the beams per satellite "
-        "derived from the capacity calibration and the panel. Each fleet's row averages its "
+        f"{shell.elevation_mask_deg:g} degree mask; a square aperture at the "
+        f"{shell.reference_aperture_m2:g} m^2 reference panel (the engine scales the curve to the "
+        f"scenario's panel, a stated limit) at {shell.carrier_hz / _HZ_PER_GHZ:g} GHz, half-power "
+        f"beamwidth {shell.beamwidth_factor:g} wavelengths over its side, the beams per satellite "
+        "derived from the capacity calibration and that panel. Each fleet's row averages its "
         "snapshots, drawn once over a sidereal day from seed "
         f"{sweep.seed}. Maximum use in closed form (every cell served by the best satellite "
         "the shell can ever offer it; for a directional class one layer per sky sector, each "
-        "at the best its ring allows, whether its azimuth is reachable ignored); the markers "
-        "on the elasticity of capacity at the geometric midpoints of the rows, interpolated "
-        "in ln N. The phone class's central rows carry the interference trim, priced on the "
+        "at the best its ring allows, whether its azimuth is reachable ignored). The markers, "
+        "each rounded half up: the saturation number and the crossing under "
+        f"{_SUPPORTING_ELASTICITY:g} on the elasticity of capacity at the geometric midpoints of "
+        "the rows, interpolated in ln N between the two midpoints that straddle each; the fleet "
+        f"at which the useful beams reach {_MAXIMUM_USE_MARKER_SHARE:g} of maximum use, read "
+        "between two rows, log-log. The phone class's central rows carry the "
+        "interference trim, priced on the "
         f"first {sweep.snapshots_trim} snapshot(s) of each row: power control gives every beam "
         "equal flux at its target, so a beam's power goes as its slant range squared over g, "
         f"g = cos^{trim.scan_exponent:g} of its scan angle; a victim cell's aggregate "
@@ -3558,11 +3679,13 @@ def _method(inputs: SaturationInputs) -> str:
         f"proportion to their beams, a fresh draw from seed {trim.seed} at each row; the trim "
         "is 1 - the victims' mean of log2(1 + 1 / (1 + x)), at each floor gamma of "
         f"{floors} dBi. Each band point of the phone class is its central curve but for one "
-        f"changed input, at {sweep.snapshots_bands} snapshot(s) a row over the same fleets, "
-        "with its own rows and markers: the beam's half-power width (the taper), the ground a "
-        "co-channel beam occupies over its 3 dB footprint (wider co-channel spacing, scaling "
-        "the area per beam in the fill, the bounds and maximum use alike), the demand "
-        "threshold, the grid (the shipped cells summed k x k), or the beams per satellite."
+        "changed input (two for the taper with wider spacing), at "
+        f"{sweep.snapshots_bands} snapshot(s) a row over the same fleets, with its own rows and "
+        "markers: the beam's half-power width (the taper); the taper with wider co-channel "
+        "spacing, the beam's width and the ground a co-channel beam occupies over its 3 dB "
+        "footprint together (the spacing scaling the area per beam in the fill, the bounds and "
+        "maximum use alike); the demand threshold; the grid (the shipped cells summed k x k); "
+        "or the beams per satellite."
     )
 
 
@@ -3579,11 +3702,18 @@ def _checks_passed(inputs: SaturationInputs) -> tuple[str, ...]:
         "capacity per satellite never rises between consecutive rows of any class or band "
         f"point by more than {_CAPACITY_PER_SATELLITE_RISE_TOLERANCE:g} relative to the "
         "earlier row (the snapshots' noise)",
+        "the markers' crossings hold: capacity never falls between consecutive rows of any class "
+        f"or band point, and the elasticity of capacity, once under {_SATURATION_ELASTICITY:g} "
+        f"or {_SUPPORTING_ELASTICITY:g}, stays under it at every later midpoint",
     )
 
 
 def _curve_limits(inputs: SaturationInputs) -> tuple[str, ...]:
-    """Return the curve's stated limits, each stated as its rule, never a magnitude."""
+    """Return the curve's stated limits, each stated as its rule. The panel rule's limit takes
+    the measured note whole (:data:`~communications.constants.PANEL_RULE_LIMITS_NOTE`, which the
+    Iridium run's panel line states too): what the rule gives against the curve computed at the
+    panel itself, below and above the reference, with the magnitudes measured at four panels and
+    the link effect it leaves out."""
     return (
         "Fluid (fractional) beams, idealized 3 dB footprints and one circular shell.",
         "Residential (night-time) population, every place at its busy hour at once.",
@@ -3602,11 +3732,19 @@ def _curve_limits(inputs: SaturationInputs) -> tuple[str, ...]:
         f"The directional terminals' pattern floor ({inputs.sidelobe_floor_db:g} dB) is an "
         "estimate, optimistic for the small terminal.",
         f"Computed at the {inputs.shell.reference_aperture_m2:g} m^2 reference panel. The "
-        "engine scales the curve linearly by the scenario's panel over it: below it the "
-        "directional classes carry more than the rule gives, because their people caps do "
-        "not shrink with the panel; the rule is exact in beams for the phone class; and each "
-        "beam's rate is held at its reference-panel value, so the link effect of another "
-        "array size is not modeled.",
+        "engine scales the curve linearly by the scenario's panel over it (the panel rule). "
+        f"{PANEL_RULE_LIMITS_NOTE}",
+        "A null marker is one the rows do not place: the saturation number when the elasticity "
+        f"of capacity is under {_SATURATION_ELASTICITY:g} at no midpoint "
+        "(saturation_not_reached_by then names the last midpoint, the geometric mean of the last "
+        "two rows' fleets, rounded "
+        "half up: the rows measure nothing past it); the crossing under "
+        f"{_SUPPORTING_ELASTICITY:g} when the elasticity is under {_SUPPORTING_ELASTICITY:g} at "
+        "no midpoint; the fleet at which the useful beams reach "
+        f"{_MAXIMUM_USE_MARKER_SHARE:g} of maximum use when they are under it at every row. A "
+        "supporting marker the rows cannot place before their first midpoint or row is null too, "
+        "and a limit below names it; saturation_not_reached_by is null when the saturation "
+        "number is placed.",
     )
 
 
@@ -3619,12 +3757,16 @@ def compute_saturation(
     mounted terminal by rules D1 to D6 at the sweep's directional snapshots (the mounted
     terminal over its extension too) and the phone class at its central snapshots, and stage
     12, the interference trim, on the phone class's central rows; then each band point of
-    the phone class, the central curve but for its one changed input, at the bands'
-    snapshots. Every curve's tasks share one sweep. Checks the bounds and capacity per
-    satellite for every class and band point and the stall floor for the phone class's
-    central curve; reads each curve's markers against its own maximum use, states any
-    supporting marker the rows cannot place among the limits, and records the run's wall
-    time and peak-memory bound.
+    the phone class, the central curve but for its one changed input (two for the taper with
+    wider spacing), at the bands' snapshots. Every curve's tasks share one sweep. Checks the
+    bounds and capacity per satellite for every class and band point and the stall floor for
+    the phone class's central curve; reads each curve's markers on its rows (the 90 percent
+    fleet against its own maximum use) once its crossings hold (capacity never falling between
+    rows, and the elasticity never back at or above 0.10 or 0.25 after crossing under it),
+    states any supporting marker the rows cannot place among the limits, and records the run's
+    wall time and peak-memory bound. Logs, once each,
+    every curve's maximum use and its saturation number (or the last measured fleet it is not
+    reached by), then the run's workers, peak-memory bound and wall time: the command's summary.
 
     Args:
         inputs: The curve's inputs.
@@ -3637,9 +3779,10 @@ def compute_saturation(
     Raises:
         PopulationGridError: If the grid is not the one the inputs name, not global, or not
             divisible by a band point's aggregation.
-        SaturationInvariantError: If a check fails, the realized fleets do not strictly
-            increase, a saturation number lies before the rows can place it, or the trim asks
-            for more snapshots than the phone class's central curve computes.
+        SaturationInvariantError: If a check fails (the markers' crossings among them), the
+            realized fleets do not strictly increase, a saturation number lies before the rows
+            can place it, or the trim asks for more snapshots than the phone class's central
+            curve computes.
         SaturationSweepError: If a saturation worker dies or runs out of memory, or the sweep's
             process pool breaks with a stated cause.
     """
@@ -3652,7 +3795,6 @@ def compute_saturation(
             f"phone class's central curve, which computes {sweep.snapshots_phone_central}: "
             "sweep.snapshots_trim must not exceed sweep.snapshots_phone_central"
         )
-    _check_realized_fleets(sweep.fleets)
     _check_realized_fleets(sweep.fleets + sweep.mounted_terminal_extension)
     cells = _demand_cells(population, inputs.demand.density_threshold_per_km2)
     plans = _curve_plans(inputs, population, cells)
@@ -3689,13 +3831,16 @@ def compute_saturation(
             bands.append(BandCurve(point=plan.point, rows=rows, markers=markers))
         elif isinstance(plan.key, DeviceClass):
             curves.append(ClassCurve(device_class=plan.key, rows=rows, markers=markers))
+        reading = (
+            f"saturation number {markers.saturation_number:,}"
+            if markers.saturation_number is not None
+            else f"not reached by the last measured fleet, {markers.saturation_not_reached_by:,}"
+        )
         logger.info(
-            "saturation: %s, maximum use %.0f beams, saturation number %s",
+            "saturation: %s, maximum use %.0f beams, %s",
             _curve_label(plan.key),
             maximum_use,
-            markers.saturation_number
-            if markers.saturation_number is not None
-            else f"not reached by {markers.saturation_not_reached_by}",
+            reading,
         )
     wall_time_s = time.perf_counter() - started
     peak_memory_mb = _own_peak_mb() + run.workers_peak_mb
@@ -3749,7 +3894,7 @@ def _inputs_grid(checkout: SourceCheckout, inputs: SaturationInputs) -> Populati
         PopulationGridError: If the grid is not the one the inputs name.
     """
     return load_population_grid(
-        _anchored(checkout, inputs.demand.grid_path), inputs.demand.grid_sha256
+        checkout.anchored(inputs.demand.grid_path), inputs.demand.grid_sha256
     )
 
 
@@ -3853,38 +3998,6 @@ def _band_row(
 # ===========================================================================
 
 
-def _anchored(checkout: SourceCheckout, path: str | Path) -> Path:
-    """Return a path anchored at the repository root when it is relative, else as given."""
-    candidate = Path(path)
-    return candidate if candidate.is_absolute() else checkout.repo_dir / candidate
-
-
-def _log_summary(curve: SaturationCurve) -> None:
-    """Log the curve's summary: each class's saturation number, or the last row it is not
-    reached by, and its maximum use, in the class key's order; then the run's wall time and
-    peak-memory bound."""
-    for entry in curve.classes:
-        markers = entry.markers
-        reading = (
-            f"saturation number {markers.saturation_number:,}"
-            if markers.saturation_number is not None
-            else f"not reached by {markers.saturation_not_reached_by:,}"
-        )
-        logger.info(
-            "saturation curve: %s, %s, maximum use %.0f beams",
-            entry.device_class.value,
-            reading,
-            markers.maximum_use_beams,
-        )
-    measured = curve.provenance.run_measurement
-    logger.info(
-        "saturation curve: computed in %.1f s, peak memory bound %.0f MB (budget %.0f MB)",
-        measured.wall_time_s,
-        measured.peak_memory_mb,
-        _MEMORY_BUDGET_MB,
-    )
-
-
 def _own_mode(path: Path, destination: Path) -> int | None:
     """Return a path's own mode by ``lstat`` (a symbolic link is itself), or None when nothing is
     there: a missing component, or one that is not a directory, so nothing below it exists.
@@ -3967,8 +4080,8 @@ def promote_saturation_curve(
     Loads the scenario, narrows it to its Iridium dials (a scenario without an ``iridium:``
     block is refused before anything runs), builds the curve's inputs from those dials (the
     held spectrum; every other input its named constant), loads the population grid the inputs
-    name, anchored at the repository root and checked against its SHA-256, computes the curve,
-    logs its summary, checks that it is complete and writes it through
+    name, anchored at the repository root and checked against its SHA-256, computes the curve
+    (:func:`compute_saturation` logs its summary), checks that it is complete and writes it through
     :func:`common.file_io.write_files_with_rollback`: staged in full beside the destination,
     then renamed over it, so a failure leaves any existing file as it was. A destination the
     writer would refuse that can be known first (a symbolic link, an existing file that is not a
@@ -4003,13 +4116,12 @@ def promote_saturation_curve(
     checkout = locate_source_checkout(__file__)
     config = load_comms_config(Path(scenario_path))
     inputs = saturation_inputs_for(iridium_dials_of(config))
-    out = _anchored(checkout, output_path)
+    out = checkout.anchored(output_path)
     _check_destination(out)
     population = _inputs_grid(checkout, inputs)
     stamp = version_stamp if version_stamp is not None else date.today().isoformat()
     logger.info("saturation curve: computing from %s, stamp %s", scenario_path, stamp)
     curve = compute_saturation(inputs, population, version_stamp=stamp)
-    _log_summary(curve)
     check_curve_complete(curve)
     write_files_with_rollback([artifact_write(out, curve)])
     logger.info("promoted saturation curve written to %s", out)
@@ -4023,7 +4135,7 @@ def _build_parser() -> CliArgumentParser:
         description=(
             "Compute the saturation curve a scenario's Iridium dials imply (every class and "
             "band point) and write it, promoted, into the repo-root communications/models/ "
-            "workstream."
+            "folder."
         ),
     )
     parser.add_argument(

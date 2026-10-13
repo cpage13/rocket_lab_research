@@ -1,24 +1,37 @@
 """Tests for the Iridium model (formerly Model B): L-band max-outcome, the MSS lane.
 
-The end-to-end specification of the Iridium family (the saturation strategy's § 5, "Through the
-engine and the artifact"). Every Iridium run goes through the Iridium entry,
-``run_iridium_model(config, curve)``: on the committed saturation curve or, for dials it was not
-computed for and for the tripwire, on a synthetic curve stamped for the dials (``conftest.py``).
-The suite covers each class's physics (the class-to-SE mapping, the satellite's peak, people per
-beam, the downlink pool and the per-user rates); the entries' refusals and the identity check;
-the tripwire in its new form (an Iridium run and a cellular run whose target the horizon never
-reaches share the fleet-and-cost record whole); the headline, every class alone and side by side,
-against the usage check's targets (``check_usage_10_04_output.txt``, section A, the terminals'
-revenue restated at the investor's $10 and $50 of A14: the small and mounted terminals within 5
-percent, the phone class within 1 percent; the fleets, costs and books exactly); the no-upgrade
-bracket; revenue rising with the fleet; the floor rule; the books outside every margin; a share
-that never launches; the downlink share; the panel setting; every class in one run, in order; a
-fleet past a class's last row (the engine and the command); a run that would hold a number that
-is not finite, refused naming the settings; the readings and the reported fleets (the retired
-cap's reading its own constant); the IoT reading; the marginal intervals (hand-worked, and their
-verdicts on the committed curve at A14's prices); a saturation number beside the cadence, never
-a cap; the scenario YAML; the stated assumptions; the promoted export frozen on ``iridium-v6``;
-and the drift guard that regenerates the committed artifact.
+The end-to-end specification of the Iridium family, through the engine and the artifact. Every
+Iridium run goes through the Iridium entry, ``run_iridium_model(config, curve)``: on the
+committed saturation curve or, for dials it was not computed for and for the tripwire, on a
+synthetic curve stamped for the dials (``conftest.py``). The suite covers each class's physics
+(the class-to-SE mapping, the satellite's peak, people per beam, the downlink pool and the
+per-user rates); the entries' refusals and the identity check; the tripwire in its new form (an
+Iridium run and a cellular run whose target the horizon never reaches share the fleet-and-cost
+record whole, and that record's values are frozen); the headline, every class alone and side by
+side, against the usage check's table (below; the terminals' revenue restated at the investor's
+prices of 2026-10-07, $10 and $50: the small and mounted terminals within 5 percent, the phone
+class within 1 percent; the fleets, costs and books exactly); the no-upgrade bracket; revenue
+rising with the fleet; the floor rule; the books outside every margin; a share that never
+launches; the downlink share; the panel setting; every class in one run, in order; a fleet past
+a class's last row (the engine and the command); a run that would hold a number that is not
+finite, refused naming the settings; the readings and the reported fleets (the retired cap's
+reading its own constant); the IoT reading; the marginal intervals (hand-worked, and their
+verdicts on the committed curve at the investor's prices); a saturation number beside the
+cadence, never a cap; the scenario YAML; the stated assumptions; the promoted export frozen on
+``iridium-v6``; and the drift guard that regenerates the committed artifact byte for byte.
+
+Where the targets come from. The fleets, costs and books are exact arithmetic, worked beside
+them. The people and revenue targets and the marginal chords come from the usage check: an
+independent computation of the investor's usage (2026-10-04) made before the module was built,
+on a prototype of its allocation (``check_usage_10_04_output.txt`` (local), in the investor's
+records). "The usage check's table" is its per-class people and revenue at FY2031, FY2033,
+FY2036, the steady state, the coverage floor and 2,000; "its rates" are each class's pool and
+per-user rates; "its chords" are the prototype's marginal chords between rows and their
+verdicts. A class's "first stop" is its first chord below cost: the phone class's is the usage
+check's, and the two terminals' come from the prototype's own rows at the earlier prices
+(``p6_targets_output.txt`` (local)). The bracket at 15 per launch comes from the investor's
+table of the new defaults (``revenue_new_defaults_10_03_output.txt`` (local)), and the IoT
+targets from the saturation design's IoT table (``strategy_09_29.md`` (local)).
 
 The values these tests freeze from the committed curve (people, the markers) move only with a
 re-promotion of the curve, which re-freezes them on purpose (the re-promotion rule). Each class's
@@ -41,8 +54,15 @@ from pydantic import ValidationError
 
 from common.cli import EXIT_ERROR
 from common.file_io import render_artifact_json
-from communications import json_output
-from communications.config import CommsConfig, IridiumArpuDials, IridiumDials, load_comms_config
+from communications import iridium, json_output
+from communications.config import (
+    CommsConfig,
+    CoverageDials,
+    IridiumArpuDials,
+    IridiumDials,
+    SatelliteDials,
+    load_comms_config,
+)
 from communications.constants import (
     APERTURE_STACK_CAVEAT_NOTE,
     BASE_YEAR_DEFAULT,
@@ -57,7 +77,10 @@ from communications.constants import (
     ORBIT_INCLINATION_DEG_SCENARIO,
     ORBIT_SCENARIO_BASIS,
     ORBIT_SCENARIO_SOURCE_STATUS,
+    PANEL_RULE_LIMITS_NOTE,
     RETIRED_CAP_READING_FLEET,
+    SATELLITES_PER_LAUNCH_MAX,
+    SATELLITES_PER_LAUNCH_MIN,
     DeviceClass,
 )
 from communications.engine import (
@@ -70,7 +93,9 @@ from communications.iridium import (
     HORIZON_END_LABEL,
     RETIRED_CAP_LABEL,
     BindingLimit,
+    BindingLimitUnmeasuredError,
     ClassReadingRecord,
+    ClassRecord,
     ClassYearRecord,
     IotCheckRowRecord,
     IridiumRun,
@@ -78,6 +103,7 @@ from communications.iridium import (
     NotAnIridiumConfigError,
     derive_iridium_per_user_rates,
     derive_per_satellite_capacity_gbps,
+    iridium_dials_of,
     run_iridium_model,
 )
 from communications.json_output import (
@@ -90,7 +116,9 @@ from communications.json_output import (
 from communications.saturation_curve import (
     CurveBeyondLastRowError,
     SaturationCurve,
+    SaturationCurveError,
     SaturationCurveMismatchError,
+    class_curve_of,
     read_fleet,
 )
 
@@ -98,10 +126,11 @@ SMALL = DeviceClass.SMALL_TERMINAL_CLASS
 MOUNTED = DeviceClass.MOUNTED_TERMINAL_CLASS
 PHONE = DeviceClass.PHONE_CLASS
 CLASS_ORDER = [SMALL, MOUNTED, PHONE]
-"""Every block's class order (E11): small terminal, mounted terminal, phone class."""
+"""Every block's class order (the charter's Presentation rule): small terminal, mounted terminal,
+phone class."""
 
 # ---------------------------------------------------------------------------
-# Each class's physics (the usage check's section K; the strategy's § 3), class order.
+# Each class's physics (the usage check's rates), class order.
 # ---------------------------------------------------------------------------
 HELD_SPECTRUM_MHZ = 8.0
 REFERENCE_PANEL_M2 = 25.0
@@ -115,6 +144,10 @@ BEAM_POOL_MBPS = (10.72, 13.4, 3.484)  # 8 x SE x 0.67.
 PEAK_RATE_MBPS = (2.0, 5.0, 0.75)  # each class's rate while active.
 OFFPEAK_RATE_MBPS = (10.0, 13.4, 3.484)  # min(pool, rate x peak / off-peak).
 PEOPLE_PER_BEAM_AT_FULL_DOWNLINK = (320.0, 40.0, 832.0 / 3.0)  # 8 x SE / the busy-hour load.
+CLASS_USAGE_SETTLED = ((2.0, 0.025, 0.005), (5.0, 0.10, 0.02), (0.75, 0.025, 0.005))
+"""The investor's usage (2026-10-04), class order: each class's rate while active (Mbps), its
+busy-hour share and its off-peak share, as literals (the off-peak shares of the mounted terminal
+and the phone class reach no rate, since the pool binds, so only these literals pin them)."""
 
 # ---------------------------------------------------------------------------
 # The shipped scenario's fleet and cost (16 per launch, the all-in share, the flat $13.0M
@@ -135,21 +168,21 @@ STEADY_STATE_FLEET = 7_200  # 90 x 16 x 5.
 ANNUAL_COST_MUSD = {2031: 191.4, 2033: 493.0, 2036: 1_554.4}
 
 # ---------------------------------------------------------------------------
-# The prices (A14, the investor, 2026-10-07: "Yes, let's use the $10 and $50"): the small
-# terminal $10 and the mounted terminal $50 a month, held flat (the build's were $15 and $100);
-# the phone class $15, its floor. Section A priced the terminals at the build's prices, so their
-# revenue targets below are section A's restated: its revenue over the build's price is its
-# people x 12, times the new price.
+# The prices (the investor, 2026-10-07: "Yes, let's use the $10 and $50"): the small terminal
+# $10 and the mounted terminal $50 a month, held flat (the earlier prices were $15 and $100);
+# the phone class $15, its floor. The usage check priced the terminals at the earlier prices, so
+# their revenue targets below are its table's restated: its revenue over the earlier price is
+# its people x 12, times the new price.
 # ---------------------------------------------------------------------------
 CLASS_PRICES = {SMALL: 10.0, MOUNTED: 50.0, PHONE: 15.0}
-SMALL_RESTATED = 10.0 / 15.0  # section A's small terminal revenue at $15, restated at $10.
-MOUNTED_RESTATED = 50.0 / 100.0  # section A's mounted terminal revenue at $100, restated at $50.
+SMALL_RESTATED = 10.0 / 15.0  # the usage check's small terminal revenue at $15, restated at $10.
+MOUNTED_RESTATED = 50.0 / 100.0  # its mounted terminal revenue at $100, restated at $50.
 
 # ---------------------------------------------------------------------------
-# The headline: each class alone, side by side (section A), each cell (people in millions,
-# revenue $M a year), class order; each own margin is checked as its revenue against the
-# fleet's cost. Tolerances: the directional classes' people and revenue within 5 percent, the
-# phone class's within 1 percent.
+# The headline: each class alone, side by side (the usage check's table), each cell (people
+# in millions, revenue $M a year), class order; each own margin is checked as its revenue
+# against the fleet's cost. Tolerances: the directional classes' people and revenue within 5
+# percent, the phone class's within 1 percent.
 # ---------------------------------------------------------------------------
 DIRECTIONAL_TOLERANCE = 0.05
 PHONE_TOLERANCE = 0.01
@@ -201,7 +234,7 @@ FROZEN_PEOPLE = {
 }
 FROZEN_STEADY_STATE_PEOPLE = (33_755_488, 5_197_846, 28_622_500)
 FROZEN_SATURATION_NUMBERS = (19_995, None, 20_652)
-FROZEN_MOUNTED_NOT_REACHED_BY = 64_009
+FROZEN_MOUNTED_NOT_REACHED_BY = 55_407
 FROZEN_BAND_SATURATION_NUMBERS = {
     "taper": 13_810,
     "taper_and_spacing": 10_223,
@@ -210,10 +243,10 @@ FROZEN_BAND_SATURATION_NUMBERS = {
     "grid_0p5_deg": 21_613,
     "beams_48": None,
 }
-SMALL_PEOPLE_AT_2000_DEFAULT_PANEL = 13_870_568  # H5: an absolute people target at 15.4 m^2.
+SMALL_PEOPLE_AT_2000_DEFAULT_PANEL = 13_870_568  # an absolute people target at 15.4 m^2.
 
 # ---------------------------------------------------------------------------
-# The no-upgrade bracket (15 per launch; the checked table's second table).
+# The no-upgrade bracket (15 per launch; the investor's table of the new defaults, its second).
 # ---------------------------------------------------------------------------
 BRACKET_FLEETS = {2031: 495, 2033: 1_275, 2036: 4_020}
 BRACKET_COSTS_MUSD = {2031: 184.8, 2033: 476.0, 2036: 1_500.8}
@@ -221,7 +254,23 @@ BRACKET_STEADY_STATE = (6_750, 2_520.0)
 BRACKET_COST_PER_SATELLITE_YEAR_MUSD = (1.0 + 13.0 / 15) / 5  # 0.3733...
 
 # ---------------------------------------------------------------------------
-# The two IoT lines and the IoT reading (the strategy's Phase 4b table; within 1 percent).
+# The tripwire's frozen record: the cellular defaults with the subscriber target at 150,000,000
+# (a 2,000-satellite fleet target the 0.18 share never reaches), flying every launch the cadence
+# allows at 12 a launch on the default launch-cost curve, whose price moves with the whole-fleet
+# cadence: the absolute pin on the shared loop's cadence-indexed launch price (the Iridium
+# scenario flies a flat $13.0M launch, which would hide it). The values the review of 2026-10-12
+# measured on the code, frozen here as new pins; before its rewrite the tripwire froze one value
+# only, the cellular default's cash cost a person ($7.951337204338448, on the 10,000,000 target),
+# which ``test_subscribers.py`` pins again.
+# ---------------------------------------------------------------------------
+TRIPWIRE_LIVING_FLEET = (0, 0, 12, 24, 48, 84, 132, 192, 288, 420, 576)
+TRIPWIRE_TOTAL_COST_MUSD = 1594.5941525706626  # cumulative build and launch cash through FY2036.
+TRIPWIRE_FY2036_REPLACEMENT_COST_MUSD = 79.51337204338448
+"""The FY2036 cash replacement, $M: the FY2031 cohort's 36 satellites at $1.05M plus its 3
+launches at the FY2036 whole-fleet cadence's price (90 launches, $13.904M), frozen exactly."""
+
+# ---------------------------------------------------------------------------
+# The two IoT lines and the IoT reading (the saturation design's IoT table; within 1 percent).
 # ---------------------------------------------------------------------------
 IOT_BOOK_MUSD = 2_480.175_36  # 51,670,320 x $4 x 12 = 25,835,160 x $8 x 12, $M a year.
 IOT_TOLERANCE = 0.01
@@ -235,12 +284,12 @@ IOT_TARGETS = (
 )
 
 # ---------------------------------------------------------------------------
-# The marginal intervals' verdicts at full price at A14's prices, each derived from the curve's
-# people on consecutive rows x the price x 12 against $0.3625M a satellite-year (section E's,
-# 8,010, 11,990 and 8,010, were at the build's $15 and $100; the phone's holds), and the first
-# chord below cost at the prototypes' endpoints, the prototypes' own at the new price (the
-# prototype's own chord over 5,402 to 8,010 on its rows, by section E's rule (section E prints
-# only the first chord below cost), at the build's price x the new price over it).
+# The marginal intervals' verdicts at full price at the investor's prices of 2026-10-07, each
+# derived from the curve's people on consecutive rows x the price x 12 against $0.3625M a
+# satellite-year (the usage check's chords, last paying through 8,010, 11,990 and 8,010, were at
+# the earlier $15 and $100; the phone's holds), and each class's first stop at the prototype's
+# endpoints at the new price (a terminal's: the prototype's own chord over 5,402 to 8,010 on its
+# rows, at the earlier price, times the new price over it).
 # ---------------------------------------------------------------------------
 SMALL_MODULE_LAST_PAYING_ROW = 6_006  # the module's finer grid splits 5,402 to 8,010.
 SMALL_PROTOTYPE_LAST_PAYING_ROW = 5_402
@@ -252,6 +301,46 @@ FIRST_STOP_CHORDS = (
     (PHONE, 8_010, 10_000, 0.2902),
 )
 
+V6_REMOVED_KEYS = frozenset(
+    {
+        "annual_revenue_musd",
+        "arpu_margin_vs_steady_state_cost_pct",
+        "arpu_revenue_total_musd",
+        "binding_regime",
+        "build_completes_in_horizon",
+        "built_fleet_annual_cost_musd",
+        "cost_per_subscriber_annualized_usd",
+        "count",
+        "cumulative_launches_to_completion",
+        "effective_satellites_per_launch",
+        "final_year_cash_cost_per_subscriber_usd",
+        "fleet_aggregate_capacity_gbps",
+        "fleet_target",
+        "full_coverage_reached_year",
+        "government",
+        "iot",
+        "iot_devices",
+        "mix_pct",
+        "people_capacity_living_fleet_final_year",
+        "people_capacity_target_fleet",
+        "premium",
+        "revenue_arpu_buckets",
+        "standard",
+        "stated_assumptions",
+        "steady_state_annual_cost_musd",
+        "subscribers_per_satellite",
+        "subscribers_served",
+        "total_build_and_hold_cost_musd",
+        "total_connections",
+    }
+)
+"""Every key name the ``iridium-v5`` artifact carried that ``iridium-v6`` carries nowhere, at any
+depth (the committed v5 artifact against v6, 29 names): the target, regime, completion and
+built-fleet fields, the per-person cost fields, the density, the fleet aggregate, the served
+base, the living fleet's people capacity, the IoT passthrough, the renamed cost and per-launch
+fields, and the four-bucket block with its inner keys. (A later schema that brings one back
+under a new meaning names it here.)"""
+
 SyntheticCurve = Callable[[IridiumDials], SaturationCurve]
 """The ``synthetic_saturation_curve`` fixture: Iridium dials in, a curve stamped for them out."""
 
@@ -259,27 +348,45 @@ ShortCurve = Callable[[IridiumDials, int], SaturationCurve]
 """The ``short_saturation_curve`` fixture: dials and a last row in, the curve cut at it."""
 
 
+def _merged(base: dict[str, object], changes: dict[str, object]) -> dict[str, object]:
+    """Return ``base`` with ``changes`` applied key by key: a nested block in ``changes`` replaces
+    only the keys it names, at any depth, and keeps the rest of ``base``'s block."""
+    merged = dict(base)
+    for key, value in changes.items():
+        current = merged.get(key)
+        if isinstance(value, dict) and isinstance(current, dict):
+            merged[key] = _merged(current, value)
+        else:
+            merged[key] = value
+    return merged
+
+
 def _iridium_scenario_with(scenario: Path, block: str, **fields: object) -> CommsConfig:
-    """Load an Iridium scenario with one block's fields replaced (re-validated).
+    """Load an Iridium scenario with some of one block's fields replaced (re-validated).
 
     Args:
         scenario: The scenario YAML to start from (the promoted ``iridium.yaml``).
         block: The top-level config block to edit (e.g. ``"satellite"``).
-        **fields: The fields to set inside that block.
+        **fields: The fields to set inside that block (a nested block merged key by key).
 
     Returns:
         The validated variant config.
     """
     data = load_comms_config(scenario).model_dump()
-    data[block] = {**(data.get(block) or {}), **fields}
-    return CommsConfig.model_validate(data)
+    return CommsConfig.model_validate(_merged(data, {block: fields}))
 
 
 def _with_iridium(config: CommsConfig, **fields: object) -> CommsConfig:
-    """Return a config with some of its Iridium dials replaced (re-validated)."""
-    data = config.model_dump()
-    data["iridium"] = {**data["iridium"], **fields}
-    return CommsConfig.model_validate(data)
+    """Return a config with some of its Iridium dials replaced (re-validated), a nested block
+    (``saturation``, ``arpu``) merged key by key, so its other settings keep the config's."""
+    return CommsConfig.model_validate(_merged(config.model_dump(), {"iridium": fields}))
+
+
+def _line_with(lines: tuple[str, ...], opening: str) -> str:
+    """The one stated assumption that opens with the given words."""
+    found = [line for line in lines if line.startswith(opening)]
+    assert len(found) == 1, (opening, found)
+    return found[0]
 
 
 def _artifact_for(run: IridiumRun) -> IridiumModelArtifact:
@@ -376,8 +483,8 @@ def test_people_per_useful_beam_at_each_class_usage(
 def test_per_user_rates_worked() -> None:
     """Objective: each class's downlink pool (W x SE x d) and per-user rates at its own usage.
 
-    Expected outcome (section K, d = 0.67): pools 10.72, 13.4 and 3.484 Mbps; peak rates 2.0,
-    5.0 and 0.75; off-peak 10.0 (the ratio binds), 13.4 and 3.484 (the pool binds).
+    Expected outcome (the usage check's rates, d = 0.67): pools 10.72, 13.4 and 3.484 Mbps; peak
+    rates 2.0, 5.0 and 0.75; off-peak 10.0 (the ratio binds), 13.4 and 3.484 (the pool binds).
     """
     for device_class, pool, peak, offpeak in zip(
         CLASS_ORDER, BEAM_POOL_MBPS, PEAK_RATE_MBPS, OFFPEAK_RATE_MBPS, strict=True
@@ -474,6 +581,40 @@ def test_the_iridium_entry_refuses_a_cellular_config_with_the_familys_message(
     assert isinstance(refused.value, ValueError)
 
 
+def test_every_iridium_path_refuses_a_setting_a_model_copy_slipped_past_the_validators(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
+    """Objective: pydantic's ``model_copy`` does not validate, so the narrowing every Iridium
+    path calls (``iridium_dials_of``) re-validates the config whole and a copied config cannot
+    carry a setting the validators refuse into a run.
+
+    Sample: the shipped scenario; a copy whose coverage floor is 500 (the Iridium path pins it
+    at 340); a copy whose phone class price is -1.0 (built without validation).
+
+    Expected outcome: the shipped config narrows to its own dials; each slipped copy raises a
+    ValidationError naming the field, from the narrowing and from the Iridium entry alike.
+    """
+    config = load_comms_config(iridium_yaml)
+    assert config.iridium is not None
+    assert iridium_dials_of(config) == config.iridium
+    floor = config.model_copy(update={"coverage": CoverageDials(satellites_for_full_coverage=500)})
+    assert floor.coverage.satellites_for_full_coverage == 500
+    negative = IridiumArpuDials.model_construct(
+        **{**config.iridium.arpu.model_dump(), "phone_class_price_usd_month": -1.0}
+    )
+    price = config.model_copy(
+        update={"iridium": config.iridium.model_copy(update={"arpu": negative})}
+    )
+    for slipped, field in (
+        (floor, "coverage.satellites_for_full_coverage"),
+        (price, "phone_class_price_usd_month"),
+    ):
+        with pytest.raises(ValidationError, match=field):
+            iridium_dials_of(slipped)
+        with pytest.raises(ValidationError, match=field):
+            run_iridium_model(slipped, committed_saturation_curve)
+
+
 def test_the_iridium_entry_runs_only_on_a_curve_computed_for_its_inputs(
     committed_saturation_curve: SaturationCurve, synthetic_saturation_curve: SyntheticCurve
 ) -> None:
@@ -513,10 +654,12 @@ def test_iridium_class_physics_frozen_at_the_default(
     from the curve, and the limit that binds at the horizon's end.
 
     Expected outcome: in class order, prices $10, $50 and $15; each class's usage its named
-    constants; SE 2.0, 2.5 and 0.65; the satellite's peak 1.4784, 1.848 and 0.48048 Gbps; pools
+    constants and the investor's literals (2 Mbps, 2.5 and 0.5 percent; 5 Mbps, 10 and 2
+    percent; 0.75 Mbps, 2.5 and 0.5 percent); SE 2.0, 2.5 and 0.65; the satellite's peak
+    1.4784, 1.848 and 0.48048 Gbps; pools
     10.72, 13.4 and 3.484 Mbps; peak rates 2.0, 5.0 and 0.75; off-peak 10.0, 13.4 and 3.484;
     the maximum use the curve's times 0.616 and every marker the curve's own (the saturation
-    numbers 19,995, not reached by 64,009, and 20,652); every class bound by the launch cadence
+    numbers 19,995, not reached by 55,407, and 20,652); every class bound by the launch cadence
     at the horizon's end (4,288 satellites, below every saturation number).
     """
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
@@ -528,11 +671,17 @@ def test_iridium_class_physics_frozen_at_the_default(
         usage = CLASS_USAGE[block.device_class]
         markers = curves[block.device_class].markers
         assert block.price_usd_per_month == prices[index]
-        assert (block.active_user_rate_mbps, block.concurrency_peak, block.concurrency_offpeak) == (
+        block_usage = (
+            block.active_user_rate_mbps,
+            block.concurrency_peak,
+            block.concurrency_offpeak,
+        )
+        assert block_usage == (
             usage.active_rate_mbps,
             usage.concurrency_peak,
             usage.concurrency_offpeak,
         )
+        assert block_usage == CLASS_USAGE_SETTLED[index]
         assert block.spectral_efficiency_bps_per_hz == CLASS_SE[index]
         assert block.per_satellite_capacity_gbps == pytest.approx(PEAK_GBPS_AT_DEFAULT[index])
         assert block.beam_pool_mbps == pytest.approx(BEAM_POOL_MBPS[index])
@@ -551,7 +700,7 @@ def test_iridium_class_physics_frozen_at_the_default(
 
 
 # ---------------------------------------------------------------------------
-# The tripwire in its new form (G33).
+# The tripwire in its new form.
 # ---------------------------------------------------------------------------
 
 
@@ -574,8 +723,11 @@ def test_iridium_and_cellular_runs_share_the_fleet_and_cost_records(
 
     Expected outcome: first the premise, every year's cellular living fleet below its target;
     then the two shared records equal whole (every year with its cohort cost lines, and every
-    cost total), compared as records, so a future shared field joins with no edit here. The
-    families' own records are not compared.
+    cost total), compared as records, so a future shared field joins with no edit here; and the
+    shared record's own values frozen, so a change that moves both families alike (a launch
+    priced at another year's cadence, say) fails here: the living fleets 0, 0, 12, 24, 48, 84,
+    132, 192, 288, 420 and 576, the total cost $1,594.59M and the FY2036 cash replacement
+    $79.51337204338448M exactly. The families' own records are not compared.
     """
     cellular_config = CommsConfig.model_validate(
         {"subscribers": {"subscribers_at_full_coverage": 150_000_000}}
@@ -588,6 +740,10 @@ def test_iridium_and_cellular_runs_share_the_fleet_and_cost_records(
     dials = IridiumDials()
     iridium = run_iridium_model(CommsConfig(iridium=dials), synthetic_saturation_curve(dials))
     assert iridium.fleet == cellular.fleet
+    shared = cellular.fleet
+    assert [year.living_fleet for year in shared.years] == list(TRIPWIRE_LIVING_FLEET)
+    assert shared.total_cost_through_final_year_musd == pytest.approx(TRIPWIRE_TOTAL_COST_MUSD)
+    assert shared.final_year_replacement_cost_musd == TRIPWIRE_FY2036_REPLACEMENT_COST_MUSD
 
 
 # ---------------------------------------------------------------------------
@@ -600,7 +756,7 @@ def test_the_headline_every_class_alone_side_by_side(
 ) -> None:
     """Objective: the headline (the investor's usage, d = 0.67, the 15.4 m^2 panel, 16 per launch,
     the all-in share): each class alone, side by side, at FY2031, FY2033, FY2036 and the steady
-    state beyond the horizon, against the usage check's section A.
+    state beyond the horizon, against the usage check's table.
 
     Expected outcome: the fleets and fleet costs exactly (528, 1,360, 4,288 and 7,200; $191.4M,
     $493.0M, $1,554.4M and $2,610.0M); each class's people and revenue within its tolerance (5
@@ -639,14 +795,23 @@ def test_the_headline_every_class_alone_side_by_side(
 def test_the_no_upgrade_bracket_at_fifteen_per_launch(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
-    """Objective: the bracket without the Neutron block upgrade, 15 satellites per launch.
+    """Objective: the bracket without the Neutron block upgrade, 15 satellites per launch, and
+    its stated assumptions say so.
 
-    Expected outcome (the checked table's second table, exact): 495, 1,275 and 4,020 satellites
-    at FY2031, FY2033 and FY2036 and 6,750 at the steady state; $184.8M, $476.0M, $1,500.8M and
-    $2,520.0M a year; $0.3733M a satellite-year.
+    Expected outcome (the investor's table of the new defaults, its second table; exact): 495,
+    1,275 and 4,020 satellites at FY2031, FY2033 and FY2036 and 6,750 at the steady state;
+    $184.8M, $476.0M, $1,500.8M and $2,520.0M a year; $0.3733M a satellite-year; the stated
+    per-launch line says this run flies 15, beside the validated 16 with the block upgrade and
+    15 without it.
     """
     config = _iridium_scenario_with(iridium_yaml, "satellite", satellites_per_launch=15)
     run = run_iridium_model(config, committed_saturation_curve)
+    per_launch = _line_with(
+        run.iridium.assumptions, "Satellites per launch is a direct scenario setting"
+    )
+    assert "this run flies 15." in per_launch
+    assert "The validated counts are 16 with the Neutron block upgrade" in per_launch
+    assert "and 15 without the upgrade" in per_launch
     for year, fleet in BRACKET_FLEETS.items():
         living, annual_cost, _ = _year(run, year)
         assert living == fleet
@@ -940,7 +1105,14 @@ def test_halving_the_downlink_share_halves_people_capacity_and_the_pool_only(
         assert half_block.beam_pool_mbps == pytest.approx(full_block.beam_pool_mbps / 2)
         assert half_block.per_satellite_capacity_gbps == full_block.per_satellite_capacity_gbps
         assert half_block.maximum_use_beams == full_block.maximum_use_beams
-        assert half_block.saturation_number == full_block.saturation_number
+        markers = (
+            "saturation_number",
+            "saturation_not_reached_by",
+            "elasticity_under_0p25_fleet",
+            "fleet_at_90pct_of_maximum_use",
+        )
+        for marker in markers:
+            assert getattr(half_block, marker) == getattr(full_block, marker), marker
     assert half.iridium.fixed_books == full.iridium.fixed_books
 
 
@@ -955,7 +1127,7 @@ def test_the_panel_setting_scales_people_beams_capacity_and_maximum_use_linearly
 
     Expected outcome: at 15.4 m^2 every class's useful beams, maximum use and satellite peak
     are 0.616 times its 25 m^2 values and its people too (within rounding), the small
-    terminal's people 13,870,568 (an absolute target, H5); satellites per launch, the fleet,
+    terminal's people 13,870,568 (an absolute target); satellites per launch, the fleet,
     the saturation numbers and U unchanged; the stack caveat in the assumptions above 15.4 m^2
     (at 16 m^2) and not at it.
     """
@@ -999,7 +1171,8 @@ def test_every_class_in_one_run_in_class_order(
     """Objective: one run reports every class side by side, never phone-first.
 
     Expected outcome: the class blocks, every year's class lines and every reading's class
-    lines run small terminal, mounted terminal, phone class, and so do the artifact's.
+    lines run small terminal, mounted terminal, phone class, and so do the artifact's class
+    blocks, its years' lines and its readings' lines.
     """
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
     assert [block.device_class for block in run.iridium.classes] == CLASS_ORDER
@@ -1012,10 +1185,12 @@ def test_every_class_in_one_run_in_class_order(
     assert [block["device_class"] for block in payload["classes"]] == order
     for year in payload["years"]:
         assert [line["device_class"] for line in year["classes"]] == order
+    for reading in payload["saturation"]["readings"]:
+        assert [line["device_class"] for line in reading["classes"]] == order
 
 
 # ---------------------------------------------------------------------------
-# A fleet past a class's last row (A10).
+# A fleet past a class's last row.
 # ---------------------------------------------------------------------------
 
 
@@ -1028,7 +1203,7 @@ def test_a_fleet_past_a_class_last_row_fails_naming_the_year_the_class_and_the_l
 ) -> None:
     """Objective: a curve is never extrapolated or clamped: the first year whose living fleet
     lies past a class's last row fails with the typed error naming that year's fleet, the class
-    and the last row, through the engine and through the command (A10).
+    and the last row, through the engine and through the command.
 
     Sample: the shipped scenario's dials on the synthetic curve cut short at 3,025 satellites
     (the realized fleet of the 3,000 request); FY2034 holds 2,096 and FY2035 3,072. For the
@@ -1055,6 +1230,41 @@ def test_a_fleet_past_a_class_last_row_fails_naming_the_year_the_class_and_the_l
     assert len(errors) == 1
     for named in ("FY2035", "small_terminal_class", "3025", "3072"):
         assert named in errors[0]
+
+
+def test_a_reading_past_a_class_last_row_fails_naming_the_reading_and_its_settings(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
+    """Objective: a reported fleet past a class's last row is refused (a curve is never
+    extrapolated), and the refusal names the reading, its fleet and the settings that set it, as
+    a year's refusal names its year: every modeled year can read while the
+    steady state beyond the horizon lies past the curve.
+
+    Sample: the shipped scenario with a 20-year life (its bound) and the cadence's year-10 anchor
+    at 126 launches, both in bounds: FY2036 flies 126 comms launches and its living fleet reads,
+    while the steady state, 126 x 16 x 20 = 40,320 satellites, lies past the small terminal's
+    last committed row, 40,000.
+
+    Expected outcome: the Iridium entry raises CurveBeyondLastRowError naming the reading's label
+    (the steady state beyond the 10-year horizon), its fleet, FY2036's 126 comms launches, the 16
+    satellites per launch and the 20-year life with the settings behind each, and then the
+    reading's own message (the small terminal and its last row).
+    """
+    data = load_comms_config(iridium_yaml).model_dump()
+    data["satellite"]["satellite_lifetime_years"] = 20
+    data["cadence"]["launches_at_year_10"] = 126
+    config = CommsConfig.model_validate(data)
+    with pytest.raises(CurveBeyondLastRowError) as refused:
+        run_iridium_model(config, committed_saturation_curve)
+    message = str(refused.value)
+    assert message.startswith(
+        f"the steady state, beyond the {HORIZON_YEARS_DEFAULT}-year horizon (40320 satellites, "
+        "FY2036's 126 comms launches (set by cadence.* and comms_cadence.share_of_fleet) x 16 "
+        "satellites per launch (satellite.satellites_per_launch) x the 20-year life "
+        "(satellite.satellite_lifetime_years)): "
+    ), message
+    for named in ("small_terminal_class", "last row is at 40000", "at 40320 satellites"):
+        assert named in message
 
 
 @pytest.mark.parametrize(
@@ -1136,12 +1346,13 @@ def test_a_run_that_would_hold_a_number_that_is_not_finite_is_refused_naming_the
 def test_the_readings_at_the_reported_fleets(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
-    """Objective: the four reported fleets (E7) and their costs, every class at each.
+    """Objective: the four reported fleets and their costs, every class at each.
 
     Expected outcome: the readings run the coverage floor (340, $123.25M), the retired cap
     (2,000, $725.0M), the horizon-end reach (4,288 at the final year's $1,554.4M) and the steady
     state beyond the 10-year horizon (7,200, $2,610.0M); at 340 and 2,000 every class within the
-    headline's tolerances of section A; the 4,288 reading equals the FY2036 year; at the 0.18
+    headline's tolerances of the usage check's table; the 4,288 reading equals the FY2036 year;
+    at the 0.18
     share the horizon-end and steady-state fleets are 768 and 1,280.
     """
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
@@ -1197,9 +1408,10 @@ def test_the_retired_cap_reading_is_its_own_constant_at_the_historical_cap(
 def test_the_iot_reading_at_the_reported_fleets(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
-    """Objective: the IoT reading (E8), each line on its own, at every reported fleet.
+    """Objective: the IoT reading, each line on its own, at every reported fleet.
 
-    Expected outcome: minimal-packet IoT within 1 percent of the strategy's table at 340, 2,000,
+    Expected outcome: minimal-packet IoT within 1 percent of the saturation design's IoT table
+    at 340, 2,000,
     4,288 and 7,200 (devices per useful beam, the uplink bits share with MAC, the access attempts
     a second a beam, the two tone shares); its share without MAC 0.2 times with it; data IoT's
     rows the module's (25,835,160 devices at 416,320 bytes and 52 attempts a day), its tone
@@ -1246,7 +1458,7 @@ def test_the_iot_reading_at_the_reported_fleets(
 def test_the_marginal_intervals_against_hand_worked_chords(
     iridium_yaml: Path, synthetic_saturation_curve: SyntheticCurve
 ) -> None:
-    """Objective: the marginal intervals (E12): from 0 to the first row, then between consecutive
+    """Objective: the marginal intervals: from 0 to the first row, then between consecutive
     rows, each the people one more satellite adds at its revenue a satellite-year against the
     cost per satellite-year, every interval listed, so one that pays after a first stop shows.
 
@@ -1254,14 +1466,15 @@ def test_the_marginal_intervals_against_hand_worked_chords(
     capacity x 1,000 / the load, 20,000 a Gbps for the small terminal), on the synthetic curve
     with the small terminal's first four rows reworked to hold 1,368,000, 1,942,000, 2,192,000
     and 3,018,000 people at 342, 506, 756 and 992 satellites; the small terminal's $10 a month
-    (A14) is $0.00012M a person a year, and a satellite-year costs $0.3625M (so an interval pays
-    from about 3,021 people a satellite).
+    (the investor's price of 2026-10-07) is $0.00012M a person a year, and a satellite-year
+    costs $0.3625M (so an interval pays from about 3,021 people a satellite).
 
     Expected outcome: 0 to 342 adds 4,000 people a satellite, $0.48M, paying; 342 to 506 3,500,
     $0.42M, paying; 506 to 756 1,000, $0.12M, not paying; 756 to 992 3,500, $0.42M, paying again;
     then 992 to 1,482 continues from the synthetic rows; every class lists one interval per row.
-    Also, d = 1 leaves the uplink no time, so every IoT uplink share is null while the devices
-    per beam and the access attempts are read.
+    Also, d = 1 leaves the uplink no time, so in every row of both IoT lines every uplink share
+    (bits, bits with MAC, and the two tone shares) is null while the devices per beam and the
+    access attempts are read.
     """
     config = _with_iridium(
         load_comms_config(iridium_yaml),
@@ -1298,28 +1511,35 @@ def test_the_marginal_intervals_against_hand_worked_chords(
         assert [interval.upper_fleet for interval in block.marginal_intervals] == [
             row.fleet for row in entry.rows
         ]
-    for row in (*run.iridium.saturation.iot_check.minimal_packet_iot[:2],):
+    iot = run.iridium.saturation.iot_check
+    for row in (*iot.minimal_packet_iot, *iot.data_iot):
         assert row.devices_per_useful_beam is not None
         assert row.access_attempts_per_second_per_beam is not None
-        assert (row.uplink_bits_share, row.uplink_tone_share_low) == (None, None)
+        shares = (
+            row.uplink_bits_share,
+            row.uplink_bits_share_with_mac,
+            row.uplink_tone_share_low,
+            row.uplink_tone_share_high,
+        )
+        assert shares == (None, None, None, None), row
 
 
 def test_the_marginal_interval_verdicts_on_the_committed_curve(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
-    """Objective: the published verdicts at full price on the curve's own rows at A14's prices
-    (the small terminal $10, the mounted terminal $50, the phone class $15), and the chords at
-    the prototypes' first-stop endpoints formed from the module's rows.
+    """Objective: the published verdicts at full price on the curve's own rows at the investor's
+    prices of 2026-10-07 (the small terminal $10, the mounted terminal $50, the phone class
+    $15), and the chords at the prototype's first-stop endpoints formed from the module's rows.
 
     Expected outcome (each verdict derived from the curve's people x the price x 12 against the
     cost per satellite-year): the small terminal, on the module's finer grid, pays on every
-    interval through 6,006 and on none from 6,006 on (the module splits the prototypes' 5,402
-    to 8,010 at 6,006; at the build's $15 it paid through 8,010, section E); the mounted
-    terminal pays through 5,402 and on none from 5,402 on (at the build's $100, through
-    14,042); the phone class (at its $15 floor) through 8,010, its first below cost 8,010 to
-    10,000 within 1 percent of the prototype's $0.2902M (the phone verdicts must hold). Each
-    first-stop chord at the prototypes' endpoints is below cost and within its class's
-    tolerance of the prototype's at the new price ($0.3257M, $0.3276M, $0.2902M).
+    interval through 6,006 and on none from 6,006 on (the module splits the prototype's 5,402
+    to 8,010 at 6,006; at the earlier $15 it paid through 8,010, as the usage check's chords
+    show); the mounted terminal pays through 5,402 and on none from 5,402 on (at the earlier
+    $100, through 14,042); the phone class (at its $15 floor) through 8,010, its first below
+    cost 8,010 to 10,000 within 1 percent of the prototype's $0.2902M (the phone verdicts must
+    hold). Each first-stop chord at the prototype's endpoints is below cost and within its
+    class's tolerance of the prototype's at the new price ($0.3257M, $0.3276M, $0.2902M).
     """
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
     cost = run.iridium.cost_per_satellite_year_musd
@@ -1367,7 +1587,7 @@ def test_a_saturation_number_is_reported_beside_the_cadence_never_a_cap(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
     """Objective: a class's saturation number is reported beside the cadence and never sizes,
-    caps, stops or slows the build (E3).
+    caps, stops or slows the build (ADR 005).
 
     Sample: the shipped scenario over a 30-year horizon with a 10-year life, so the living fleet
     passes the small terminal's and the phone class's saturation numbers (19,995 and 20,652)
@@ -1375,7 +1595,7 @@ def test_a_saturation_number_is_reported_beside_the_cadence_never_a_cap(
 
     Expected outcome: every year flies every launch the cadence share allows; the living fleet
     keeps growing past both numbers; the small terminal and the phone class read spectrum as the
-    limit at the horizon's end and the mounted terminal (not reached by 64,009) the launch
+    limit at the horizon's end and the mounted terminal (not reached by 55,407) the launch
     cadence; people are read past the numbers, still rising.
     """
     data = load_comms_config(iridium_yaml).model_dump()
@@ -1403,6 +1623,85 @@ def test_a_saturation_number_is_reported_beside_the_cadence_never_a_cap(
     assert people[-1] > people[0]
 
 
+NOT_REACHED_LABELS = {SMALL: 36_900, MOUNTED: 55_407}
+"""The synthetic curve's not-reached-by fleets (it places no saturation number on any class):
+each class's last midpoint, by hand: the small terminal sqrt(34,040 x 40,000) = 36,899.86, so
+36,900; the mounted terminal sqrt(47,961 x 64,009) = 55,407.0 (219 x 253)."""
+
+HAND_PRICE_USD_PER_MONTH = 10.0
+"""The price the binding-limit tests build a block at: any price, since the limit reads none."""
+
+
+def class_record_at(
+    curve: SaturationCurve, device_class: DeviceClass, final_living_fleet: int
+) -> ClassRecord:
+    """One class's block built by the run's own ``_class_record`` at the default dials, the
+    default panel factor, the shipped cost per satellite-year and the given final living fleet."""
+    return iridium._class_record(
+        curve,
+        device_class,
+        IridiumDials(),
+        panel_factor=DEFAULT_PANEL_FACTOR,
+        price_usd_per_month=HAND_PRICE_USD_PER_MONTH,
+        final_living_fleet=final_living_fleet,
+        cost_per_satellite_year_musd=COST_PER_SATELLITE_YEAR_MUSD,
+    )
+
+
+@pytest.mark.parametrize("device_class", [SMALL, MOUNTED])
+def test_a_final_fleet_at_the_not_reached_by_fleet_reads_the_launch_cadence(
+    synthetic_saturation_curve: SyntheticCurve, device_class: DeviceClass
+) -> None:
+    """Objective: a class whose curve reaches no saturation number reads the launch cadence as
+    its binding limit at the horizon's end up to and at the fleet its curve names it not reached
+    by, the last fleet its rows measure (ADR 005).
+
+    Sample: the synthetic curve for the default dials (L = N x B, no saturation number on any
+    class), each class's block built by ``_class_record`` with the final living fleet at its
+    label: the small terminal 36,900, the mounted terminal 55,407 (each worked by hand).
+
+    Expected outcome: the curve and the block carry that label and no saturation number; the
+    binding limit is the launch cadence.
+    """
+    curve = synthetic_saturation_curve(IridiumDials())
+    label = NOT_REACHED_LABELS[device_class]
+    markers = class_curve_of(curve, device_class).markers
+    assert markers.saturation_number is None
+    assert markers.saturation_not_reached_by == label
+    record = class_record_at(curve, device_class, label)
+    assert record.saturation_number is None
+    assert record.saturation_not_reached_by == label
+    assert record.binding_limit_at_horizon_end is BindingLimit.LAUNCH_CADENCE
+
+
+@pytest.mark.parametrize("device_class", [SMALL, MOUNTED])
+def test_a_final_fleet_past_the_not_reached_by_fleet_is_refused(
+    synthetic_saturation_curve: SyntheticCurve, device_class: DeviceClass
+) -> None:
+    """Objective: a class whose curve reaches no saturation number, its final living fleet past
+    the fleet its curve names it not reached by, is refused with a typed error naming the class,
+    the fleet and the label: the rows measure the elasticity no further, so which limit binds
+    there is unknown, never guessed.
+
+    Sample: as the test above, the final living fleet one satellite past each label (36,901 for
+    the small terminal, 55,408 for the mounted terminal), both inside the class's last row.
+
+    Expected outcome: ``BindingLimitUnmeasuredError``, a ``SaturationCurveError`` (so a
+    ValueError, which the commands report on one line), its message naming the class, the
+    label and the fleet.
+    """
+    curve = synthetic_saturation_curve(IridiumDials())
+    label = NOT_REACHED_LABELS[device_class]
+    assert label + 1 < class_curve_of(curve, device_class).rows[-1].fleet
+    with pytest.raises(BindingLimitUnmeasuredError) as refused:
+        class_record_at(curve, device_class, label + 1)
+    assert isinstance(refused.value, SaturationCurveError)
+    message = str(refused.value)
+    assert f"the {device_class.value} curve reaches no saturation number" in message
+    assert f"not reached by {label} satellites" in message
+    assert f"living fleet of {label + 1} satellites lies past it" in message
+
+
 # ---------------------------------------------------------------------------
 # The scenario YAML, the stated assumptions, the promoted export.
 # ---------------------------------------------------------------------------
@@ -1411,13 +1710,14 @@ def test_a_saturation_number_is_reported_beside_the_cadence_never_a_cap(
 def test_iridium_yaml_scenario_loads_and_runs(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
-    """Objective: the Iridium scenario YAML loads at the Revision 4 settings and runs on the
+    """Objective: the Iridium scenario YAML loads at its shipped settings and runs on the
     promoted curve.
 
     Expected outcome: the label "Iridium L-band max-outcome (every device class)", the 15.4 m^2
-    panel, 16 per launch, d = 0.67, the five prices, the all-in share and the flat costs; no
-    metadata block (the default factory gives 2026 and a 10-year horizon); its run reaches 4,288
-    satellites at FY2036 with every class side by side.
+    panel, 16 per launch, d = 0.67, the five prices, the all-in share and the flat costs (a
+    $13.0M launch at both cadence anchors and a $1.0M build); no metadata block (the default
+    factory gives 2026 and a 10-year horizon); its run reaches 4,288 satellites at FY2036 with
+    every class side by side.
     """
     config = load_comms_config(iridium_yaml)
     assert config.iridium is not None
@@ -1429,6 +1729,9 @@ def test_iridium_yaml_scenario_loads_and_runs(
     assert config.iridium.arpu == IridiumArpuDials()
     assert config.satellite.satellites_per_launch == 16
     assert config.comms_cadence.share_of_fleet == 1.0
+    launch = config.launch_cost
+    assert (launch.low_cadence_cost_musd, launch.high_cadence_cost_musd) == (13.0, 13.0)
+    assert config.satellite.satellite_build_cost_musd == 1.0
     assert config.metadata.base_year == BASE_YEAR_DEFAULT
     assert config.metadata.horizon_years == HORIZON_YEARS_DEFAULT
     run = run_iridium_model(config, committed_saturation_curve)
@@ -1439,33 +1742,47 @@ def test_iridium_yaml_scenario_loads_and_runs(
 def test_iridium_assumptions_states_ecosystem_and_ops(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
-    """Objective: the stated assumptions, rewritten for the switch (the strategy's § 3 row).
+    """Objective: the stated assumptions, rewritten for the switch.
 
-    Expected outcome: the lines state the ecosystem assumption and operations at zero; the curve,
-    d and the panel and its limits as the rule (no measured magnitude); the cadence fleet with no
-    target and no cap; the block upgrade with its two conditions and the 15 without it; every
-    seat sold; the class prices held flat (the small terminal $10, the mounted terminal $50 and
-    the phone class $15 a month), a haircut as a division with every margin re-derived;
-    each class's usage; the two IoT lines and the floor rule; government left out of revenue;
-    the readings; the limits; no line calls the margin gross; no stack caveat at the default.
+    Expected outcome: the lines state the ecosystem assumption first, its MSS-lane statements
+    among it (the phone class's tier is in-chipset, and no unmodified phone is reached), and
+    operations at zero; the curve,
+    the reuse calibration (0.15 at the 25 m^2 reference panel, an estimate, COMM-410 and
+    COMM-411), d, and the panel with the rule's measured limits (``PANEL_RULE_LIMITS_NOTE``:
+    every class carries at least what the rule gives below the reference panel); the cadence
+    fleet with no target and no cap; this run's 16 per launch beside the validated counts (16
+    with the block upgrade and its two conditions, 15 without it); every seat sold; the class
+    prices held flat (the small terminal $10, the mounted terminal $50 and the phone class $15 a
+    month) and the phone class's floor, $15, apart from its price; a haircut as a division with
+    every margin re-derived; each class's usage; the two IoT lines (data IoT's price a month)
+    and the floor rule; government left out of revenue; the readings; the limits; no line calls
+    the margin gross; no stack caveat at the default.
     """
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
     lines = run.iridium.assumptions
     assert lines[0] == ECOSYSTEM_ASSUMPTION_NOTE
+    for statement in ("in-chipset", "unmodified"):
+        assert statement in lines[0], statement
+    assert any(PANEL_RULE_LIMITS_NOTE in line for line in lines)
     joined = " ".join(lines).lower()
     for statement in (
         "operations cost is assumed zero",
         "promoted saturation curve (saturation-v1)",
+        "the reuse calibration is 0.15 gbps per mhz per unit of spectral efficiency at the 25 "
+        "m^2 reference panel, an estimate (comm-410, comm-411)",
         "the downlink share d is 0.67",
         "a panel factor of 0.616",
-        "conservative",
+        "every class carries at least what the rule gives",
         "no fleet target and no cap",
-        "block upgrade",
+        "this run flies 16",
+        "16 with the neutron block upgrade",
         "rod-held base",
-        "without the upgrade it is 15",
+        "15 without the upgrade",
         "every seat is sold",
         "the small terminal $10, the mounted terminal $50 and the phone class $15 a month",
+        "the phone class's floor is the investor's $15 a month",
         "re-derived against the same fleet cost, never divided or averaged",
+        "data iot, 25,835,160 devices at $8 a month",
         "the small terminal 2 mbps while active",
         "the mounted terminal 5 mbps",
         "the phone class 0.75 mbps",
@@ -1478,7 +1795,98 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
     ):
         assert statement in joined, statement
     assert "gross" not in joined
+    assert "(its floor)" not in joined
+    assert "exact in beams" not in joined
     assert APERTURE_STACK_CAVEAT_NOTE not in lines
+
+
+def test_the_per_launch_and_price_lines_state_the_run_beside_the_validated_values(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
+    """Objective: the stated per-launch and price lines are built from the run, so a setting the
+    config accepts never publishes a line written for the shipped values: the
+    run's own satellites per launch beside the validated counts and the bounds' one home, and
+    the run's own phone price beside the investor's floor, never the price called the floor.
+
+    Sample: the shipped scenario, then the same at 15 satellites per launch (the no-upgrade
+    bracket) and a phone class price of $20 a month (above its floor, a value the config
+    accepts).
+
+    Expected outcome: the shipped run's per-launch line says it flies 16 and the variant's 15,
+    each beside the bounds 1 to 16 (the config's own bounds, the named constants) and the
+    validated counts, 16 with the block upgrade (COMM-713) and 15 without (COMM-712); the
+    variant's price line states the phone class at $20 a month and its floor at the investor's
+    $15, and no line says "(its floor)" of a configured price.
+    """
+    shipped = load_comms_config(iridium_yaml)
+    data = shipped.model_dump()
+    data["satellite"]["satellites_per_launch"] = 15
+    data["iridium"]["arpu"]["phone_class_price_usd_month"] = 20.0
+    variant = CommsConfig.model_validate(data)
+    assert (SATELLITES_PER_LAUNCH_MIN, SATELLITES_PER_LAUNCH_MAX) == (1, 16)
+    for accepted in (SATELLITES_PER_LAUNCH_MIN, SATELLITES_PER_LAUNCH_MAX):
+        assert SatelliteDials(satellites_per_launch=accepted).satellites_per_launch == accepted
+    for refused in (SATELLITES_PER_LAUNCH_MIN - 1, SATELLITES_PER_LAUNCH_MAX + 1):
+        with pytest.raises(ValidationError, match="satellites_per_launch"):
+            SatelliteDials(satellites_per_launch=refused)
+    validated = (
+        "The validated counts are 16 with the Neutron block upgrade assumed from the first "
+        "launch, for the stack kept in the fairing's cylinder at calculation C's pitch on a "
+        "rod-held base (COMM-713), and 15 without the upgrade, the mass-bound count today "
+        "(COMM-712)."
+    )
+    for config, flies in ((shipped, 16), (variant, 15)):
+        lines = run_iridium_model(config, committed_saturation_curve).iridium.assumptions
+        per_launch = _line_with(lines, "Satellites per launch is a direct scenario setting")
+        assert per_launch == (
+            "Satellites per launch is a direct scenario setting (bounds 1 to 16); this run "
+            f"flies {flies}. {validated}"
+        )
+    lines = run_iridium_model(variant, committed_saturation_curve).iridium.assumptions
+    prices = _line_with(lines, "Each class's price is held flat")
+    assert prices.startswith(
+        "Each class's price is held flat: the small terminal $10, the mounted terminal $50 and "
+        "the phone class $20 a month. The phone class's floor is the investor's $15 a month, "
+        "which no price haircut goes below."
+    )
+    assert "(its floor)" not in " ".join(lines)
+
+
+def test_a_phone_price_below_the_floor_is_named_in_the_price_line(
+    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
+) -> None:
+    """Objective: a phone class price below the investor's floor, which the config accepts (the
+    floor is a stated value, not a config bound), publishes a price line that says the run is
+    below the floor, never the floor beside a price that breaks it and nothing more.
+
+    Sample: the shipped scenario with the phone class at $12 a month (below the $15 floor); the
+    same at $15 (the floor itself) and at $20 (above it).
+
+    Expected outcome: at $12 the price line states the phone class at $12, the floor at the
+    investor's $15, and that this run sets the phone class below that floor, at $12 a month (a
+    scenario setting, not a haircut);
+    at $15 and at $20 the floor's sentence ends where it did and no line says the run is below
+    the floor.
+    """
+    shipped = load_comms_config(iridium_yaml)
+    below = _with_iridium(shipped, arpu={"phone_class_price_usd_month": 12.0})
+    lines = run_iridium_model(below, committed_saturation_curve).iridium.assumptions
+    assert _line_with(lines, "Each class's price is held flat").startswith(
+        "Each class's price is held flat: the small terminal $10, the mounted terminal $50 and "
+        "the phone class $12 a month. The phone class's floor is the investor's $15 a month, "
+        "which no price haircut goes below; this run sets the phone class below that floor, at "
+        "$12 a month (a scenario setting, not a haircut). A lower price or a smaller market is a "
+        "division in the conclusions"
+    )
+    for price in (15.0, 20.0):
+        at_or_above = _with_iridium(shipped, arpu={"phone_class_price_usd_month": price})
+        lines = run_iridium_model(at_or_above, committed_saturation_curve).iridium.assumptions
+        line = _line_with(lines, "Each class's price is held flat")
+        assert (
+            f"the phone class ${price:g} a month. The phone class's floor is the investor's $15 a "
+            "month, which no price haircut goes below. A lower price"
+        ) in line, line
+        assert "below that floor" not in " ".join(lines), price
 
 
 def test_promoted_json_export_writes_frozen_baseline(
@@ -1495,7 +1903,8 @@ def test_promoted_json_export_writes_frozen_baseline(
     saturation numbers; the years' fleet, cost, books and frozen people at FY2031, FY2033 and
     FY2036; the steady state's frozen people; the books; the saturation block's identity (the
     committed curve's path, schema, stamp and hash), d, the panel factor, the band saturation
-    numbers, four IoT rows a line and the curve's limits; no key the v6 schema removed.
+    numbers, four IoT rows a line and the curve's limits; none of the 29 key names the v6
+    schema removed, at any depth (``V6_REMOVED_KEYS``).
     """
     out_path = tmp_path / "iridium_default.json"
     written = export_iridium_json(iridium_yaml, out_path, version_stamp="test-stamp")
@@ -1577,19 +1986,9 @@ def test_promoted_json_export_writes_frozen_baseline(
         4,
     ]
     assert saturation["limits"] == list(committed_saturation_curve.limits)
-    text = written.read_text(encoding="utf-8")
-    for removed in (
-        "revenue_arpu_buckets",
-        "fleet_target",
-        "binding_regime",
-        "subscribers_per_satellite",
-        "subscribers_served",
-        "effective_satellites_per_launch",
-        "full_coverage_reached_year",
-        "iot_devices",
-        "built_fleet_annual_cost_musd",
-    ):
-        assert f'"{removed}":' not in text, removed
+    assert len(V6_REMOVED_KEYS) == 29
+    returned = sorted(_keys(payload) & V6_REMOVED_KEYS)
+    assert returned == [], returned
 
 
 def test_regenerated_default_artifact_matches_committed(
@@ -1600,7 +1999,9 @@ def test_regenerated_default_artifact_matches_committed(
     Objective: the committed communications/models/iridium/default.json is exactly
     what the current code writes from scenarios/iridium.yaml on the committed curve (the
     conclusion quotes it). Expected: a fresh export, stamped with the committed version
-    stamp, parses to the same JSON document, key for key and value for value.
+    stamp, parses to the same JSON document, key for key and value for value (compared first,
+    for a readable difference), and is the same file byte for byte, so an integer written as a
+    float, a boolean as a number or a key moved fails too.
     """
     committed = json.loads(promoted_iridium_artifact.read_text(encoding="utf-8"))
     written = export_iridium_json(
@@ -1610,3 +2011,4 @@ def test_regenerated_default_artifact_matches_committed(
     )
     regenerated = json.loads(written.read_text(encoding="utf-8"))
     assert regenerated == committed
+    assert written.read_bytes() == promoted_iridium_artifact.read_bytes()

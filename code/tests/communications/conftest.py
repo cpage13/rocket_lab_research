@@ -1,13 +1,10 @@
-"""Shared fixtures for the communications test suite (clean-rewrite, slim).
+"""Shared fixtures for the communications test suite.
 
-This conftest is the slim rewrite version: it provides the Iridium scenario and
-artifact paths (from the repository-anchored fixtures in ``tests/conftest.py``, never
-the working directory).
-The pre-rewrite old tree (its src modules, test files, and scenario YAML) was
-retired in the investor-directed 2026-07-07 alignment cleanup, so the whole
-``tests/communications/`` directory now collects and runs cleanly. The live suite
-covers the High-Bandwidth Cellular Pure Play model (formerly Model A), the Iridium
-model (formerly Model B), the ground comparison, and the cross-import guard.
+It provides the Iridium scenario and the committed artifact's paths (from the
+repository-anchored fixtures in ``tests/conftest.py``, never the working directory). The
+suite covers the High-Bandwidth Cellular Pure Play model (formerly Model A), the Iridium
+model (formerly Model B), the saturation curve, the ground comparison, and the
+cross-import guard.
 
 It also provides the saturation module's synthetic worlds: a builder of synthetic global
 population grids and a builder of the curve's inputs for them
@@ -54,6 +51,7 @@ from communications.saturation_curve import (
     ShellInputs,
     SweepInputs,
     TrimAtFloor,
+    beams_per_satellite,
     curve_input_hash,
     load_saturation_curve,
     saturation_inputs_for,
@@ -180,7 +178,7 @@ def build_synthetic_curve(dials: IridiumDials) -> SaturationCurve:
     """
     parameters = saturation_inputs_for(dials)
     sweep = parameters.sweep
-    central_beams = sat._beams_per_satellite(parameters.shell)
+    central_beams = beams_per_satellite(parameters.shell)
     sectored = {
         entry.device_class: bool(entry.sector_wedges_per_ring) for entry in parameters.classes
     }
@@ -217,7 +215,7 @@ def build_synthetic_curve(dials: IridiumDials) -> SaturationCurve:
     for point in parameters.bands:
         rows = _synthetic_rows(
             sweep.fleets,
-            central_beams if point.beams_per_satellite is None else point.beams_per_satellite,
+            beams_per_satellite(parameters.shell, point),
             gbps_per_beam[DeviceClass.PHONE_CLASS],
             sectored=sectored[DeviceClass.PHONE_CLASS],
             trim_floors_dbi=None,
@@ -233,7 +231,7 @@ def build_synthetic_curve(dials: IridiumDials) -> SaturationCurve:
         provenance=CurveProvenance(
             grid_file_name=Path(parameters.demand.grid_path).name,
             grid_sha256=parameters.demand.grid_sha256,
-            citations=(),
+            citations=("none (synthetic): a test curve built from no grid",),
             licence="none (synthetic)",
             method=(
                 "synthetic, built by the test suite, never computed: L = N x B at every row "

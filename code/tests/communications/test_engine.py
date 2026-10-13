@@ -154,7 +154,7 @@ def test_fleet_cadence_non_decreasing_every_year() -> None:
     Unlike the comms flown count, the whole-fleet cadence is the raw shared
     logistic ramp and is monotonic across the whole horizon, build-out and HOLD
     alike. The launch cost is priced at this series, so its non-increasing cost
-    behaviour (the Phase 5 invariant) rests on this monotonicity.
+    behaviour (the launch-cost invariant) rests on this monotonicity.
     """
     run = run_comms_model(CommsConfig())
     for earlier, later in zip(run.fleet.years, run.fleet.years[1:], strict=False):
@@ -437,9 +437,8 @@ def test_capacity_base_builds_beyond_the_coverage_floor() -> None:
 def test_final_year_cash_per_subscriber_is_over_the_served_base() -> None:
     """The final-year cash per subscriber divides the final-year replacement by the served base.
 
-    Objective: the cash per-person figure uses the served base (the same base the
-    annualized per-person figure uses), not the configured target. Expected: on the
-    default run it equals the final-year replacement (USD) over
+    Objective: the cash per-person figure uses the served base, not the configured
+    target. Expected: on the default run it equals the final-year replacement (USD) over
     ``subscribers_served``; with a served override of half the target it doubles
     (the fleet, and so the replacement cash, is unchanged).
     """
@@ -527,7 +526,7 @@ def test_comms_share_exact_half_rounds_up() -> None:
     assert final.comms_launches_flown_this_year == expected_fy2036_launches
 
 
-# -- the revenue + gross-margin overlay (the two cases, per cohort + fleet) --
+# -- the revenue and margin overlay (the two cases, per cohort + fleet) --
 
 
 def test_cost_plus_revenue_is_annual_cost_times_multiple() -> None:
@@ -573,7 +572,7 @@ def test_arpu_revenue_is_served_base_times_arpu_annualized() -> None:
         )
 
 
-def test_gross_margin_is_revenue_minus_cost_over_revenue() -> None:
+def test_the_margin_is_revenue_minus_cost_over_revenue() -> None:
     """Both margins follow ``(revenue - cost) / revenue x 100`` against the annual cost."""
     config = CommsConfig()
     run = run_comms_model(config)
@@ -1002,10 +1001,11 @@ def test_the_cohort_cost_lines_are_each_living_cohort_at_its_locked_cost() -> No
     satellites times the per-satellite cost at its launch year's price, exactly; the lines'
     satellites sum to the living fleet and their costs to the annualized fleet cost; some year
     carries cohorts locked at two prices (so a line priced at the current year's launch price
-    would fail here); and the replacement split under this family-neutral rule, the one p6's
-    rule reads: each year replaces the lesser of its deployment and the deployment one life
-    earlier (the step's retirements), its replacement line those satellites at the build cost
-    plus their launches at the year's price, and some year replaces satellites.
+    would fail here); and the replacement split under this family-neutral rule, the one the
+    Iridium family's full-cadence rule reads: each year replaces the lesser of its deployment
+    and the deployment one life earlier (the step's retirements), its replacement line those
+    satellites at the build cost plus their launches at the year's price, and some year replaces
+    satellites.
     """
     config = CommsConfig()
     per_launch = config.satellite.satellites_per_launch

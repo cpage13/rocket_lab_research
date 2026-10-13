@@ -1,7 +1,7 @@
 [project]
 name = "rklb-value"
 version = "0.1.0"
-description = "YAML-driven valuation calculator for Rocket Lab's orbital AI-inference data-center venture (standalone)"
+description = "YAML-driven models of two Rocket Lab applications on Neutron: an orbital AI-inference data center and communications on Iridium's L-band"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [

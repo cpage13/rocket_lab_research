@@ -161,6 +161,63 @@ def test_the_launch_cost_dials_refuse_a_number_that_is_not_finite_naming_the_fie
                 )
 
 
+SHARED_BLOCKS: tuple[tuple[str, type[CadenceDials] | type[LaunchCostDials]], ...] = (
+    ("cadence", CadenceDials),
+    ("launch_cost", LaunchCostDials),
+)
+"""The two shared dial blocks, by the key both models' scenarios write them under."""
+
+
+def test_the_shared_dial_blocks_refuse_a_boolean_or_a_quoted_number_naming_the_field(
+    tmp_path: Path,
+) -> None:
+    """Objective: a YAML boolean or a quoted number never loads as a number in the shared cadence
+    and launch-cost blocks, for either model (before the fix ``low_cadence_cost_musd: true``
+    loaded as a $1.0M launch and ``launches_at_year_5: true`` as 1 launch), the investor's yes of
+    2026-10-12 on strict numbers in the settings both models read.
+
+    Sample: every field of the two blocks, walked from the models' own fields, written in a
+    scenario YAML as ``true`` and as its default quoted, each loaded by both models' scenario
+    loaders (``communications.config.load_comms_config`` and ``data_center.config.load_config``);
+    a launch cost as the integer ``25``; a cadence anchor as the float ``14.0`` and ``14.5``.
+
+    Expected outcome: the walk finds the eight dials; each boolean and each quoted number fails at
+    load, for both models, with one ValidationError located at that field; the integer launch
+    cost loads as the float 25.0 for both; the whole-number float anchor loads as the integer 14
+    for both, as before, and the fractional one is refused (launches are whole missions).
+    """
+    scenario = tmp_path / "strict.yaml"
+    walked: list[str] = []
+    for block_name, block in SHARED_BLOCKS:
+        for field_name in block.model_fields:
+            for written in (True, str(getattr(block(), field_name))):
+                scenario.write_text(
+                    yaml.safe_dump({block_name: {field_name: written}}), encoding="utf-8"
+                )
+                for load in (load_comms_config, load_config):
+                    with pytest.raises(ValidationError) as refused:
+                        load(scenario)
+                    located = [".".join(map(str, error["loc"])) for error in refused.value.errors()]
+                    assert located == [f"{block_name}.{field_name}"], (
+                        load.__module__,
+                        field_name,
+                        written,
+                    )
+            walked.append(f"{block_name}.{field_name}")
+    assert len(walked) == 8
+    scenario.write_text("launch_cost:\n  low_cadence_cost_musd: 25\n", encoding="utf-8")
+    for launch_cost in (load_comms_config(scenario).launch_cost, load_config(scenario).launch_cost):
+        assert isinstance(launch_cost.low_cadence_cost_musd, float)
+        assert launch_cost.low_cadence_cost_musd == 25.0
+    scenario.write_text("cadence:\n  launches_at_year_5: 14.0\n", encoding="utf-8")
+    for cadence in (load_comms_config(scenario).cadence, load_config(scenario).cadence):
+        assert (type(cadence.launches_at_year_5), cadence.launches_at_year_5) == (int, 14)
+    scenario.write_text("cadence:\n  launches_at_year_5: 14.5\n", encoding="utf-8")
+    for load in (load_comms_config, load_config):
+        with pytest.raises(ValidationError, match=r"cadence\.launches_at_year_5"):
+            load(scenario)
+
+
 def test_launches_per_year_year_zero_is_zero() -> None:
     """Objective: no launch before the first launch year. Expected: year 0 flies 0."""
     assert compute_launches_per_year(0).value == 0

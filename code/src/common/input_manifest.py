@@ -1,7 +1,9 @@
 """Shared input-cell vocabulary and cell builders.
 
 The source-linked ``InputCell``, its enums, and the generic cell builders,
-used by the data-center space model and the ground reference.
+used by the data-center space model and the ground reference; the
+communications model reads only the source status (:class:`SourceStatus`),
+for its constants and its artifact's orbit block.
 
 :func:`_spec_cell` is the one entry point for a scenario-valued input: it
 attaches the input's source metadata (claim ID, status, rationale) only when

@@ -2,6 +2,10 @@
 
 Status: Accepted (2026-10-04, with the saturation module's strategy, Revision 4)
 
+Amended 2026-10-12: the Decision names the last midpoint a class's rows measure as the fleet
+its saturation number is not reached by, and gained the refusal of a run whose final year's
+fleet passes that fleet.
+
 ## Context
 
 The Iridium model inherited a 2,000-satellite cap set for the cellular family.
@@ -16,15 +20,20 @@ wall. The Iridium fleet grows at the comms share of the launch cadence
 The 2,000-satellite cap is retired for Iridium. Each device class's spectrum
 bound is its saturation number: the fleet at which one more satellite adds
 less than 10 percent of an average satellite's capacity (the elasticity of
-capacity under 0.10), measured against the N-independent maximum use,
+capacity under 0.10), reported beside the N-independent maximum use,
 computed per class by the `saturation` module at the 25 m^2 reference panel
 and the exclusive 8 MHz, with the band in full-time use (ADR 008). It is
 reported beside the launch cadence in every run, never a build target and
 never a cap on the build. A fleet past a class's saturation number is read
 from the curve like any other; a fleet past the curve's last computed row is
-refused with an error. When a class's marker is not reached on the grid,
-that class has no spectrum bound. 2,000 stays only as a reading, labeled the
-retired cap, for comparison.
+refused with an error. When a class's crossing is not reached on its rows,
+the curve publishes no saturation number for that class and names the last
+midpoint at which its rows measure the elasticity (the geometric mean of the
+last two rows' fleets) as the fleet it is not reached by: the class's
+spectrum bound lies beyond that fleet, unmeasured, so a run whose final
+year's living fleet passes it is refused with an error, since which limit
+binds there is not known. 2,000 stays only as a reading, labeled the retired
+cap, for comparison.
 
 ## Consequences
 

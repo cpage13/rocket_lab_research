@@ -44,7 +44,9 @@ output); it defaults to today's ISO date.
 The command follows the shared CLI conventions (:mod:`common.cli`): the status
 line and any error are log records on stderr; an unreadable or invalid
 scenario, a scenario of the cellular family, a saturation curve that cannot be
-read, was computed for other inputs or ends before a fleet the run reads, a
+read, was computed for other inputs, ends before a fleet the run reads or
+measures nothing at the final year's fleet for a class it gives no saturation
+number (that fleet past the one the curve names it not reached by), a
 scenario the model cannot run (a value the model cannot compute among them), an
 artifact that would hold a number that is not finite (the artifact's models refuse
 one, so no value is ever written as null in its place), or a failed write is one
@@ -75,7 +77,6 @@ from common.cli import (
 )
 from common.file_io import (
     ModelFileError,
-    SourceCheckout,
     artifact_write,
     locate_source_checkout,
     write_files_with_rollback,
@@ -131,7 +132,9 @@ keeps the spectrum, the panel, the operations cost and the ecosystem assumption 
 ``effective_satellites_per_launch`` to ``satellites_per_launch``. Removed: the target,
 regime, completion and built-fleet fields, the per-person cost fields, the density and the
 fleet aggregate, the IoT passthrough, the one device class and its physics (each class's now
-in ``classes``), and the four-bucket ``revenue_arpu_buckets`` block. Earlier versions, in
+in ``classes``), the served base ``subscribers_served`` and the living fleet's people capacity
+``people_capacity_living_fleet_final_year`` (each class's people now in ``years`` and the
+readings), and the four-bucket ``revenue_arpu_buckets`` block. Earlier versions, in
 brief: ``iridium-v5`` (2026-09-23) made the edge cases honest (nullable final-year cash
 figures, the built fleet's annualized cost as the ARPU margin's basis); ``iridium-v4``
 (2026-07-14) named the cost bases and exposed the denominators the prose quoted, and added
@@ -159,7 +162,10 @@ class IridiumProvenance(BaseModel):
         description="The scenario label (from the IridiumDials scenario_name single home)."
     )
     source_scenario_path: str = Field(
-        description="Repo-relative path to the scenario YAML this artifact was run from."
+        description=(
+            "The scenario YAML this artifact was run from: repository-relative, or its absolute "
+            "path when it lies outside the repository."
+        )
     )
     version_stamp: str = Field(
         description="Caller-supplied stamp (git-describe or a date string; default today)."
@@ -223,7 +229,7 @@ class OrbitScenarioBlock(BaseModel):
 
     No config dial sets these values: they are named constants, and the saturation curve's
     shell is computed at them (450 km, 53 degrees, the 25 degree mask), so the readings rest
-    on this posture. The block (schema iridium-v4) gives the public orbit claim in the
+    on this posture. The block (introduced in iridium-v4) gives the public orbit claim in the
     conclusion and the assumptions ledger a typed model-contract anchor that travels with its
     limitations. Values and basis text come from :mod:`communications.constants`.
     """
@@ -337,7 +343,11 @@ class ClassBlock(BaseModel):
         )
     )
     saturation_not_reached_by: int | None = Field(
-        description="The curve's last row when the saturation number is not reached, else None."
+        description=(
+            "When the saturation number is not reached, the last fleet at which the curve's "
+            "rows measure the elasticity (their last midpoint, the geometric mean of the last two "
+            "rows' fleets, rounded half up); else None."
+        )
     )
     elasticity_under_0p25_fleet: int | None = Field(
         description="The fleet at the first elasticity crossing under 0.25, or None."
@@ -522,7 +532,9 @@ class SaturationBlock(BaseModel):
 
     model_config = _BLOCK_CONFIG
 
-    curve_path: str = Field(description="The scenario's curve path (repository-relative).")
+    curve_path: str = Field(
+        description="The scenario's curve path (repository-relative, or absolute as given)."
+    )
     curve_schema_version: str = Field(description="The curve's schema version.")
     curve_version_stamp: str = Field(description="The curve's version stamp.")
     input_hash: str = Field(description="The curve's input hash.")
@@ -778,13 +790,6 @@ def build_iridium_artifact(
     )
 
 
-def _anchored(checkout: SourceCheckout, path: str | Path) -> Path:
-    """Return a path as given when it is absolute, else anchored to the repository root (the
-    promoted files, the curve and the artifact, live there, never under ``code/``)."""
-    given = Path(path)
-    return given if given.is_absolute() else checkout.repo_dir / given
-
-
 def export_iridium_json(
     scenario_path: str | Path,
     output_path: str | Path,
@@ -799,16 +804,19 @@ def export_iridium_json(
     :func:`~communications.saturation_curve.load_saturation_curve`; runs the
     Iridium entry, :func:`~communications.iridium.run_iridium_model`, which first
     checks that the curve was computed for the scenario's own inputs (a refusal
-    names the curve file the path resolved to, as the loader's refusals do);
+    names the curve file by its anchored path, as the loader's refusals do);
     assembles the artifact from the run's two records, and writes it through
     :func:`common.file_io.write_files_with_rollback` (staged in full, then one
     atomic rename, so a failed write leaves any existing file as it was; an
     output path that is a symbolic link or not a regular file is refused). A
     relative ``output_path`` or curve path is anchored to the REPO ROOT of the
     source checkout (the promoted ``communications/models/`` folder lives
-    there, never under ``code/``); an absolute path is used as-is. The
+    there, never under ``code/``); an absolute path is used as-is
+    (:meth:`common.file_io.SourceCheckout.anchored`). The
     ``scenario_path`` resolves against the working directory as usual and is
-    recorded repository-relative in the provenance header.
+    recorded in the provenance header repository-relative, or as its absolute
+    path when it lies outside the repository
+    (:meth:`common.file_io.SourceCheckout.repo_relative`).
 
     Args:
         scenario_path: The scenario YAML to run (must select the Iridium model).
@@ -818,7 +826,8 @@ def export_iridium_json(
             or any string); defaults to today's ISO date.
 
     Returns:
-        The resolved path the artifact was written to.
+        The path the artifact was written to: the output path anchored at the repository
+        root when it is relative, else as given, and not resolved.
 
     Raises:
         common.file_io.ModelFileError: If the module is not running from a
@@ -831,8 +840,11 @@ def export_iridium_json(
             saturation curve is refused (a
             :class:`~communications.saturation_curve.SaturationCurveError`:
             another schema, altered, incomplete, or computed for other inputs,
-            each naming the curve file; or a fleet the run reads past a class's
-            last row), or it cannot be run.
+            each naming the curve file; a fleet the run reads past a class's last
+            row; or the final year's fleet past the fleet a class with no
+            saturation number is not reached by,
+            :class:`~communications.iridium.BindingLimitUnmeasuredError`), or it
+            cannot be run.
         ArithmeticError: If a value the model cannot compute arises (an
             ``OverflowError``, say).
     """
@@ -840,7 +852,7 @@ def export_iridium_json(
     scenario = Path(scenario_path)
     config = load_comms_config(scenario)
     dials = iridium_dials_of(config)
-    curve_path = _anchored(checkout, dials.saturation.curve_path)
+    curve_path = checkout.anchored(dials.saturation.curve_path)
     curve = load_saturation_curve(curve_path)
     try:
         run = run_iridium_model(config, curve)
@@ -853,7 +865,7 @@ def export_iridium_json(
         source_scenario_path=checkout.repo_relative(scenario),
         version_stamp=stamp,
     )
-    out = _anchored(checkout, output_path)
+    out = checkout.anchored(output_path)
     write_files_with_rollback([artifact_write(out, artifact)])
     logger.info("promoted Iridium model artifact written to %s", out)
     return out
@@ -899,9 +911,11 @@ def main(argv: list[str] | None = None) -> int:
         :data:`~common.cli.EXIT_OK` on success; :data:`~common.cli.EXIT_ERROR`
         (after one ``ERROR:`` log line, no traceback) when the scenario cannot
         be read, is invalid, or does not select the Iridium model, its
-        saturation curve cannot be read, was computed for other inputs or ends
-        before a fleet the run reads, the model cannot run (a value it cannot
-        compute among them: an ``ArithmeticError``, such as an overflow), the
+        saturation curve cannot be read, was computed for other inputs, ends
+        before a fleet the run reads or measures nothing at the final year's
+        fleet for a class it gives no saturation number, the model cannot run
+        (a value it cannot compute among them: an ``ArithmeticError``, such as
+        an overflow), the
         artifact would hold a number that is not finite (its models refuse one), or the
         artifact cannot be written. Usage errors exit through
         :class:`~common.cli.CliArgumentParser` with :data:`~common.cli.EXIT_USAGE`.

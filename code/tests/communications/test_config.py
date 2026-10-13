@@ -8,8 +8,9 @@ classes' own defaults and bounds are tested once, in
 ground blocks, the field bounds, the cross-field validators (the coverage floor at or
 below the fleet cap; on an Iridium config every cellular sizing and revenue dial at its
 default and no ground block), a retired Iridium setting refused at load, every float dial of
-an Iridium config finite and never a boolean, the YAML loader pair, and the Iridium saturation
-block (its defaults, the shipped scenario's block, its bounds). Mirrors the data-center
+an Iridium config finite and never a boolean, the numbers of the metadata, comms share and
+satellite blocks never a boolean or a quoted number, the YAML loader pair, and the Iridium
+saturation block (its defaults, the shipped scenario's block, its bounds). Mirrors the data-center
 ``test_config.py`` assertion style without importing ``data_center`` (forbidden).
 """
 
@@ -209,7 +210,7 @@ def test_revenue_dials_defaults() -> None:
     assert rev.arpu_usd_per_month == pytest.approx(50.0)
 
 
-# -- ground interface block (declared in Phase 1, None-able baselines) -
+# -- ground interface block (None-able baselines) ---------------------
 
 
 def test_ground_interface_dials_defaults_are_none_able() -> None:
@@ -364,8 +365,8 @@ IRIDIUM_FIXED_BLOCKS: tuple[tuple[str, type[BaseModel]], ...] = (
     ("subscribers", SubscriberDials),
     ("revenue", RevenueDials),
 )
-"""The blocks whose every field an Iridium config keeps at its default (E3): the cellular
-family's sizing and revenue dials, and the coverage floor the Iridium path pins."""
+"""The blocks whose every field an Iridium config keeps at its default: the cellular family's
+sizing and revenue dials, and the coverage floor the Iridium path pins."""
 
 
 def _a_non_default(block: type[BaseModel], field_name: str) -> object:
@@ -375,15 +376,28 @@ def _a_non_default(block: type[BaseModel], field_name: str) -> object:
     return 1 if default is None else default + 1
 
 
+def _nested(path: tuple[str, ...], value: object) -> object:
+    """A value written at a dotted path: ``("a", "b"), 1`` gives ``{"a": {"b": 1}}``."""
+    nested = value
+    for key in reversed(path):
+        nested = {key: nested}
+    return nested
+
+
+def _located(refused: pytest.ExceptionInfo[ValidationError]) -> list[str]:
+    """Each error's location in a refused load, as a dotted path."""
+    return [".".join(map(str, error["loc"])) for error in refused.value.errors()]
+
+
 def test_iridium_config_refuses_every_cellular_sizing_and_revenue_field(tmp_path: Path) -> None:
     """Objective: on an Iridium config every field of the ``coverage``, ``subscribers`` and
-    ``revenue`` blocks keeps its default and ``ground`` stays unset (E3; guard G34): the Iridium
+    ``revenue`` blocks keeps its default and ``ground`` stays unset: the Iridium
     path reads none of the cellular family's sizing and revenue dials and pins the coverage
     floor at 340. The test walks each block's own fields, so a field added later is covered
     with no edit here; it is on the value, so a config written out whole still loads.
 
     Sample: for every field of the three blocks, a scenario with an ``iridium:`` block and that
-    field at a value other than its default (the cap also at 1,999 and 3,000, p4's samples);
+    field at a value other than its default (the cap also at 1,999 and 3,000, under and past it);
     the same scenario without the ``iridium:`` block; a scenario with an ``iridium:`` block and
     a ``ground`` block; an Iridium scenario writing every field at its default; the default
     Iridium config round-tripped through ``model_dump`` and ``model_validate``.
@@ -461,9 +475,9 @@ RETIRED_IRIDIUM_SETTINGS: tuple[tuple[str, ...], ...] = (
     ("arpu", "iot_price_usd_month"),
     ("arpu", "government_price_usd_month"),
 )
-"""The Iridium settings the switch retires (K11 to K18): the device class, the SE override, the
-one usage for every class, the IoT passthrough, the four-bucket sheet's mixes and prices, the
-single IoT price and the government price."""
+"""The Iridium settings the switch retires, with the investor's OK of 2026-10-04: the device
+class, the SE override, the one usage for every class, the IoT passthrough, the four-bucket
+sheet's mixes and prices, the single IoT price and the government price."""
 
 
 def test_a_retired_iridium_setting_fails_at_load_naming_it(tmp_path: Path) -> None:
@@ -480,17 +494,11 @@ def test_a_retired_iridium_setting_fails_at_load_naming_it(tmp_path: Path) -> No
     """
     scenario = tmp_path / "retired.yaml"
     for path in RETIRED_IRIDIUM_SETTINGS:
-        setting: object = 1.0
-        for key in reversed(path):
-            setting = {key: setting}
-        scenario.write_text(yaml.safe_dump({"iridium": setting}), encoding="utf-8")
+        scenario.write_text(yaml.safe_dump(_nested(("iridium", *path), 1.0)), encoding="utf-8")
         with pytest.raises(ValidationError) as refused:
             load_comms_config(scenario)
-        errors = refused.value.errors()
-        assert [".".join(map(str, error["loc"])) for error in errors] == [
-            ".".join(("iridium", *path))
-        ], path
-        assert errors[0]["type"] == "extra_forbidden"
+        assert _located(refused) == [".".join(("iridium", *path))], path
+        assert refused.value.errors()[0]["type"] == "extra_forbidden"
 
 
 def _float_dial_paths(block: type[BaseModel]) -> list[tuple[str, ...]]:
@@ -532,21 +540,19 @@ def test_the_iridium_dials_refuse_a_number_that_is_not_finite_naming_the_field(
     scenario = tmp_path / "not_finite.yaml"
     for path in paths:
         for value in (math.inf, -math.inf, math.nan):
-            dials: object = value
-            for key in reversed(path):
-                dials = {key: dials}
-            scenario.write_text(yaml.safe_dump({"iridium": dials}), encoding="utf-8")
+            written = _nested(("iridium", *path), value)
+            scenario.write_text(yaml.safe_dump(written), encoding="utf-8")
             with pytest.raises(ValidationError) as refused:
                 load_comms_config(scenario)
-            located = [".".join(map(str, error["loc"])) for error in refused.value.errors()]
-            assert located == [".".join(("iridium", *path))], (path, value)
+            assert _located(refused) == [".".join(("iridium", *path))], (path, value)
 
 
 def test_the_iridium_dials_refuse_a_boolean_naming_the_field(tmp_path: Path) -> None:
     """Objective: a YAML boolean never loads as a number in the Iridium dials (before the fix
     pydantic's lax mode read ``true`` as 1.0: a price of $1, a 1 m^2 panel, d = 1, a 1 MHz
-    spectrum), while an integer still loads as its float. The shared satellite and comms-share
-    blocks are not in this test: making them strict changes how cellular configs load.
+    spectrum), while an integer still loads as its float. The comms share and satellite blocks
+    have their own test below, and the shared cadence and launch-cost blocks theirs in
+    ``tests/common/test_cadence_move.py``.
 
     Sample: every float field of the Iridium dials and of the blocks nested in them (the
     spectrum, the panel, the downlink share and the five prices), walked from the model's own
@@ -564,14 +570,10 @@ def test_the_iridium_dials_refuse_a_boolean_naming_the_field(tmp_path: Path) -> 
     } == set(paths)
     scenario = tmp_path / "boolean.yaml"
     for path in paths:
-        dials: object = True
-        for key in reversed(path):
-            dials = {key: dials}
-        scenario.write_text(yaml.safe_dump({"iridium": dials}), encoding="utf-8")
+        scenario.write_text(yaml.safe_dump(_nested(("iridium", *path), True)), encoding="utf-8")
         with pytest.raises(ValidationError) as refused:
             load_comms_config(scenario)
-        located = [".".join(map(str, error["loc"])) for error in refused.value.errors()]
-        assert located == [".".join(("iridium", *path))], path
+        assert _located(refused) == [".".join(("iridium", *path))], path
     for written in ("yes", "on", '"15"'):
         scenario.write_text(f"iridium:\n  aperture_m2: {written}\n", encoding="utf-8")
         with pytest.raises(ValidationError, match=r"iridium\.aperture_m2"):
@@ -581,6 +583,109 @@ def test_the_iridium_dials_refuse_a_boolean_naming_the_field(tmp_path: Path) -> 
     assert loaded is not None
     assert isinstance(loaded.aperture_m2, float)
     assert loaded.aperture_m2 == 15.0
+
+
+STRICT_DEPLOYMENT_BLOCKS: tuple[tuple[str, type[BaseModel]], ...] = (
+    ("comms_cadence", CommsCadenceDials),
+    ("satellite", SatelliteDials),
+)
+"""The comms-owned blocks of deployment and cost settings, both families' (the Iridium path
+reads them all): strict since 2026-10-12 (a YAML boolean or a quoted number refused)."""
+
+METADATA_WRITTEN_WHOLE: dict[str, int] = {
+    "base_year": BASE_YEAR_DEFAULT,
+    "horizon_years": HORIZON_YEARS_DEFAULT,
+}
+"""The metadata block's two required whole numbers at their defaults, written beside the field
+under test, so a refusal names that field alone (a block missing one would add a second error)."""
+
+
+def test_the_metadata_share_and_satellite_blocks_refuse_a_boolean_or_a_quoted_number(
+    tmp_path: Path,
+) -> None:
+    """Objective: a YAML boolean or a quoted number never loads as a number in the comms metadata,
+    share and satellite blocks (before the fix ``share_of_fleet: yes`` loaded as the all-in share
+    1.0, ``satellites_per_launch: on`` as 1, ``satellite_lifetime_years: true`` as a 1-year life,
+    ``satellites_per_launch: '16'`` as 16, and ``horizon_years: yes`` as a 1-year horizon), on
+    either family's config: both families read these very blocks.
+
+    Sample: every field of the share and satellite blocks, and every whole-number field of the
+    metadata block (all but its label), walked from the models' own fields, written in a cellular
+    scenario YAML as ``true`` and as its default quoted (a metadata field beside the block's other
+    required field at its default); the share and the build cost as the integer ``1``; satellites
+    per launch as the float ``16.0`` and ``16.5``; the horizon as the float ``10.0``.
+
+    Also on an Iridium config (an ``iridium:`` block beside): the share written ``yes``,
+    satellites per launch ``on`` and the horizon ``yes``, the review's own cases.
+
+    Expected outcome: the walk finds the share, satellites per launch, the life, the build cost,
+    the base year and the horizon; each boolean and each quoted number fails at load with one
+    ValidationError located at that field, on the cellular and the Iridium config alike; the
+    integer share and build cost load as the floats 1.0; the whole-number float count and horizon
+    load as the integers 16 and 10, as before, and the fractional count is refused.
+    """
+    scenario = tmp_path / "strict.yaml"
+    walked: list[str] = []
+    for block_name, block in STRICT_DEPLOYMENT_BLOCKS:
+        for field_name in block.model_fields:
+            path = (block_name, field_name)
+            for written in (True, str(getattr(block(), field_name))):
+                scenario.write_text(yaml.safe_dump(_nested(path, written)), encoding="utf-8")
+                with pytest.raises(ValidationError) as refused:
+                    load_comms_config(scenario)
+                assert _located(refused) == [".".join(path)], (path, written)
+            walked.append(".".join(path))
+    whole_numbers = [
+        name for name, field in CommsMetadataDials.model_fields.items() if field.annotation is int
+    ]
+    for field_name in whole_numbers:
+        path = ("metadata", field_name)
+        for written in (True, str(METADATA_WRITTEN_WHOLE[field_name])):
+            metadata = {**METADATA_WRITTEN_WHOLE, field_name: written}
+            scenario.write_text(yaml.safe_dump({"metadata": metadata}), encoding="utf-8")
+            with pytest.raises(ValidationError) as refused:
+                load_comms_config(scenario)
+            assert _located(refused) == [".".join(path)], (path, written)
+        walked.append(".".join(path))
+    assert walked == [
+        "comms_cadence.share_of_fleet",
+        "satellite.satellites_per_launch",
+        "satellite.satellite_lifetime_years",
+        "satellite.satellite_build_cost_musd",
+        "metadata.base_year",
+        "metadata.horizon_years",
+    ]
+    on_an_iridium_config = {
+        "comms_cadence.share_of_fleet": "comms_cadence:\n  share_of_fleet: yes\n",
+        "satellite.satellites_per_launch": "satellite:\n  satellites_per_launch: on\n",
+        "metadata.horizon_years": "metadata:\n  base_year: 2026\n  horizon_years: yes\n",
+    }
+    for located, written in on_an_iridium_config.items():
+        scenario.write_text(f"{written}iridium:\n  spectrum_mhz: 8.0\n", encoding="utf-8")
+        with pytest.raises(ValidationError) as refused:
+            load_comms_config(scenario)
+        assert _located(refused) == [located], located
+    scenario.write_text("metadata:\n  base_year: 2026\n  horizon_years: 10.0\n", encoding="utf-8")
+    horizon = load_comms_config(scenario).metadata.horizon_years
+    assert (type(horizon), horizon) == (int, 10)
+    scenario.write_text(
+        "comms_cadence:\n  share_of_fleet: 1\nsatellite:\n  satellite_build_cost_musd: 1\n",
+        encoding="utf-8",
+    )
+    loaded = load_comms_config(scenario)
+    assert isinstance(loaded.comms_cadence.share_of_fleet, float)
+    assert isinstance(loaded.satellite.satellite_build_cost_musd, float)
+    assert (loaded.comms_cadence.share_of_fleet, loaded.satellite.satellite_build_cost_musd) == (
+        1.0,
+        1.0,
+    )
+    scenario.write_text("satellite:\n  satellites_per_launch: 16.0\n", encoding="utf-8")
+    count = load_comms_config(scenario).satellite.satellites_per_launch
+    assert (type(count), count) == (int, 16)
+    scenario.write_text("satellite:\n  satellites_per_launch: 16.5\n", encoding="utf-8")
+    with pytest.raises(ValidationError) as refused:
+        load_comms_config(scenario)
+    assert _located(refused) == ["satellite.satellites_per_launch"]
 
 
 COMMON_CADENCE_BLOCKS = ("cadence", "launch_cost")
@@ -611,14 +716,10 @@ def test_every_block_this_module_defines_refuses_a_number_that_is_not_finite(
     scenario = tmp_path / "not_finite.yaml"
     for path in paths:
         for value in (math.inf, -math.inf, math.nan):
-            dials: object = value
-            for key in reversed(path):
-                dials = {key: dials}
-            scenario.write_text(yaml.safe_dump(dials), encoding="utf-8")
+            scenario.write_text(yaml.safe_dump(_nested(path, value)), encoding="utf-8")
             with pytest.raises(ValidationError) as refused:
                 load_comms_config(scenario)
-            located = [".".join(map(str, error["loc"])) for error in refused.value.errors()]
-            assert located == [".".join(path)], (path, value)
+            assert _located(refused) == [".".join(path)], (path, value)
 
 
 # -- the Iridium saturation block (ADRs 005 and 008) ---------------------

@@ -8,19 +8,22 @@ family with :class:`NotAnIridiumConfigError`, so one condition and one error gua
 them: the saturation command (``python -m communications.saturation``) calls it before it
 reads the dials the curve depends on, the Iridium promotion command
 (``python -m communications.json_output``) before it loads the curve, and the Iridium entry
-before anything else. The message is the one the Iridium promotion command gives.
+before anything else. It also re-validates the config whole, so a config built with
+``model_copy`` (which pydantic does not validate) cannot carry a setting past the validators
+into a run (a ``pydantic.ValidationError`` naming the field). The refusal of the other
+family's config gives the Iridium promotion command's message.
 
 The Iridium entry, :func:`run_iridium_model`, takes the config and its saturation curve, both
 required, so the curve's presence is a type fact. On every run it narrows the config, checks
 that the curve was computed for the config's own inputs (the identity check,
 :func:`communications.saturation_curve.check_curve_matches`), and only then runs:
 
-1. **The fleet** (E2): the shared fleet-and-cost loop
+1. **The fleet**: the shared fleet-and-cost loop
    (:func:`communications.engine.run_fleet_loop`) under :func:`full_cadence_rule`, which flies
    every comms launch the cadence share allows at the scenario's satellites per launch and
    counts as replacement only what matches the year's retirements. There is no fleet target,
    no hold and no cap: no saturation number sizes, caps, stops or slows the build.
-2. **The years** (E4, E5): in every year whose living fleet is at or above the coverage floor
+2. **The years**: in every year whose living fleet is at or above the coverage floor
    (pinned at 340 on the Iridium path), each device class serves every person its living fleet
    carries (the curve's people, read at the downlink share d and the panel factor, rounded half
    up) at its own flat price, and the two IoT lines earn their fixed books; below the floor
@@ -28,12 +31,15 @@ that the curve was computed for the config's own inputs (the identity check,
    annualized cost, null with no revenue; the IoT lines are never inside it. The years are
    read before anything else, so a year's fleet past a class's last computed row raises
    :class:`~communications.saturation_curve.CurveBeyondLastRowError` naming that year.
-3. **The readings** (E6, E7): every class at four reported fleets (the coverage floor; 2,000,
-   the retired cap, kept for comparison; the horizon-end full-cadence reach; the steady state
-   beyond the horizon), each priced by its reading cost, and the IoT check (E8) at each.
-4. **Each class's block** (E3, E12): its price, usage and physics (the satellite's peak at the
+3. **The readings**: every class at four reported fleets (the coverage floor; 2,000, the
+   retired cap, kept for comparison; the horizon-end full-cadence reach; the steady state
+   beyond the horizon), each priced by its reading cost, and the IoT check at each.
+4. **Each class's block**: its price, usage and physics (the satellite's peak at the
    panel, the downlink pool and the per-user rates), its markers from the curve, the limit
-   that binds at the horizon's end, and its marginal intervals on the curve's own rows.
+   that binds at the horizon's end, and its marginal intervals on the curve's own rows. A
+   class whose curve reaches no saturation number, its final fleet past the fleet the curve
+   names it not reached by, raises :class:`BindingLimitUnmeasuredError`: the curve measures
+   nothing past that fleet, so the limit there is not known.
 5. **The record**, :class:`IridiumRecord`: everything the ``iridium-v6`` artifact publishes
    beside the shared fleet-and-cost record, with the stated assumptions, so the artifact
    builder reads no dial and holds no Optional check.
@@ -70,6 +76,7 @@ from communications.constants import (
     DATA_IOT_BURST_BYTES,
     DATA_IOT_BURSTS_PER_DAY,
     DATA_IOT_DEVICES,
+    DATA_IOT_PRICE_USD_MONTH_DEFAULT,
     ECOSYSTEM_ASSUMPTION_NOTE,
     HZ_PER_MHZ,
     IOT_MAC_EFFICIENCY,
@@ -78,18 +85,27 @@ from communications.constants import (
     IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH,
     IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW,
     IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND,
+    IRIDIUM_IOT_BOOK_DEVICES,
     IRIDIUM_OPERATIONS_COST_MUSD,
+    MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES,
     MINIMAL_PACKET_IOT_DEVICES,
     MINIMAL_PACKET_IOT_MESSAGE_BYTES,
     MINIMAL_PACKET_IOT_MESSAGES_PER_DAY,
+    MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT,
     MONTHS_PER_YEAR,
     MOUNTED_TERMINAL_CLASS_SE_HIGH,
     MOUNTED_TERMINAL_CLASS_SE_LOW,
     NB_IOT_TONE_HZ,
+    PANEL_RULE_LIMITS_NOTE,
+    PHONE_CLASS_PRICE_FLOOR_USD_MONTH,
     PHONE_CLASS_SE_HIGH,
     PHONE_CLASS_SE_LOW,
     RETIRED_CAP_READING_FLEET,
     REUSE_CALIBRATION_GBPS_PER_MHZ_PER_SE,
+    SATELLITES_PER_LAUNCH_BLOCK_UPGRADE,
+    SATELLITES_PER_LAUNCH_MAX,
+    SATELLITES_PER_LAUNCH_MIN,
+    SATELLITES_PER_LAUNCH_NO_UPGRADE,
     SECONDS_PER_DAY,
     SMALL_TERMINAL_CLASS_SE_HIGH,
     SMALL_TERMINAL_CLASS_SE_LOW,
@@ -113,6 +129,7 @@ from communications.saturation_curve import (
     SaturationCurve,
     SaturationCurveError,
     check_curve_matches,
+    class_curve_of,
     people_at,
     read_fleet,
     saturation_inputs_for,
@@ -170,12 +187,21 @@ class NotAnIridiumConfigError(ValueError):
     """A config of the cellular family where an Iridium path needs the Iridium dials."""
 
 
+class BindingLimitUnmeasuredError(SaturationCurveError):
+    """A final living fleet past a class's not-reached-by fleet, on a curve that reaches no
+    saturation number for the class; the message names the class, the fleet and that label.
+    The curve's rows measure the elasticity of capacity no further than the label (their last
+    midpoint), so whether the spectrum or the launch cadence binds there is unknown, never
+    guessed: a fleet past it needs a curve whose sweep measures it."""
+
+
 class BindingLimit(StrEnum):
-    """What bounds a device class's fleet at the horizon's end (the saturation strategy's E3)."""
+    """What bounds a device class's fleet at the horizon's end, reported beside the launch
+    cadence and never a cap on the build (ADR 005)."""
 
     LAUNCH_CADENCE = "launch_cadence"
     """The launch cadence: the final year's living fleet is below the class's saturation number,
-    or the class has none on the curve."""
+    or, for a class whose curve reaches none, at or below its not-reached-by fleet."""
 
     SPECTRUM = "spectrum"
     """The owned spectrum: the final year's living fleet is at or past the class's saturation
@@ -184,7 +210,8 @@ class BindingLimit(StrEnum):
 
 @dataclass(frozen=True)
 class ClassRates:
-    """One class's downlink pool and per-user rates (the saturation strategy's § 3 rule).
+    """One class's downlink pool and per-user rates (the rule is
+    :func:`derive_iridium_per_user_rates`'s).
 
     Attributes:
         beam_pool_mbps: One beam's downlink pool, W x SE x d, Mbps.
@@ -200,7 +227,7 @@ class ClassRates:
 
 @dataclass(frozen=True)
 class MarginalIntervalRecord:
-    """One interval of a class's curve rows and what one more satellite adds across it (E12).
+    """One interval of a class's curve rows and what one more satellite adds across it.
 
     Attributes:
         lower_fleet: The interval's lower fleet (0 for the first interval).
@@ -236,11 +263,14 @@ class ClassRecord:
         per_user_rate_offpeak_mbps: Its off-peak per-user rate, Mbps.
         maximum_use_beams: The curve's maximum use times the panel factor, beams.
         saturation_number: The curve's saturation number, or None when not reached.
-        saturation_not_reached_by: The curve's last row when the number is not reached.
+        saturation_not_reached_by: When the number is not reached, the last fleet at which
+            the curve's rows measure the elasticity (their last midpoint, the geometric mean of
+            the last two rows' fleets, rounded half up); else None.
         elasticity_under_0p25_fleet: The curve's 0.25 marker, or None.
         fleet_at_90pct_of_maximum_use: The curve's 90 percent fleet, or None.
         binding_limit_at_horizon_end: Spectrum when the final year's living fleet is at or past
-            the saturation number, else the launch cadence.
+            the saturation number, else the launch cadence (for a class with no number, at or
+            below its not-reached-by fleet; past it the run is refused).
         marginal_intervals: Its intervals, from 0 to the first row and between consecutive
             rows of its curve.
     """
@@ -349,7 +379,7 @@ class ClassReadingRecord:
 
 @dataclass(frozen=True)
 class ReadingRecord:
-    """Every class at one reported fleet (E7).
+    """Every class at one reported fleet.
 
     Attributes:
         label: What the fleet is (the coverage floor, the retired cap, the horizon-end reach,
@@ -368,7 +398,7 @@ class ReadingRecord:
 
 @dataclass(frozen=True)
 class IotCheckRowRecord:
-    """One IoT line at one reported fleet (E8); every field but ``fleet`` None below the floor.
+    """One IoT line at one reported fleet; every field but ``fleet`` None below the floor.
 
     Attributes:
         fleet: The fleet, satellites.
@@ -534,7 +564,13 @@ single-tone, and its messages' tone time goes unreported (no tone share)."""
 
 
 def iridium_dials_of(config: CommsConfig) -> IridiumDials:
-    """Return a config's Iridium dials, refusing a config that does not select the Iridium model.
+    """Return a config's Iridium dials, refusing a config that does not select the Iridium model
+    and one that does not validate whole.
+
+    Every Iridium path narrows its config here, so here the config is re-validated whole
+    (``CommsConfig.model_validate(config.model_dump())``): a config built with ``model_copy``,
+    which pydantic does not validate, cannot carry a setting past the validators (a coverage
+    floor off its pinned value, a negative price) into a run.
 
     Args:
         config: A communications config.
@@ -544,10 +580,12 @@ def iridium_dials_of(config: CommsConfig) -> IridiumDials:
 
     Raises:
         NotAnIridiumConfigError: If the config has no ``iridium:`` block (it is the cellular
-            family's).
+            family's), checked first.
+        pydantic.ValidationError: If the config does not validate whole, naming the field.
     """
     if config.iridium is None:
         raise NotAnIridiumConfigError(_NOT_AN_IRIDIUM_CONFIG)
+    CommsConfig.model_validate(config.model_dump())
     return config.iridium
 
 
@@ -676,9 +714,47 @@ def _class_price(arpu: IridiumArpuDials, device_class: DeviceClass) -> float:
             assert_never(device_class)
 
 
-def _annual_revenue_musd(count: int, price_usd_per_month: float) -> float:
-    """Return a count at a monthly price for a year, $M."""
+def _annual_revenue_musd(count: float, price_usd_per_month: float) -> float:
+    """Return a count (people, devices, or the people one satellite adds) at a monthly price
+    for a year, $M."""
     return count * price_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
+
+
+def _sells(fleet: int, coverage_floor: int) -> bool:
+    """Whether a fleet sells: the floor rule's one home. At or above the coverage floor every
+    class and both IoT lines are sold in full; below it nothing is sold."""
+    return fleet >= coverage_floor
+
+
+@dataclass(frozen=True)
+class _ClassSale:
+    """A class's sale at one fleet (engine-internal): its revenue and its own margin.
+
+    Attributes:
+        revenue_musd: The people at the class's price for a year, $M; 0.0 below the floor.
+        own_margin_pct: That revenue against the fleet's annualized cost, percent; None when
+            the revenue is 0.0.
+    """
+
+    revenue_musd: float
+    own_margin_pct: float | None
+
+
+def _class_sale(
+    people: int,
+    *,
+    sold: bool,
+    price_usd_per_month: float,
+    fleet_annual_cost_musd: float,
+) -> _ClassSale:
+    """A class's floor-gated sale at a fleet, for the years and the readings alike: its people at
+    its price when the fleet sells (:func:`_sells`), else nothing, and its own margin against
+    the fleet's annualized cost."""
+    revenue_musd = _annual_revenue_musd(people, price_usd_per_month) if sold else _NOTHING_SOLD_MUSD
+    return _ClassSale(
+        revenue_musd=revenue_musd,
+        own_margin_pct=margin_pct(revenue_musd, fleet_annual_cost_musd),
+    )
 
 
 def _people_served(
@@ -721,7 +797,7 @@ def _years(
     """Each model year's Iridium lines: every seat sold at or above the floor, nothing below it."""
     years: list[YearRecord] = []
     for fleet_year in fleet.years:
-        sold = fleet_year.living_fleet >= coverage_floor
+        sold = _sells(fleet_year.living_fleet, coverage_floor)
         lines: list[ClassYearRecord] = []
         for device_class in DeviceClass:
             people = (
@@ -735,15 +811,18 @@ def _years(
                 if sold
                 else 0
             )
-            revenue_musd = (
-                _annual_revenue_musd(people, prices[device_class]) if sold else _NOTHING_SOLD_MUSD
+            sale = _class_sale(
+                people,
+                sold=sold,
+                price_usd_per_month=prices[device_class],
+                fleet_annual_cost_musd=fleet_year.annual_cost_this_year_musd,
             )
             lines.append(
                 ClassYearRecord(
                     device_class=device_class,
                     people_served=people,
-                    revenue_musd=revenue_musd,
-                    own_margin_pct=margin_pct(revenue_musd, fleet_year.annual_cost_this_year_musd),
+                    revenue_musd=sale.revenue_musd,
+                    own_margin_pct=sale.own_margin_pct,
                 )
             )
         years.append(
@@ -763,11 +842,19 @@ def _years(
 
 @dataclass(frozen=True)
 class _ReportedFleet:
-    """A fleet the readings are taken at, with its label and its cost (engine-internal)."""
+    """A fleet the readings are taken at (engine-internal).
+
+    Attributes:
+        label: What the fleet is (the reading's published label).
+        fleet: The fleet, satellites.
+        annual_cost_musd: The reading's cost, $M a year.
+        basis: How the fleet is formed and the settings that set it, for a refusal's message.
+    """
 
     label: str
     fleet: int
     annual_cost_musd: float
+    basis: str
 
 
 def _reported_fleets(
@@ -777,32 +864,46 @@ def _reported_fleets(
     coverage_floor: int,
     cost_per_satellite_year_musd: float,
 ) -> tuple[_ReportedFleet, ...]:
-    """The four reported fleets (E7), each with its reading cost.
+    """The four reported fleets, each with its reading cost and its basis.
 
     The horizon-end reach takes the final year's annualized cost, so it and the final year agree
     under any launch-cost path; the coverage floor, the retired cap and the steady state, fleets
     the trajectory does not hold, are priced at the cost per satellite-year.
     """
     final = fleet.years[-1]
-    steady_state = (
-        final.comms_launches_flown_this_year
-        * config.satellite.satellites_per_launch
-        * config.satellite.satellite_lifetime_years
-    )
+    satellites_per_launch = config.satellite.satellites_per_launch
+    life = config.satellite.satellite_lifetime_years
+    steady_state = final.comms_launches_flown_this_year * satellites_per_launch * life
     return (
         _ReportedFleet(
-            COVERAGE_FLOOR_LABEL, coverage_floor, coverage_floor * cost_per_satellite_year_musd
+            COVERAGE_FLOOR_LABEL,
+            coverage_floor,
+            coverage_floor * cost_per_satellite_year_musd,
+            "the floor pinned on the Iridium path (coverage.satellites_for_full_coverage)",
         ),
         _ReportedFleet(
             RETIRED_CAP_LABEL,
             RETIRED_CAP_READING_FLEET,
             RETIRED_CAP_READING_FLEET * cost_per_satellite_year_musd,
+            "a reading set by no setting",
         ),
-        _ReportedFleet(HORIZON_END_LABEL, final.living_fleet, final.annual_cost_this_year_musd),
+        _ReportedFleet(
+            HORIZON_END_LABEL,
+            final.living_fleet,
+            final.annual_cost_this_year_musd,
+            f"FY{final.year}'s living fleet, set by the cadence (cadence.*, "
+            "comms_cadence.share_of_fleet), satellite.satellites_per_launch and "
+            "satellite.satellite_lifetime_years",
+        ),
         _ReportedFleet(
             STEADY_STATE_LABEL_FORMAT.format(horizon_years=config.metadata.horizon_years),
             steady_state,
             steady_state * cost_per_satellite_year_musd,
+            f"FY{final.year}'s {final.comms_launches_flown_this_year} comms launches (set by "
+            "cadence.* and comms_cadence.share_of_fleet) x "
+            f"{satellites_per_launch} satellites per launch "
+            f"(satellite.satellites_per_launch) x the {life}-year life "
+            "(satellite.satellite_lifetime_years)",
         ),
     )
 
@@ -816,20 +917,35 @@ def _reading(
     panel_factor: float,
     prices: Mapping[DeviceClass, float],
 ) -> ReadingRecord:
-    """Every class at one reported fleet; below the floor it carries people and sells nothing."""
-    sold = reported.fleet >= coverage_floor
+    """Every class at one reported fleet; below the floor it carries people and sells nothing.
+
+    Raises:
+        CurveBeyondLastRowError: If the reported fleet lies past a class's last row, naming the
+            reading (its label, its fleet and the settings that set it) beside the reading's
+            own message (the fleet, the class and the last row), as a year's refusal names its
+            year.
+    """
+    sold = _sells(reported.fleet, coverage_floor)
     lines: list[ClassReadingRecord] = []
     for device_class in DeviceClass:
-        reading = read_fleet(
-            curve,
-            device_class,
-            reported.fleet,
-            downlink_share=downlink_share,
-            panel_factor=panel_factor,
-        )
+        try:
+            reading = read_fleet(
+                curve,
+                device_class,
+                reported.fleet,
+                downlink_share=downlink_share,
+                panel_factor=panel_factor,
+            )
+        except CurveBeyondLastRowError as exc:
+            raise CurveBeyondLastRowError(
+                f"{reported.label} ({reported.fleet} satellites, {reported.basis}): {exc}"
+            ) from exc
         people = round_half_up(reading.people)
-        revenue_musd = (
-            _annual_revenue_musd(people, prices[device_class]) if sold else _NOTHING_SOLD_MUSD
+        sale = _class_sale(
+            people,
+            sold=sold,
+            price_usd_per_month=prices[device_class],
+            fleet_annual_cost_musd=reported.annual_cost_musd,
         )
         lines.append(
             ClassReadingRecord(
@@ -838,8 +954,8 @@ def _reading(
                 share_of_maximum_use=reading.share_of_maximum_use,
                 ocean_factor=reading.ocean_factor,
                 people=people,
-                revenue_musd=revenue_musd,
-                own_margin_pct=margin_pct(revenue_musd, reported.annual_cost_musd),
+                revenue_musd=sale.revenue_musd,
+                own_margin_pct=sale.own_margin_pct,
             )
         )
     return ReadingRecord(
@@ -872,7 +988,7 @@ def _iot_row(
         for line_reading in reading.classes
         if line_reading.device_class is DeviceClass.PHONE_CLASS
     )
-    if reading.fleet < coverage_floor or phone_beams <= 0:
+    if not _sells(reading.fleet, coverage_floor) or phone_beams <= 0:
         return IotCheckRowRecord(
             fleet=reading.fleet,
             devices_per_useful_beam=None,
@@ -912,7 +1028,7 @@ def _iot_check(
     *,
     coverage_floor: int,
 ) -> IotCheckRecord:
-    """The IoT check at every reported fleet, each line on its own (E8).
+    """The IoT check at every reported fleet, each line on its own.
 
     A beam's uplink is the held width at the phone class's spectral efficiency over the share of
     the frame the downlink leaves (1 - d, ADR 008), and its tones are the held width over the
@@ -954,7 +1070,7 @@ def _marginal_intervals(
     price_usd_per_month: float,
     cost_per_satellite_year_musd: float,
 ) -> tuple[MarginalIntervalRecord, ...]:
-    """A class's marginal intervals on its curve's own rows (E12): from 0 to the first row, then
+    """A class's marginal intervals on its curve's own rows: from 0 to the first row, then
     between consecutive rows, every one listed, so an interval that pays after a first stop
     shows."""
     intervals: list[MarginalIntervalRecord] = []
@@ -968,7 +1084,7 @@ def _marginal_intervals(
             panel_factor=panel_factor,
         )
         added = (upper_people - lower_people) / (row.fleet - lower_fleet)
-        revenue_musd = added * price_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
+        revenue_musd = _annual_revenue_musd(added, price_usd_per_month)
         intervals.append(
             MarginalIntervalRecord(
                 lower_fleet=lower_fleet,
@@ -982,18 +1098,6 @@ def _marginal_intervals(
     return tuple(intervals)
 
 
-def _class_curve(curve: SaturationCurve, device_class: DeviceClass) -> ClassCurve:
-    """Return a class's central curve.
-
-    Raises:
-        SaturationCurveError: If the curve holds no curve for the class.
-    """
-    for entry in curve.classes:
-        if entry.device_class is device_class:
-            return entry
-    raise SaturationCurveError(f"the saturation curve holds no {device_class.value} curve to read")
-
-
 def _class_record(
     curve: SaturationCurve,
     device_class: DeviceClass,
@@ -1004,8 +1108,14 @@ def _class_record(
     final_living_fleet: int,
     cost_per_satellite_year_musd: float,
 ) -> ClassRecord:
-    """One class's block: its price, usage and physics, its markers, its limit, its intervals."""
-    class_curve = _class_curve(curve, device_class)
+    """One class's block: its price, usage and physics, its markers, its limit, its intervals.
+
+    Raises:
+        BindingLimitUnmeasuredError: If the class's curve reaches no saturation number and the
+            final living fleet lies past its not-reached-by fleet, naming the class, the fleet
+            and that label.
+    """
+    class_curve = class_curve_of(curve, device_class)
     usage = CLASS_USAGE[device_class]
     spectral_efficiency = CLASS_SE_CENTRAL[device_class]
     downlink_share = dials.saturation.downlink_share
@@ -1016,6 +1126,15 @@ def _class_record(
         usage=usage,
     )
     markers = class_curve.markers
+    not_reached_by = markers.saturation_not_reached_by
+    if not_reached_by is not None and final_living_fleet > not_reached_by:
+        raise BindingLimitUnmeasuredError(
+            f"the {device_class.value} curve reaches no saturation number and is not reached "
+            f"by {not_reached_by} satellites, the last fleet its rows measure, and the final "
+            f"year's living fleet of {final_living_fleet} satellites lies past it: the binding "
+            "limit at the horizon's end is unknown there, so the run needs a curve whose sweep "
+            "measures that fleet"
+        )
     binding = (
         BindingLimit.SPECTRUM
         if markers.saturation_number is not None and final_living_fleet >= markers.saturation_number
@@ -1051,8 +1170,13 @@ def _class_record(
     )
 
 
-def _fixed_books(arpu: IridiumArpuDials, *, coverage_floor: int) -> FixedBooksRecord:
-    """The two IoT lines at their fixed counts and prices (ADR 007)."""
+def _fixed_books(arpu: IridiumArpuDials) -> FixedBooksRecord:
+    """The two IoT lines at their fixed counts and prices (ADR 007).
+
+    The basis states where the counts come from in named constants alone (the iridium-v5
+    model's count at the floor it was read at; Iridium's own book; the price relation at the
+    default prices), so it reads true at any setting a run takes.
+    """
     return FixedBooksRecord(
         minimal_packet_iot_devices=MINIMAL_PACKET_IOT_DEVICES,
         minimal_packet_iot_price_usd_per_month=arpu.minimal_packet_iot_price_usd_month,
@@ -1065,14 +1189,17 @@ def _fixed_books(arpu: IridiumArpuDials, *, coverage_floor: int) -> FixedBooksRe
             DATA_IOT_DEVICES, arpu.data_iot_price_usd_month
         ),
         basis=(
-            "Minimal-packet IoT's count is the capable count: today's model's Sheet A IoT "
-            f"count at the {coverage_floor}-satellite coverage floor, held as a stated "
-            "assumption (ADR 007), not Iridium's own IoT book (1,998,000 devices, COMM-617). "
-            "Data IoT's count is half of it at double the price, in proportion. Each line is "
-            "its own revenue line, never inside a class's margin; neither moves with the "
-            "fleet, a class, the downlink share, the panel or satellites per launch; both are "
-            "sold in full from the first year the living fleet reaches the coverage floor, "
-            "and not before. Government is left out of revenue."
+            "Minimal-packet IoT's count is the capable count: the iridium-v5 model's Sheet A "
+            f"IoT count at the {MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES}-satellite coverage "
+            "floor, held as a stated assumption (ADR 007), not Iridium's own IoT book "
+            f"({IRIDIUM_IOT_BOOK_DEVICES:,} devices, COMM-617). Data IoT's count is half of it, "
+            "in proportion, the investor's setting of 2026-10-04: at the default prices "
+            f"(${MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT:g} and "
+            f"${DATA_IOT_PRICE_USD_MONTH_DEFAULT:g} a month) half the count at double the "
+            "price. Each line is its own revenue line, never inside a class's margin; neither "
+            "moves with the fleet, a class, the downlink share, the panel or satellites per "
+            "launch; both are sold in full from the first year the living fleet reaches the "
+            "coverage floor, and not before. Government is left out of revenue."
         ),
     )
 
@@ -1090,6 +1217,12 @@ def _assumptions(
     mounted = CLASS_USAGE[DeviceClass.MOUNTED_TERMINAL_CLASS]
     phone = CLASS_USAGE[DeviceClass.PHONE_CLASS]
     floor = config.coverage.satellites_for_full_coverage
+    below_phone_floor = (
+        "; this run sets the phone class below that floor, at "
+        f"${arpu.phone_class_price_usd_month:g} a month (a scenario setting, not a haircut)"
+        if arpu.phone_class_price_usd_month < PHONE_CLASS_PRICE_FLOOR_USD_MONTH
+        else ""
+    )
     lines = [
         ECOSYSTEM_ASSUMPTION_NOTE,
         (
@@ -1107,6 +1240,14 @@ def _assumptions(
             "share). Beams over oceans and empty land carry no one."
         ),
         (
+            "The reuse calibration is "
+            f"{curve.parameters.shell.reuse_calibration_gbps_per_mhz_per_se:g} Gbps per MHz per "
+            "unit of spectral efficiency at the "
+            f"{curve.parameters.shell.reference_aperture_m2:g} m^2 reference panel, an estimate "
+            "(COMM-410, COMM-411): it sets each class's satellite peak and the curve's beams per "
+            "satellite."
+        ),
+        (
             f"The downlink share d is {dials.saturation.downlink_share:g}, the time-division "
             "duplex band's downlink time share (ADR 008): every people and capacity figure but "
             "the satellite's peak scales with it, and the uplink holds the rest of the frame."
@@ -1114,12 +1255,8 @@ def _assumptions(
         (
             f"The panel is {dials.aperture_m2:g} m^2, applied linearly on the curve: a panel "
             f"factor of {panel_factor:.4g} on people, useful beams, capacity and maximum use, "
-            "never on the saturation numbers, the ocean factor or satellites per launch. Above "
-            "the reference panel the rule is conservative (it ignores the per-link SNR lift a "
-            "larger panel also gives); below it the directional classes carry more than the "
-            "rule gives, because their people caps do not shrink with the panel, the rule is "
-            "exact in beams for the phone class, and each beam's rate is held at its "
-            "reference-panel value (the link effect of another panel is not modeled)."
+            "never on the saturation numbers, the ocean factor or satellites per launch. "
+            f"{PANEL_RULE_LIMITS_NOTE}"
         ),
         (
             "The fleet is every comms launch the cadence share allows "
@@ -1130,10 +1267,14 @@ def _assumptions(
             "target and no cap, and no saturation number sizes, caps, stops or slows the build."
         ),
         (
-            "Satellites per launch is a direct scenario setting (bounds 1 to 16). The Iridium "
-            "scenario's 16 assumes the Neutron block upgrade from the first launch, for the "
-            "stack kept in the fairing's cylinder at calculation C's pitch on a rod-held base "
-            "(COMM-713); without the upgrade it is 15, the mass-bound count today (COMM-712)."
+            "Satellites per launch is a direct scenario setting (bounds "
+            f"{SATELLITES_PER_LAUNCH_MIN} to {SATELLITES_PER_LAUNCH_MAX}); this run flies "
+            f"{config.satellite.satellites_per_launch}. The validated counts are "
+            f"{SATELLITES_PER_LAUNCH_BLOCK_UPGRADE} with the Neutron block upgrade assumed from "
+            "the first launch, for the stack kept in the fairing's cylinder at calculation C's "
+            "pitch on a rod-held base (COMM-713), and "
+            f"{SATELLITES_PER_LAUNCH_NO_UPGRADE} without the upgrade, the mass-bound count "
+            "today (COMM-712)."
         ),
         (
             "Every seat is sold: each year each device class serves every person its living "
@@ -1144,7 +1285,9 @@ def _assumptions(
             "Each class's price is held flat: the small terminal "
             f"${arpu.small_terminal_class_price_usd_month:g}, the mounted terminal "
             f"${arpu.mounted_terminal_class_price_usd_month:g} and the phone class "
-            f"${arpu.phone_class_price_usd_month:g} a month (its floor). A lower price or a "
+            f"${arpu.phone_class_price_usd_month:g} a month. The phone class's floor is the "
+            f"investor's ${PHONE_CLASS_PRICE_FLOOR_USD_MONTH:g} a month, which no price haircut "
+            f"goes below{below_phone_floor}. A lower price or a "
             "smaller market is a division in the conclusions, never in the model: a price "
             "haircut divides revenue only, a market haircut people and revenue, and every "
             "margin is re-derived against the same fleet cost, never divided or averaged."
@@ -1180,7 +1323,7 @@ def _assumptions(
             f"${arpu.minimal_packet_iot_price_usd_month:g} a month "
             f"({MINIMAL_PACKET_IOT_MESSAGES_PER_DAY} messages of "
             f"{MINIMAL_PACKET_IOT_MESSAGE_BYTES} bytes a day), and data IoT, "
-            f"{DATA_IOT_DEVICES:,} devices at ${arpu.data_iot_price_usd_month:g} "
+            f"{DATA_IOT_DEVICES:,} devices at ${arpu.data_iot_price_usd_month:g} a month "
             f"({DATA_IOT_BURSTS_PER_DAY} bursts of {DATA_IOT_BURST_BYTES // _BYTES_PER_KB} KB a "
             "day beside the messages). Their counts are fixed (ADR 007): they never move with "
             "the fleet, a class, d, the panel or satellites per launch."
@@ -1208,7 +1351,8 @@ def _assumptions(
             f"{IOT_MAC_EFFICIENCY * _PERCENT:g} percent MAC efficiency; its access attempts a "
             "second a beam, one per message or burst, against a random-access window of "
             f"{IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW} to {IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH:,} "
-            f"devices at {IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND} window a second (COMM-654); "
+            f"devices (COMM-654) at an assumed {IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND} window a "
+            "second (no source gives a window rate); "
             "and, for minimal-packet IoT, its messages' channel time on "
             f"{NB_IOT_TONE_HZ * _TONE_KHZ_PER_HZ:g} kHz tones at {IOT_MESSAGE_AIRTIME_LOW_S:g} "
             f"to {IOT_MESSAGE_AIRTIME_HIGH_S:g} s a message (COMM-714, COMM-719)."
@@ -1323,11 +1467,17 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
 
     Raises:
         NotAnIridiumConfigError: If the config has no ``iridium:`` block.
+        pydantic.ValidationError: If the config does not validate whole (a setting a
+            ``model_copy`` carried past the validators), naming the field.
         SaturationCurveMismatchError: If the curve was computed for other inputs, naming the
             first field that differs.
         CurveBeyondLastRowError: If a year's living fleet, or a reported fleet, lies past a
-            class's last row (a year's names its fiscal year), naming the fleet, the class and
-            the last row.
+            class's last row, naming the fleet, the class and the last row, and before them
+            the year's fiscal year, or the reading's label, fleet and the settings that set
+            it.
+        BindingLimitUnmeasuredError: If a class's curve reaches no saturation number and the
+            final year's living fleet lies past its not-reached-by fleet, naming the class, the
+            fleet and that label.
         ValueError: If the panel factor is not a positive finite number (a panel so small its
             ratio to the reference panel underflows to 0), naming ``iridium.aperture_m2``; or
             if the run's records would hold an infinity or a NaN (a panel, a price or a cost
@@ -1351,7 +1501,7 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
     prices = MappingProxyType(
         {device_class: _class_price(dials.arpu, device_class) for device_class in DeviceClass}
     )
-    books = _fixed_books(dials.arpu, coverage_floor=coverage_floor)
+    books = _fixed_books(dials.arpu)
     years = _years(
         fleet,
         curve,
@@ -1404,7 +1554,8 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
         operations_cost_musd=IRIDIUM_OPERATIONS_COST_MUSD,
         ecosystem_assumption=ECOSYSTEM_ASSUMPTION_NOTE,
         coverage_floor_reached_year=next(
-            (year.year for year in fleet.years if year.living_fleet >= coverage_floor), None
+            (year.year for year in fleet.years if _sells(year.living_fleet, coverage_floor)),
+            None,
         ),
         cost_per_satellite_year_musd=cost_per_satellite_year_musd,
         classes=classes,
@@ -1444,6 +1595,7 @@ __all__ = [
     "RETIRED_CAP_LABEL",
     "STEADY_STATE_LABEL_FORMAT",
     "BindingLimit",
+    "BindingLimitUnmeasuredError",
     "ClassRates",
     "ClassReadingRecord",
     "ClassRecord",

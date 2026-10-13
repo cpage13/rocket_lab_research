@@ -10,7 +10,7 @@ specification, each naming what it exercises and what counts as success:
   uniform band, where the supply bound is the time fraction over land and the 0.10 crossing
   is not reached; a two-band world, where maximum use matches its closed form; a dense
   mid-latitude band swept twice, where the 90 percent fleet reads maximum use, never a
-  sweep's last ceiling; capacity that does not fall between rows; determinism; and a world
+  sweep's last ceiling; capacity that never falls between rows; determinism; and a world
   at one shared usage, where the classes order in aggregate and the sector-rule ceiling
   bounds every directional row;
 * through the private seam ``_allocate`` with explicit satellite positions: one patch under
@@ -28,7 +28,15 @@ specification, each naming what it exercises and what counts as success:
   band point's first row rebuilt through the drift seams, and every class's and band point's
   maximum use through the curve's own plans, at 1e-4, and its markers, limits and texts
   re-derived exactly; the coarse promotion, byte-identical but for its measurement; the curve
-  loader's refusals and the saturation command's;
+  loader's refusals; the saturation command's refusals and its writes (over an existing curve,
+  under missing folders, a relative output anchored at the repository root);
+* the markers' rules worked by hand: the first crossing under 0.10, interpolated in ln N
+  (1,046 on rows at 342, 992 and 1,980; an elasticity of exactly 0.10 no crossing), a
+  saturation number not reached named by the rows' last midpoint (2,803), and the crossings
+  refused when capacity falls between rows or the elasticity crosses back over a threshold;
+* the sweep's schedule: the memory tiers change no number, the worker count takes each
+  worker at its reading times the margin (worked by hand), and every task runs in a fresh
+  worker of its own, a pool's bound the sum of its largest task peaks, as many as its workers;
 * numpy confinement (a subprocess), the people-per-beam arithmetic, the class constants,
   the checks' refusals, the grid loader's refusals and the contract's validators;
 * the engine's side of the curve: the identity check, which names the first field of a run's
@@ -61,10 +69,12 @@ import subprocess
 import sys
 import tracemalloc
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from enum import StrEnum
 from functools import partial
 from itertools import combinations, pairwise
+from multiprocessing.context import BaseContext
 from pathlib import Path
 from typing import Protocol, assert_never
 
@@ -73,7 +83,7 @@ import pytest
 from pydantic import ValidationError
 
 from common.cadence import round_half_up
-from common.cli import EXIT_ERROR, EXIT_USAGE, describe_failure
+from common.cli import EXIT_ERROR, EXIT_OK, EXIT_USAGE, describe_failure
 from common.file_io import (
     ARTIFACT_FILE_END,
     ModelFileError,
@@ -82,14 +92,16 @@ from common.file_io import (
     render_artifact_json,
     write_files_with_rollback,
 )
+from communications import iridium, saturation_curve
 from communications import saturation as sat
-from communications import saturation_curve
 from communications.config import CommsConfig, IridiumDials, load_comms_config
 from communications.constants import (
+    APERTURE_M2_DEFAULT,
     CLASS_SE_CENTRAL,
     CLASS_USAGE,
     DOWNLINK_SHARE_DEFAULT,
     GBPS_TO_MBPS,
+    PANEL_RULE_LIMITS_NOTE,
     POPULATION_GRID_PATH,
     POPULATION_GRID_SHA256,
     SATELLITES_FOR_FULL_COVERAGE_DEFAULT,
@@ -418,16 +430,19 @@ def test_supply_bound_on_a_uniform_band_is_the_time_fraction_over_land(
     assert first.ocean_factor == pytest.approx(share, rel=0.01)
 
 
-def test_a_class_whose_crossing_is_not_reached_reports_the_last_fleet(
+def test_a_class_whose_crossing_is_not_reached_reports_its_last_measured_midpoint(
     uniform_band_curve: SaturationCurve,
 ) -> None:
-    """Objective: a curve that has not flattened by its last row reports no spectrum bound.
+    """Objective: a curve whose elasticity has not fallen under 0.10 at any midpoint reports no
+    saturation number, and names as the fleet it is not reached by the last fleet its rows
+    measure the elasticity at, never the last row's fleet (ADR 005).
 
     Sample: the uniform band's curve (fleets 992 and 10,000), whose capacity still grows
     with an elasticity well above 0.10 between its two rows.
 
-    Expected outcome: no saturation number; ``saturation_not_reached_by`` is the last row's
-    fleet, 10,000; no crossing under 0.25 either.
+    Expected outcome: no saturation number; ``saturation_not_reached_by`` is the rows' one
+    midpoint, sqrt(992 x 10,000) = 3,149.6, rounded half up to 3,150; no crossing under 0.25
+    either.
     """
     rows = phone_curve(uniform_band_curve).rows
     markers = phone_curve(uniform_band_curve).markers
@@ -435,7 +450,7 @@ def test_a_class_whose_crossing_is_not_reached_reports_the_last_fleet(
     elasticity = math.log(high.capacity_gbps / low.capacity_gbps) / math.log(high.fleet / low.fleet)
     assert elasticity > 0.25
     assert markers.saturation_number is None
-    assert markers.saturation_not_reached_by == rows[-1].fleet == 10_000
+    assert markers.saturation_not_reached_by == round_half_up(math.sqrt(992 * 10_000)) == 3_150
     assert markers.elasticity_under_0p25_fleet is None
 
 
@@ -512,21 +527,25 @@ def test_ninety_percent_fleet_reads_maximum_use_never_a_sweeps_last_ceiling(
     assert longer_by_ceiling != shorter_by_ceiling
 
 
-def test_capacity_does_not_fall_more_than_two_percent_between_rows(
+def test_capacity_never_falls_between_rows_on_any_curve(
     mid_band_curves: tuple[SaturationCurve, ...],
     uniform_band_curve: SaturationCurve,
     two_band_world_curve: SaturationCurve,
 ) -> None:
-    """Objective: capacity grows with the fleet, or holds, up to the snapshots' spread.
+    """Objective: capacity grows with the fleet, or holds, on every class's curve and every band
+    point's (the markers' crossings rest on it, and the computation refuses a curve whose capacity
+    falls).
 
     Sample: every synthetic curve here: the dense band's two sweeps, the uniform band and the
-    two-band world.
+    two-band world, each with its three classes and six band points.
 
-    Expected outcome: each row's capacity is at least 0.98 of the row before it.
+    Expected outcome: on every curve each row's capacity is at least the row before it.
     """
     for curve in (*mid_band_curves, uniform_band_curve, two_band_world_curve):
-        for earlier, later in pairwise(phone_curve(curve).rows):
-            assert later.capacity_gbps >= 0.98 * earlier.capacity_gbps
+        every_curve = (*(entry.rows for entry in curve.classes), *(b.rows for b in curve.bands))
+        for rows in every_curve:
+            for earlier, later in pairwise(rows):
+                assert later.capacity_gbps >= earlier.capacity_gbps
 
 
 def test_two_runs_under_the_fixed_seed_are_equal(
@@ -644,8 +663,9 @@ def test_one_patch_under_one_overhead_satellite(
     Expected outcome: L = min(B, cell area / the overhead footprint), the overhead footprint
     pi / 4 x (450 km x 0.886 lambda / 5 m)^2 = 170.8 km^2: a 0.25 degree cell (about 773
     km^2) takes 4.5 beams, so the cell's area binds; a 2 degree cell (about 49,400 km^2)
-    could take 289, so the satellite's 150 beams bind. The supply and the ceiling read the
-    same here.
+    could take 289, so the satellite's 150 beams bind. The supply reads L; the ceiling reads the
+    cell's room at the overhead footprint, cell area / 170.8 km^2 (4.5 and 289 beams), since no
+    people cap binds.
     """
     grid = synthetic_population_grid(cell_deg, patch_people(cell_deg, 0))
     cells = sat._demand_cells(grid, 1.0)
@@ -664,6 +684,7 @@ def test_one_patch_under_one_overhead_satellite(
     binds_on_beams = area / overhead_footprint > beams_per_satellite
     assert binds_on_beams == (binding == "the satellite's beams")
     assert allocation.supply_beams == pytest.approx(expected, rel=1e-9)
+    assert allocation.ceiling_beams == pytest.approx(area / overhead_footprint, rel=1e-9)
 
 
 @pytest.fixture(scope="module")
@@ -728,37 +749,61 @@ def test_one_satellite_adds_at_most_one_layer_to_a_cell(
     assert np.all(layer <= 1 + 1e-9)
 
 
-TRIM_CASE_CENTRES_DEG = ((0.125, 0.125), (0.125, 22.125))
-"""Two 0.25 degree cells on the equator, 22 degrees of longitude apart: each lies beyond the
-other cell's overhead satellite's horizon (a 450 km shell's horizon stands 20.9 degrees away)."""
+TRIM_CASE_LATITUDE_DEG = 0.125
+"""The trim cases' cells sit on the equator's first row: 0.25 degree cells centred at 0.125
+degrees north."""
+
+TRIM_CASE_FIRST_LONGITUDE_DEG = 0.125
+"""The first trim-case cell's centre longitude; the second cell lies east of it."""
 
 
-def two_cells_people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
-    """People in the two trim-case cells only (far above any people cap)."""
-    inside = np.zeros(lat.shape, dtype=bool)
-    for centre_lat, centre_lon in TRIM_CASE_CENTRES_DEG:
-        inside |= (np.abs(lat - centre_lat) < 0.125) & (np.abs(lon - centre_lon) < 0.125)
-    return np.where(inside, DENSE_PEOPLE_PER_CELL, 0.0)
+def cells_people(centres_deg: Sequence[tuple[float, float]]) -> PeopleAt:
+    """People in the given 0.25 degree cells only (far above any people cap), by centre."""
+
+    def people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+        inside = np.zeros(lat.shape, dtype=bool)
+        for centre_lat, centre_lon in centres_deg:
+            inside |= (np.abs(lat - centre_lat) < 0.125) & (np.abs(lon - centre_lon) < 0.125)
+        return np.where(inside, DENSE_PEOPLE_PER_CELL, 0.0)
+
+    return people
 
 
+@pytest.mark.parametrize(
+    ("separation_deg", "leaks"),
+    [(22.0, False), (10.0, True)],
+    ids=["below the horizon", "above the horizon, off axis"],
+)
 def test_the_trim_is_its_closed_form_and_drops_satellites_below_the_horizon(
-    synthetic_population_grid: GridBuilder,
+    synthetic_population_grid: GridBuilder, separation_deg: float, leaks: bool
 ) -> None:
     """Objective: the interference trim (stage 12) prices each victim's aggregate leak by power
-    control and counts only the lit satellites above the victim's horizon.
+    control, the slant range squared over cos^1.3 of the scan angle and the gain toward the
+    victim at that angle, and counts only the lit satellites above the victim's horizon.
 
-    Sample: the two trim-case cells, each under a satellite placed exactly over its centre, the
-    phone allocation (each cell's area binds: about 4.5 beams each), the default trim settings
-    (both cells are the victims, since 2 is under 3,000). Each satellite stands below the other
-    cell's horizon yet is scanned under 90 degrees toward it, so it would leak into it but for
-    the horizon rule.
+    Sample: two 0.25 degree cells on the equator, 22 or 10 degrees of longitude apart, each under a
+    satellite placed exactly over its centre, the phone allocation (each cell's area binds: about
+    4.5 beams each, every beam overhead its own cell), the default trim settings (both cells are
+    the victims, since 2 is under 3,000). At 22 degrees each satellite stands below the other
+    cell's horizon (a 450 km shell's horizon stands 20.9 degrees away), though scanned under 90
+    degrees toward it; at 10 degrees it stands above it, out of view of the other cell (the 25
+    degree mask's 7.2 degrees), so it leaks into the other cell off axis.
 
     Expected outcome: a victim's own satellite overhead gives W = b x h^2 and reaches it as W /
-    h^2, so x = gamma / G0 x b exactly, G0 = 4 pi x 25 / (2.998e8 / 1.621e9)^2 (39.6 dBi); the
-    trim at each floor is 1 - log2(1 + 1 / (1 + x)) within 1e-9 relative. The satellite below
-    the horizon would have added over 0.5 percent to x.
+    h^2, b; the other satellite, also W = b x h^2, reaches it, when above its horizon, as W x
+    cos^1.3(eta) / r^2, r the slant range and eta the scan angle off its nadir toward the victim,
+    worked by hand from the central angle g between the cells (r^2 = R^2 + (R + h)^2 - 2 R (R + h)
+    cos g, sin eta = R sin g / r). So x = gamma / G0 x b x (1 + h^2 cos^1.3(eta) / r^2) when it
+    leaks and gamma / G0 x b when not, G0 = 4 pi x 25 / (2.998e8 / 1.621e9)^2 (39.6 dBi); the trim
+    at each floor is 1 - log2(1 + 1 / (1 + x)) within 1e-9 relative. The leak, worked by hand, is
+    over 1 percent of x at 10 degrees; at 22 degrees it would add over 0.5 percent but for the
+    horizon rule.
     """
-    grid = synthetic_population_grid(0.25, two_cells_people)
+    centres = (
+        (TRIM_CASE_LATITUDE_DEG, TRIM_CASE_FIRST_LONGITUDE_DEG),
+        (TRIM_CASE_LATITUDE_DEG, TRIM_CASE_FIRST_LONGITUDE_DEG + separation_deg),
+    )
+    grid = synthetic_population_grid(0.25, cells_people(centres))
     cells = sat._demand_cells(grid, 1.0)
     assert cells.count == 2
     over = list(zip(np.degrees(cells.lat_rad).tolist(), np.degrees(cells.lon_rad).tolist()))
@@ -771,20 +816,22 @@ def test_the_trim_is_its_closed_form_and_drops_satellites_below_the_horizon(
     inputs = SaturationInputs()
     shell = inputs.shell
     orbit_km = EARTH_RADIUS_KM + shell.altitude_km
-    satellite_km = orbit_km * cells.xyz[1]
-    offset_km = satellite_km - EARTH_RADIUS_KM * cells.xyz[0]
-    distance_km = float(np.linalg.norm(offset_km))
-    assert float(offset_km @ cells.xyz[0]) / distance_km < 0
-    scan_cosine = float(offset_km @ cells.xyz[1]) / distance_km
-    assert scan_cosine > 0
-    leak = beams * shell.altitude_km**2 * scan_cosine**inputs.trim.scan_exponent / distance_km**2
-    assert leak / beams > 0.005
+    central = math.acos(float(cells.xyz[0] @ cells.xyz[1]))
+    slant_squared = (
+        EARTH_RADIUS_KM**2 + orbit_km**2 - 2 * EARTH_RADIUS_KM * orbit_km * math.cos(central)
+    )
+    sin_scan = EARTH_RADIUS_KM * math.sin(central) / math.sqrt(slant_squared)
+    cos_scan = math.sqrt(1 - sin_scan**2)
+    above_horizon = central < math.acos(EARTH_RADIUS_KM / orbit_km)
+    assert above_horizon is leaks
+    leak = shell.altitude_km**2 * cos_scan**inputs.trim.scan_exponent / slant_squared
+    assert leak > 0.005 and (not leaks or leak > 0.01)
     trims = sat._interference_trim(satellites, allocation, cells, shell, inputs.trim)
     wavelength_m = SPEED_OF_LIGHT_M_S / shell.carrier_hz
     directivity = 4 * math.pi * shell.reference_aperture_m2 / wavelength_m**2
     assert 10 * math.log10(directivity) == pytest.approx(39.6, abs=0.05)
     for floor_dbi, trim in zip(inputs.trim.floors_dbi, trims, strict=True):
-        extra = 10 ** (floor_dbi / 10) / directivity * beams
+        extra = 10 ** (floor_dbi / 10) / directivity * beams * (1 + (leak if leaks else 0.0))
         assert trim == pytest.approx(1 - math.log2(1 + 1 / (1 + extra)), rel=1e-9)
 
 
@@ -874,6 +921,10 @@ def test_each_band_point_changes_its_one_input(synthetic_population_grid: GridBu
 
 COARSE_REAL_FLEETS = (340, 1_000, 2_000)
 """The coarse setting's requested fleets (realized 342, 992 and 1,980), one snapshot."""
+
+COARSE_LAST_MIDPOINT = 1_401
+"""The coarse rows' last midpoint, sqrt(992 x 1,980) = 1,401.48, rounded half up: the fleet each
+coarse curve names as not reached by, since no curve's elasticity falls under 0.10 there."""
 
 COARSE_REAL_ROWS = (
     (
@@ -1277,11 +1328,12 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: Saturati
     directional classes their stacking diagnostics, and for the phone class its interference
     trim at -0.4, -2 and -8 dBi) and maximum use within 1e-4 relative of the frozen values;
     the six band points in their order, each the inputs' point, its rows (no trim, no
-    diagnostics) and maximum use within 1e-4 relative; no 0.10 crossing by 1,980 and no other
-    marker on any curve; the curve's envelope: schema, stamp, the input hash of its
-    parameters, the grid's name, digest, citations and licence, the three checks passed, the
-    run measured, the stated limits, and the three classes (small terminal, mounted terminal,
-    phone class).
+    diagnostics) and maximum use within 1e-4 relative; no 0.10 crossing on any curve, each not
+    reached by the rows' last midpoint (1,401), and no other marker on any curve (the
+    directional classes' included); the curve's envelope: schema, stamp, the input hash of its
+    parameters, the grid's name, digest, citations and licence, the four checks passed, the
+    run measured, the ten stated limits (the curve's own; no marker unplaced), and the three
+    classes (small terminal, mounted terminal, phone class).
     """
     inputs = SaturationInputs(sweep=COARSE_SWEEP)
     curve = coarse_real_curve
@@ -1305,7 +1357,7 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: Saturati
     markers = phone_curve(curve).markers
     assert markers.maximum_use_beams == pytest.approx(COARSE_REAL_MAXIMUM_USE, rel=1e-4)
     assert markers.saturation_number is None
-    assert markers.saturation_not_reached_by == 1_980
+    assert markers.saturation_not_reached_by == COARSE_LAST_MIDPOINT
     assert markers.elasticity_under_0p25_fleet is None
     assert markers.fleet_at_90pct_of_maximum_use is None
     assert curve.schema_version == SATURATION_CURVE_SCHEMA_VERSION == "saturation-v1"
@@ -1319,17 +1371,17 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: Saturati
     assert "doi:10.2905/2FF68A52-5B5B-4A22-8F40-C41DA8332CFE" in provenance.citations[0]
     assert "doi:10.1080/17538947.2024.2390454" in provenance.citations[1]
     assert provenance.licence == "CC BY 4.0"
-    assert len(provenance.checks_passed) == 3
+    assert len(provenance.checks_passed) == 4
     assert provenance.run_measurement.wall_time_s > 0
     assert provenance.run_measurement.peak_memory_mb > 0
-    assert len(curve.limits) == 9
+    assert len(curve.limits) == 10
     assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
     assert [band.point for band in curve.bands] == list(inputs.bands)
     assert [band.point.name for band in curve.bands] == list(BandName)
     for band in curve.bands:
         maximum_use, frozen_rows = COARSE_BANDS[band.point.name]
         assert band.markers.maximum_use_beams == pytest.approx(maximum_use, rel=1e-4)
-        assert band.markers.saturation_not_reached_by == 1_980
+        assert band.markers.saturation_not_reached_by == COARSE_LAST_MIDPOINT
         assert band.markers.elasticity_under_0p25_fleet is None
         assert band.markers.fleet_at_90pct_of_maximum_use is None
         for row, (fleet, useful, capacity, ocean, ceiling, supply) in zip(
@@ -1346,7 +1398,9 @@ def test_the_real_grid_at_a_coarse_setting_is_frozen(coarse_real_curve: Saturati
     for device_class, (maximum_use, frozen_rows) in COARSE_DIRECTIONAL.items():
         directional = class_curve(curve, device_class)
         assert directional.markers.maximum_use_beams == pytest.approx(maximum_use, rel=1e-4)
-        assert directional.markers.saturation_not_reached_by == 1_980
+        assert directional.markers.saturation_not_reached_by == COARSE_LAST_MIDPOINT
+        assert directional.markers.elasticity_under_0p25_fleet is None
+        assert directional.markers.fleet_at_90pct_of_maximum_use is None
         for row, frozen in zip(directional.rows, frozen_rows, strict=True):
             fleet, useful, capacity, ocean, ceiling, supply, share, separation, interference = (
                 frozen
@@ -1560,6 +1614,39 @@ def test_committed_curve_has_not_drifted_in_its_derived_fields(repo_dir: Path) -
     assert provenance.licence == sat._GRID_LICENCE
 
 
+def test_the_curve_texts_name_the_reference_panel_and_take_the_measured_panel_note_whole() -> None:
+    """Objective: the curve's published texts call the 25 m^2 panel the reference the engine scales
+    from, never the model's panel, and its panel-rule limit is the measured note whole (the
+    Iridium run's panel line states the same note), so the curve and the artifact cannot
+    disagree about the panel rule.
+
+    Sample: the default inputs' method and stated limits, as the computation writes them
+    (``_method``, ``_curve_limits``).
+
+    Expected outcome: the method names "a square aperture at the 25 m^2 reference panel" and no
+    "square 25 m^2 aperture"; it says the taper-and-spacing point changes two inputs, and reads
+    the 90 percent fleet between two rows, log-log; the panel limit is "Computed at the 25 m^2
+    reference panel. The engine scales the curve linearly by the scenario's panel over it (the
+    panel rule). " and ``PANEL_RULE_LIMITS_NOTE`` exactly; no limit calls the rule exact; one limit
+    says what a null marker means.
+    """
+    inputs = SaturationInputs()
+    method = sat._method(inputs)
+    assert "a square aperture at the 25 m^2 reference panel" in method
+    assert "square 25 m^2 aperture" not in method
+    assert "but for one changed input (two for the taper with wider spacing)" in method
+    assert "reach 0.9 of maximum use, read between two rows, log-log" in method
+    limits = sat._curve_limits(inputs)
+    panel = [limit for limit in limits if limit.startswith("Computed at the 25 m^2 reference")]
+    assert panel == [
+        "Computed at the 25 m^2 reference panel. The engine scales the curve linearly by the "
+        f"scenario's panel over it (the panel rule). {PANEL_RULE_LIMITS_NOTE}"
+    ]
+    assert not any("exact in beams" in limit for limit in limits)
+    null_markers = [limit for limit in limits if limit.startswith("A null marker is one the rows")]
+    assert len(null_markers) == 1
+
+
 def test_the_committed_curve_loads_whole_from_the_shipped_scenario(
     repo_dir: Path, iridium_yaml: Path
 ) -> None:
@@ -1648,11 +1735,13 @@ def test_the_byte_identity_helper_refuses_another_byte_form(
 NUMPY_FREE_MODULES = (
     "communications.config",
     "communications.engine",
+    "communications.ground",
     "communications.iridium",
     "communications.json_output",
     "communications.saturation_curve",
 )
-"""The communications modules that must load without numpy (ADR 010)."""
+"""The communications modules that must load without numpy (ADR 010): the ones the Iridium
+command loads and the cellular family's ground comparison, every one but the saturation module."""
 
 
 def _loaded_after_each_import(
@@ -1683,7 +1772,7 @@ def test_numpy_stays_inside_the_saturation_module(code_dir: Path) -> None:
     """Objective: numpy stays inside ``communications.saturation`` (ADR 010), transitive
     imports included, which a grep would miss.
 
-    Sample: one fresh interpreter importing ``communications.config``, ``.engine``,
+    Sample: one fresh interpreter importing ``communications.config``, ``.engine``, ``.ground``,
     ``.iridium``, ``.json_output`` and ``.saturation_curve``; then, in the same interpreter,
     ``communications.saturation`` too, the control.
 
@@ -1901,6 +1990,104 @@ def test_the_shared_writer_refuses_every_destination_the_preflight_refuses(
         unlock(tmp_path, case)
     assert preflight.value.path == writer.value.path == destination
     assert the_tree(tmp_path) == before
+
+
+CommandRun = tuple[SaturationInputs, str]
+"""What the patched computation was given on a command run: the inputs and the grid's SHA-256."""
+
+
+def command_promotes(
+    monkeypatch: pytest.MonkeyPatch, curve: SaturationCurve, scenario: Path, output: str | Path
+) -> list[CommandRun]:
+    """Run the saturation command (``main``) on a scenario and an output, its computation patched
+    to return ``curve`` (a curve the module computed once), so a test of the command's
+    destinations and its exit status costs no run; assert it exits 0 and return what the
+    computation was given."""
+    given: list[CommandRun] = []
+
+    def computed(
+        inputs: SaturationInputs, population: PopulationGrid, *, version_stamp: str
+    ) -> SaturationCurve:
+        given.append((inputs, population.sha256))
+        return curve
+
+    monkeypatch.setattr(sat, "compute_saturation", computed)
+    assert sat.main([str(scenario), str(output)]) == EXIT_OK
+    return given
+
+
+def promotion_bytes(curve: SaturationCurve) -> bytes:
+    """A curve's bytes as the promotion writes them."""
+    return (render_artifact_json(curve) + ARTIFACT_FILE_END).encode("utf-8")
+
+
+@pytest.mark.parametrize("where", ["an existing curve", "under missing folders"])
+def test_the_command_writes_its_curve_over_an_existing_one_and_under_missing_folders(
+    tmp_path: Path,
+    iridium_yaml: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    coarse_real_curve: SaturationCurve,
+    where: str,
+) -> None:
+    """Objective: the command's destination checks let through what every promotion needs: an
+    existing curve, which each re-promotion replaces, and a path under folders not yet made,
+    which the shared writer creates; the command exits 0 with the curve written.
+
+    Sample: the shipped scenario, the computation patched to return the coarse curve (computed
+    once by this module's coarse promotion: the destination and the exit are under test, not the
+    computation); the destination a file holding older bytes, or a path two missing folders down.
+
+    Expected outcome: exit status 0 and no ERROR record; the destination holds the curve exactly
+    as the promotion renders it, alone in its folder (the writer's staged file renamed away); the
+    computation given the shipped scenario's inputs and the shipped grid.
+    """
+    if where == "an existing curve":
+        destination = tmp_path / "saturation_curve.json"
+        destination.write_text("OLD\n", encoding="utf-8")
+    else:
+        destination = tmp_path / "models" / "iridium" / "saturation_curve.json"
+    given = command_promotes(monkeypatch, coarse_real_curve, iridium_yaml, destination)
+    dials = iridium_dials_of(load_comms_config(iridium_yaml))
+    assert given == [(saturation_inputs_for(dials), POPULATION_GRID_SHA256)]
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
+    assert destination.read_bytes() == promotion_bytes(coarse_real_curve)
+    assert list(destination.parent.iterdir()) == [destination]
+
+
+def test_a_relative_output_is_written_under_the_repository_root(
+    tmp_path: Path,
+    iridium_yaml: Path,
+    repo_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    coarse_real_curve: SaturationCurve,
+) -> None:
+    """Objective: the command anchors a relative output path at the repository root, never the
+    working directory, and reads the grid its inputs name there too (``SourceCheckout.anchored``).
+
+    Sample: the shipped scenario, given by its absolute path; the command's source checkout
+    patched to a temporary repository root that holds only a link to the shipped grid at its
+    repository path; the working directory another temporary folder; the output
+    ``communications/models/iridium/saturation_curve.json``, relative; the computation patched to
+    return the coarse curve.
+
+    Expected outcome: exit status 0; the curve written under the temporary root at that path,
+    as the promotion renders it (its folders made); the working directory still empty; the
+    computation given the shipped grid, read through the root's link.
+    """
+    root = tmp_path / "checkout"
+    grid_link = root / POPULATION_GRID_PATH
+    grid_link.parent.mkdir(parents=True)
+    grid_link.symlink_to(repo_dir / POPULATION_GRID_PATH)
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    monkeypatch.setattr(sat, "locate_source_checkout", lambda module_file: SourceCheckout(root))
+    relative = Path("communications/models/iridium/saturation_curve.json")
+    given = command_promotes(monkeypatch, coarse_real_curve, iridium_yaml, relative)
+    assert [sha256 for _, sha256 in given] == [POPULATION_GRID_SHA256]
+    assert (root / relative).read_bytes() == promotion_bytes(coarse_real_curve)
+    assert list(work.iterdir()) == []
 
 
 POOL_TERMINATED = (
@@ -2204,16 +2391,22 @@ def test_each_class_off_peak_share_is_at_most_its_busy_hour_share() -> None:
         assert 0 < usage.concurrency_offpeak <= usage.concurrency_peak <= 1
 
 
+ROW_BEAMS_PER_SATELLITE = 150.0
+"""B at the default inputs (1,000 x the 0.15 calibration at the 25 m^2 reference panel), at
+which a hand-built row's ocean factor is U = L / (N x B), as the computation writes it."""
+
+
 def _row(fleet: int, useful: float, capacity: float) -> CurveRow:
     """A bare curve row for the checks' refusals, requested at its own realized fleet (each
-    fleet used here realizes as itself when requested)."""
+    fleet used here realizes as itself when requested), its ceiling and supply equal to L and its
+    ocean factor L / (N x B) at the default B."""
     return CurveRow(
         fleet=fleet,
         requested_fleet=fleet,
         useful_beams=useful,
         useful_beams_spread=0.0,
         capacity_gbps=capacity,
-        ocean_factor=0.1,
+        ocean_factor=useful / (fleet * ROW_BEAMS_PER_SATELLITE),
         ceiling_beams=useful,
         supply_beams=useful,
         directional=None,
@@ -2256,6 +2449,29 @@ def _row(fleet: int, useful: float, capacity: float) -> CurveRow:
             ),
             "the saturation number: the elasticity is already",
         ),
+        (
+            lambda: sat._markers(
+                PHONE, rows_with_elasticities(MARKER_FLEETS, (0.60, 0.09, 0.40), (1.0,) * 4), 10.0
+            ),
+            r"phone_class: the elasticity falls under 0.1 at the midpoint 1401 \(0.0900\) and is "
+            r"back at 0.4000 at the later midpoint 2803",
+        ),
+        (
+            lambda: sat._markers(
+                BandName.TAPER,
+                rows_with_elasticities(MARKER_FLEETS, (0.60, 0.24, 0.40), (1.0,) * 4),
+                10.0,
+            ),
+            r"phone_class band point taper: the elasticity falls under 0.25 at the midpoint 1401 "
+            r"\(0.2400\) and is back at 0.4000 at the later midpoint 2803",
+        ),
+        (
+            lambda: sat._markers(
+                PHONE, rows_with_elasticities(MARKER_FLEETS, (0.60, -0.10, 0.40), (1.0,) * 4), 10.0
+            ),
+            r"phone_class: capacity falls from .* Gbps at 992 satellites to .* Gbps at 1980 "
+            r"\(an elasticity of -0.1000 at their midpoint\)",
+        ),
     ],
     ids=[
         "L above min(ceiling, supply)",
@@ -2263,6 +2479,9 @@ def _row(fleet: int, useful: float, capacity: float) -> CurveRow:
         "stalled allocation",
         "capacity per satellite rising",
         "saturation before the first midpoint",
+        "the elasticity back over 0.10 after its crossing",
+        "the elasticity back over 0.25 after its crossing",
+        "capacity falling between rows",
     ],
 )
 def test_each_check_refuses_a_curve_that_breaks_it(
@@ -2273,9 +2492,14 @@ def test_each_check_refuses_a_curve_that_breaks_it(
     Sample: hand-built snapshots or rows: L above min(ceiling, supply); a ceiling above
     maximum use; L at 0.90 of its bound at 20,022 satellites against the 0.98 floor; capacity
     per satellite rising from 1.0 / 342 to 4.0 / 992; an elasticity of 0.01 at the first
-    midpoint (the saturation number cannot be placed).
+    midpoint (the saturation number cannot be placed); rows at 342, 992, 1,980 and 3,969
+    whose elasticity runs 0.60, 0.09, 0.40 (under 0.10 at the midpoint 1,401, back over it at
+    2,803), 0.60, 0.24, 0.40 (the same for 0.25, on a band point) and 0.60, -0.10, 0.40 (capacity
+    falling from 992 to 1,980 satellites).
 
-    Expected outcome: SaturationInvariantError, its message naming the breach.
+    Expected outcome: SaturationInvariantError, its message naming the breach: the curve, and
+    for a crossing that does not hold the threshold, both midpoints and both elasticities, or
+    for a fall the two rows and the elasticity between them.
     """
     with pytest.raises(SaturationInvariantError, match=message):
         refused()
@@ -2341,18 +2565,21 @@ def test_saturation_inputs_for_reads_only_the_held_spectrum() -> None:
     """Objective: a config's Iridium dials reach the curve's inputs only through the held
     spectrum; the defaults are the named constants in the class key's order.
 
-    Sample: the default Iridium dials; the same with a 15.4 m^2 panel; the same with 10.5 MHz.
+    Sample: the default Iridium dials (a 15.4 m^2 panel); the same with the 25 m^2 reference
+    panel and with a 10 m^2 panel, each another panel than the default; the same with 10.5 MHz.
 
     Expected outcome: the default dials give ``SaturationInputs()``, its classes in
-    ``DeviceClass`` order and its band points in ``BandName`` order; the panel changes
+    ``DeviceClass`` order and its band points in ``BandName`` order; another panel changes
     nothing (the engine applies it); the spectrum changes ``spectrum_mhz`` alone, and the
     input hash with it; the hash survives a JSON round trip.
     """
     default = SaturationInputs()
+    assert IridiumDials().aperture_m2 == APERTURE_M2_DEFAULT == 15.4
     assert saturation_inputs_for(IridiumDials()) == default
     assert [entry.device_class for entry in default.classes] == list(DeviceClass)
     assert [point.name for point in default.bands] == list(BandName)
-    assert saturation_inputs_for(IridiumDials(aperture_m2=15.4)) == default
+    for panel_m2 in (25.0, 10.0):
+        assert saturation_inputs_for(IridiumDials(aperture_m2=panel_m2)) == default
     wider = saturation_inputs_for(IridiumDials(spectrum_mhz=10.5))
     assert wider == default.model_copy(update={"spectrum_mhz": 10.5})
     assert curve_input_hash(wider) != curve_input_hash(default)
@@ -2537,15 +2764,24 @@ BOUNDARY_SLACK = 1e-12
 """Pairs within this of the view's limit, in cosine, may fall either way under rounding."""
 
 
+BRUTE_FORCE_CHUNK_SATELLITES = 50
+"""Satellites the brute-force search tests against every cell at once: at 0.5 degree cells
+(259,200) a chunk's cosines take about 100 MB."""
+
+
 def brute_force_pair_keys(
     satellites: sat._SatellitePositions, cells: sat._DemandCells, limit_rad: float, slack: float
 ) -> np.ndarray:
     """Every pair whose cosine is at least cos(limit) + slack, by testing every cell against
-    every satellite, as sorted keys satellite x (cells + 1) + cell."""
+    every satellite (a chunk of satellites at a time), as sorted keys satellite x (cells + 1) +
+    cell."""
     satellite_xyz = sat._unit_vectors(satellites.lat_rad, satellites.lon_rad)
-    cosine = cells.xyz @ satellite_xyz.T
-    cell, satellite = np.nonzero(cosine >= math.cos(limit_rad) + slack)
-    return np.sort(satellite.astype(np.int64) * (cells.count + 1) + cell)
+    keys = []
+    for start in range(0, satellites.count, BRUTE_FORCE_CHUNK_SATELLITES):
+        cosine = cells.xyz @ satellite_xyz[start : start + BRUTE_FORCE_CHUNK_SATELLITES].T
+        cell, satellite = np.nonzero(cosine >= math.cos(limit_rad) + slack)
+        keys.append((satellite.astype(np.int64) + start) * (cells.count + 1) + cell)
+    return np.sort(np.concatenate(keys))
 
 
 def everywhere_people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
@@ -2554,26 +2790,37 @@ def everywhere_people(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
 
 
 @pytest.mark.parametrize(
-    "shell", [ShellInputs(), NARROW_VIEW_SHELL], ids=["central", "narrow view"]
+    ("shell", "cell_deg", "times_s"),
+    [
+        (ShellInputs(), 1.0, (0.0, 4321.0)),
+        (NARROW_VIEW_SHELL, 1.0, (0.0, 4321.0)),
+        (ShellInputs(), 0.5, (0.0,)),
+    ],
+    ids=["central", "narrow view", "central, 0.5 degree cells"],
 )
 def test_pair_search_finds_exactly_the_pairs_a_brute_force_search_finds(
-    synthetic_population_grid: Callable[[float, PeopleAt], PopulationGrid], shell: ShellInputs
+    synthetic_population_grid: Callable[[float, PeopleAt], PopulationGrid],
+    shell: ShellInputs,
+    cell_deg: float,
+    times_s: tuple[float, ...],
 ) -> None:
     """Objective: the windowed pair search misses no pair in view and keeps none out of view,
-    at the poles and across the antimeridian too; no runtime check could see a miss, since L,
-    the ceiling and the supply are built on the same pairs.
+    at the poles and across the antimeridian too, at the grid's cell sizes; no runtime check
+    could see a miss, since L, the ceiling and the supply are built on the same pairs.
 
-    Sample: every 1 degree cell populated; the central shell and a narrow-view shell (300 km,
-    a 60 degree mask), each at 400 requested satellites at two times, plus satellites placed
-    at and near both poles and across the antimeridian.
+    Sample: every cell populated: 1 degree cells for the central shell and a narrow-view shell
+    (300 km, a 60 degree mask), each at 400 requested satellites at two times; and 0.5 degree
+    cells (the 0.5 degree band point sums the shipped 0.25 degree grid to them) for the central
+    shell at one time; each with satellites placed at and near both poles and across the
+    antimeridian.
 
     Expected outcome: the pairs equal a brute-force search over every cell and satellite, up
     to pairs within 1e-12 of the limit in cosine, each listed once, ordered by satellite then
     cell.
     """
-    cells = sat._demand_cells(synthetic_population_grid(1.0, everywhere_people), 1e-12)
+    cells = sat._demand_cells(synthetic_population_grid(cell_deg, everywhere_people), 1e-12)
     limit = sat._central_angle_limit(shell)
-    shells = [sat._walker_positions(shell, 400, time_s) for time_s in (0.0, 4321.0)]
+    shells = [sat._walker_positions(shell, 400, time_s) for time_s in times_s]
     edges = satellites_at(EDGE_SATELLITES_DEG)
     satellites = sat._SatellitePositions(
         lat_rad=np.concatenate([part.lat_rad for part in (*shells, edges)]),
@@ -2684,12 +2931,83 @@ def test_a_supporting_marker_before_the_first_row_never_takes_the_saturation_num
     assert sat._unplaced_marker_limits(PHONE, placed_rows, 1_000.0) == ()
 
 
+BARE_LAST_MIDPOINT = 582
+"""The bare rows' one midpoint, sqrt(342 x 992) = 582.46, rounded half up: the fleet bare markers
+with no crossing are not reached by."""
+
+
+def test_the_saturation_number_is_the_first_crossing_under_0p10_interpolated_in_ln_n(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Objective: the saturation number's rule, worked by hand: the elasticity of capacity at the
+    rows' geometric midpoints, its first crossing under 0.10 interpolated in ln N between the two
+    midpoints that straddle it, rounded half up; and an elasticity of exactly 0.10 is no crossing
+    (the rule is strictly under).
+
+    Sample: rows at 342, 992 and 1,980 satellites whose capacity's elasticity is 0.20 and 0.05
+    over the two intervals; then the same rows read with the elasticity exactly 0.20 and 0.10 at
+    their midpoints (the module's elasticity patched, since no rows give exactly 0.10 in floating
+    point: log 2 / log 1,024 is 0.09999999999999999), and the rule's own crossing at 0.10 and at
+    the float just under it.
+
+    Expected outcome, worked by hand: the midpoints sqrt(342 x 992) = 582.464 and sqrt(992 x
+    1,980) = 1,401.485; the crossing lies (0.20 - 0.10) / (0.20 - 0.05) = 2/3 of the way between
+    them in ln N, 582.464 x (1,401.485 / 582.464)^(2/3) = 1,045.88, so the saturation number is
+    1,046 (an interpolation linear in N would give 1,128). At exactly 0.10 there is no crossing:
+    no saturation number, not reached by the last midpoint, 1,401; the float just under 0.10
+    crosses at the last midpoint.
+    """
+    fleets = (342, 992, 1_980)
+    rows = rows_with_elasticities(fleets, (0.20, 0.05), (100.0, 200.0, 300.0))
+    markers = sat._markers(PHONE, rows, 1_000.0)
+    assert markers.saturation_number == 1_046
+    assert markers.saturation_not_reached_by is None
+    midpoints = [math.sqrt(low * high) for low, high in pairwise(fleets)]
+    assert midpoints == pytest.approx([582.464, 1_401.485], abs=1e-3)
+    by_hand = midpoints[0] * (midpoints[1] / midpoints[0]) ** (2 / 3)
+    assert by_hand == pytest.approx(1_045.88, abs=0.01)
+    assert round_half_up(midpoints[0] + 2 / 3 * (midpoints[1] - midpoints[0])) == 1_128
+    exact = [0.20, 0.10]
+    assert sat._first_crossing_under(midpoints, exact, 0.10, "exactly 0.10") is None
+    just_under = [0.20, math.nextafter(0.10, 0.0)]
+    crossing = sat._first_crossing_under(midpoints, just_under, 0.10, "just under 0.10")
+    assert crossing == pytest.approx(midpoints[1], rel=1e-12)
+    monkeypatch.setattr(sat, "_elasticity", lambda curve, rows: (midpoints, exact))
+    at_exactly = sat._markers(PHONE, rows, 1_000.0)
+    assert at_exactly.saturation_number is None
+    assert at_exactly.saturation_not_reached_by == 1_401
+
+
+def test_a_saturation_number_not_reached_names_the_last_midpoint_the_rows_measure() -> None:
+    """Objective: when the elasticity of capacity is under 0.10 at no midpoint, the curve has no
+    saturation number, and the fleet it is not reached by is the last midpoint at which its rows
+    measure the elasticity, never the last row's fleet: past that midpoint the rows measure
+    nothing (ADR 005).
+
+    Sample: hand-built rows at 342, 992, 1,980 and 3,969 satellites whose capacity's elasticity is
+    0.60, 0.40 and 0.30 over the three intervals (never under 0.10, nor under 0.25), with L far
+    under 90 percent of maximum use.
+
+    Expected outcome, worked by hand: no saturation number; not reached by sqrt(1,980 x 3,969) =
+    sqrt(7,858,620) = 2,803.32, rounded half up to 2,803, not by the last row's 3,969; no
+    crossing under 0.25 and no 90 percent fleet.
+    """
+    rows = rows_with_elasticities(MARKER_FLEETS, (0.60, 0.40, 0.30), (100.0, 200.0, 300.0, 400.0))
+    markers = sat._markers(PHONE, rows, 1_000.0)
+    assert markers.saturation_number is None
+    assert markers.saturation_not_reached_by == 2_803
+    assert markers.saturation_not_reached_by != rows[-1].fleet == 3_969
+    assert markers.elasticity_under_0p25_fleet is None
+    assert markers.fleet_at_90pct_of_maximum_use is None
+
+
 def bare_markers(**changes: int | None) -> ClassMarkers:
-    """Markers with no crossing (not reached by 992), but for the changes asked."""
+    """Markers with no crossing (not reached by the bare rows' midpoint, 582), but for the changes
+    asked."""
     fields: dict[str, float | int | None] = {
         "maximum_use_beams": 1_000.0,
         "saturation_number": None,
-        "saturation_not_reached_by": 992,
+        "saturation_not_reached_by": BARE_LAST_MIDPOINT,
         "elasticity_under_0p25_fleet": None,
         "fleet_at_90pct_of_maximum_use": None,
     }
@@ -2800,11 +3118,25 @@ NO_STACK = DirectionalDiagnostics(
 """A directional row's diagnostics when it keeps no stacked beam."""
 
 
+def band_rows(point: BandPoint) -> tuple[CurveRow, ...]:
+    """The bare rows for a band point: its ocean factor at the point's own B when it sets one
+    (the 48-beam point), else the bare rows as they are."""
+    if point.beams_per_satellite is None:
+        return BARE_ROWS
+    return tuple(
+        row.model_copy(
+            update={"ocean_factor": row.useful_beams / (row.fleet * point.beams_per_satellite)}
+        )
+        for row in BARE_ROWS
+    )
+
+
 def complete_bare_curve() -> SaturationCurve:
     """A complete curve on hand-built rows: the default inputs but for the sweep (fleets 342
-    and 992, no mounted extension), every class and every band point on the two bare rows, the
-    directional classes' rows with their diagnostics, the phone class's rows with a trim at the
-    default floors, one stated limit and one check passed."""
+    and 992, no mounted extension), every class and every band point on the two bare rows (the
+    48-beam point's ocean factor at its own B), the directional classes' rows with their
+    diagnostics, the phone class's rows with a trim at the default floors, one citation, one
+    stated limit and one check passed."""
     inputs = SaturationInputs(
         sweep=SweepInputs(fleets=COMPLETE_FLEETS, mounted_terminal_extension=())
     )
@@ -2821,14 +3153,17 @@ def complete_bare_curve() -> SaturationCurve:
             for device_class in DeviceClass
         ),
         tuple(
-            BandCurve(point=point, rows=BARE_ROWS, markers=bare_markers()) for point in inputs.bands
+            BandCurve(point=point, rows=band_rows(point), markers=bare_markers())
+            for point in inputs.bands
         ),
     )
     return curve.model_copy(
         update={
             "parameters": inputs,
             "input_hash": curve_input_hash(inputs),
-            "provenance": curve.provenance.model_copy(update={"checks_passed": ("a check",)}),
+            "provenance": curve.provenance.model_copy(
+                update={"checks_passed": ("a check",), "citations": ("a citation",)}
+            ),
             "limits": ("a stated limit",),
         }
     )
@@ -3190,8 +3525,14 @@ def _phone_trim_json() -> list[dict[str, float]]:
             "the provenance's grid digest 0000",
         ),
         (
-            lambda d: d["bands"][5]["markers"].update(saturation_not_reached_by=500),
-            "band point beams_48 saturation_not_reached_by is 500, not its last row's fleet 992",
+            lambda d: d["bands"][5]["markers"].update(saturation_not_reached_by=992),
+            "band point beams_48 saturation_not_reached_by is 992, not its last measured "
+            r"midpoint, 582 \(the geometric mean of its last two rows' fleets, rounded half up\)",
+        ),
+        (
+            lambda d: d["classes"][1]["markers"].update(saturation_not_reached_by=500),
+            "mounted_terminal_class saturation_not_reached_by is 500, not its last measured "
+            "midpoint, 582",
         ),
         (
             lambda d: d["classes"][0]["markers"].update(
@@ -3218,6 +3559,31 @@ def _phone_trim_json() -> list[dict[str, float]]:
             lambda d: d["classes"][2]["markers"].update(maximum_use_beams=15.0),
             "phone_class row at 992 satellites has a ceiling of 20.0 beams, above its maximum use",
         ),
+        (
+            lambda d: d["classes"][2]["rows"][1].update(useful_beams=40.0),
+            r"phone_class row at 992 satellites has useful beams of 40.0, above min\(ceiling 20.0, "
+            r"supply 20.0\)",
+        ),
+        (
+            lambda d: d["classes"][2]["rows"][0].update(ocean_factor=0.9),
+            "phone_class row at 342 satellites has an ocean factor of 0.9, not its useful beams "
+            "over its fleet's beams",
+        ),
+        (
+            lambda d: d["bands"][5]["rows"][0].update(ocean_factor=10.0 / (342 * 150.0)),
+            r"band point beams_48 row at 342 satellites has an ocean factor of .*, not its useful "
+            r"beams over its fleet's beams, .* \(U = L / \(N x B\), B 48\)",
+        ),
+        (
+            lambda d: d["provenance"].update(citations=[]),
+            "the curve's provenance names no citation, or a blank one",
+        ),
+        (
+            lambda d: d["provenance"].update(citations=["a citation", " "]),
+            "the curve's provenance names no citation, or a blank one",
+        ),
+        (lambda d: d["provenance"].update(licence=" "), "the curve's provenance states no licence"),
+        (lambda d: d["provenance"].update(method=""), "the curve's provenance states no method"),
     ],
     ids=[
         "an altered input hash",
@@ -3245,12 +3611,20 @@ def _phone_trim_json() -> list[dict[str, float]]:
         "no stated limits",
         "no checks passed",
         "a grid digest not the parameters'",
-        "not reached by a fleet that is not the last row",
+        "not reached by the last row's fleet, past the last midpoint",
+        "not reached by a fleet that is no midpoint",
         "a saturation number outside the rows",
         "a saturation number before the first midpoint",
         "a 0.25 crossing past the last midpoint",
         "a 90 percent fleet past the last row",
         "maximum use under a row's ceiling",
+        "useful beams above min(ceiling, supply)",
+        "an ocean factor not L / (N x B)",
+        "the 48-beam point's ocean factor at the central B",
+        "no citation",
+        "a blank citation",
+        "a blank licence",
+        "no method",
     ],
 )
 def test_the_loader_refuses_a_curve_the_engine_must_not_read(
@@ -3259,9 +3633,11 @@ def test_the_loader_refuses_a_curve_the_engine_must_not_read(
     """Objective: ``load_saturation_curve`` refuses a promoted curve whose parameters or hash
     were altered, one of another schema, one the contract refuses (a value of another JSON type
     than the contract writes, a NaN or an infinity, a number out of range), an incomplete one
-    (diagnostics or a trim misplaced, no limits or checks, a grid not the parameters') and one
-    whose markers its rows cannot give, each with a SaturationCurveError (a ValueError, so both
-    commands catch it) naming the file.
+    (diagnostics or a trim misplaced, no limits or checks, no citation, licence or method, a grid
+    not the parameters'), one whose rows break what every computed row holds (useful beams above
+    min(ceiling, supply), so possibly above maximum use; an ocean factor not L / (N x B) at the
+    curve's B, the 48-beam point's own) and one whose markers its rows cannot give, each with a
+    SaturationCurveError (a ValueError, so both commands catch it) naming the file.
 
     Sample: the complete bare curve's JSON with one change each.
 
@@ -3448,6 +3824,42 @@ def test_a_code_defect_in_validation_is_never_reported_as_a_data_problem(
         load_saturation_curve(path)
 
 
+def test_fleets_too_large_for_their_midpoint_are_the_curves_error_naming_the_file(
+    tmp_path: Path,
+) -> None:
+    """Objective: the loader's one rule holds for every number out of range: two neighbouring
+    rows' fleets whose product (the geometric midpoint's) a float cannot hold are the curve's error
+    naming the file, never a raw OverflowError, though the contract admits each fleet (each one's
+    shell builds).
+
+    Sample: the complete bare curve's JSON with the sweep's requests moved to 10^160 and 4 x
+    10^160, every row's request and realized fleet moved with them, each row's ocean factor L / (N
+    x B) at its new fleet (B 150, or 48 for the 48-beam point), the input hash recomputed.
+
+    Expected outcome: SaturationCurveError naming the file and a number out of range, the two
+    neighbouring fleets' product.
+    """
+    requests = (10**160, 4 * 10**160)
+    realized = [math.prod(walker_shape(request)) for request in requests]
+    data = json.loads(render_artifact_json(complete_bare_curve()))
+    data["parameters"]["sweep"]["fleets"] = list(requests)
+    data["input_hash"] = curve_input_hash(SaturationInputs.model_validate(data["parameters"]))
+    for entry in (*data["classes"], *data["bands"]):
+        beams = 48.0 if entry.get("point", {}).get("beams_per_satellite") == 48 else 150.0
+        for row, request, fleet in zip(entry["rows"], requests, realized, strict=True):
+            row.update(
+                requested_fleet=request,
+                fleet=fleet,
+                ocean_factor=row["useful_beams"] / (fleet * beams),
+            )
+    path = write_curve_json(tmp_path / "huge_fleets.json", data)
+    with pytest.raises(
+        SaturationCurveError, match="a number out of range: two neighbouring rows' fleets"
+    ) as refused:
+        load_saturation_curve(path)
+    assert str(refused.value).startswith(f"{path}: not a saturation curve")
+
+
 @pytest.mark.parametrize(
     ("content", "message"),
     [
@@ -3476,36 +3888,88 @@ def test_the_loader_refuses_a_file_it_cannot_read_as_a_curve(
     assert refused.value.path == path
 
 
+@pytest.mark.parametrize(
+    ("fleets", "extension", "named"),
+    [
+        ((992, 993), (), r"\[992, 993\] realize as \[992, 992\]"),
+        ((1_000, 3_969), (3_970,), r"\[1000, 3969, 3970\] realize as \[992, 3969, 3969\]"),
+    ],
+    ids=["two of the sweep's fleets", "the mounted extension's first and the sweep's last"],
+)
 def test_compute_saturation_refuses_requests_that_realize_one_row(
-    uniform_band: PopulationGrid, synthetic_saturation_inputs: SaturationInputsBuilder
+    uniform_band: PopulationGrid,
+    synthetic_saturation_inputs: SaturationInputsBuilder,
+    fleets: tuple[int, ...],
+    extension: tuple[int, ...],
+    named: str,
 ) -> None:
     """Objective: requests that strictly increase but realize the same P x S are refused
-    before any computation, since each row is keyed by its realized fleet.
+    before any computation, since each row is keyed by its realized fleet; one check covers the
+    sweep's fleets and the mounted terminal's extension after them.
 
-    Sample: the uniform band's inputs at the requests 992 and 993, both 31 x 32 = 992.
+    Sample: the uniform band's inputs at the requests 992 and 993, both 31 x 32 = 992; then at
+    1,000 and 3,969 with the mounted extension 3,970, which realizes as 63 x 63 = 3,969, the
+    sweep's last row.
 
-    Expected outcome: SaturationInvariantError naming both, the realized fleets not strictly
-    increasing.
+    Expected outcome: SaturationInvariantError naming the requests and the realized fleets, which
+    do not strictly increase.
     """
-    inputs = synthetic_saturation_inputs(uniform_band, fleets=(992, 993))
-    with pytest.raises(SaturationInvariantError, match="do not strictly increase"):
-        compute_saturation(inputs, uniform_band, version_stamp=STAMP)
+    inputs = synthetic_saturation_inputs(uniform_band, fleets=fleets)
+    sweep = inputs.sweep.model_copy(update={"mounted_terminal_extension": extension})
+    with pytest.raises(SaturationInvariantError, match=named):
+        compute_saturation(
+            inputs.model_copy(update={"sweep": sweep}), uniform_band, version_stamp=STAMP
+        )
 
 
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"lat_top_deg": 89.75}, "global grid from 90 degrees north"),
+        ({"rows": 80}, r"global grid from 90 degrees north; got 80 x 180 cells of 2.0 degrees"),
+        ({"columns": 170}, r"global grid from 90 degrees north; got 90 x 170 cells of 2.0 degrees"),
+        ({"dimensions": 3}, "must be two-dimensional; got 3 dimensions"),
+    ],
+    ids=[
+        "its north edge off the pole",
+        "rows short of 180 degrees",
+        "columns short of 360 degrees",
+        "not two-dimensional",
+    ],
+)
 def test_compute_saturation_refuses_a_grid_that_is_not_global(
-    uniform_band: PopulationGrid, synthetic_saturation_inputs: SaturationInputsBuilder
+    uniform_band: PopulationGrid,
+    synthetic_saturation_inputs: SaturationInputsBuilder,
+    change: dict[str, float],
+    message: str,
 ) -> None:
     """Objective: the pair search wraps longitudes and clips at the poles, so the curve is
-    computed only on a global grid from 90 degrees north.
+    computed only on a two-dimensional global grid from 90 degrees north: each of the guard's
+    four conditions refuses on its own.
 
-    Sample: the uniform band's grid and digest, its northern edge moved to 89.75 degrees.
+    Sample: the uniform band's grid (90 x 180 cells of 2 degrees) and digest, with one change
+    each: its northern edge moved to 89.75 degrees; its first 80 rows only (160 degrees of
+    latitude); its first 170 columns only (340 degrees of longitude); its array given a third
+    dimension.
 
-    Expected outcome: PopulationGridError asking for a global grid from 90 degrees north.
+    Expected outcome: PopulationGridError asking for a global grid from 90 degrees north (naming
+    the cells found), or for a two-dimensional grid.
     """
-    shifted = dataclasses.replace(uniform_band, lat_top_deg=89.75)
+    population = uniform_band.population
+    changed = dataclasses.replace(
+        uniform_band,
+        lat_top_deg=change.get("lat_top_deg", uniform_band.lat_top_deg),
+        population=(
+            population[None]
+            if "dimensions" in change
+            else population[: int(change.get("rows", population.shape[0])), :][
+                :, : int(change.get("columns", population.shape[1]))
+            ]
+        ),
+    )
     inputs = synthetic_saturation_inputs(uniform_band, fleets=BAND_FLEETS)
-    with pytest.raises(PopulationGridError, match="global grid from 90 degrees north"):
-        compute_saturation(inputs, shifted, version_stamp=STAMP)
+    with pytest.raises(PopulationGridError, match=message):
+        compute_saturation(inputs, changed, version_stamp=STAMP)
 
 
 def test_load_population_grid_names_a_missing_member_once(tmp_path: Path) -> None:
@@ -3903,12 +4367,13 @@ def test_the_serving_set_holds_the_satellites_whose_layer_reaches_f_serve(
     assert main_only.serving.tolist() == [True, False, False, False]
 
 
-PAIRWISE_CASE_DEG = ((90.0, 0.0), (28.05, 170.0), (28.0, 190.0), (40.0, 270.0))
+PAIRWISE_CASE_DEG = ((90.0, 0.0), (28.0, 190.0), (28.05, 170.0), (40.0, 270.0))
 """The pairwise case: the zenith satellite, two candidates of one band either side of the ring
 halves' boundary, and a candidate within a beamwidth of the zenith. The two candidates'
 footprints differ by 0.5 percent, inside one band at 40, 160 or 320 footprint bands (at 160 a
-band spans 1.7 percent here; the first candidate sat at 28.3 degrees, 3.1 percent apart, while
-the fill had 40 bands)."""
+band spans 1.7 percent here; the smaller-footprint candidate sat at 28.3 degrees, 3.1 percent
+apart, while the fill had 40 bands). The larger footprint (28.0 degrees) is on the lower
+satellite index, so the candidates' order by footprint and by satellite index differ."""
 
 
 def test_a_stacked_candidate_needs_a_beamwidth_from_the_serving_set_and_the_bands_admitted(
@@ -3917,17 +4382,20 @@ def test_a_stacked_candidate_needs_a_beamwidth_from_the_serving_set_and_the_band
     """Objective: rule D4's pairwise admission: a candidate is admitted only at least one
     terminal beamwidth (60.3 degrees for the small terminal) from every satellite serving its
     cell in another sector and from every candidate of its cell admitted earlier in the band
-    in another sector.
+    in another sector; a band's candidates are taken by (cell, footprint, satellite index), so
+    the smaller footprint is taken first whatever its satellite's index.
 
     Sample: the small terminal, one cell, B = 150: a zenith satellite that covers the cell
-    alone in stage 1; candidates at (28.05, 170) and (28.0, 190) degrees, in one footprint band
-    and in the two halves of the ring, 17.6 degrees apart, each over 60.3 from the zenith; one
-    at (40, 270), 50 degrees from the zenith. Then the same without the (28.05, 170) satellite.
+    alone in stage 1; candidates at (28.0, 190) degrees (satellite 1) and (28.05, 170) (satellite
+    2, the smaller footprint), in one footprint band and in the two halves of the ring, 17.6
+    degrees apart, each over 60.3 from the zenith; one at (40, 270), 50 degrees from the zenith.
+    Then the same without the (28.05, 170) satellite.
 
-    Expected outcome: the two band-mates share a band, the first by footprint taken first; it
-    stacks; its band-mate, closer to it than a beamwidth in the other sector, is refused; the
-    candidate at (40, 270) is refused by the serving zenith satellite. Without the first, its
-    band-mate stacks, so it was the earlier admitted candidate that refused it.
+    Expected outcome: the two band-mates share a band, the smaller footprint on the higher index;
+    it is taken first and stacks; its band-mate, the lower index, closer to it than a beamwidth in
+    the other sector, is refused (an order by satellite index alone would stack it instead); the
+    candidate at (40, 270) is refused by the serving zenith satellite. Without the smaller
+    footprint, its band-mate stacks, so it was the earlier admitted candidate that refused it.
     """
     allocation = allocate_seen_at(one_cell, PAIRWISE_CASE_DEG, directional_limits(SMALL, 150.0))
     layers = directional_of(allocation)
@@ -3936,20 +4404,66 @@ def test_a_stacked_candidate_needs_a_beamwidth_from_the_serving_set_and_the_band
     for band in range(bands.count):
         band_of[bands.members(band)] = band
     assert band_of[1] == band_of[2]
-    assert allocation.footprint_km2[1] < allocation.footprint_km2[2]
+    assert allocation.footprint_km2[2] < allocation.footprint_km2[1]
     assert layers.sector[1] != layers.sector[2]
     beamwidth_deg = math.degrees(terminal_beamwidth_rad(SMALL))
-    zenith, first, second, steep = PAIRWISE_CASE_DEG
-    assert angle_between_deg(first, second) < beamwidth_deg
-    assert min(angle_between_deg(first, zenith), angle_between_deg(second, zenith)) > beamwidth_deg
+    zenith, larger, smaller, steep = PAIRWISE_CASE_DEG
+    assert angle_between_deg(larger, smaller) < beamwidth_deg
+    from_zenith = (angle_between_deg(larger, zenith), angle_between_deg(smaller, zenith))
+    assert min(from_zenith) > beamwidth_deg
     assert angle_between_deg(steep, zenith) < beamwidth_deg
     assert layers.serving[0]
-    assert layers.stacked_beams[1] > 0
-    assert layers.stacked_beams[2] == layers.stacked_beams[3] == 0.0
-    without_first = allocate_seen_at(
-        one_cell, (zenith, second, steep), directional_limits(SMALL, 150.0)
+    assert layers.stacked_beams[2] > 0
+    assert layers.stacked_beams[1] == layers.stacked_beams[3] == 0.0
+    without_smaller = allocate_seen_at(
+        one_cell, (zenith, larger, steep), directional_limits(SMALL, 150.0)
     )
-    assert directional_of(without_first).stacked_beams[1] > 0
+    assert directional_of(without_smaller).stacked_beams[1] > 0
+
+
+KEY_AREA_CASE_DEG = ((90.0, 0.0), (35.0, 90.0), (28.0, 150.0))
+"""The key-area case (the small terminal, B = 2): the zenith satellite, whose 2 beams cover
+part of the cell (its sky's cap sector); a satellite at (35, 90) in the first half of the ring
+(55 degrees from the zenith, under a beamwidth), which completes the cell's first layer; and a
+satellite at (28, 150) in the same half (62 degrees from the zenith, over a beamwidth; its
+sector-mate is exempt), whose larger footprint comes too late for the first layer."""
+
+
+def test_a_stacked_layer_fills_at_most_what_its_sectors_first_layer_left_of_the_cell(
+    one_cell: OneCell,
+) -> None:
+    """Objective: rule D4's key area: a stacked candidate's key is its cell's sky sector, whose
+    area is the cell's less the first layer from that sector, so a sector's first and stacked
+    layers together never cover more than the cell.
+
+    Sample: the small terminal, one cell (about 773 km^2), B = 2: the zenith satellite covers
+    2 x 170.8 km^2 of it in stage 1 (the cap sector); the (35, 90) satellite, next by footprint,
+    completes the first layer from the ring's first half (sector 1); the (28, 150) satellite, in
+    the same sector, gets no first layer (rounding dust under the module's served floor). In
+    stage 2 the (35, 90) satellite is refused (55 degrees from the serving zenith satellite) and
+    the (28, 150) one, 62 degrees from it and exempt from its sector-mate, stacks.
+
+    Expected outcome: the first layer covers the cell; the (28, 150) satellite stacks, and sector
+    1's first and stacked layers cover the cell's area exactly (within 1e-9): its key area, the
+    cell less sector 1's first layer, binds; a key of the whole cell would let it cover more.
+    """
+    allocation = allocate_seen_at(one_cell, KEY_AREA_CASE_DEG, directional_limits(SMALL, 2.0))
+    layers = directional_of(allocation)
+    cells, _ = one_cell
+    area = float(cells.area_km2[0])
+    footprint = allocation.footprint_km2
+    assert layers.sector[1] == layers.sector[2] != layers.sector[0]
+    assert layers.first_layer_beams[0] == pytest.approx(2.0, rel=1e-12)
+    assert layers.first_layer_beams[2] < SERVED_BEAMS_FLOOR
+    first_area = float((layers.first_layer_beams * footprint).sum())
+    assert first_area == pytest.approx(area, rel=1e-9)
+    assert layers.stacked_beams[1] == 0.0
+    assert layers.stacked_beams[2] > 0
+    in_sector = layers.sector == layers.sector[1]
+    layer_area = (layers.first_layer_beams + layers.stacked_beams) * footprint
+    sector_area = float(layer_area[in_sector].sum())
+    assert sector_area <= area * (1 + 1e-9)
+    assert sector_area == pytest.approx(area, rel=1e-9)
 
 
 def test_satellites_in_the_same_sector_are_exempt_from_each_other(one_cell: OneCell) -> None:
@@ -4351,6 +4865,55 @@ def test_the_vectorized_admission_equals_the_rule_taken_candidate_by_candidate(
     assert 0 < found.sum() < found.size
 
 
+@pytest.mark.parametrize("bands", [160, 300], ids=["an unsigned byte key", "a two-byte key"])
+def test_the_footprint_bands_order_is_the_stable_order_of_the_band_index(bands: int) -> None:
+    """Objective: the footprint bands' sort on the smallest unsigned key that holds the band index
+    (a radix sort) gives the stable order of the 64-bit band index exactly, so every fill takes
+    its pairs in the same order.
+
+    Sample: 200,000 random footprints from 170 to 3,300 km^2 (seed 7), at 160 bands (a byte key,
+    the default) and 300 (a two-byte key).
+
+    Expected outcome: the order equals numpy's stable argsort of the 64-bit band index, at the
+    pinned edges ``geomspace(min x 0.999, max x 1.001, bands + 1)``, and so do the band starts.
+    """
+    footprint = np.random.default_rng(7).uniform(170.0, 3_300.0, 200_000)
+    found = sat._footprint_bands(footprint, bands)
+    edges = np.geomspace(footprint.min() * 0.999, footprint.max() * 1.001, bands + 1)
+    band = np.clip(np.searchsorted(edges, footprint, side="right") - 1, 0, bands - 1)
+    expected = np.argsort(band, kind="stable")
+    assert np.array_equal(found.order, expected)
+    assert np.array_equal(found.starts, np.searchsorted(band[expected], np.arange(bands + 1)))
+
+
+def test_the_serving_index_merged_band_by_band_is_the_index_sorted_from_every_server() -> None:
+    """Objective: the serving index kept sorted by cell, each band's joins merged in, is the index
+    sorted afresh from every serving pair in the order they joined, so the admission reads the
+    same servers at every band.
+
+    Sample: 400 cells and 30,000 pairs with random cells (seed 3), a random tenth of the pairs
+    serving at first, then five bands, each joining a random twentieth of the pairs not yet
+    serving, in pair index order.
+
+    Expected outcome: after every band the merged index's pairs, counts and starts equal those of
+    ``_serving_index`` over the initial servers and every band's joins appended.
+    """
+    rng = np.random.default_rng(3)
+    n_cells, n_pairs = 400, 30_000
+    pair_cell = rng.integers(0, n_cells, n_pairs).astype(np.int64)
+    serving = rng.random(n_pairs) < 0.1
+    joined = np.flatnonzero(serving)
+    index = sat._serving_index(joined, pair_cell, n_cells)
+    for _ in range(5):
+        joins = np.flatnonzero(~serving & (rng.random(n_pairs) < 0.05))
+        serving[joins] = True
+        index = sat._with_joins(index, joins, pair_cell)
+        joined = np.concatenate([joined, joins])
+        rebuilt = sat._serving_index(joined, pair_cell, n_cells)
+        for field in ("pairs", "counts", "starts"):
+            assert np.array_equal(getattr(index, field), getattr(rebuilt, field)), field
+
+
 def shared_usage(inputs: SaturationInputs) -> SaturationInputs:
     """The inputs with every class at one shared usage, 1 Mbps x 2.5 percent, so the
     classes' people per beam differ only by their central SE (640, 800 and 208)."""
@@ -4473,8 +5036,9 @@ def test_the_mounted_terminal_runs_over_its_extension_through_compute_saturation
     Expected outcome: the classes in the class key's order; the mounted terminal's rows 506,
     992 and 3,969, requested 500, 1,000 and 4,000, its 3,969 row a directional row with its
     diagnostics; the small terminal's and the phone class's rows 506 and 992, requested 500 and
-    1,000; each class's 0.10 crossing not reached by its own last row (capacity still rises
-    steeply here), 3,969 for the mounted terminal and 992 for the others.
+    1,000; each class's 0.10 crossing not reached by its own rows' last midpoint (capacity still
+    rises steeply here): sqrt(992 x 3,969) = 1,984.25, rounded half up to 1,984, for the
+    mounted terminal and sqrt(506 x 992) = 708.49, rounded to 708, for the others.
     """
     grid = synthetic_population_grid(MID_BAND_CELL_DEG, shared_usage_people)
     inputs = shared_usage(synthetic_saturation_inputs(grid, fleets=EXTENSION_TEST_FLEETS))
@@ -4491,11 +5055,12 @@ def test_the_mounted_terminal_runs_over_its_extension_through_compute_saturation
     assert [entry.device_class for entry in curve.classes] == list(DeviceClass)
     fleets_rows = [(506, 500), (992, 1_000)]
     expected = {SMALL: fleets_rows, MOUNTED: [*fleets_rows, (3_969, 4_000)], PHONE: fleets_rows}
+    not_reached_by = {SMALL: 708, MOUNTED: 1_984, PHONE: 708}
     for device_class, keyed in expected.items():
         entry = class_curve(curve, device_class)
         assert [(row.fleet, row.requested_fleet) for row in entry.rows] == keyed
         assert entry.markers.saturation_number is None
-        assert entry.markers.saturation_not_reached_by == keyed[-1][0]
+        assert entry.markers.saturation_not_reached_by == not_reached_by[device_class]
     assert class_curve(curve, MOUNTED).rows[-1].directional is not None
 
 
@@ -4517,14 +5082,14 @@ def test_the_memory_tiers_change_no_number(
     Sample: the uniform band (B = 1) at 1,000 and 10,000 requested satellites (realized 992
     and 10,000), one snapshot, the CPU count pinned to 8; computed once at the default budget
     and once with the budget lowered to this process's peak plus two of the task peaks the
-    first run measured, so whether the budget binds depends on neither the machine's CPUs nor
-    a worker's own peak.
+    first run measured, each taken times the margin as the worker count takes it, so whether
+    the budget binds depends on neither the machine's CPUs nor a worker's own peak.
 
-    Expected outcome: at the default budget (room for at least eight task peaks) one process
-    runs the nine curves' largest tasks (three classes, six band points) and one pool the
-    rest; with the budget binding (room for about two), each curve's 992 task, a tier of its
-    own (under half of 10,000), runs alone too: ten alone runs. The two curves are equal in
-    everything but the run's own measurement.
+    Expected outcome: at the default budget (room for at least eight task peaks at the margin)
+    the nine curves' largest tasks (three classes, six band points) run alone, in one run, and
+    one pool runs the rest; with the budget binding (room for about two), each curve's 992
+    task, a tier of its own (under half of 10,000), runs alone too: ten runs alone. The two
+    curves are equal in everything but the run's own measurement.
     """
     monkeypatch.setattr(sat.os, "process_cpu_count", lambda: TIER_TEST_CPUS)
     inputs = small_sweep(
@@ -4545,10 +5110,10 @@ def test_the_memory_tiers_change_no_number(
     monkeypatch.setattr(sat, "_run_alone", counted_run_alone)
     free = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
     assert len(alone_runs) == 1
-    task_peak_mb = max(alone_runs[0])
-    room = (sat._MEMORY_BUDGET_MB - sat._own_peak_mb()) / task_peak_mb
+    counted_mb = max(alone_runs[0]) * sat._WORKER_PEAK_MARGIN
+    room = (sat._MEMORY_BUDGET_MB - sat._own_peak_mb()) / counted_mb
     assert room >= TIER_TEST_CPUS
-    monkeypatch.setattr(sat, "_MEMORY_BUDGET_MB", sat._own_peak_mb() + 2 * task_peak_mb)
+    monkeypatch.setattr(sat, "_MEMORY_BUDGET_MB", sat._own_peak_mb() + 2 * counted_mb)
     tiered = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
     assert len(alone_runs) == 1 + 1 + len(DeviceClass) + len(BandName)
     measured_as_free = tiered.model_copy(
@@ -4561,15 +5126,109 @@ def test_the_memory_tiers_change_no_number(
     assert measured_as_free == free
 
 
+def test_the_worker_count_takes_each_worker_at_its_reading_times_the_margin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Objective: the worker count is what the budget holds at a task reading taken times the
+    margin (a fresh worker's peak varies between runs of one task), at most one per CPU and one
+    per remaining task, and at least one; the budget binds when it holds fewer than the CPUs.
+
+    Sample: the parent's peak pinned at 1,000 MB under the 16,000 MB budget (15,000 MB of
+    room), 16 CPUs, the margin 1.25; readings of 1,000, 760, 750 and 20,000 MB.
+
+    Expected outcome, by hand: 1,000 MB counts as 1,250, so 12 workers (15 without the margin)
+    and the budget binds; 760 MB counts as 950, so 15 (15.79 floored), and it binds; 750 MB
+    counts as 937.5, so 16, the CPUs, and it does not bind; with 5 tasks left, 5; 20,000 MB
+    counts as 25,000, past the room, so the one worker a sweep always runs.
+    """
+    monkeypatch.setattr(sat, "_own_peak_mb", lambda: 1_000.0)
+    monkeypatch.setattr(sat.os, "process_cpu_count", lambda: 16)
+    assert sat._MEMORY_BUDGET_MB == 16_000.0
+    assert sat._WORKER_PEAK_MARGIN == 1.25
+    assert sat._worker_count(1_000.0, 100) == 12
+    assert sat._memory_binds(1_000.0)
+    assert sat._worker_count(760.0, 100) == 15
+    assert sat._memory_binds(760.0)
+    assert sat._worker_count(750.0, 100) == 16
+    assert not sat._memory_binds(750.0)
+    assert sat._worker_count(750.0, 5) == 5
+    assert sat._worker_count(20_000.0, 100) == 1
+
+
+POOL_TEST_CPUS = 2
+"""The CPU count the pool test pins, so its pool of three tasks runs two workers at once."""
+
+POOL_TEST_READING_MB = 200.0
+"""The task reading the pool test sizes its pool to: the budget holds far more than two
+workers at it, so the pinned CPUs set the count."""
+
+
+def recording_pool(built: list[tuple[int, int | None]]) -> type[ProcessPoolExecutor]:
+    """A process pool class that appends each pool's workers and tasks per worker to ``built``
+    before building it as the module would (the module builds its pools through
+    ``sat.ProcessPoolExecutor``, which a test patches with this)."""
+
+    class RecordedPool(ProcessPoolExecutor):
+        """The process pool, recording how it is built."""
+
+        def __init__(
+            self,
+            max_workers: int,
+            mp_context: BaseContext,
+            *,
+            max_tasks_per_child: int | None = None,
+        ) -> None:
+            built.append((max_workers, max_tasks_per_child))
+            super().__init__(max_workers, mp_context, max_tasks_per_child=max_tasks_per_child)
+
+    return RecordedPool
+
+
+def test_every_task_runs_in_a_fresh_worker_and_a_pool_counts_its_largest_peaks(
+    monkeypatch: pytest.MonkeyPatch, synthetic_population_grid: GridBuilder
+) -> None:
+    """Objective: the sweep runs each snapshot task in a fresh worker of its own, in a pool and
+    alone, since a process keeps memory its tasks freed (a worker kept for several tasks peaks
+    above any one of them); a pool's bound is what its workers can hold at once: the sum of its
+    largest task peaks, as many as its workers.
+
+    Sample: three phone-class tasks of 342 satellites on one populated 2 degree cell, run by
+    ``_run_pool`` at a reading of 200 MB with the CPU count pinned to 2, then two of them by
+    ``_run_alone``, the module's process pool patched to record how each pool is built.
+
+    Expected outcome: a pool of two workers, each running one task (``max_tasks_per_child``
+    1), then the runs alone one worker at a time, each running one task; the count 2; every
+    task's result stored; the pool's bound the sum of the two largest of its three task peaks,
+    below the sum of all three.
+    """
+    built: list[tuple[int, int | None]] = []
+    monkeypatch.setattr(sat, "ProcessPoolExecutor", recording_pool(built))
+    monkeypatch.setattr(sat.os, "process_cpu_count", lambda: POOL_TEST_CPUS)
+    tasks = [phone_snapshot_task(index, 342) for index in range(3)]
+    context = one_patch_context(synthetic_population_grid)
+    results: dict[int, sat._SnapshotResult] = {}
+    workers, bound_mb = sat._run_pool(
+        range(3), tasks, {PHONE: context}, POOL_TEST_READING_MB, results
+    )
+    alone: dict[int, sat._SnapshotResult] = {}
+    sat._run_alone([0, 1], tasks, {PHONE: context}, alone)
+    assert built == [(POOL_TEST_CPUS, 1), (1, 1)]
+    assert workers == POOL_TEST_CPUS
+    assert sorted(results) == [0, 1, 2]
+    assert sorted(alone) == [0, 1]
+    peaks = sorted((result.worker_peak_mb for result in results.values()), reverse=True)
+    assert bound_mb == peaks[0] + peaks[1]
+    assert bound_mb < sum(peaks)
+
+
 # ---------------------------------------------------------------------------
 # The identity check and the readings (the engine's side of the curve)
 # ---------------------------------------------------------------------------
 
 READING_PANEL_FACTOR = 0.616
 """The panel factor the readings below are taken at where the panel is not the point (d is then
-the default, ``DOWNLINK_SHARE_DEFAULT``): 15.4 m^2, the investor's approved panel (the Iridium
-dials' default once the approved defaults are built; today's built default is the 25 m^2
-reference), over the curve's 25 m^2 reference panel."""
+the default, ``DOWNLINK_SHARE_DEFAULT``): 15.4 m^2, the investor's approved panel and the Iridium
+dials' default (``APERTURE_M2_DEFAULT``), over the curve's 25 m^2 reference panel (ADR 005)."""
 
 POWER_LAW_FLEETS = (342, 992)
 """The fleets of the hand-built reading curve's two rows (each realizes as itself)."""
@@ -4990,6 +5649,69 @@ def test_a_reading_the_curve_cannot_give_is_refused_with_a_typed_error() -> None
         )
 
 
+ROWS_TOO_FAR_APART = "the two rows' values lie too far apart for this reading's arithmetic"
+"""The refusal's cause between two rows whose ratio leaves a float's range."""
+
+FIRST_ROW_TOO_LARGE = "that value is too large for this reading's arithmetic"
+"""The refusal's cause below the first row when the fleet times its value leaves a float's range."""
+
+
+@pytest.mark.parametrize(
+    ("low_beams", "high_beams", "fleet", "cause"),
+    [
+        (5e-324, 1e300, 582, ROWS_TOO_FAR_APART),
+        (1e300, 5e-324, 582, ROWS_TOO_FAR_APART),
+        (1.5e308, 1.5e308, 341, FIRST_ROW_TOO_LARGE),
+    ],
+    ids=["a ratio past a float's range", "a ratio under a float's range", "below the first row"],
+)
+def test_a_reading_past_a_floats_range_is_refused_with_a_typed_error(
+    low_beams: float, high_beams: float, fleet: int, cause: str
+) -> None:
+    """Objective: a reading whose arithmetic leaves a float's range (the rows' values too far
+    apart, or the fleet times the first row's value too large) is the curve's typed error naming
+    that cause, never an infinity published as a number or a bare arithmetic ValueError, though
+    the reading itself may be a finite number.
+
+    Sample: a phone-class curve of two rows, 342 and 992 satellites, its useful beams 5e-324 and
+    1e300 (their ratio past a float's range; the reading at 582 is 7.6e-13), then 1e300 and
+    5e-324 (their ratio under it, 0; the reading 6.5e-12), each read at 582 between the rows;
+    then 1.5e308 at the first row, read at 341 below it (341 x 1.5e308 past a float's range; the
+    reading 1.4956e308).
+
+    Expected outcome: SaturationCurveError naming the class's useful beams, the fleet and the
+    cause, the rows' values too far apart between the rows and the first row's value too large
+    below it; at each row the row's own value still reads.
+    """
+    low, high = _row(342, low_beams, 1.0), _row(992, high_beams, 2.0)
+    curve = power_law_curve((low, high))
+    with pytest.raises(
+        SaturationCurveError,
+        match=f"the phone_class curve's useful beams at {fleet} satellites, .*: {cause}",
+    ):
+        useful_beams_at(curve, PHONE, fleet)
+    assert useful_beams_at(curve, PHONE, 342) == low_beams
+    assert useful_beams_at(curve, PHONE, 992) == high_beams
+
+
+def test_the_readings_and_the_iridium_family_find_a_class_curve_by_one_lookup() -> None:
+    """Objective: one lookup finds a class's central curve, for the readings and for the Iridium
+    family's class blocks, which keeps no copy of its own.
+
+    Sample: the power-law curve (the phone class only); the Iridium module.
+
+    Expected outcome: the contract's ``class_curve_of`` returns the phone class's curve and
+    refuses the small terminal naming it; the Iridium module's lookup is that very function, and
+    it holds no ``_class_curve``.
+    """
+    curve = power_law_curve()
+    assert saturation_curve.class_curve_of(curve, PHONE) is curve.classes[0]
+    with pytest.raises(SaturationCurveError, match="holds no small_terminal_class curve to read"):
+        saturation_curve.class_curve_of(curve, DeviceClass.SMALL_TERMINAL_CLASS)
+    assert iridium.class_curve_of is saturation_curve.class_curve_of
+    assert not hasattr(iridium, "_class_curve")
+
+
 def test_the_synthetic_curve_fixture_matches_its_dials_and_loads_as_promoted(
     synthetic_saturation_curve: Callable[[IridiumDials], SaturationCurve], tmp_path: Path
 ) -> None:
@@ -4998,7 +5720,8 @@ def test_the_synthetic_curve_fixture_matches_its_dials_and_loads_as_promoted(
     row hand-workable (its markers are the module's own, ``_markers``, by construction: the
     fixture is a valid curve for the engine's tests, not an oracle of the marker rules).
 
-    Sample: the default Iridium dials, the same at 10.5 MHz, and at a 15.4 m^2 panel.
+    Sample: the default Iridium dials, the same at 10.5 MHz, and at the 25 m^2 reference panel
+    (another panel than the default 15.4 m^2).
 
     Expected outcome: each curve's parameters are ``saturation_inputs_for`` of its dials with a
     valid input hash, so the identity check passes for its dials (and the 10.5 MHz curve is
@@ -5008,7 +5731,7 @@ def test_the_synthetic_curve_fixture_matches_its_dials_and_loads_as_promoted(
     capacity is L x the spectrum x the class's central SE / 1,000.
     """
     default_dials = IridiumDials()
-    for dials in (default_dials, IridiumDials(spectrum_mhz=10.5), IridiumDials(aperture_m2=15.4)):
+    for dials in (default_dials, IridiumDials(spectrum_mhz=10.5), IridiumDials(aperture_m2=25.0)):
         curve = synthetic_saturation_curve(dials)
         assert curve.parameters == saturation_inputs_for(dials)
         assert curve.input_hash == curve_input_hash(curve.parameters)
@@ -5046,8 +5769,9 @@ def test_the_short_curve_fixture_ends_at_its_row_and_refuses_a_reading_past_it(
     request); a fleet past it, 3,072; a cut at 3,000, which is no row; a cut at 342, the first
     row, which keeps one row.
 
-    Expected outcome: every class's and band point's rows end at 3,025, each not reached by
-    3,025; the identity check passes; the completeness check refuses the short rows; a reading
+    Expected outcome: every class's and band point's rows end at 3,025, each not reached by its
+    kept rows' last midpoint, sqrt(1,980 x 3,025) = 2,447.3, rounded half up to 2,447; the
+    identity check passes; the completeness check refuses the short rows; a reading
     at 3,025 is given (L = 3,025 x 150), and one at 3,072 is a CurveBeyondLastRowError naming
     the class, 3,025 and 3,072; the cut at 3,000 is a ValueError, and so is the cut at 342 (a
     curve's markers read the elasticity between two rows).
@@ -5057,8 +5781,8 @@ def test_the_short_curve_fixture_ends_at_its_row_and_refuses_a_reading_past_it(
     curves = [(entry.rows, entry.markers) for entry in curve.classes]
     curves += [(band.rows, band.markers) for band in curve.bands]
     for rows, markers in curves:
-        assert rows[-1].fleet == 3_025
-        assert markers.saturation_not_reached_by == 3_025
+        assert (rows[-2].fleet, rows[-1].fleet) == (1_980, 3_025)
+        assert markers.saturation_not_reached_by == 2_447
     check_curve_matches(saturation_inputs_for(dials), curve)
     with pytest.raises(SaturationCurveError, match="rows stand at the requested fleets"):
         check_curve_complete(curve)
@@ -5095,7 +5819,8 @@ def test_a_curve_cut_short_carries_the_markers_its_kept_rows_give(
     Expected outcome: at each cut, every class's and band point's rows are its rows up to the
     cut, its markers ``_markers`` of those rows at its maximum use, valid as the contract's; a
     curve whose rows are all kept keeps the committed markers; a saturation number the full
-    curve places past the cut is not reached, by the cut's fleet.
+    curve places past the cut is not reached, by the kept rows' last midpoint (the geometric
+    mean of the last two kept rows' fleets, rounded half up).
     """
     curve = committed_saturation_curve
     full = [(entry.device_class, entry.rows, entry.markers) for entry in curve.classes]
@@ -5120,4 +5845,6 @@ def test_a_curve_cut_short_carries_the_markers_its_kept_rows_give(
                 full_markers.saturation_number > last_fleet
             ):
                 assert markers.saturation_number is None
-                assert markers.saturation_not_reached_by == last_fleet
+                assert markers.saturation_not_reached_by == round_half_up(
+                    math.sqrt(rows[-2].fleet * rows[-1].fleet)
+                )
