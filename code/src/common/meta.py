@@ -75,6 +75,7 @@ class QueryAppliesTo(StrEnum):
 
     SPACE = "space"
     GROUND = "ground"
+    PRODUCT_CASE = "product_case"  # the product case's artifact (ADR 012)
 
 
 class SourceStatusSummary(BaseModel):
