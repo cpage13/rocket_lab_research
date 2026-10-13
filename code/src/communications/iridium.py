@@ -79,6 +79,7 @@ from communications.constants import (
     DATA_IOT_PRICE_USD_MONTH_DEFAULT,
     ECOSYSTEM_ASSUMPTION_NOTE,
     HZ_PER_MHZ,
+    IOT_ENGINEERING_USAGE,
     IOT_MAC_EFFICIENCY,
     IOT_MESSAGE_AIRTIME_HIGH_S,
     IOT_MESSAGE_AIRTIME_LOW_S,
@@ -111,6 +112,8 @@ from communications.constants import (
     SMALL_TERMINAL_CLASS_SE_LOW,
     ClassUsage,
     DeviceClass,
+    IotClass,
+    IotView,
 )
 from communications.engine import (
     MUSD_TO_USD,
@@ -292,6 +295,87 @@ class ClassRecord:
     fleet_at_90pct_of_maximum_use: int | None
     binding_limit_at_horizon_end: BindingLimit
     marginal_intervals: tuple[MarginalIntervalRecord, ...]
+
+
+@dataclass(frozen=True)
+class IotClassCapacityRecord:
+    """One IoT class alone at one fleet: the devices IoT's whole room holds for it (ADR 011).
+
+    Each view's devices are the room over one device's load a second at the class's engineering
+    usage (:data:`~communications.constants.IOT_ENGINEERING_USAGE`, a day's average); the
+    capacity is the least, in whole devices. Each class is given the whole room, so the two
+    classes' capacities never add. A capacity, never a count sold or a forecast. Every field but
+    the class is None below the coverage floor (IoT needs continuous coverage).
+
+    Attributes:
+        iot_class: The IoT class.
+        devices_by_payload_bits: The uplink's payload bits a second over one device's uplink
+            bits a second.
+        devices_by_random_access: The access attempts a second at the window's low end over one
+            device's attempts a second.
+        devices_by_single_tone_time: The single-tone seconds a second over one device's tone
+            seconds a second, at the message airtime's high end.
+        device_capacity: The least of the three, rounded down to whole devices.
+        binding_view: The view that gives the least, a tie going to the earliest in
+            :class:`~communications.constants.IotView`'s order.
+    """
+
+    iot_class: IotClass
+    devices_by_payload_bits: float | None
+    devices_by_random_access: float | None
+    devices_by_single_tone_time: float | None
+    device_capacity: int | None
+    binding_view: IotView | None
+
+
+@dataclass(frozen=True)
+class IotRoomRecord:
+    """IoT's room at one fleet, and each IoT class's capacity in it alone (ADR 011).
+
+    IoT rides the phone class's useful beams (IoT devices are low gain, so their reuse follows
+    the phone rule) in the uplink's share of the frame, 1 - d (ADR 008). The room is published at
+    every fleet (0.0 at a fleet of 0); each class's capacity only at or above the coverage floor.
+
+    Attributes:
+        uplink_bits_per_second: The phone class's useful beams x the held width x the phone
+            class's central spectral efficiency x (1 - d), bits a second.
+        uplink_payload_bits_per_second: That x the MAC efficiency, bits a second.
+        access_attempts_per_second_low: The beams x the random-access window's low end x the
+            windows a second.
+        access_attempts_per_second_high: The same at the window's high end.
+        single_tone_seconds_per_second: The beams x the held width over the NB-IoT tone x
+            (1 - d): the single-tone seconds the uplink holds a second.
+        classes: Each IoT class's capacity alone, in IoT class order.
+    """
+
+    uplink_bits_per_second: float
+    uplink_payload_bits_per_second: float
+    access_attempts_per_second_low: float
+    access_attempts_per_second_high: float
+    single_tone_seconds_per_second: float
+    classes: tuple[IotClassCapacityRecord, ...]
+
+
+@dataclass(frozen=True)
+class IotClassRecord:
+    """One IoT class's engineering usage and the loads a day it gives (ADR 011): the usage each
+    capacity is read at, never a count of devices.
+
+    Attributes:
+        iot_class: The IoT class.
+        messages_per_day: Its messages a day.
+        bursts_per_day: Its bursts a day, beside the messages.
+        uplink_bits_per_day: Its uplink bits a day.
+        access_attempts_per_day: Its random-access attempts a day, one per message or burst.
+        single_tone_messages_per_day: Its messages a day read on single tones.
+    """
+
+    iot_class: IotClass
+    messages_per_day: int
+    bursts_per_day: int
+    uplink_bits_per_day: int
+    access_attempts_per_day: int
+    single_tone_messages_per_day: int
 
 
 @dataclass(frozen=True)
@@ -966,6 +1050,139 @@ def _reading(
     )
 
 
+def _binding_view(devices_by_view: Mapping[IotView, float]) -> IotView:
+    """Return the view giving the least devices, a tie going to the earliest in
+    :class:`~communications.constants.IotView`'s order (``min`` keeps the first of equal keys, and
+    the views are taken in that order). :func:`iot_room` makes two views tie exactly only where
+    their rooms are 0, as at d = 1, where the payload and tone views are both 0 and the payload
+    view binds."""
+    return min(IotView, key=lambda view: devices_by_view[view])
+
+
+def _iot_class_capacity(
+    iot_class: IotClass,
+    *,
+    uplink_payload_bits_per_second: float,
+    access_attempts_per_second_low: float,
+    single_tone_seconds_per_second: float,
+) -> IotClassCapacityRecord:
+    """One IoT class alone in the whole room, at its engineering usage, a day's average.
+
+    Each view divides its room by one device's load a second (its load a day over
+    :data:`~communications.constants.SECONDS_PER_DAY`): the uplink bits; the access attempts, one
+    per message or burst; the tone seconds, each single-tone message holding a tone for the
+    airtime's high end. The engineering usage's loads are positive named constants, so no view
+    divides by zero. The capacity is rounded down only from a finite least view: a room past what
+    a float holds leaves a view that is not finite, which the run's last step refuses
+    (:func:`_refuse_a_number_that_is_not_finite`), so the capacity is then None, never rounded.
+    """
+    usage = IOT_ENGINEERING_USAGE[iot_class]
+    devices = {
+        IotView.PAYLOAD_BITS: uplink_payload_bits_per_second
+        / (usage.uplink_bits_per_day / SECONDS_PER_DAY),
+        IotView.RANDOM_ACCESS: access_attempts_per_second_low
+        / (usage.access_attempts_per_day / SECONDS_PER_DAY),
+        IotView.SINGLE_TONE_TIME: single_tone_seconds_per_second
+        / (usage.single_tone_messages_per_day * IOT_MESSAGE_AIRTIME_HIGH_S / SECONDS_PER_DAY),
+    }
+    binding = _binding_view(devices)
+    least = devices[binding]
+    return IotClassCapacityRecord(
+        iot_class=iot_class,
+        devices_by_payload_bits=devices[IotView.PAYLOAD_BITS],
+        devices_by_random_access=devices[IotView.RANDOM_ACCESS],
+        devices_by_single_tone_time=devices[IotView.SINGLE_TONE_TIME],
+        device_capacity=math.floor(least) if math.isfinite(least) else None,
+        binding_view=binding,
+    )
+
+
+def iot_room(
+    phone_useful_beams: float,
+    *,
+    spectrum_mhz: float,
+    downlink_share: float,
+    at_or_above_floor: bool,
+) -> IotRoomRecord:
+    """Return IoT's room at a fleet and each IoT class's capacity in it alone (ADR 011).
+
+    With L the phone class's useful beams at the fleet (times the panel factor, as
+    :func:`~communications.saturation_curve.read_fleet` gives them), W the held width in Hz, SE the
+    phone class's central spectral efficiency and d the downlink share, each at its conservative
+    end::
+
+        uplink bits a second       = L x W x SE x (1 - d)            (the uplink's share, ADR 008)
+        payload bits a second      = that x the MAC efficiency       (0.20, COMM-659)
+        access attempts a second   = L x the random-access window x the windows a second
+                                     (57 low and 1,650 high devices a window, COMM-654; 1 a second)
+        single-tone seconds a sec. = L x W / the NB-IoT tone x (1 - d)   (3,750 Hz, COMM-714)
+
+    Each IoT class alone takes the whole room at its engineering usage, devices by payload bits,
+    by random access at the window's low end and by single-tone time at the airtime's high end
+    (7 s, COMM-719); its capacity is the least, rounded down, and that view binds (a tie to the
+    earliest in :class:`~communications.constants.IotView`'s order). The two capacities never add.
+    At d = 1 the payload and tone rooms are 0, so each capacity is 0 with the payload view
+    binding. Worked at FY2036 of the shipped scenario (L = 112,065.11747, W = 8 MHz, d = 0.67):
+    payload 38,460,748,316.2 bits a second, access 6,387,711.7 to 184,907,443.8 attempts a second,
+    tone time 78,893,842.7 seconds a second; minimal-packet IoT 11,497,881,052 devices (random
+    access binds) and data IoT 997,732,709 (payload bits bind).
+
+    Args:
+        phone_useful_beams: The phone class's useful beams at the fleet, times the panel factor.
+        spectrum_mhz: The held width, MHz.
+        downlink_share: The downlink share d.
+        at_or_above_floor: Whether the fleet is at or above the coverage floor; below it every
+            class's five capacity fields are None (IoT needs continuous coverage), while the room
+            is published.
+
+    Returns:
+        The room, with each IoT class's capacity in IoT class order.
+    """
+    width_hz = spectrum_mhz * HZ_PER_MHZ
+    uplink_share = _WHOLE_FRAME - downlink_share
+    uplink_bits = (
+        phone_useful_beams * width_hz * CLASS_SE_CENTRAL[DeviceClass.PHONE_CLASS] * uplink_share
+    )
+    payload_bits = uplink_bits * IOT_MAC_EFFICIENCY
+    access_low = (
+        phone_useful_beams
+        * IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW
+        * IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND
+    )
+    access_high = (
+        phone_useful_beams
+        * IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH
+        * IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND
+    )
+    tone_seconds = phone_useful_beams * width_hz / NB_IOT_TONE_HZ * uplink_share
+    classes = tuple(
+        _iot_class_capacity(
+            iot_class,
+            uplink_payload_bits_per_second=payload_bits,
+            access_attempts_per_second_low=access_low,
+            single_tone_seconds_per_second=tone_seconds,
+        )
+        if at_or_above_floor
+        else IotClassCapacityRecord(
+            iot_class=iot_class,
+            devices_by_payload_bits=None,
+            devices_by_random_access=None,
+            devices_by_single_tone_time=None,
+            device_capacity=None,
+            binding_view=None,
+        )
+        for iot_class in IotClass
+    )
+    return IotRoomRecord(
+        uplink_bits_per_second=uplink_bits,
+        uplink_payload_bits_per_second=payload_bits,
+        access_attempts_per_second_low=access_low,
+        access_attempts_per_second_high=access_high,
+        single_tone_seconds_per_second=tone_seconds,
+        classes=classes,
+    )
+
+
 def _iot_row(
     usage: _IotUsage,
     reading: ReadingRecord,
@@ -1603,6 +1820,9 @@ __all__ = [
     "FixedBooksRecord",
     "IotCheckRecord",
     "IotCheckRowRecord",
+    "IotClassCapacityRecord",
+    "IotClassRecord",
+    "IotRoomRecord",
     "IridiumRecord",
     "IridiumRun",
     "MarginalIntervalRecord",
@@ -1613,6 +1833,7 @@ __all__ = [
     "derive_iridium_per_user_rates",
     "derive_per_satellite_capacity_gbps",
     "full_cadence_rule",
+    "iot_room",
     "iridium_dials_of",
     "run_iridium_model",
 ]

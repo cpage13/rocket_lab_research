@@ -46,6 +46,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import math
 from collections.abc import Callable
 from pathlib import Path
 
@@ -84,6 +85,7 @@ from communications.constants import (
     SATELLITES_PER_LAUNCH_MIN,
     DeviceClass,
     IotClass,
+    IotView,
 )
 from communications.engine import (
     CellularTrajectory,
@@ -105,6 +107,7 @@ from communications.iridium import (
     NotAnIridiumConfigError,
     derive_iridium_per_user_rates,
     derive_per_satellite_capacity_gbps,
+    iot_room,
     iridium_dials_of,
     run_iridium_model,
 )
@@ -558,6 +561,230 @@ def test_each_iot_class_engineering_usage_and_its_loads_a_day() -> None:
         assert usage.uplink_bits_per_day == bits
         assert usage.access_attempts_per_day == attempts
         assert usage.single_tone_messages_per_day == tones
+
+
+IOT_WORKED_ROOMS = (
+    (
+        2031,
+        528,
+        19_160.469197388542,
+        (32_879_365_142.718735, 6_575_873_028.543747, 1_092_146.744251147, 31_614_774.175691094),
+        13_488_970.31496153,
+        (
+            ((4_351_680_680.653951, 1_965_864_139.6520646, 3_468_592_366.7043934), 1_965_864_139),
+            ((170_588_558.58059296, 1_814_643_821.2172902, 3_468_592_366.7043934), 170_588_558),
+        ),
+    ),
+    (
+        2036,
+        4_288,
+        112_065.11747154818,
+        (192_303_741_581.17667, 38_460_748_316.23534, 6_387_711.695878246, 184_907_443.8280545),
+        78_893_842.6999699,
+        (
+            ((25_451_965_797.50868, 11_497_881_052.580843, 20_286_988_122.849403), 11_497_881_052),
+            ((997_732_709.9715161, 10_613_428_663.920776, 20_286_988_122.849403), 997_732_709),
+        ),
+    ),
+)
+"""The worked capacity case, the build's own print at full precision (``A_capacity_print.txt``
+(local), equal to the product-case design's probe P6 to every printed digit): per year, the
+fleet, the phone class's useful beams (x 0.616), the room (uplink bits, payload bits, access low
+and high a second), the single-tone seconds a second, and per IoT class its three views (payload
+bits, random access, single-tone time) and its capacity."""
+IOT_BINDING_VIEWS = (IotView.RANDOM_ACCESS, IotView.PAYLOAD_BITS)
+"""The view that binds each IoT class at the shipped settings: random access for minimal-packet
+IoT, payload bits for data IoT."""
+
+
+def _room_at(
+    curve: SaturationCurve, fleet: int, *, downlink_share: float, at_or_above_floor: bool
+) -> iridium.IotRoomRecord:
+    """The IoT room at a fleet of the shipped settings: the phone class's useful beams read from a
+    curve at d and the default panel (15.4 / 25, the run's own division), then the room."""
+    beams = read_fleet(
+        curve,
+        PHONE,
+        fleet,
+        downlink_share=downlink_share,
+        panel_factor=DEFAULT_PANEL_M2 / REFERENCE_PANEL_M2,
+    ).useful_beams
+    return iot_room(
+        beams,
+        spectrum_mhz=HELD_SPECTRUM_MHZ,
+        downlink_share=downlink_share,
+        at_or_above_floor=at_or_above_floor,
+    )
+
+
+def test_the_worked_iot_capacity_case_at_fy2031_and_fy2036(
+    committed_saturation_curve: SaturationCurve,
+) -> None:
+    """Objective: IoT's room on the phone class's useful beams and each IoT class's capacity
+    alone, by the three views at their conservative ends, the least rounded down (ADR 011).
+
+    Sample: the committed curve at the shipped settings (8 MHz, d = 0.67, the 15.4 m^2 panel), at
+    FY2031's living fleet (528) and FY2036's (4,288).
+
+    Expected outcome: the beams, the room and each view within 1e-9 of the build's own print
+    (P6's values); the capacities exactly (FY2031: 1,965,864,139 and 170,588,558; FY2036:
+    11,497,881,052 and 997,732,709), each the least view rounded down, random access binding
+    minimal-packet IoT and payload bits data IoT; the classes in IoT class order.
+    """
+    for _, fleet, beams, room_values, tone, classes in IOT_WORKED_ROOMS:
+        room = _room_at(
+            committed_saturation_curve,
+            fleet,
+            downlink_share=DEFAULT_DOWNLINK_SHARE,
+            at_or_above_floor=True,
+        )
+        assert read_fleet(
+            committed_saturation_curve,
+            PHONE,
+            fleet,
+            downlink_share=DEFAULT_DOWNLINK_SHARE,
+            panel_factor=DEFAULT_PANEL_M2 / REFERENCE_PANEL_M2,
+        ).useful_beams == pytest.approx(beams, rel=1e-9)
+        assert (
+            room.uplink_bits_per_second,
+            room.uplink_payload_bits_per_second,
+            room.access_attempts_per_second_low,
+            room.access_attempts_per_second_high,
+        ) == pytest.approx(room_values, rel=1e-9)
+        assert room.single_tone_seconds_per_second == pytest.approx(tone, rel=1e-9)
+        assert [entry.iot_class for entry in room.classes] == IOT_CLASS_ORDER
+        for entry, (views, capacity), binding in zip(
+            room.classes, classes, IOT_BINDING_VIEWS, strict=True
+        ):
+            published = (
+                entry.devices_by_payload_bits,
+                entry.devices_by_random_access,
+                entry.devices_by_single_tone_time,
+            )
+            assert published == pytest.approx(views, rel=1e-9)
+            assert entry.device_capacity == capacity
+            assert entry.binding_view is binding
+            assert all(value is not None for value in published)
+            assert entry.device_capacity == math.floor(min(v for v in published if v is not None))
+
+
+def test_the_iot_room_below_the_floor_and_at_an_empty_fleet(
+    committed_saturation_curve: SaturationCurve,
+) -> None:
+    """Objective: the room is published at every fleet, while each class's five capacity fields
+    are null below the coverage floor (IoT needs continuous coverage); a fleet of 0 has a room of
+    0.0.
+
+    Sample: the committed curve at the shipped settings, at FY2030's living fleet (304, below the
+    340 floor) read as below the floor and, for the room alone, as at it; and at a fleet of 0.
+
+    Expected outcome: at 304 below the floor the room equals the room read at it (positive), and
+    every class's five fields are None; at 0 every room field is 0.0 and every class's five
+    fields None.
+    """
+    below = _room_at(
+        committed_saturation_curve,
+        304,
+        downlink_share=DEFAULT_DOWNLINK_SHARE,
+        at_or_above_floor=False,
+    )
+    read_as_sold = _room_at(
+        committed_saturation_curve,
+        304,
+        downlink_share=DEFAULT_DOWNLINK_SHARE,
+        at_or_above_floor=True,
+    )
+    empty = _room_at(
+        committed_saturation_curve,
+        0,
+        downlink_share=DEFAULT_DOWNLINK_SHARE,
+        at_or_above_floor=False,
+    )
+    nulls = (None, None, None, None, None)
+    for room in (below, empty):
+        assert [entry.iot_class for entry in room.classes] == IOT_CLASS_ORDER
+        for entry in room.classes:
+            assert dataclasses.astuple(entry)[1:] == nulls
+    assert dataclasses.replace(below, classes=()) == dataclasses.replace(read_as_sold, classes=())
+    assert below.uplink_payload_bits_per_second > 0.0
+    assert (
+        empty.uplink_bits_per_second,
+        empty.uplink_payload_bits_per_second,
+        empty.access_attempts_per_second_low,
+        empty.access_attempts_per_second_high,
+        empty.single_tone_seconds_per_second,
+    ) == (0.0, 0.0, 0.0, 0.0, 0.0)
+
+
+def test_at_full_downlink_each_iot_capacity_is_zero_with_the_payload_view_binding(
+    committed_saturation_curve: SaturationCurve,
+) -> None:
+    """Objective: d = 1 leaves the uplink no time, so the payload and tone rooms are 0 and each
+    IoT class's capacity is 0, the payload view binding (the tie between the two zero views goes
+    to the earlier in ``IotView``'s order), while the access room is still read.
+
+    Sample: the committed curve at d = 1 and the default panel, at 4,288 satellites.
+
+    Expected outcome: uplink, payload and tone rooms 0.0; the access room positive; each class's
+    payload and tone views 0.0, its access view positive, its capacity 0 and ``payload_bits``
+    binding.
+    """
+    room = _room_at(committed_saturation_curve, 4_288, downlink_share=1.0, at_or_above_floor=True)
+    assert (
+        room.uplink_bits_per_second,
+        room.uplink_payload_bits_per_second,
+        room.single_tone_seconds_per_second,
+    ) == (0.0, 0.0, 0.0)
+    assert room.access_attempts_per_second_low > 0.0
+    for entry in room.classes:
+        assert (entry.devices_by_payload_bits, entry.devices_by_single_tone_time) == (0.0, 0.0)
+        assert entry.devices_by_random_access is not None and entry.devices_by_random_access > 0.0
+        assert (entry.device_capacity, entry.binding_view) == (0, IotView.PAYLOAD_BITS)
+
+
+def test_a_tie_between_views_binds_the_earlier_in_the_view_order() -> None:
+    """Objective: when two views give the same least devices, the one earlier in ``IotView``'s
+    order (payload bits, random access, single-tone time) binds.
+
+    Sample: constructed views (no shipped input ties them): payload and access equal and least;
+    access and tone equal and least; payload and tone equal and least; all three equal.
+
+    Expected outcome: payload bits, random access, payload bits, payload bits.
+    """
+    cases = (
+        ((5.0, 5.0, 9.0), IotView.PAYLOAD_BITS),
+        ((9.0, 5.0, 5.0), IotView.RANDOM_ACCESS),
+        ((5.0, 9.0, 5.0), IotView.PAYLOAD_BITS),
+        ((5.0, 5.0, 5.0), IotView.PAYLOAD_BITS),
+    )
+    for values, binding in cases:
+        views = dict(zip(IotView, values, strict=True))
+        assert iridium._binding_view(views) is binding, values
+
+
+def test_an_iot_room_past_what_a_float_holds_leaves_the_capacity_unrounded() -> None:
+    """Objective: the capacity is rounded down only from a finite least view, so a room past what
+    a float holds never raises an ``OverflowError`` from rounding; the view that is not finite
+    stays in the record, where the run's last step refuses it naming the field.
+
+    Sample: phone-class useful beams of 1e305 at the shipped settings, at or above the floor.
+
+    Expected outcome: no exception; every class's capacity None and one of its views not finite.
+    """
+    room = iot_room(
+        1e305,
+        spectrum_mhz=HELD_SPECTRUM_MHZ,
+        downlink_share=DEFAULT_DOWNLINK_SHARE,
+        at_or_above_floor=True,
+    )
+    for entry in room.classes:
+        assert entry.device_capacity is None
+        views = (
+            entry.devices_by_payload_bits,
+            entry.devices_by_random_access,
+            entry.devices_by_single_tone_time,
+        )
+        assert not all(view is not None and math.isfinite(view) for view in views)
 
 
 # ---------------------------------------------------------------------------
