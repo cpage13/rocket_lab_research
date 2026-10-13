@@ -320,7 +320,9 @@ curve's or the current Iridium schema (the promotion page, Open).
   is the on-hold High-Bandwidth Cellular family) locks the shared fleet
   loop: on config defaults, with the cellular subscriber target raised so
   that fleet never reaches it, an Iridium run and a cellular run produce one
-  fleet-and-cost record.
+  fleet-and-cost record, whose own values it freezes (the living fleets,
+  the total cost and the FY2036 replacement cost), so a change that moves
+  both families alike fails too.
 - No em-dashes in the files `code/tests/test_no_em_dashes.py` covers: the
   code, tests and scenarios, the promoted JSON, the root documents
   (`CLAUDE.md` among them), every document under `atlas/`, `docs/`,

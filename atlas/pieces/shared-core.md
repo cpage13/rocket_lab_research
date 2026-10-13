@@ -7,12 +7,12 @@ implementation per helper:
 
 | Module | Owns |
 |---|---|
-| `cadence.py` | the cadence spine: the logistic whole-fleet launch ramp, the cadence-indexed launch cost, their dial blocks (`CadenceDials`, `LaunchCostDials`) and defaults, and `round_half_up` |
+| `cadence.py` | the cadence spine: the logistic whole-fleet launch ramp, the cadence-indexed launch cost, their dial blocks (`CadenceDials`, `LaunchCostDials`) and defaults, `WholeNumber` (a whole-number field that refuses a YAML boolean or a quoted number at load: the cadence counts, and the communications metadata and satellite counts) and `round_half_up` |
 | `cohort.py` | the service-life cohort cliff (`LivedCohort`, `cohort_is_alive_at`, `living_cohorts`) |
 | `provenance.py` | `ProvenanceCell`, the `FORMULAS` catalog, the `cell` factory, the strict readers `as_float` and `as_int` |
 | `input_manifest.py` | the input-cell vocabulary (`InputCell`, `SourceStatus`, `AssumptionRole`) and the default-versus-override rule |
 | `meta.py` | the meta-block types: validation checks and results, data dictionary, query examples, formula definitions |
-| `file_io.py` | the file boundary: `load_yaml_mapping`, `render_artifact_json`, `artifact_write` and its `PendingWrite`, `write_files_with_rollback`, `locate_source_checkout` and its `SourceCheckout`, `ModelFileError` |
+| `file_io.py` | the file boundary: `load_yaml_mapping`, `render_artifact_json`, `artifact_write` and its `PendingWrite`, `write_files_with_rollback`, `locate_source_checkout` and its `SourceCheckout`, whose `anchored` method anchors a relative path at the repository root (the one rule both communications commands read and write by), `ModelFileError` |
 | `cli.py` | the command conventions: product on stdout, status on stderr, exit status 1 for an expected failure and 2 for a usage error, followed by all three promotion commands |
 
 **Serves.** Keeps both applications on one spine (the same launch ramp,

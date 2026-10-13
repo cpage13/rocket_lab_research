@@ -171,8 +171,8 @@ The shared Neutron launch ramp and its cadence-indexed launch cost (`code/src/co
 
 ### equality tripwire
 The test (`test_iridium_and_cellular_runs_share_the_fleet_and_cost_records`) that an Iridium run and a cellular
-run whose fleet never reaches its target produce one shared fleet-and-cost record, so the shared loop stays
-family-neutral.
+run whose fleet never reaches its target produce one shared fleet-and-cost record, its values frozen, so the
+shared loop stays family-neutral and a change that moves both families alike fails.
 - **Avoid:** parity test (the data-center golden trajectory's name)
 
 ### investor-set
