@@ -1,6 +1,10 @@
 # 006 - People Capacity Comes From The Saturation Curve, And Every Seat Is Sold On The Fleet The Cadence Builds
 
-Status: Accepted (2026-10-04, with the saturation module's strategy, Revision 4)
+Status: Accepted (2026-10-04, with the saturation module's strategy, Revision 4); since ADR 011
+(2026-10-13, `iridium-v7`), the Consequences' "with the IoT lines on their own" describes the IoT
+lines ADR 011 removed, and, in ADR 011's words, its "with the IoT lines on their own and
+government left out of revenue (ADR 007)" now reads "with IoT as capacity, its revenue the
+product case's, and government left out of revenue".
 
 ## Context
 
