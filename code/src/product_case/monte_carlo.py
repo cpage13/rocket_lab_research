@@ -1392,11 +1392,13 @@ def _exclusive_cuts(values: Sequence[float], groups: int) -> tuple[float, ...]:
     the standard library's indices: j = floor(i x m / groups), clamped to 1 .. c - 1, and
     d = i x m - j x groups. The cut is (x_j x (groups - d) + x_(j+1) x d) / groups, taken in exact
     fractions of the two floats and rounded once to the nearest float, where the standard library
-    rounds each product, the sum and the quotient. So a cut is its data point exactly when d is 0
-    or its two points are equal (every value equal gives that value; 9 values give the lowest and
-    the highest as the 10th and the 90th), and the cuts and the median, the method's middle cut,
-    fall in order. A cut between points that are not finite is taken in floats, so it stays not
-    finite and the run's walk of its numbers refuses it, naming the field.
+    rounds each product, the sum and the quotient. So a cut is a data point exactly when d is 0 or
+    d equals groups, x_j or x_(j+1) whatever the values (9 values give the lowest and the highest
+    as the 10th and the 90th: d is 0 at the first cut, and at the last j clamps to 8 and d equals
+    groups); at any other d two equal points still give their value, so every value equal gives
+    that value. Computed so, the cuts and the median, the method's middle cut, fall in order. A
+    cut between points that are not finite is taken in floats, so it stays not finite and the
+    run's walk of its numbers refuses it, naming the field.
 
     Args:
         values: The values, at least two.
