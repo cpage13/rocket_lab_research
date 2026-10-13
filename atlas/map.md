@@ -247,10 +247,16 @@ curve's or the current Iridium schema (the promotion page, Open).
 - A people class's saturation number, where its rows reach one, is a
   spectrum bound reported beside the launch cadence, never a build target
   or a cap on the build, and a fleet past a class's last computed row is
-  refused, never extrapolated or clamped
-  (`docs/adr/005-iridium-spectrum-bound-from-saturation.md`). Guards:
-  `test_a_saturation_number_is_reported_beside_the_cadence_never_a_cap`,
-  `test_a_fleet_past_a_class_last_row_fails_naming_the_year_the_class_and_the_last_row`.
+  refused, never extrapolated or clamped. A class whose rows never reach
+  one has no saturation number: the curve names the last midpoint at which
+  its rows measure the elasticity as the fleet it is not reached by, and a
+  run whose final year's living fleet passes that fleet is refused, since
+  the curve does not measure the elasticity there and which limit binds is
+  not known (`docs/adr/005-iridium-spectrum-bound-from-saturation.md`).
+  Guards: `test_a_saturation_number_is_reported_beside_the_cadence_never_a_cap`,
+  `test_a_fleet_past_a_class_last_row_fails_naming_the_year_the_class_and_the_last_row`,
+  `test_a_final_fleet_past_the_not_reached_by_fleet_is_refused` and, at the
+  command, `test_a_final_fleet_past_a_no_number_classs_label_is_one_error_line`.
 - A run reads only a curve computed for its own inputs: the identity check
   refuses any other, naming the first field that differs
   (`test_the_iridium_entry_runs_only_on_a_curve_computed_for_its_inputs`,

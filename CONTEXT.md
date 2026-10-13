@@ -107,7 +107,8 @@ phone class) per added satellite: a knee, not a wall, measured by the class's sa
 The spectrum bound of a people class (the small terminal, the mounted terminal or the phone class): the fleet
 at which its elasticity of capacity first falls under 0.10 on the saturation curve, reported beside the launch
 cadence and never a build target or a cap; a class whose rows never reach it has none, and the curve names the
-last fleet they measure (`saturation_not_reached_by`).
+last midpoint at which its rows measure the elasticity, the fleet it is not reached by
+(`saturation_not_reached_by`).
 - **Relates to:** saturation, saturation curve, maximum use
 
 ### saturation curve

@@ -65,11 +65,13 @@ failed sweep (a worker out of memory, say), and writes only a curve that
 passes its completeness check. The Iridium command refuses a curve it
 cannot read, one of another schema, an altered or incomplete curve, a curve
 computed for other inputs (the identity check), a fleet past a class's last
-computed row, a value the model cannot compute and a run holding a number
-that is not finite. Each refusal is one `ERROR:` line and exit status 1. No
-ignore rule keeps a communications artifact local, so a trial run never
-targets a committed path except with that file's own stamp, to reproduce
-it.
+computed row, a run whose final year's living fleet passes the fleet a
+class with no saturation number is not reached by (ADR 005: the curve does
+not measure the elasticity there, so which limit binds is not known), a
+value the model cannot compute and a run holding a number that is not
+finite. Each refusal is one `ERROR:` line and exit status 1. No ignore rule
+keeps a communications artifact local, so a trial run never targets a
+committed path except with that file's own stamp, to reproduce it.
 
 **The writer.** The two data-center artifacts are written as a pair with
 backup and rollback (`common.file_io.write_files_with_rollback`); each
