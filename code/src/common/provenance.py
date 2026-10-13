@@ -1,8 +1,13 @@
 """Provenance infrastructure: ProvenanceCell + FORMULAS lookup + cell() factory.
 
-Every leaf numeric value in the cycle-2 output JSON is wrapped in a
-:class:`ProvenanceCell`, carrying value + unit + formula + formula_name +
-uses + sources + description. The :data:`FORMULAS` table is the authoritative
+The data-center model wraps every leaf numeric value of its yearly output (the
+space artifact's ``physical.years`` and ``business.years``, but each year's
+``year`` index) in a :class:`ProvenanceCell`, carrying value + unit + formula +
+formula_name + uses + sources + description; the ground reference builds its
+cells with the same factory. The communications artifacts (the Iridium
+artifact and the saturation curve) carry plain numbers, and the communications
+code reads only :func:`as_float` and :func:`as_int` from here. The
+:data:`FORMULAS` table is the authoritative
 lookup for ``formula_name`` keys; V13 enforces that every used name exists
 here.
 

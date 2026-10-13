@@ -44,7 +44,10 @@ output); it defaults to today's ISO date.
 The command follows the shared CLI conventions (:mod:`common.cli`): the status
 line and any error are log records on stderr; an unreadable or invalid
 scenario, a scenario of the cellular family, a saturation curve that cannot be
-read, was computed for other inputs or ends before a fleet the run reads, a
+read, was computed for other inputs, ends before a fleet the run reads or
+measures no elasticity of capacity at the final year's fleet for a class it
+gives no saturation number (that fleet past the one the curve names it not
+reached by, so which limit binds there is not known), a
 scenario the model cannot run (a value the model cannot compute among them), an
 artifact that would hold a number that is not finite (the artifact's models refuse
 one, so no value is ever written as null in its place), or a failed write is one
@@ -341,7 +344,11 @@ class ClassBlock(BaseModel):
         )
     )
     saturation_not_reached_by: int | None = Field(
-        description="The curve's last row when the saturation number is not reached, else None."
+        description=(
+            "When the saturation number is not reached, the last fleet at which the curve's "
+            "rows measure the elasticity (their last midpoint, the geometric mean of the last two "
+            "rows' fleets, rounded half up); else None."
+        )
     )
     elasticity_under_0p25_fleet: int | None = Field(
         description="The fleet at the first elasticity crossing under 0.25, or None."
@@ -834,8 +841,12 @@ def export_iridium_json(
             saturation curve is refused (a
             :class:`~communications.saturation_curve.SaturationCurveError`:
             another schema, altered, incomplete, or computed for other inputs,
-            each naming the curve file; or a fleet the run reads past a class's
-            last row), or it cannot be run.
+            each naming the curve file; a fleet the run reads past a class's last
+            row; or the final year's fleet past the fleet a class with no
+            saturation number is not reached by, where the curve measures no
+            elasticity of capacity,
+            :class:`~communications.iridium.BindingLimitUnmeasuredError`), or it
+            cannot be run.
         ArithmeticError: If a value the model cannot compute arises (an
             ``OverflowError``, say).
     """
@@ -902,12 +913,15 @@ def main(argv: list[str] | None = None) -> int:
         :data:`~common.cli.EXIT_OK` on success; :data:`~common.cli.EXIT_ERROR`
         (after one ``ERROR:`` log line, no traceback) when the scenario cannot
         be read, is invalid, or does not select the Iridium model, its
-        saturation curve cannot be read, was computed for other inputs or ends
-        before a fleet the run reads, the model cannot run (a value it cannot
-        compute among them: an ``ArithmeticError``, such as an overflow), the
-        artifact would hold a number that is not finite (its models refuse one), or the
-        artifact cannot be written. Usage errors exit through
-        :class:`~common.cli.CliArgumentParser` with :data:`~common.cli.EXIT_USAGE`.
+        saturation curve cannot be read, was computed for other inputs, ends
+        before a fleet the run reads or measures no elasticity of capacity at
+        the final year's fleet for a class it gives no saturation number (that
+        fleet past the one the curve names it not reached by), the model cannot
+        run (a value it cannot compute among them: an ``ArithmeticError``, such
+        as an overflow), the artifact would hold a number that is not finite
+        (its models refuse one), or the artifact cannot be written. Usage
+        errors exit through :class:`~common.cli.CliArgumentParser` with
+        :data:`~common.cli.EXIT_USAGE`.
     """
     configure_cli_logging()
     args = _build_parser().parse_args(argv)
