@@ -547,7 +547,7 @@ def locate_source_checkout(module_file: str | Path) -> SourceCheckout:
     """Locate the source checkout a model module was imported from.
 
     The scenarios and the promoted artifacts are repository files, not package
-    data: the wheel ships only the three Python packages. The command-line
+    data: the wheel ships only the four Python packages. The command-line
     entry points therefore work only from a source checkout, where ``uv run``
     installs the package in editable mode and a module's ``__file__`` stays at
     ``code/src/<package>/<module>.py``. From an installed wheel the module
