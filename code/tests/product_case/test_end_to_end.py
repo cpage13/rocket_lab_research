@@ -187,9 +187,9 @@ def _floor_draws(draws: int, robust: float) -> int:
 
 def _stated_lines(artifact: dict[str, Any], config: ProductCaseConfig) -> list[str]:
     """The 13 stated lines as this run must state them, each number read from the artifact's
-    published values (its constants' input cells, network, choices, pick, headline, spreads and
-    metadata) or the scenario, never the shipped run's, so a line true only at the shipped
-    settings fails."""
+    published values (its constants' and engineering input cells, network, choices, pick,
+    headline, spreads and metadata) or the scenario, never the shipped run's, so a line true only
+    at the shipped settings fails."""
     constants = {key: cell["value"] for key, cell in artifact["inputs"]["constants"].items()}
 
     def anchor(product_class: str) -> str:
@@ -250,6 +250,9 @@ def _stated_lines(artifact: dict[str, Any], config: ProductCaseConfig) -> list[s
     iot = {entry["product_class"]: entry["iot"] for entry in last["classes"] if entry["iot"]}
     basis = artifact["spreads"]["all_draws_basis"]
     engineering = artifact["metadata"]["engineering_artifact"]
+    cells = artifact["inputs"]["engineering"]
+    first_beams = cells[f"phone_useful_beams.{network[0]['year']}"]["value"]
+    last_beams = cells[f"phone_useful_beams.{network[-1]['year']}"]["value"]
     return [
         "Each class's customers come from the demand curve D = N x k^gamma x (A / p)^epsilon x "
         "v^eta, anchored on Iridium's customers and ARPU today (COMM-617, COMM-618): the small "
@@ -289,9 +292,13 @@ def _stated_lines(artifact: dict[str, Any], config: ProductCaseConfig) -> list[s
         f"({iot['minimal_packet_iot']['messages_per_day']['value']:,} messages a day for "
         f"minimal-packet IoT and {iot['data_iot']['bursts_per_day']['value']:,} bursts a day for "
         f"data IoT in FY{last['year']}), so its devices are never divided by that capacity.",
-        "IoT's room is the whole uplink in its share of the frame after the MAC efficiency, with "
-        "the random-access window and the single-tone room; the terminals' own upload is not "
-        "subtracted.",
+        "IoT's room rides the phone class's useful beams, the beams lit over inhabited cells: "
+        f"{first_beams:,.0f} in FY{network[0]['year']} and {last_beams:,.0f} in "
+        f"FY{network[-1]['year']}, read from the engineering artifact. So the room counts no beam "
+        "over oceans or empty land, a conservative basis: the beams there are upside the case "
+        "does not count. On its beams the room is the whole uplink in its share of the frame "
+        "after the MAC efficiency, with the random-access window and the single-tone room; the "
+        "terminals' own upload is not subtracted.",
         "The all-draw spreads cover every drawn market, the usable test not applied: in "
         f"{basis['draws_past_iot_room']:,} of the {basis['draws']:,} drawn markets the pick sells "
         "IoT past its uplink, access or single-tone room in some reported year.",
@@ -331,7 +338,9 @@ def test_the_stated_assumptions_are_the_runs_line_by_line(
     stops (the floor, the median's peak, the top of an IoT class's usage list), and on either
     basis it names each IoT class whose usage stops at the top of its list, warned (the re-check's
     m1); the data IoT anchor at twice Iridium's IoT revenue today, a run rate (montecarlo M1, the
-    spec lens's m1); the population sentence (m5); the all-draw count equal to the count this
+    spec lens's m1); the population sentence (m5); the IoT room's line naming its conservative
+    basis, the phone class's useful beams lit over inhabited cells, read from the engineering
+    cells (the basis the Iridium artifact states); the all-draw count equal to the count this
     test recomputes from the pick's four uses in each of the 50 draws (montecarlo M2), the
     single-tone room among them (the numerics lens's m4).
 

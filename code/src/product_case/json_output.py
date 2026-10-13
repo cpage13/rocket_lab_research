@@ -1193,9 +1193,13 @@ def _assumptions(run: ProductCaseRun, headline: MarketOutcome, spreads: Spreads)
         f"({minimal.iot.messages_per_day:,} messages a day for minimal-packet IoT and "
         f"{data.iot.bursts_per_day:,} bursts a day for data IoT in FY{last_year.year}), so its "
         "devices are never divided by that capacity.",
-        "IoT's room is the whole uplink in its share of the frame after the MAC efficiency, with "
-        "the random-access window and the single-tone room; the terminals' own upload is not "
-        "subtracted.",
+        "IoT's room rides the phone class's useful beams, the beams lit over inhabited cells: "
+        f"{first.phone_useful_beams:,.0f} in FY{first.year} and {last.phone_useful_beams:,.0f} "
+        f"in FY{last.year}, read from the engineering artifact. So the room counts no beam over "
+        "oceans or empty land, a conservative basis: the beams there are upside the case does not "
+        "count. On its beams the room is the whole uplink in its share of the frame after the MAC "
+        "efficiency, with the random-access window and the single-tone room; the terminals' own "
+        "upload is not subtracted.",
         "The all-draw spreads cover every drawn market, the usable test not applied: in "
         f"{spreads.draws_past_iot_room:,} of the {spreads.draws:,} drawn markets the pick sells "
         "IoT past its uplink, access or single-tone room in some reported year.",

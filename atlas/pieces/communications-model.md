@@ -4,9 +4,11 @@
 regenerated artifact that matches the committed one, and a committed
 saturation curve its drift tests rebuild. The High-Bandwidth Cellular Pure
 Play family is on hold. IoT is published as capacity (ADR 011, `iridium-v7`);
-the product case (ADR 012) is approved, not built. Checked against `main` at
-1570350, 2026-10-12; what it says of IoT against part A's code
-(`iridium-v7`), 2026-10-13.
+the product case (ADR 012) is built as its own model on this model's
+artifact, not yet promoted (the product-case page). Checked against `main`
+at 1570350, 2026-10-12; what it says of IoT against part A's code
+(`iridium-v7`), 2026-10-13; of the product case against part B's code,
+2026-10-13.
 
 **Role.** Models a Neutron-launched communications constellation as model
 families on one shared fleet-and-cost loop: each family hands the loop its
@@ -56,7 +58,8 @@ assumptions).
   `run_iridium_model(config, curve)` returns an `IridiumRun` (the shared
   fleet record and the Iridium record); the cellular entry,
   `run_comms_model(config)`, returns a `CellularRun` and has no command-line
-  caller. All plain numbers, no provenance cells.
+  caller. All plain numbers, no provenance cells. The product case reads the
+  Iridium artifact (its bytes, hashed) and never feeds this model (ADR 012).
 
 **Modules** (`code/src/communications/`):
 
@@ -66,7 +69,7 @@ assumptions).
 | `constants.py` | every default and named constant, one section per family (to change one, the assumptions page's checklist) |
 | `engine.py` | the shared fleet-and-cost loop (`run_fleet_loop`, `DeploymentRule`, `FleetTrajectory`), `margin_pct`, and the cellular family (`run_comms_model`, the treadmill) |
 | `iridium.py` | the Iridium family: `iridium_dials_of`, `full_cadence_rule`, `run_iridium_model`, its record, the readings, IoT's room and each IoT class's capacity (`iot_room`), the marginal intervals and the stated assumptions (`_assumptions`) |
-| `saturation.py` | the saturation curve's computation and its command; the one module that imports numpy (ADR 010) |
+| `saturation.py` | the saturation curve's computation and its command; the one communications module that imports numpy, the product case's Monte Carlo the other (ADR 010 as ADR 012 widens it) |
 | `saturation_curve.py` | the curve's contract: `SaturationInputs`, `SaturationCurve`, `load_saturation_curve`, the identity check `check_curve_matches`, and the readings at any fleet |
 | `ground.py` | the cellular family's two-regime ground comparison (no production caller yet) |
 | `json_output.py` | the Iridium artifact and its promotion command |
@@ -122,10 +125,6 @@ deployment, equality tripwire, engineering case, product case (see
   Iridium family.
 
 **Open.**
-- **Approved, not built.** The product case as its own model on this
-  model's artifact (ADR 012), its IoT customers, usage and revenue among it.
-  It lands with its code, its pages and its guards; until then the artifact
-  is as State says.
 - **The public documents.** The root README's Iridium section and the
   folder's documents still describe the model before the saturation work
   (the conclusions page, Open); until their rewrite, the code, the promoted
@@ -135,8 +134,8 @@ deployment, equality tripwire, engineering case, product case (see
   reaches fewer people and the fleet's cost a seat rises. The investor ruled
   (2026-10-12) that the conclusions state this plainly beside each class's
   revenue rising every year, and that the product case (ADR 012) carries
-  the service that improves; both wait for the documents' rewrite and the
-  product case's code.
+  the service that improves, which its code now does (its usage paths rise
+  year by year); both wait for the documents' rewrite.
 - Whether the small and mounted terminals' upload carries every seat is an
   open local research wiki, `.agent/other/wiki_terminal_uplink/` (local).
 - The phone class needs the band in standard phone chipsets (the stated
@@ -170,7 +169,8 @@ check rows); the conclusion's numbers (the conclusions page).
 
 **If this changes, update here.** A family added or retired; the shared
 loop or a deployment rule; the curve's inputs, contract or command; the
-artifact's blocks; the product case landing (rewrite State and Open).
+artifact's blocks or schema, which the product case reads and pins (the
+product-case page).
 
 **Drill down.** The `code/src/communications/__init__.py` docstring and
 each module's (`iridium.py`, `saturation.py` and `saturation_curve.py`

@@ -1,7 +1,8 @@
 # Assumptions
 
 **Maturity.** Stable. Checked against `main` at 1570350, 2026-10-12; its
-Iridium lines on IoT against part A's code (`iridium-v7`), 2026-10-13.
+Iridium lines on IoT against part A's code (`iridium-v7`), 2026-10-13; its
+product-case lines against part B's code, 2026-10-13.
 
 **Role.** Where every assumption lives, in three forms. The machine form:
 the scenario files in `code/scenarios/` and the defaults behind them in
@@ -12,9 +13,10 @@ the assumptions ledgers, `data_center/assumptions.md` and
 `communications/assumptions.md` (their shapes under The ledgers), with the
 stated rows that set no dial. And, for communications, the
 stated-assumption lines its artifact publishes, written by `_assumptions`
-in `code/src/communications/iridium.py`: part values read from the run,
-part text tied to the named constants (dates, claims, the investor's
-words).
+in `code/src/communications/iridium.py`, and the product case's, written by
+`_assumptions` in `code/src/product_case/json_output.py`: part values read
+from the run, part text tied to the named constants (dates, claims, the
+investor's words).
 This is where the investor's "state assumptions instead of knobs" lives.
 
 **Serves.** Objective 3 (simple models with stated assumptions) and
@@ -28,7 +30,9 @@ objective 2 (each input traces to a claim ID or says investor-set).
   tables (`CADENCE_SPECS`, `PHYSICAL_SPECS` and the rest in
   `code/src/data_center/input_manifest.py`; for the ground,
   `GROUND_INPUT_SPECS` in `code/src/data_center/ground.py`) carry every
-  input's claim, status and rationale into the promoted JSON.
+  input's claim, status and rationale into the promoted JSON; in the product
+  case, `SCENARIO_SPECS` and `CONSTANT_INPUTS` in
+  `code/src/product_case/config.py` do the same.
 
 **The scenarios.**
 
@@ -42,6 +46,7 @@ objective 2 (each input traces to a claim ID or says investor-set).
 | `ai1_equivalent.yaml` | AI-1's specs on the model's dials; it fails the `pf_per_kw_in_band` rule by design, so it cannot be promoted |
 | `volume_stress.yaml` | a fixture on the co-mounted radiator that trips validation rule V15; quote nothing from it |
 | `iridium.yaml` | the Iridium default, promoted as `communications/models/iridium/default.json`; the saturation command reads its held spectrum |
+| `product_case.yaml` | the product case's shipped scenario (the investor's prices held flat and FY2036 usage), equal to its code defaults; its first promotion writes communications/models/product_case/default.json, the one path reserved for it |
 
 **The ledgers.**
 - `data_center/assumptions.md`: a table of claim ID, assumption, source
@@ -60,13 +65,18 @@ objective 2 (each input traces to a claim ID or says investor-set).
   anchors, and the maintenance rule, which does not name the artifact's
   stated lines. Its rows still describe the model before the saturation work
   (the four-bucket price sheet, a 25 m^2 panel, uniform-demand geography)
-  until its rewrite (the conclusions page, Open).
+  until its rewrite (the conclusions page, Open). It has no product-case
+  section yet: until the rewrite, the product case's values are labeled in
+  the source-ledger rows `COMM-722` to `COMM-726` and in each constant's
+  docstring.
 
 **Source classes.** Each default in a `constants.py` opens its docstring
 with a source class that says how its value was set: in the data center
 `SOURCED_FACT`, `SOURCED`, `ESTIMATE`, `EXTRAPOLATION`, `SOURCED_DECISION`
 or `INVESTOR_SET`; in communications `SOURCED_FACT`, `SOURCED_ESTIMATE`,
-`ESTIMATE`, `SCENARIO`, `INVESTOR_SET` or `DERIVED`, and some carry none.
+`ESTIMATE`, `SCENARIO`, `INVESTOR_SET` or `DERIVED`, and some carry none;
+in the product case `SOURCED_FACT`, `INVESTOR_SET`, `SCENARIO` or
+`DERIVED`, a definition none.
 The cadence defaults (the `*_DEFAULT` constants in
 `code/src/common/cadence.py`) carry `ESTIMATE`; the ground defaults in
 `ground.py` carry none. A claim's home is
@@ -74,7 +84,9 @@ not the docstring: in the data center every input's claim is set in
 `input_manifest.py` (its `*_SPECS` tables, and for the GPU roadmap and the R
 band its builders and claim constants; for the ground, `GROUND_INPUT_SPECS`
 and the `GROUND_*_CLAIM_ID` constants in `ground.py`),
-and in communications in the dial's ledger row. A docstring may cite the
+in communications in the dial's ledger row, and in the product case in each
+input's cell spec (`SCENARIO_SPECS`, `CONSTANT_INPUTS`) with its source-ledger
+row. A docstring may cite the
 claim too; a decision-sourced default cites its decision (such as D7) or a
 design rule; unit conversions cite nothing. These classes are not the
 public source-status taxonomy (`CONTEXT.md`, Ambiguities).
@@ -108,8 +120,11 @@ public source-status taxonomy (`CONTEXT.md`, Ambiguities).
 
    Update the claim and rationale in the input spec tables when the basis
    changes. A cadence default also moves the Iridium run, whose scenario
-   inherits the cadence, and any shared default moves the communications
-   tests on config defaults: follow the Iridium steps 4 and 5 too.
+   inherits the cadence, and with it the product case, which reads the
+   Iridium artifact: three artifacts move, in order, the data center's, the
+   Iridium artifact, then the product case (follow the Iridium steps 4 and 5
+   and the product-case checklist too). Any shared default moves the
+   communications tests on config defaults as well.
 3. Check the default guards (the data-center page, `validation.py`):
    promotion refuses while one fails; move a guard only on purpose, and
    rename a check ID that names the old value.
@@ -136,7 +151,10 @@ public source-status taxonomy (`CONTEXT.md`, Ambiguities).
    usage and the IoT room's constants), with
    its description in `code/src/communications/config.py` where a config
    field defaults to it. A changed config default can also move the
-   cellular family and the equality tripwire.
+   cellular family and the equality tripwire. The small and mounted
+   terminals' prices are one price list with the product case's start
+   prices: a terminal price is two scenario edits and two ledger rows, the
+   Iridium artifact promoted first, then the product case (its checklist).
 3. If the change moves an input of the saturation curve, re-promote the
    curve first: its inputs are the held spectrum and every named constant
    `SaturationInputs` reads in `code/src/communications/saturation_curve.py`
@@ -159,13 +177,50 @@ public source-status taxonomy (`CONTEXT.md`, Ambiguities).
 4. Re-promote the Iridium artifact with the Iridium command (the promotion
    page, with today's stamp), re-freeze the Iridium suite's numbers on
    purpose, then run the test command: the regeneration test fails until
-   re-promotion. Once the product case is built (ADR 012), re-promote it
-   after this artifact, every time: it reads the engineering artifact, so
-   that artifact is promoted first (the product-case design's promotion
-   order).
+   re-promotion. Then promote the product case after it, every time, with
+   its command (the promotion page; the product-case checklist, step 4): it
+   records the SHA-256 of the Iridium bytes it read, so even a stamp-only
+   re-promotion of this artifact moves it (ADR 012).
 5. Read the artifact's stated-assumption lines (`_assumptions` in
    `code/src/communications/iridium.py`) for text the moved value leaves
    stale, and review every document that quotes a moved number (the
+   conclusions page).
+
+*Product case.*
+1. Update the dial's row in `communications/assumptions.md`'s product-case
+   section (it comes with the rewrite, the conclusions page, Open), and the
+   dial's source-ledger row (`COMM-722` to `COMM-726`) when the value or the
+   investor's words change.
+2. Change the value in its homes, together: the setting in
+   `code/scenarios/product_case.yaml`, its `*_DEFAULT` constant in
+   `code/src/product_case/constants.py` (its docstring's basis with it) and
+   its cell spec in `code/src/product_case/config.py` (`SCENARIO_SPECS`: its
+   claim, status and rationale).
+   `test_the_code_defaults_equal_the_shipped_scenario_file` holds the
+   scenario and the constants together. A terminal's start price is one
+   price list with the Iridium scenario's (`iridium.arpu`): two scenario
+   edits and two ledger rows, the Iridium artifact promoted first, then the
+   product case. No test ties the two lists; the review does.
+3. When the Iridium artifact or a terminal price moves, re-derive each
+   terminal's lower end prices, the context (`end_usd_month` in the scenario
+   and its constant), by the product-case design's rule: steps of a tenth of
+   the investor's price, down to the lowest step at or above the class's
+   break-even price alone in every reported year (its price times one minus
+   its own margin, `own_margin_pct`, in the Iridium artifact).
+4. Promote it with its command (the promotion page), always after the
+   Iridium artifact; from its first promotion on, its regeneration test
+   fails until it is re-promoted. Re-freeze on purpose any test that pins a
+   moved value, then run the test command.
+5. Read the artifact's stated lines (`_assumptions` in
+   `code/src/product_case/json_output.py`) for text the moved value leaves
+   stale. Check the investor's margin floor in its three parts, each where it
+   is read: fifty percent on the whole business, in the usable test and the
+   headline's margin check (`floors.margin_pct`); each class alone at or
+   above break-even, the people classes in the Iridium artifact's own margins
+   (`own_margin_pct`) and each IoT class at the product case's headline (its
+   `revenue_musd` against the year's `fleet_annual_cost_musd`); and the
+   Iridium artifact's own margins, published and never tested against fifty
+   percent. Then review every document that quotes a moved number (the
    conclusions page).
 
 **Rules.**
@@ -176,8 +231,11 @@ public source-status taxonomy (`CONTEXT.md`, Ambiguities).
   the data center's mass envelope (`RLDC-PAYLOAD-SSO-UPGRADE`) and the
   Iridium scenario's 16 satellites per launch (`COMM-713`; 15 without it,
   `COMM-712`), stated in the Iridium artifact.
-- A data-center scenario value that differs from the default publishes as a
-  scenario override (the map's invariants).
+- A data-center or product-case scenario value that differs from its
+  default publishes as a scenario override (the map's invariants).
+- No IoT count is ever a product-case setting: each IoT class's customers
+  come from the demand curve, and a key that sets a count is refused at
+  load, naming it.
 
 **Terms.** assumptions ledger, investor-set, default scenario, source
 status, claim ID (see `CONTEXT.md`).
@@ -199,7 +257,8 @@ review alone; nothing checks it automatically (Tests, below).
   hold at every setting the config accepts; their text tied to named
   constants (dates, claims, the investor's words) moves only with those
   constants, so a changed default is followed by a read of them (the
-  Iridium checklist, step 5).
+  Iridium checklist, step 5). The product case's stated lines are built from
+  its run the same way (the product-case checklist, step 5).
 
 **Tests.** `test_code_defaults_equal_the_default_scenario_file`
 (`code/tests/data_center/test_parity.py`), `test_scenario_drift.py`,
@@ -212,11 +271,17 @@ and `test_a_phone_price_below_the_floor_is_named_in_the_price_line` (two
 stated lines read at other settings),
 `test_bundled_generations_yaml_matches_known_gens`,
 `test_input_manifest.py` (statuses match the ledger; overrides drop the
-default's claim), and `test_validation_results.py` (each shipped scenario's
-expected failures). Missed: no test compares a ledger's rows with its
-scenario file; none ties the ground constants to their scenario file as a
-set (the data-center page, Open); no test reads every stated line at
-every setting; and a new data-center scenario
+default's claim), `test_validation_results.py` (each shipped scenario's
+expected failures), and for the product case
+`test_the_code_defaults_equal_the_shipped_scenario_file`,
+`test_every_scenario_value_has_one_cell_spec`,
+`test_scenario_inputs_keep_the_shipped_values_defaults` (the override rule)
+and `test_the_stated_assumptions_are_the_runs_line_by_line` (every stated
+line against the run, on a robust and two fallback samples). Missed: no
+test compares a ledger's rows with its scenario file; none ties the ground
+constants to their scenario file as a set (the data-center page, Open); none
+ties the terminals' prices in the Iridium and product-case scenarios; no
+test reads every stated line at every setting; and a new data-center scenario
 is tested only once it joins the hand-kept lists `_EXPECTED_FAILURES`
 (`test_validation_results.py`) and `_SCENARIO_NAMES`
 (`test_provenance_uses.py`).
@@ -231,4 +296,7 @@ source class; a stated-assumption line; an input of the saturation curve.
 `*_SPECS` tables in `code/src/data_center/input_manifest.py` and
 `GROUND_INPUT_SPECS` in `code/src/data_center/ground.py`; `_assumptions`
 in `code/src/communications/iridium.py` and `SaturationInputs` in
-`code/src/communications/saturation_curve.py`.
+`code/src/communications/saturation_curve.py`; for the product case,
+`code/src/product_case/constants.py`, `SCENARIO_SPECS` and
+`CONSTANT_INPUTS` in `code/src/product_case/config.py`, and `_assumptions`
+in `code/src/product_case/json_output.py`.
