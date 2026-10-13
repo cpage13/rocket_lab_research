@@ -1152,8 +1152,9 @@ _DATA_IOT_ANCHOR_RATIONALE: Final[str] = (
     "commercial IoT segment (1,998,000 "
     "at $7.78, COMM-617, COMM-618); the product case takes it whole as minimal-packet IoT's "
     "anchor and anchors data IoT beside it, so the two IoT classes start from twice Iridium's IoT "
-    "revenue today ($373.1M a year against $186.5M). The curve's starting point, never a count of "
-    "devices: data IoT's customers in every market and year come from the demand curve."
+    "revenue today, a run rate at today's count and ARPU ($373.1M a year against $186.5M). The "
+    "curve's starting point, never a count of devices: data IoT's customers in every market and "
+    "year come from the demand curve."
 )
 """The rationale of data IoT's two anchor values (montecarlo M1's sentence)."""
 

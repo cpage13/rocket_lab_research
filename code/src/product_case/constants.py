@@ -272,7 +272,8 @@ DATA_IOT_ANCHOR_CUSTOMERS: Final[float] = IOT_CUSTOMERS_TODAY * DATA_IOT_ANCHOR_
 999,000, half of Iridium's IoT customers today. Iridium reports one commercial IoT segment
 (1,998,000 subscribers at $7.78 a month, COMM-617 and COMM-618); the product case takes it whole
 as minimal-packet IoT's anchor and anchors data IoT beside it, so the two IoT classes start from
-twice Iridium's IoT revenue today ($373.1M a year against $186.5M)."""
+twice Iridium's IoT revenue today, a run rate at today's count and ARPU ($373.1M a year against
+$186.5M)."""
 
 DATA_IOT_ANCHOR_ARPU_USD_MONTH: Final[float] = IOT_ARPU_USD_MONTH * DATA_IOT_PRICE_MULTIPLE
 """DERIVED (COMM-618 by the investor's proportion; COMM-726): data IoT's anchor price, $15.56 a
