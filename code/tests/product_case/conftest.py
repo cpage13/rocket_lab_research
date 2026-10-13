@@ -5,9 +5,10 @@ test may change, and a writer that puts a changed scenario in a temporary folder
 loads it through the real loader (``load_product_case_config``). A synthetic engineering
 artifact of round numbers (:func:`synthetic_engineering_artifact`), the ``iridium-v7`` fields the
 product case reads and nothing else, as a fresh mapping a test may change, with a writer of its
-JSON bytes; the end-to-end case reuses it. Every path is anchored to the root ``conftest.py``'s
-fixtures, never to the working directory, so the suite runs from ``code/`` and from the
-repository root.
+JSON bytes, and the small scenario it runs (:func:`synthetic_scenario_mapping`: three reported
+years, 50 draws); the engine's and the end-to-end tests reuse both. Every path is anchored to
+the root ``conftest.py``'s fixtures, never to the working directory, so the suite runs from
+``code/`` and from the repository root.
 """
 
 from __future__ import annotations
@@ -242,3 +243,43 @@ def write_engineering(tmp_path: Path) -> EngineeringWriter:
         return path
 
     return write
+
+
+SYNTHETIC_SCENARIO_DRAWS: Final[int] = 50
+"""The small scenario's market draws: enough for the spreads (at least 9), few for seconds."""
+
+SYNTHETIC_SCENARIO_SEED: Final[int] = 7
+"""The small scenario's seed (any seed would do: the case's checks are read at this one)."""
+
+
+def synthetic_scenario_mapping(shipped: dict[str, Any]) -> dict[str, Any]:
+    """The small scenario the synthetic artifact runs, built on the shipped scenario's mapping.
+
+    Its three reported years are the synthetic artifact's (FY2031 to FY2033); each terminal holds
+    its start price and one lower end price ($10 and $9; $50 and $45), minimal-packet IoT its $3
+    (data IoT $6); each IoT class two usage scales (x1, x2); the shipped usage paths' first three
+    values; 50 draws at seed 7; the shipped ranges and floors. Its engineering artifact path is the
+    shipped one until a test points it at a written synthetic file.
+    """
+    scenario = copy.deepcopy(shipped)
+    scenario["scenario_name"] = "The synthetic product-case scenario"
+    scenario["reported_years"] = list(SYNTHETIC_REPORTED_YEARS)
+    scenario["prices"]["small_terminal"]["end_usd_month"] = [10.0, 9.0]
+    scenario["prices"]["mounted_terminal"]["end_usd_month"] = [50.0, 45.0]
+    usage = scenario["usage"]
+    usage["small_terminal"]["gb_per_month"] = [5.4, 6.7, 8.1]
+    usage["mounted_terminal"]["gb_per_month"] = [54.0, 67.0, 81.0]
+    usage["minimal_packet_iot"]["messages_per_day"] = [48, 72, 96]
+    usage["minimal_packet_iot"]["scales"] = [1.0, 2.0]
+    usage["data_iot"]["bursts_per_day"] = [8, 10, 12]
+    usage["data_iot"]["bursts_outside_busy_hours"] = [False, True, True]
+    usage["data_iot"]["scales"] = [1.0, 2.0]
+    scenario["market"]["draws"] = SYNTHETIC_SCENARIO_DRAWS
+    scenario["market"]["seed"] = SYNTHETIC_SCENARIO_SEED
+    return scenario
+
+
+@pytest.fixture
+def synthetic_scenario(shipped_scenario: dict[str, Any]) -> dict[str, Any]:
+    """The small scenario the synthetic artifact runs, as a fresh mapping a test may change."""
+    return synthetic_scenario_mapping(shipped_scenario)
