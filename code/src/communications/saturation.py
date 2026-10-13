@@ -139,13 +139,11 @@ alive at once: a pool's largest, as many as its workers).
         communications/models/iridium/saturation_curve.json --version-stamp <stamp>
 
 The full promotion of 2026-10-12 (the shipped scenario, 160 footprint bands, a shared machine
-of 16 CPUs and 32 GB, contended by other work: ``time -l`` counted 46.4 million involuntary
-context switches) measured 1,740.5 s of wall time, about 29 minutes, and a peak-memory bound of
-16,077 MB, 77 MB over the 16 GB budget, which it logged as a warning (the bound is the budget's
-figure; ``time -l`` reported a largest resident set of 3.50 GB); the curve's
-``provenance.run_measurement`` carries the same two figures. That run kept each pool's worker
-for many tasks, past whose single readings a worker's peak grows; the schedule above, one task a
-worker and the margin, has no full promotion measured yet.
+of 16 CPUs and 32 GB, contended by other work: ``time -l`` counted 35.7 million involuntary
+context switches) measured 1,794.2 s of wall time, about 30 minutes, and a peak-memory bound of
+14,095 MB, under the 16 GB budget (the bound is the budget's figure; ``time -l`` reported a
+largest resident set of 3.29 GB); the curve's ``provenance.run_measurement`` carries the same
+two figures.
 
 It loads the scenario, narrows it to its Iridium dials (a scenario without an ``iridium:``
 block is refused before anything runs), refuses a destination the shared writer would refuse

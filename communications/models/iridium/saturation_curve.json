@@ -171,8 +171,8 @@
       "the markers' crossings hold: capacity never falls between consecutive rows of any class or band point, and the elasticity of capacity, once under 0.1 or 0.25, stays under it at every later midpoint"
     ],
     "run_measurement": {
-      "wall_time_s": 1740.4734365055338,
-      "peak_memory_mb": 16076.955648000001
+      "wall_time_s": 1794.207887398079,
+      "peak_memory_mb": 14094.651392000002
     }
   },
   "classes": [
