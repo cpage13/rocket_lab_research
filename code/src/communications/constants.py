@@ -143,8 +143,7 @@ class IotClass(StrEnum):
     """The engineering model's two IoT device classes: the key that names each (never a setting).
 
     An IoT class is measured in devices, never people, and the engineering model sells no IoT
-    seat: it publishes
-    what IoT the network can carry, each class alone at its engineering usage
+    seat: it publishes what IoT the network can carry, each class alone at its engineering usage
     (:data:`IOT_ENGINEERING_USAGE`), never a count sold, a price or revenue (ADR 011). The member
     order is the order every list of IoT classes takes. ``MINIMAL_PACKET_IOT`` sends short
     messages only; ``DATA_IOT`` sends bursts of data beside the same messages.

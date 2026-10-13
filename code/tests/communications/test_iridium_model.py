@@ -795,14 +795,24 @@ def test_at_full_downlink_each_iot_capacity_is_zero_with_the_payload_view_bindin
         assert (entry.device_capacity, entry.binding_view) == (0, IotView.PAYLOAD_BITS)
 
 
+TIE_DOWNLINK_SHARE = 0.81296875
+"""The downlink share at which minimal-packet IoT's random-access and single-tone views meet at 8
+MHz: W (1 - d) = 57 devices a window x 3,750 Hz x 7 s = 1,496,250 Hz, so 1 - d = 0.18703125."""
+
+
 def test_a_tie_between_views_binds_the_earlier_in_the_view_order() -> None:
     """Objective: when two views give the same least devices, the one earlier in ``IotView``'s
-    order (payload bits, random access, single-tone time) binds.
+    order (payload bits, random access, single-tone time) binds, for constructed views and for
+    the real input that ties two least views.
 
-    Sample: constructed views (no shipped input ties them): payload and access equal and least;
-    access and tone equal and least; payload and tone equal and least; all three equal.
+    Sample: constructed views: payload and access equal and least; access and tone equal and
+    least; payload and tone equal and least; all three equal. Then ``iot_room`` at 8 MHz and
+    d = 0.81296875, where minimal-packet IoT's random-access and single-tone views meet, at 1,
+    1,000 and 4,096 phone-class beams, where the two come out bit-equal (102,600 devices a beam).
 
-    Expected outcome: payload bits, random access, payload bits, payload bits.
+    Expected outcome: payload bits, random access, payload bits, payload bits; at the real tie
+    minimal-packet IoT's two views equal and below its payload view, random access binding, and
+    the capacity that view rounded down.
     """
     cases = (
         ((5.0, 5.0, 9.0), IotView.PAYLOAD_BITS),
@@ -813,6 +823,22 @@ def test_a_tie_between_views_binds_the_earlier_in_the_view_order() -> None:
     for values, binding in cases:
         views = dict(zip(IotView, values, strict=True))
         assert iridium._binding_view(views) is binding, values
+    uplink_width_hz = (1.0 - TIE_DOWNLINK_SHARE) * HELD_SPECTRUM_MHZ * 1e6
+    assert uplink_width_hz == pytest.approx(57 * 3_750.0 * 7.0)
+    for beams in (1.0, 1_000.0, 4_096.0):
+        entry = iot_room(
+            beams,
+            spectrum_mhz=HELD_SPECTRUM_MHZ,
+            downlink_share=TIE_DOWNLINK_SHARE,
+            at_or_above_floor=True,
+        ).classes[0]
+        assert entry.iot_class is IotClass.MINIMAL_PACKET_IOT
+        access, tone = entry.devices_by_random_access, entry.devices_by_single_tone_time
+        assert access is not None and entry.devices_by_payload_bits is not None
+        assert access == tone, (beams, access, tone)
+        assert access < entry.devices_by_payload_bits
+        assert entry.binding_view is IotView.RANDOM_ACCESS
+        assert entry.device_capacity == math.floor(access)
 
 
 def test_an_iot_room_past_what_a_float_holds_leaves_the_capacity_unrounded() -> None:

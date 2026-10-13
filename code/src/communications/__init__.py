@@ -30,8 +30,8 @@ The package mirrors the data-center model's shape and reuses the shared spine in
 record (the deployment, the living fleet, the build, launch and replacement cost
 lines and the annualized cost). The Iridium record carries each class's people,
 revenue, own margin and useful beams by year, IoT's room and capacities by year and
-at the readings, the readings at the reported fleets and the marginal intervals; the
-cellular record carries its target, its served
+at the readings, each IoT class's engineering usage, the readings at the reported
+fleets and the marginal intervals; the cellular record carries its target, its served
 base, its two revenue cases and its cost per person, which the ground comparison
 sets against a ground cost (a marked, two-regime INTERFACE the caller supplies). It
 is NOT a market-share, demand, or DCF model. People are PEOPLE, never households and

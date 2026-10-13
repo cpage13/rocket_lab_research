@@ -971,9 +971,12 @@ def _reading(
 def _binding_view(devices_by_view: Mapping[IotView, float]) -> IotView:
     """Return the view giving the least devices, a tie going to the earliest in
     :class:`~communications.constants.IotView`'s order (``min`` keeps the first of equal keys, and
-    the views are taken in that order). :func:`iot_room` makes two views tie exactly only where
-    their rooms are 0, as at d = 1, where the payload and tone views are both 0 and the payload
-    view binds."""
+    the views are taken in that order). Two of :func:`iot_room`'s views tie at the least where
+    their rooms are both 0 (at d = 1 the payload and tone views, and the payload view binds), and
+    where minimal-packet IoT's random-access and single-tone views meet: W (1 - d) equal to the
+    window's low end x the NB-IoT tone x the airtime's high end (1,496,250 Hz at the named
+    constants, d = 0.81296875 at 8 MHz). There, when the two floats come out equal, random access
+    binds; when rounding leaves them a unit in the last place or two apart, the lower binds."""
     return min(IotView, key=lambda view: devices_by_view[view])
 
 
@@ -1539,8 +1542,8 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
         ValueError: If the panel factor is not a positive finite number (a panel so small its
             ratio to the reference panel underflows to 0), naming ``iridium.aperture_m2``; or
             if the run's records would hold an infinity or a NaN (a panel, a price or a cost
-            setting past what the model can compute: a panel of 1e-305 or 2.5e300 m^2, say,
-            or a price of 5e-324 dollars), naming the first such field (the fleet-and-cost
+            setting past what the model can compute: a panel of 2.5e300 m^2, say, or a price
+            of 5e-324 dollars), naming the first such field (the fleet-and-cost
             record walked first), its value and the settings its record scales with, each
             with its value (the panel, the three prices and the cost settings; the cost
             settings alone for the fleet-and-cost record). No run is returned.

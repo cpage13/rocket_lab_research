@@ -704,7 +704,10 @@ class IridiumModelArtifact(BaseModel):
         description="The published orbit posture (a labeled scenario with its limitations)."
     )
     iridium_physics: IridiumPhysicsBlock = Field(
-        description="The run's Iridium settings and stated physics notes."
+        description=(
+            "The run's Iridium settings, its stated physics notes and the IoT room's constants "
+            "(ADR 011)."
+        )
     )
     classes: tuple[ClassBlock, ...] = Field(description="Each device class's block, in order.")
     iot_classes: tuple[IotClassBlock, ...] = Field(
