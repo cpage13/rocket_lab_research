@@ -592,6 +592,8 @@ def test_per_user_offpeak_caps_at_the_beam_pool() -> None:
 # IoT as capacity (ADR 011): each IoT class's engineering usage, its loads a day.
 # ---------------------------------------------------------------------------
 IOT_CLASS_ORDER = [IotClass.MINIMAL_PACKET_IOT, IotClass.DATA_IOT]
+"""Every IoT list's class order (``IotClass``'s): minimal-packet IoT, then data IoT."""
+
 IOT_USAGE_LOADS = (
     (IotClass.MINIMAL_PACKET_IOT, 48, 0, 16_320, 130_560, 48, 48),
     (IotClass.DATA_IOT, 48, 4, 416_320, 3_330_560, 52, 48),
@@ -1405,8 +1407,8 @@ def test_each_class_revenue_is_its_people_times_its_price(
     and in every sold year its own margin its own revenue against the year's cost.
     """
     config = load_comms_config(iridium_yaml)
-    base = run_iridium_model(config, committed_saturation_curve)
-    for fleet_year, iridium_year in zip(base.fleet.years, base.iridium.years, strict=True):
+    run = run_iridium_model(config, committed_saturation_curve)
+    for fleet_year, iridium_year in zip(run.fleet.years, run.iridium.years, strict=True):
         for line in iridium_year.classes:
             assert line.revenue_musd == pytest.approx(
                 line.people_served * CLASS_PRICES[line.device_class] * 12 / 1e6
@@ -2173,35 +2175,32 @@ def test_iridium_yaml_scenario_loads_and_runs(
 def test_iridium_assumptions_states_ecosystem_and_ops(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
-    """Objective: the stated assumptions, rewritten for the switch.
+    """Objective: the stated assumptions the shipped run publishes, each built from the run.
 
-    Expected outcome: the lines state the ecosystem assumption first, its MSS-lane statements
-    among it (the phone class's tier is in-chipset, and no unmodified phone is reached), and
-    operations at zero; the curve,
-    the reuse calibration (0.15 at the 25 m^2 reference panel, an estimate, COMM-410 and
-    COMM-411), d (each people figure and each class's downlink pool scale with it, the off-peak
-    per-user rate follows the pool only where the pool caps it, and the satellite's peak and the
-    busy-hour per-user rates do not move; IoT's uplink, payload and single-tone rooms with 1 - d
-    and its random-access room with neither, so an IoT class's capacity follows its binding
-    view), and the panel with the rule's measured limits
-    (``PANEL_RULE_LIMITS_NOTE``: every class carries at least what the rule gives below the
-    reference panel); the cadence fleet with no target and no cap; this run's 16 per launch
-    beside the validated counts (16 with the block upgrade and its two conditions, 15 without
-    it); every seat of the three people classes sold; the class
-    prices held flat (the small terminal $10, the mounted terminal $50 and the phone class $15 a
-    month) and the phone class's floor, $15, apart from its price; a haircut as a division with
-    every margin re-derived; each class's own margin with no IoT clause; each class's usage; IoT
-    as two device classes on the phone class's useful beams, those lit over inhabited cells, so
-    IoT over oceans and empty land is not counted (a conservative basis), each class with its
-    capacity alone at its engineering usage and never a count sold or revenue (ADR 011); the
-    floor rule, IoT's capacity null below the floor; the
-    room's formulas and constants with their claim IDs (COMM-659, COMM-654, COMM-714 and
-    COMM-719), each view at its conservative end; the whole IoT uplink, no people class's upload
-    subtracted (the phone class's on the beams IoT rides among them); each capacity at its
-    engineering usage over the day, never divided by the product case's devices; government left
-    out of revenue; the readings, a reading below the floor selling nothing with each IoT
-    class's capacity null there; the refusals of a
-    fleet past a class's last row and of a final fleet past a no-number class's label (ADR 005);
+    Expected outcome: the lines state the ecosystem assumption first, its MSS-lane statements among
+    it (the phone class's tier is in-chipset, and no unmodified phone is reached), and operations
+    at zero; the curve, the reuse calibration (0.15 at the 25 m^2 reference panel, an estimate,
+    COMM-410 and COMM-411), d (each people figure and each class's downlink pool scale with it, the
+    off-peak per-user rate follows the pool only where the pool caps it, and the satellite's peak
+    and the busy-hour per-user rates do not move; IoT's uplink, payload and single-tone rooms with
+    1 - d and its random-access room with neither, so an IoT class's capacity follows its binding
+    view), and the panel with the rule's measured limits (``PANEL_RULE_LIMITS_NOTE``: every class
+    carries at least what the rule gives below the reference panel); the cadence fleet with no
+    target and no cap; this run's 16 per launch beside the validated counts (16 with the block
+    upgrade and its two conditions, 15 without it); every seat of the three people classes sold;
+    the class prices held flat (the small terminal $10, the mounted terminal $50 and the phone
+    class $15 a month) and the phone class's floor, $15, apart from its price; a haircut as a
+    division with every margin re-derived; each class's own margin with no IoT clause; each class's
+    usage; IoT as two device classes on the phone class's useful beams, those lit over inhabited
+    cells, so IoT over oceans and empty land is not counted (a conservative basis), each class with
+    its capacity alone at its engineering usage and never a count sold or revenue (ADR 011); the
+    floor rule, IoT's capacity null below the floor; the room's formulas and constants with their
+    claim IDs (COMM-659, COMM-654, COMM-714 and COMM-719), each view at its conservative end; the
+    whole IoT uplink, no people class's upload subtracted (the phone class's on the beams IoT rides
+    among them); each capacity at its engineering usage over the day, never divided by the product
+    case's devices; government left out of revenue; the readings, a reading below the floor selling
+    nothing with each IoT class's capacity null there; and the refusals of a fleet past a class's
+    last row and of a final fleet past a no-number class's label (ADR 005);
     the limits; no line calls the margin gross; no stack caveat at the default.
     """
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
