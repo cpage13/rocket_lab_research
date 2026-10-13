@@ -16,9 +16,10 @@ Coverage (paths relative to the repository root):
   ``data_center/models/ground/default.json``,
   ``communications/models/iridium/default.json``, and
   ``communications/models/iridium/saturation_curve.json``;
-* the root ``README.md``, ``AGENTS.md``, ``CONTEXT.md``,
+* the root ``README.md``, ``AGENTS.md``, ``CLAUDE.md``, ``CONTEXT.md``,
   ``rocket_lab_primer.md``, and ``.gitignore``;
-* every ``*.md`` under ``docs/``, ``data_center/``, and ``communications/``;
+* every ``*.md`` under ``atlas/``, ``docs/``, ``data_center/``, and
+  ``communications/``;
 * the research front door ``research/README.md`` and the research ledgers
   ``research/SOURCE_INDEX.md``, ``research/LIBRARY.md``, and
   ``research/RESEARCH_TRACKER.md``.
@@ -59,11 +60,19 @@ _PROMOTED_ARTIFACTS = (
 )
 """The four promoted JSON artifacts, repository-relative."""
 
-_ROOT_FILES = ("README.md", "AGENTS.md", "CONTEXT.md", "rocket_lab_primer.md", ".gitignore")
-"""Files at the repository root: its documents and the git ignore rules."""
+_ROOT_FILES = (
+    "README.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "CONTEXT.md",
+    "rocket_lab_primer.md",
+    ".gitignore",
+)
+"""Files at the repository root: its documents, the charter's loader and the git ignore rules."""
 
-_MARKDOWN_TREES = ("docs", "data_center", "communications")
-"""Repository directories whose every ``*.md`` (at any depth) is covered."""
+_MARKDOWN_TREES = ("atlas", "docs", "data_center", "communications")
+"""Repository directories whose every ``*.md`` (at any depth) is covered: the atlas the
+agents ground in, the ADRs and the two applications' documents."""
 
 _RESEARCH_FILES = (
     "research/README.md",

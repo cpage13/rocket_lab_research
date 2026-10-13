@@ -1,7 +1,7 @@
 # Research wiki
 
 **Maturity.** Stable rules, growing content. Checked against `research/` on
-`main` at 7ff8bc3, 2026-10-03.
+`main` at 1570350, 2026-10-12.
 
 **Role.** The evidence base for every application. It holds each
 application's thesis, the investor's hypothesis as an append-only belief
@@ -71,8 +71,6 @@ study (see `CONTEXT.md`).
   predate the no-em-dash rule, and the write-ups plus `research/LIBRARY.md` and
   `research/RESEARCH_TRACKER.md` still say "founder"; the em-dash guard
   excludes the write-ups until the investor decides on a sweep.
-- `research/README.md` still introduces the wiki as the data-center
-  project's source base, with communications added as a bullet.
 - The Neutron documents lag the payload user's guide as read by the local
   Flatellite experiment (the 13 t reference orbit, the SSO curves, the
   first-flight claim `NTR-011`, a dead guide link in the ledger); its
@@ -90,9 +88,12 @@ study (see `CONTEXT.md`).
 ledgers (`code/tests/test_no_em_dashes.py`). The data-center suite checks
 that each `RLDC`-cited input carries the ledger's status
 (`code/tests/data_center/test_input_manifest.py`,
-`code/tests/data_center/test_provenance_uses.py`). Missed: links inside
-`research/` and the catalog's coverage of every file (lint passes are agent
-runs); the unchecked `COMM-*` citations are on the communications page.
+`code/tests/data_center/test_provenance_uses.py`), the communications suite
+that every `COMM-*` claim ID its code cites is a ledger row
+(`code/tests/communications/test_claim_citations.py`), and the documents
+guard that every claim ID the agent pages cite is a ledger row
+(`code/tests/test_agent_docs_resolve.py`). Missed: links inside `research/`
+and the catalog's coverage of every file (lint passes are agent runs).
 
 **If this changes, update here.** A topic folder, claim family, ledger or
 rule added or retired; a change in what may live in `research/`.

@@ -1,6 +1,6 @@
 # 007 - IoT Counts Are Fixed At The Coverage Floor; Government Is Left Out Of Revenue
 
-Status: Accepted (2026-10-04, with the saturation module's strategy, Revision 4)
+Status: Superseded by ADR 011 (2026-10-12)
 
 ## Context
 
