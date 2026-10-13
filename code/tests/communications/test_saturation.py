@@ -5655,6 +5655,17 @@ ROWS_TOO_FAR_APART = "the two rows' values lie too far apart for this reading's 
 FIRST_ROW_TOO_LARGE = "that value is too large for this reading's arithmetic"
 """The refusal's cause below the first row when the fleet times its value leaves a float's range."""
 
+READING_NEAR_FLOAT_MAX = (
+    "the reading lies so near a float's largest value that this reading's arithmetic rounds past it"
+)
+"""The refusal's cause between two rows whose ratio is finite when the reading's exponential rounds
+past the largest float."""
+
+NEAR_FLOAT_MAX_LOW_BEAMS = 1.7976931348622133e308
+"""A first row's useful beams just under the largest float: with the largest float at the second
+row, their ratio is finite (1.000000000000057) and the reading at 991 satellites, within rounding
+of the largest float, rounds past it in the exponential (checked by command)."""
+
 
 @pytest.mark.parametrize(
     ("low_beams", "high_beams", "fleet", "cause"),
@@ -5662,8 +5673,14 @@ FIRST_ROW_TOO_LARGE = "that value is too large for this reading's arithmetic"
         (5e-324, 1e300, 582, ROWS_TOO_FAR_APART),
         (1e300, 5e-324, 582, ROWS_TOO_FAR_APART),
         (1.5e308, 1.5e308, 341, FIRST_ROW_TOO_LARGE),
+        (NEAR_FLOAT_MAX_LOW_BEAMS, sys.float_info.max, 991, READING_NEAR_FLOAT_MAX),
     ],
-    ids=["a ratio past a float's range", "a ratio under a float's range", "below the first row"],
+    ids=[
+        "a ratio past a float's range",
+        "a ratio under a float's range",
+        "below the first row",
+        "a reading rounding past the largest float",
+    ],
 )
 def test_a_reading_past_a_floats_range_is_refused_with_a_typed_error(
     low_beams: float, high_beams: float, fleet: int, cause: str
@@ -5677,11 +5694,14 @@ def test_a_reading_past_a_floats_range_is_refused_with_a_typed_error(
     1e300 (their ratio past a float's range; the reading at 582 is 7.6e-13), then 1e300 and
     5e-324 (their ratio under it, 0; the reading 6.5e-12), each read at 582 between the rows;
     then 1.5e308 at the first row, read at 341 below it (341 x 1.5e308 past a float's range; the
-    reading 1.4956e308).
+    reading 1.4956e308); then 1.7976931348622133e308 and the largest float, read at 991 between
+    them (their ratio finite, the reading within rounding of the largest float, which the
+    exponential rounds past: the guard that keeps a bare OverflowError from leaving the reader).
 
     Expected outcome: SaturationCurveError naming the class's useful beams, the fleet and the
-    cause, the rows' values too far apart between the rows and the first row's value too large
-    below it; at each row the row's own value still reads.
+    cause: the rows' values too far apart between the rows, the first row's value too large
+    below it, the reading too near a float's largest value at 991; at each row the row's own
+    value still reads.
     """
     low, high = _row(342, low_beams, 1.0), _row(992, high_beams, 2.0)
     curve = power_law_curve((low, high))

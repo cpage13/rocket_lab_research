@@ -1538,7 +1538,7 @@ class _Bracket:
                 rounds past it (never on a computed curve, whose values lie within a few orders
                 of magnitude). A loaded curve's rows are never 0 (the completeness check refuses
                 one), so the first guards a curve built in Python; the second, any curve whose
-                values span too far.
+                values span too far, or lie near a float's largest value.
         """
         high, low = self.high, self.low
         name = f"the {self.curve.device_class.value} curve's {quantity.name}"

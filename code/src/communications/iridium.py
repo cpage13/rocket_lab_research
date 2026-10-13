@@ -38,8 +38,8 @@ that the curve was computed for the config's own inputs (the identity check,
    panel, the downlink pool and the per-user rates), its markers from the curve, the limit
    that binds at the horizon's end, and its marginal intervals on the curve's own rows. A
    class whose curve reaches no saturation number, its final fleet past the fleet the curve
-   names it not reached by, raises :class:`BindingLimitUnmeasuredError`: the curve measures
-   nothing past that fleet, so the limit there is not known.
+   names it not reached by, raises :class:`BindingLimitUnmeasuredError`: the curve does not
+   measure the elasticity of capacity past that fleet, so which limit binds there is not known.
 5. **The record**, :class:`IridiumRecord`: everything the ``iridium-v6`` artifact publishes
    beside the shared fleet-and-cost record, with the stated assumptions, so the artifact
    builder reads no dial and holds no Optional check.
@@ -1130,10 +1130,10 @@ def _class_record(
     if not_reached_by is not None and final_living_fleet > not_reached_by:
         raise BindingLimitUnmeasuredError(
             f"the {device_class.value} curve reaches no saturation number and is not reached "
-            f"by {not_reached_by} satellites, the last fleet its rows measure, and the final "
-            f"year's living fleet of {final_living_fleet} satellites lies past it: the binding "
-            "limit at the horizon's end is unknown there, so the run needs a curve whose sweep "
-            "measures that fleet"
+            f"by {not_reached_by} satellites, the last midpoint at which its rows measure the "
+            f"elasticity of capacity, and the final year's living fleet of {final_living_fleet} "
+            "satellites lies past it: which limit binds at the horizon's end is not known there, "
+            "so the run needs a curve whose rows measure the elasticity at that fleet"
         )
     binding = (
         BindingLimit.SPECTRUM

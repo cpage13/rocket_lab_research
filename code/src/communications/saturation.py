@@ -3764,9 +3764,9 @@ def compute_saturation(
     fleet against its own maximum use) once its crossings hold (capacity never falling between
     rows, and the elasticity never back at or above 0.10 or 0.25 after crossing under it),
     states any supporting marker the rows cannot place among the limits, and records the run's
-    wall time and peak-memory bound. Logs, once each,
-    every curve's maximum use and its saturation number (or the last measured fleet it is not
-    reached by), then the run's workers, peak-memory bound and wall time: the command's summary.
+    wall time and peak-memory bound. Logs, once each, every curve's maximum use and its
+    saturation number (or the last measured fleet it is not reached by), then the run's
+    workers, peak-memory bound and wall time: the command's summary.
 
     Args:
         inputs: The curve's inputs.
