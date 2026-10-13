@@ -27,7 +27,7 @@
 # research/SOURCE_INDEX.md (COMM-722 to COMM-726). INVESTOR_SET marks a value
 # the investor set; SCENARIO a modeling choice of the product-case design.
 
-scenario_name: "The product case at the investor's prices, held flat"
+scenario_name: "The product case at the investor's prices, held flat"  # the run's label (the artifact's metadata), not an input
 engineering_artifact_path: communications/models/iridium/default.json  # the promoted Iridium artifact, repository-relative
 reported_years: [2031, 2033, 2035, 2036]  # SCENARIO: the 2026-10-05 product-case design's years (COMM-723)
 
