@@ -23,7 +23,9 @@ the shared writer (``common.file_io.write_files_with_rollback``). The contract:
    names (a relative path anchored to the repository root, an absolute one as
    given) and runs the Iridium entry: a missing curve, or one computed for other
    inputs (the identity check), is one error record naming the curve file, and
-   nothing is written;
+   nothing is written; a final year's fleet past the fleet a class with no
+   saturation number is not reached by is one error record naming the class,
+   that label and the fleet, and nothing is written;
 6. no field of the run's Iridium record can stay unpublished silently: each record the
    artifact publishes whole and its block carry the same fields in the same order, each year's
    Iridium lines sit in the year block, every field of the Iridium record has its home in the
@@ -520,8 +522,8 @@ def test_a_final_fleet_past_a_no_number_classs_label_is_one_error_line(
 ) -> None:
     """Objective: a run whose final year's living fleet passes the fleet a class with no
     saturation number is not reached by ends the command in one ERROR line, never a traceback,
-    naming the class, that label and the fleet: the curve measures nothing past the label, so
-    the binding limit there is not known (ADR 005).
+    naming the class, that label and the fleet: the curve does not measure the elasticity of
+    capacity past the label, so which limit binds there is not known (ADR 005).
 
     Sample: the synthetic curve for the default dials (no saturation number on any class; the
     small terminal not reached by 36,900, its last row 40,000), written as the promotion writes

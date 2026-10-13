@@ -1654,7 +1654,7 @@ def test_a_final_fleet_at_the_not_reached_by_fleet_reads_the_launch_cadence(
 ) -> None:
     """Objective: a class whose curve reaches no saturation number reads the launch cadence as
     its binding limit at the horizon's end up to and at the fleet its curve names it not reached
-    by, the last fleet its rows measure (ADR 005).
+    by, the last midpoint at which its rows measure the elasticity of capacity (ADR 005).
 
     Sample: the synthetic curve for the default dials (L = N x B, no saturation number on any
     class), each class's block built by ``_class_record`` with the final living fleet at its
