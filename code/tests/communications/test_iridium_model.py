@@ -2015,10 +2015,15 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
     with the block upgrade and its two conditions, 15 without it); every seat sold; the class
     prices held flat (the small terminal $10, the mounted terminal $50 and the phone class $15 a
     month) and the phone class's floor, $15, apart from its price; a haircut as a division with
-    every margin re-derived; each class's usage; IoT as two device classes, each with its
-    capacity alone at its engineering usage and never a count sold or revenue (ADR 011), and the
-    floor rule; government left out of revenue; the readings; the limits; no line calls the
-    margin gross; no stack caveat at the default.
+    every margin re-derived; each class's own margin with no IoT clause; each class's usage; IoT
+    as two device classes, each with its capacity alone at its engineering usage and never a
+    count sold or revenue (ADR 011); the floor rule, IoT's capacity null below the floor; the
+    room's formulas and constants with their claim IDs (COMM-659, COMM-654, COMM-714 and
+    COMM-719), each view at its conservative end; the whole IoT uplink, the terminals' upload not
+    subtracted; each capacity at its engineering usage over the day, never divided by the
+    product case's devices; government left out of revenue; the readings; the refusals of a
+    fleet past a class's last row and of a final fleet past a no-number class's label (ADR 005);
+    the limits; no line calls the margin gross; no stack caveat at the default.
     """
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
     lines = run.iridium.assumptions
@@ -2053,12 +2058,30 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
         "the two capacities never add",
         "a capacity is never a count sold and never revenue",
         "the product case's (adr 011)",
-        "nothing is sold",
+        "nothing is sold in a year whose living fleet is below it, and each iot class's "
+        "capacity is null there (iot needs continuous coverage)",
+        "every class is sold in full and both iot capacities are published",
+        "iot's room, at each year's and each reading's phone-class useful beams l, the held "
+        "width w (8 mhz), the phone class's central spectral efficiency se (0.65)",
+        "the uplink bits a second, l x w x se x (1 - d)",
+        "times a 20 percent mac efficiency (comm-659)",
+        "a random-access window of 57 to 1,650 devices (comm-654) x an assumed 1 window a second",
+        "l x w over the 3.75 khz nb-iot tone (comm-714) x (1 - d)",
+        "the random-access window's low end (57) and the message airtime's high end (7 s of 4 to "
+        "7 s, comm-719)",
+        "iot's room is the whole iot uplink: the terminals' own upload is not subtracted from it",
+        "each iot class's capacity is read at its engineering usage, averaged over the day",
+        "so neither is divided by the other",
         "government is left out of revenue",
         "the retired cap, kept for comparison",
         "never a build target or a cap",
+        "a fleet past a class's last computed row is refused, never extrapolated or clamped",
+        "so is a run whose final year's living fleet passes the fleet a class with no saturation "
+        "number is not reached by",
     ):
         assert statement in joined, statement
+    margin = _line_with(lines, "Each class's own margin is its own revenue")
+    assert margin.endswith("null in a year with no revenue."), margin
     assert "gross" not in joined
     assert "(its floor)" not in joined
     assert "exact in beams" not in joined

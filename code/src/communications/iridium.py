@@ -1319,8 +1319,7 @@ def _assumptions(
         ),
         (
             "Each class's own margin is its own revenue against the whole fleet's annualized "
-            "build and launch cost (operations zero, above), null in a year with no revenue; "
-            "the IoT lines are never inside it."
+            "build and launch cost (operations zero, above), null in a year with no revenue."
         ),
         (
             "Each class's usage is the investor's (2026-10-04): the small terminal "
@@ -1357,10 +1356,10 @@ def _assumptions(
             "case's (ADR 011)."
         ),
         (
-            f"The coverage floor ({floor} satellites) gates every sale: nothing is sold, by a "
-            "class or an IoT line, in a year whose living fleet is below it, and from the first "
-            "year at it every class and both IoT lines are sold in full (a step with no "
-            "phase-in)."
+            f"The coverage floor ({floor} satellites) gates every sale: nothing is sold in a "
+            "year whose living fleet is below it, and each IoT class's capacity is null there "
+            "(IoT needs continuous coverage); from the first year at it every class is sold in "
+            "full and both IoT capacities are published (a step with no phase-in)."
         ),
         "Government is left out of revenue: the model carries no government count, price or line.",
         (
@@ -1373,23 +1372,41 @@ def _assumptions(
             "year's cost per satellite-year; a reading below the coverage floor sells nothing."
         ),
         (
-            "The IoT check spreads each line's devices over the phone class's useful beams "
-            "(IoT devices are low gain, so their reuse follows the phone rule) and reads its "
-            "daily volume against a beam's uplink (the frame's share 1 - d), with and without a "
-            f"{IOT_MAC_EFFICIENCY * _PERCENT:g} percent MAC efficiency; its access attempts a "
-            "second a beam, one per message or burst, against a random-access window of "
+            "IoT's room, at each year's and each reading's phone-class useful beams L, the held "
+            f"width W ({dials.spectrum_mhz:g} MHz), the phone class's central spectral efficiency "
+            f"SE ({CLASS_SE_CENTRAL[DeviceClass.PHONE_CLASS]:g}) and the uplink's share 1 - d: "
+            "the uplink bits a second, L x W x SE x (1 - d); the payload bits a second, those "
+            f"times a {IOT_MAC_EFFICIENCY * _PERCENT:g} percent MAC efficiency (COMM-659); the "
+            "access attempts a second, L x a random-access window of "
             f"{IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW} to {IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH:,} "
-            f"devices (COMM-654) at an assumed {IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND} window a "
-            "second (no source gives a window rate); "
-            "and, for minimal-packet IoT, its messages' channel time on "
-            f"{NB_IOT_TONE_HZ * _TONE_KHZ_PER_HZ:g} kHz tones at {IOT_MESSAGE_AIRTIME_LOW_S:g} "
-            f"to {IOT_MESSAGE_AIRTIME_HIGH_S:g} s a message (COMM-714, COMM-719)."
+            f"devices (COMM-654) x an assumed {IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND} window a "
+            "second (no source gives a window rate); and the single-tone seconds a second, L x W "
+            f"over the {NB_IOT_TONE_HZ * _TONE_KHZ_PER_HZ:g} kHz NB-IoT tone (COMM-714) x "
+            "(1 - d). Each IoT class's capacity reads each view at its conservative end: the "
+            "payload bits after the MAC efficiency, the random-access window's low end "
+            f"({IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW}) and the message airtime's high end "
+            f"({IOT_MESSAGE_AIRTIME_HIGH_S:g} s of {IOT_MESSAGE_AIRTIME_LOW_S:g} to "
+            f"{IOT_MESSAGE_AIRTIME_HIGH_S:g} s, COMM-719); the least, rounded down to whole "
+            "devices, is the capacity, and its view binds (a tie goes to the earlier in that "
+            "order)."
+        ),
+        (
+            "IoT's room is the whole IoT uplink: the terminals' own upload is not subtracted "
+            "from it."
+        ),
+        (
+            "Each IoT class's capacity is read at its engineering usage, averaged over the day; "
+            "the product case's devices sit at their own usage and time basis, so neither is "
+            "divided by the other."
         ),
         (
             "Each class's saturation number is a spectrum bound reported beside the launch "
-            "cadence, never a build target or a cap; a fleet past a class's last computed row "
-            "is refused, never extrapolated or clamped. The curve's stated limits are carried "
-            "in saturation.limits."
+            "cadence, never a build target or a cap. A fleet past a class's last computed row "
+            "is refused, never extrapolated or clamped; so is a run whose final year's living "
+            "fleet passes the fleet a class with no saturation number is not reached by, since "
+            "the curve's rows do not measure the elasticity of capacity there and which limit "
+            "binds is not known (ADR 005). The curve's stated limits are carried in "
+            "saturation.limits."
         ),
         (
             "The Iridium model is the MSS lane (owned L-band, purpose-built or in-chipset "
