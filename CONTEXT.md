@@ -134,7 +134,9 @@ maximum use linearly, never the saturation numbers, the ocean factor or satellit
 
 ### downlink share
 d: the share of the time-division duplex frame the downlink holds, a scenario setting (ADR 008); every people
-and capacity figure but the satellite's peak scales with it, and the curve is computed at d = 1.
+figure and every downlink capacity figure but the satellite's peak scales with it, and the uplink holds the rest
+of the frame, 1 - d. IoT's uplink, payload and single-tone rooms scale with 1 - d and its random-access room with
+neither (ADR 011). The curve is computed at d = 1.
 - **Relates to:** saturation curve
 
 ### readings
