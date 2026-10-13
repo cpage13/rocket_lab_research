@@ -41,14 +41,24 @@ take only the markets between the fill's share and the robust floor: the pick's 
 while its median rises and its share holds above the floor, and stops at whichever comes
 first; it can move in steps with a price or a terminal change, never the prices.
 
-**The investor's words that set the rules:** the prices held flat (2026-10-06 19:38: "The prices
-will not go down, but they will not go up"); IoT at $3 and $6 (2026-10-06 19:52: "Let's go with
-the three and six for now"); the terminals at $10 and $50 (2026-10-07: "Yes, let's use the $10
-and $50. Let's do that"); the margin floor (2026-10-07: "I think about a 50% floor for margin");
-the FY2036 usage (2026-10-12 15:56: "go with 9 GB, 90 GB and 13 bursts"); this documentation
-(2026-10-06: "As long as we have all of this documented clearly in the code section, with the
-Monte Carlo documented based on the guidelines of the repository, we can proceed"). Each other
-value's basis and words are in its constant's docstring and its row (COMM-722 to COMM-726).
+**The investor's words that set the rules**, verbatim and dated. The method's own rules: the
+case kept apart from the engineering model (2026-10-05: "you don't want to mix your market with
+your engineering and your production ... Keep it separate"); the demand curve on cost and
+service (2026-10-06: "This will be a curve based on cost and on what kind of service you are
+giving them"); the four classes side by side (2026-10-06 18:26: "There is a small terminal, there
+are two classes of IoT, and then there is the mounted terminal"); the usage raised until the
+network is used, the Pareto front and the Monte Carlo (2026-10-06 18:26: "If we barely use any of
+the network, then we just increase usage as is, right? Right. So we just do a Pareto. That is why
+we do the Monte Carlo and see what makes sense"); IoT uncapped (2026-10-06 16:58: "Would I cap the
+data IoT? No, I don't think so. ... I don't think there's any reason to cap the data"). The
+values: the prices held flat (2026-10-06 19:38: "The prices will not go down, but they will not go
+up"); IoT at $3 and $6 (2026-10-06 19:52: "Let's go with the three and six for now"); the
+terminals at $10 and $50 (2026-10-07: "Yes, let's use the $10 and $50. Let's do that"); the margin
+floor (2026-10-07: "I think about a 50% floor for margin"); the FY2036 usage (2026-10-12 15:56: "go
+with 9 GB, 90 GB and 13 bursts"). And this documentation (2026-10-06: "As long as we have all of
+this documented clearly in the code section, with the Monte Carlo documented based on the
+guidelines of the repository, we can proceed"). Each other value's basis and words are in its
+constant's docstring and its row (COMM-722 to COMM-726).
 
 **How to run it**, from ``code/`` (:mod:`product_case.json_output`; the engineering artifact is
 promoted first, then the product case, every time):
