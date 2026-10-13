@@ -38,10 +38,9 @@ kept in a module-level variable: every price, path and scale comes from the conf
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from itertools import product
-from types import MappingProxyType
 
 from common.cadence import round_half_up
 from product_case.config import ClassPriceDials, ProductCaseConfig
@@ -72,14 +71,85 @@ class OfferError(ValueError):
 
 
 @dataclass(frozen=True)
+class EndPrices(Mapping[ProductClass, float]):
+    """Each class's end price: a frozen record of the four prices that reads as a mapping.
+
+    A small immutable ``Mapping[ProductClass, float]`` in :class:`ProductClass` order that is also
+    a value: it hashes, deep-copies and pickles, and ``dataclasses.asdict`` writes it as the four
+    prices by class name, so a :class:`Choice` that holds it is a value too (a set or a cache can
+    key on a choice).
+
+    Attributes:
+        small_terminal: The small terminal's price a month by the last reported year.
+        mounted_terminal: The mounted terminal's.
+        minimal_packet_iot: Minimal-packet IoT's.
+        data_iot: Data IoT's (in the grid, twice minimal-packet IoT's).
+    """
+
+    small_terminal: float
+    mounted_terminal: float
+    minimal_packet_iot: float
+    data_iot: float
+
+    def __getitem__(self, product_class: ProductClass) -> float:
+        """The class's end price; a key that is not a product class raises ``KeyError``."""
+        match product_class:
+            case ProductClass.SMALL_TERMINAL:
+                return self.small_terminal
+            case ProductClass.MOUNTED_TERMINAL:
+                return self.mounted_terminal
+            case ProductClass.MINIMAL_PACKET_IOT:
+                return self.minimal_packet_iot
+            case ProductClass.DATA_IOT:
+                return self.data_iot
+        raise KeyError(product_class)
+
+    def __iter__(self) -> Iterator[ProductClass]:
+        """The four classes, in :class:`ProductClass` order."""
+        return iter(ProductClass)
+
+    def __len__(self) -> int:
+        """Four: one end price per class."""
+        return len(ProductClass)
+
+    @classmethod
+    def from_mapping(cls, prices: Mapping[ProductClass, float]) -> EndPrices:
+        """The end prices of a mapping that holds every class's.
+
+        Args:
+            prices: An end price per :class:`ProductClass`.
+
+        Returns:
+            The frozen end prices.
+
+        Raises:
+            ValueError: If a class has no end price.
+        """
+        missing = [product_class for product_class in ProductClass if product_class not in prices]
+        if missing:
+            raise ValueError(
+                f"a choice's end prices need every class; missing {[str(m) for m in missing]}"
+            )
+        return cls(
+            small_terminal=prices[ProductClass.SMALL_TERMINAL],
+            mounted_terminal=prices[ProductClass.MOUNTED_TERMINAL],
+            minimal_packet_iot=prices[ProductClass.MINIMAL_PACKET_IOT],
+            data_iot=prices[ProductClass.DATA_IOT],
+        )
+
+
+@dataclass(frozen=True)
 class Choice:
     """One choice of the grid: each class's end price and each IoT class's usage scale.
+
+    A value: it hashes, deep-copies, pickles and passes ``dataclasses.asdict``, whatever mapping
+    of end prices it is built with, since it holds them as :class:`EndPrices`.
 
     Attributes:
         choice_id: The choice's index in the grid's fixed order.
         end_prices: Each class's price a month by the last reported year, in
-            :class:`ProductClass` order (data IoT's twice minimal-packet IoT's); a read-only
-            mapping.
+            :class:`ProductClass` order (data IoT's twice minimal-packet IoT's); held as the
+            immutable :class:`EndPrices`.
         minimal_packet_scale: Minimal-packet IoT's usage scale by the last reported year.
         data_iot_scale: Data IoT's usage scale by the last reported year.
         at_start_prices: True when every end price equals its start price (a candidate).
@@ -90,6 +160,11 @@ class Choice:
     minimal_packet_scale: float
     data_iot_scale: float
     at_start_prices: bool
+
+    def __post_init__(self) -> None:
+        """Hold the end prices as :class:`EndPrices`, so the choice is a value."""
+        if not isinstance(self.end_prices, EndPrices):
+            object.__setattr__(self, "end_prices", EndPrices.from_mapping(self.end_prices))
 
 
 @dataclass(frozen=True)
@@ -261,13 +336,11 @@ def choice_grid(config: ProductCaseConfig) -> tuple[Choice, ...]:
         grid.append(
             Choice(
                 choice_id=index,
-                end_prices=MappingProxyType(
-                    {
-                        ProductClass.SMALL_TERMINAL: small,
-                        ProductClass.MOUNTED_TERMINAL: mounted,
-                        ProductClass.MINIMAL_PACKET_IOT: minimal,
-                        ProductClass.DATA_IOT: DATA_IOT_PRICE_MULTIPLE * minimal,
-                    }
+                end_prices=EndPrices(
+                    small_terminal=small,
+                    mounted_terminal=mounted,
+                    minimal_packet_iot=minimal,
+                    data_iot=DATA_IOT_PRICE_MULTIPLE * minimal,
                 ),
                 minimal_packet_scale=minimal_scale,
                 data_iot_scale=data_scale,
@@ -492,6 +565,7 @@ def grid_offers(
 __all__ = [
     "Choice",
     "ChoiceOffers",
+    "EndPrices",
     "IotOffer",
     "OfferError",
     "TerminalOffer",

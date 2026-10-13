@@ -4,7 +4,10 @@ and per-device loads in each reported year, before any market.
 
 from __future__ import annotations
 
+import copy
+import dataclasses
 import math
+import pickle
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -20,6 +23,8 @@ from product_case.engineering import (
     build_engineering_view,
 )
 from product_case.offers import (
+    Choice,
+    EndPrices,
     OfferError,
     choice_grid,
     choice_offers,
@@ -105,6 +110,50 @@ def test_the_shipped_grid_holds_300_choices_and_20_candidates() -> None:
     adopted = grid[ADOPTED_CHOICE]
     assert adopted.at_start_prices
     assert (adopted.minimal_packet_scale, adopted.data_iot_scale) == (8.0, 1.0)
+
+
+def test_a_choice_and_its_offers_are_values(product_case_yaml: Path) -> None:
+    """Objective: a choice and its offers are values that every later box can key, copy and
+    serialize: each hashes, deep-copies, pickles and passes ``dataclasses.asdict``, and a choice
+    built from a plain mapping of end prices holds them as the immutable ``EndPrices``.
+
+    Sample: the shipped grid's choice 12 (the investor's prices, minimal-packet x8, data IoT x1)
+    and its offers on an engineering view of round numbers; the same choice built from a dict.
+
+    Expected outcome: equal copies hash equal and fall in one set; a deep copy and a pickle
+    round trip equal the original; ``asdict`` writes the end prices by class name ($10, $50, $3,
+    $6) for the choice and inside its offers; the dict-built choice equals the grid's, holds
+    ``EndPrices`` and reads as a mapping in class order.
+    """
+    config = load_product_case_config(product_case_yaml)
+    choice = choice_grid(config)[ADOPTED_CHOICE]
+    offers = choice_offers(config, _view(SHIPPED_YEARS), choice)
+    prices = {"small_terminal": 10.0, "mounted_terminal": 50.0, "minimal_packet_iot": 3.0}
+    prices["data_iot"] = 6.0
+    for value in (choice, offers):
+        assert hash(value) == hash(copy.deepcopy(value))
+        assert copy.deepcopy(value) == value
+        assert pickle.loads(pickle.dumps(value)) == value  # noqa: S301 (the bytes this test pickled)
+        assert len({value, copy.deepcopy(value)}) == 1
+    assert dataclasses.asdict(choice) == {
+        "choice_id": ADOPTED_CHOICE,
+        "end_prices": prices,
+        "minimal_packet_scale": 8.0,
+        "data_iot_scale": 1.0,
+        "at_start_prices": True,
+    }
+    assert dataclasses.asdict(offers)["choice"]["end_prices"] == prices
+    rebuilt = Choice(
+        choice_id=ADOPTED_CHOICE,
+        end_prices={ProductClass(name): price for name, price in prices.items()},
+        minimal_packet_scale=8.0,
+        data_iot_scale=1.0,
+        at_start_prices=True,
+    )
+    assert isinstance(rebuilt.end_prices, EndPrices)
+    assert rebuilt == choice
+    assert hash(rebuilt) == hash(choice)
+    assert list(rebuilt.end_prices.items()) == [(ProductClass(n), p) for n, p in prices.items()]
 
 
 def test_the_adopted_choice_paths_are_pb1s(product_case_yaml: Path) -> None:
