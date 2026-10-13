@@ -576,7 +576,8 @@ the panel factor times their reference-panel values, and each class's maximum us
   4.99 (mounted terminal) and 7.04 (phone class) below, each further below than at 40 m^2.
 
 Each magnitude holds at its panel and fleets as measured, not at every panel. Stated in the
-run's panel line, after its first sentence."""
+run's panel line, after its first sentence, and whole in the saturation curve's panel limit,
+after its two sentences naming the reference panel and the rule."""
 
 APERTURE_VALIDATED_STACK_LIMIT_M2: Final[float] = 15.4
 """DERIVED (COMM-711, COMM-713). The largest flat panel the validated 16-satellite
@@ -1062,9 +1063,10 @@ saturation number moving with the count at 40 bands, and 160 near converged: 320
 0.3 to 0.5 percent of the mounted terminal's capacity over 160 (at 40,000 and 64,009
 satellites, at one shared usage of 1 Mbps x 2.5 percent). On the promoted curves of 2026-10-06,
 from 40 to 160 bands, the small terminal's saturation number rises 0.3 percent, the mounted
-terminal's moves from 48,912 to not reached by 64,009 (its last row), and the phone class's
-rises 1.2 percent and its band points' up to 2.3 percent, while both terminals' capacity at 528
-to 7,200 satellites moves 0.0 to 0.4 percent."""
+terminal's moves from 48,912 to not reached by 64,009 (the label then, its last row; since
+2026-10-12 the label is the last midpoint its rows measure, 55,407, ADR 005), and the phone
+class's rises 1.2 percent and its band points' up to 2.3 percent, while both terminals' capacity
+at 528 to 7,200 satellites moves 0.0 to 0.4 percent."""
 
 SATURATION_PASSES: Final[int] = 4
 """SCENARIO (the saturation design's allocation rule). The alternating proportional

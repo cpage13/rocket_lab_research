@@ -36,7 +36,10 @@ that the curve was computed for the config's own inputs (the identity check,
    beyond the horizon), each priced by its reading cost, and the IoT check at each.
 4. **Each class's block**: its price, usage and physics (the satellite's peak at the
    panel, the downlink pool and the per-user rates), its markers from the curve, the limit
-   that binds at the horizon's end, and its marginal intervals on the curve's own rows.
+   that binds at the horizon's end, and its marginal intervals on the curve's own rows. A
+   class whose curve reaches no saturation number, its final fleet past the fleet the curve
+   names it not reached by, raises :class:`BindingLimitUnmeasuredError`: the curve measures
+   nothing past that fleet, so the limit there is not known.
 5. **The record**, :class:`IridiumRecord`: everything the ``iridium-v6`` artifact publishes
    beside the shared fleet-and-cost record, with the stated assumptions, so the artifact
    builder reads no dial and holds no Optional check.
@@ -124,6 +127,7 @@ from communications.saturation_curve import (
     ClassCurve,
     CurveBeyondLastRowError,
     SaturationCurve,
+    SaturationCurveError,
     check_curve_matches,
     class_curve_of,
     people_at,
@@ -183,13 +187,21 @@ class NotAnIridiumConfigError(ValueError):
     """A config of the cellular family where an Iridium path needs the Iridium dials."""
 
 
+class BindingLimitUnmeasuredError(SaturationCurveError):
+    """A final living fleet past a class's not-reached-by fleet, on a curve that reaches no
+    saturation number for the class; the message names the class, the fleet and that label.
+    The curve's rows measure the elasticity of capacity no further than the label (their last
+    midpoint), so whether the spectrum or the launch cadence binds there is unknown, never
+    guessed: a fleet past it needs a curve whose sweep measures it."""
+
+
 class BindingLimit(StrEnum):
     """What bounds a device class's fleet at the horizon's end, reported beside the launch
     cadence and never a cap on the build (ADR 005)."""
 
     LAUNCH_CADENCE = "launch_cadence"
     """The launch cadence: the final year's living fleet is below the class's saturation number,
-    or the class has none on the curve."""
+    or, for a class whose curve reaches none, at or below its not-reached-by fleet."""
 
     SPECTRUM = "spectrum"
     """The owned spectrum: the final year's living fleet is at or past the class's saturation
@@ -257,7 +269,8 @@ class ClassRecord:
         elasticity_under_0p25_fleet: The curve's 0.25 marker, or None.
         fleet_at_90pct_of_maximum_use: The curve's 90 percent fleet, or None.
         binding_limit_at_horizon_end: Spectrum when the final year's living fleet is at or past
-            the saturation number, else the launch cadence.
+            the saturation number, else the launch cadence (for a class with no number, at or
+            below its not-reached-by fleet; past it the run is refused).
         marginal_intervals: Its intervals, from 0 to the first row and between consecutive
             rows of its curve.
     """
@@ -1095,7 +1108,13 @@ def _class_record(
     final_living_fleet: int,
     cost_per_satellite_year_musd: float,
 ) -> ClassRecord:
-    """One class's block: its price, usage and physics, its markers, its limit, its intervals."""
+    """One class's block: its price, usage and physics, its markers, its limit, its intervals.
+
+    Raises:
+        BindingLimitUnmeasuredError: If the class's curve reaches no saturation number and the
+            final living fleet lies past its not-reached-by fleet, naming the class, the fleet
+            and that label.
+    """
     class_curve = class_curve_of(curve, device_class)
     usage = CLASS_USAGE[device_class]
     spectral_efficiency = CLASS_SE_CENTRAL[device_class]
@@ -1107,6 +1126,15 @@ def _class_record(
         usage=usage,
     )
     markers = class_curve.markers
+    not_reached_by = markers.saturation_not_reached_by
+    if not_reached_by is not None and final_living_fleet > not_reached_by:
+        raise BindingLimitUnmeasuredError(
+            f"the {device_class.value} curve reaches no saturation number and is not reached "
+            f"by {not_reached_by} satellites, the last fleet its rows measure, and the final "
+            f"year's living fleet of {final_living_fleet} satellites lies past it: the binding "
+            "limit at the horizon's end is unknown there, so the run needs a curve whose sweep "
+            "measures that fleet"
+        )
     binding = (
         BindingLimit.SPECTRUM
         if markers.saturation_number is not None and final_living_fleet >= markers.saturation_number
@@ -1447,6 +1475,9 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
             class's last row, naming the fleet, the class and the last row, and before them
             the year's fiscal year, or the reading's label, fleet and the settings that set
             it.
+        BindingLimitUnmeasuredError: If a class's curve reaches no saturation number and the
+            final year's living fleet lies past its not-reached-by fleet, naming the class, the
+            fleet and that label.
         ValueError: If the panel factor is not a positive finite number (a panel so small its
             ratio to the reference panel underflows to 0), naming ``iridium.aperture_m2``; or
             if the run's records would hold an infinity or a NaN (a panel, a price or a cost
@@ -1564,6 +1595,7 @@ __all__ = [
     "RETIRED_CAP_LABEL",
     "STEADY_STATE_LABEL_FORMAT",
     "BindingLimit",
+    "BindingLimitUnmeasuredError",
     "ClassRates",
     "ClassReadingRecord",
     "ClassRecord",

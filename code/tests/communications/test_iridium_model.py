@@ -54,7 +54,7 @@ from pydantic import ValidationError
 
 from common.cli import EXIT_ERROR
 from common.file_io import render_artifact_json
-from communications import json_output
+from communications import iridium, json_output
 from communications.config import (
     CommsConfig,
     CoverageDials,
@@ -93,7 +93,9 @@ from communications.iridium import (
     HORIZON_END_LABEL,
     RETIRED_CAP_LABEL,
     BindingLimit,
+    BindingLimitUnmeasuredError,
     ClassReadingRecord,
+    ClassRecord,
     ClassYearRecord,
     IotCheckRowRecord,
     IridiumRun,
@@ -114,7 +116,9 @@ from communications.json_output import (
 from communications.saturation_curve import (
     CurveBeyondLastRowError,
     SaturationCurve,
+    SaturationCurveError,
     SaturationCurveMismatchError,
+    class_curve_of,
     read_fleet,
 )
 
@@ -1617,6 +1621,85 @@ def test_a_saturation_number_is_reported_beside_the_cadence_never_a_cap(
     people = [run.iridium.years[index].classes[0].people_served for index in past]
     assert people == sorted(people)
     assert people[-1] > people[0]
+
+
+NOT_REACHED_LABELS = {SMALL: 36_900, MOUNTED: 55_407}
+"""The synthetic curve's not-reached-by fleets (it places no saturation number on any class):
+each class's last midpoint, by hand: the small terminal sqrt(34,040 x 40,000) = 36,899.86, so
+36,900; the mounted terminal sqrt(47,961 x 64,009) = 55,407.0 (219 x 253)."""
+
+HAND_PRICE_USD_PER_MONTH = 10.0
+"""The price the binding-limit tests build a block at: any price, since the limit reads none."""
+
+
+def class_record_at(
+    curve: SaturationCurve, device_class: DeviceClass, final_living_fleet: int
+) -> ClassRecord:
+    """One class's block built by the run's own ``_class_record`` at the default dials, the
+    default panel factor, the shipped cost per satellite-year and the given final living fleet."""
+    return iridium._class_record(
+        curve,
+        device_class,
+        IridiumDials(),
+        panel_factor=DEFAULT_PANEL_FACTOR,
+        price_usd_per_month=HAND_PRICE_USD_PER_MONTH,
+        final_living_fleet=final_living_fleet,
+        cost_per_satellite_year_musd=COST_PER_SATELLITE_YEAR_MUSD,
+    )
+
+
+@pytest.mark.parametrize("device_class", [SMALL, MOUNTED])
+def test_a_final_fleet_at_the_not_reached_by_fleet_reads_the_launch_cadence(
+    synthetic_saturation_curve: SyntheticCurve, device_class: DeviceClass
+) -> None:
+    """Objective: a class whose curve reaches no saturation number reads the launch cadence as
+    its binding limit at the horizon's end up to and at the fleet its curve names it not reached
+    by, the last fleet its rows measure (ADR 005).
+
+    Sample: the synthetic curve for the default dials (L = N x B, no saturation number on any
+    class), each class's block built by ``_class_record`` with the final living fleet at its
+    label: the small terminal 36,900, the mounted terminal 55,407 (each worked by hand).
+
+    Expected outcome: the curve and the block carry that label and no saturation number; the
+    binding limit is the launch cadence.
+    """
+    curve = synthetic_saturation_curve(IridiumDials())
+    label = NOT_REACHED_LABELS[device_class]
+    markers = class_curve_of(curve, device_class).markers
+    assert markers.saturation_number is None
+    assert markers.saturation_not_reached_by == label
+    record = class_record_at(curve, device_class, label)
+    assert record.saturation_number is None
+    assert record.saturation_not_reached_by == label
+    assert record.binding_limit_at_horizon_end is BindingLimit.LAUNCH_CADENCE
+
+
+@pytest.mark.parametrize("device_class", [SMALL, MOUNTED])
+def test_a_final_fleet_past_the_not_reached_by_fleet_is_refused(
+    synthetic_saturation_curve: SyntheticCurve, device_class: DeviceClass
+) -> None:
+    """Objective: a class whose curve reaches no saturation number, its final living fleet past
+    the fleet its curve names it not reached by, is refused with a typed error naming the class,
+    the fleet and the label: the rows measure the elasticity no further, so which limit binds
+    there is unknown, never guessed.
+
+    Sample: as the test above, the final living fleet one satellite past each label (36,901 for
+    the small terminal, 55,408 for the mounted terminal), both inside the class's last row.
+
+    Expected outcome: ``BindingLimitUnmeasuredError``, a ``SaturationCurveError`` (so a
+    ValueError, which the commands report on one line), its message naming the class, the
+    label and the fleet.
+    """
+    curve = synthetic_saturation_curve(IridiumDials())
+    label = NOT_REACHED_LABELS[device_class]
+    assert label + 1 < class_curve_of(curve, device_class).rows[-1].fleet
+    with pytest.raises(BindingLimitUnmeasuredError) as refused:
+        class_record_at(curve, device_class, label + 1)
+    assert isinstance(refused.value, SaturationCurveError)
+    message = str(refused.value)
+    assert f"the {device_class.value} curve reaches no saturation number" in message
+    assert f"not reached by {label} satellites" in message
+    assert f"living fleet of {label + 1} satellites lies past it" in message
 
 
 # ---------------------------------------------------------------------------
