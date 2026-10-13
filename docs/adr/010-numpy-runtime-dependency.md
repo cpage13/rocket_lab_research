@@ -22,7 +22,6 @@ One new dependency, declared in `pyproject.toml` and pinned in `uv.lock`. It
 stays confined to the saturation module: no other module under `code/src/`
 imports it (ADR 012 adds one module of the product case), and
 `test_numpy_stays_inside_the_saturation_module` checks, transitive imports
-included, that the modules the Iridium command loads
-(`communications.config`, `communications.engine`, `communications.iridium`,
-`communications.json_output` and `communications.saturation_curve`) import
-without it. The allocation stays transparent and deterministic.
+included, that every other communications module imports without it (the
+test's `NUMPY_FREE_MODULES`). The allocation stays transparent and
+deterministic.
