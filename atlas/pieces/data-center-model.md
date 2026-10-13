@@ -1,7 +1,7 @@
 # Data-center model
 
 **Maturity.** Stable: a frozen golden trajectory locks the default run.
-Checked against `main` at 1570350, 2026-10-12.
+Checked against `part-c-contract-helpers` at 2ce71ba, 2026-10-13.
 
 **Role.** Models a Neutron-launched orbital AI-inference data center, year
 by year. Each fiscal year it picks the frontier GPU package generation, fits
@@ -41,7 +41,7 @@ reference: callers never recreate their internal logic.
 | `volume.py` | stowed volume against the fairing (reported; mass alone sets the package count) |
 | `input_manifest.py` | the input tree, the `*_SPECS` claim tables, the flat `inputs.assumption_index` |
 | `output.py` | the artifact schema and its `SCHEMA_VERSION` |
-| `json_output.py` | artifact assembly and the generated data dictionary |
+| `json_output.py` | artifact assembly, its data dictionary built by the shared walker in `code/src/common/meta.py` |
 | `validation.py` | `meta.validation_results`: the V-rules, the model invariants and, for the default only, three default guards: the anchor-year capacity band (a fixed range, so a moved default can fail it), and the central R and the service life (each compared with its code default, so it moves with the default, though its check ID spells the value) |
 | `query_examples.py` | the worked `jq` examples, addressed to the anchor year |
 | `ground.py` | the ground reference: anchor, inputs and their claim table `GROUND_INPUT_SPECS`, costs, comparison |
