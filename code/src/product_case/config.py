@@ -66,6 +66,7 @@ from product_case.constants import (
     BROADBAND_CUSTOMERS_TODAY,
     BUSY_HOURS_PER_DAY,
     BYTES_PER_GB,
+    BYTES_PER_MB,
     DATA_IOT_ANCHOR_ARPU_USD_MONTH,
     DATA_IOT_ANCHOR_CUSTOMERS,
     DATA_IOT_ANCHOR_SHARE,
@@ -1317,12 +1318,24 @@ CONSTANT_INPUTS: Final[Mapping[str, ConstantInput]] = MappingProxyType(
             "The usage paths' conventions: decimal units.",
             "SCENARIO (round 1's convention, 2026-10-06): decimal units, a GB is 10^9 bytes.",
         ),
+        "bytes_per_mb": _constant(
+            BYTES_PER_MB,
+            "The bytes in a MB.",
+            "Bytes a MB",
+            "bytes/MB",
+            SourceStatus.SCENARIO,
+            _USAGE_CLAIM,
+            "The usage paths' conventions: decimal units.",
+            "SCENARIO (round 1's convention, 2026-10-06): decimal units, a MB is 10^6 bytes, as a "
+            "GB is 10^9; data IoT's price per unit is in dollars a MB.",
+        ),
     }
 )
 """One input per named constant that is a model input, keyed by its path under
 ``inputs.constants`` (a read-only mapping): the anchors, Iridium's terminal customers today, data
-IoT's proportion and the three conventions. Unit conversions, the schema versions and the
-invariants' tolerance are definitions, not inputs."""
+IoT's proportion and the four conventions (the busy hours, the days a month, and the decimal GB
+and MB). Unit conversions, the schema versions and the invariants' tolerance are definitions, not
+inputs."""
 
 
 __all__ = [

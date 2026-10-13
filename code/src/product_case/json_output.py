@@ -510,11 +510,17 @@ _SOURCES: Final[Mapping[ProductCaseFormula, tuple[str, ...]]] = MappingProxyType
         ProductCaseFormula.IOT_BYTES_PER_DAY: ("COMM-724", _ENGINEERING_SOURCE),
         ProductCaseFormula.PRICE_PER_UNIT: ("COMM-722", "COMM-724"),
         ProductCaseFormula.DEMAND_CURVE: ("COMM-617", "COMM-618", "COMM-723", "COMM-726"),
-        ProductCaseFormula.SOLD: ("COMM-617", "COMM-618", "COMM-723", _ENGINEERING_SOURCE),
+        ProductCaseFormula.SOLD: (
+            "COMM-617",
+            "COMM-618",
+            "COMM-723",
+            "COMM-726",
+            _ENGINEERING_SOURCE,
+        ),
         ProductCaseFormula.CLASS_REVENUE: ("COMM-722", "COMM-723"),
         ProductCaseFormula.REVENUE: ("COMM-722", "COMM-723"),
-        ProductCaseFormula.MARGIN: ("COMM-723", _ENGINEERING_SOURCE),
-        ProductCaseFormula.PROFIT: ("COMM-723", _ENGINEERING_SOURCE),
+        ProductCaseFormula.MARGIN: ("COMM-722", "COMM-723", _ENGINEERING_SOURCE),
+        ProductCaseFormula.PROFIT: ("COMM-722", "COMM-723", _ENGINEERING_SOURCE),
         ProductCaseFormula.SEATS: (_ENGINEERING_SOURCE,),
         ProductCaseFormula.FLEET_ANNUAL_COST: (_ENGINEERING_SOURCE,),
         ProductCaseFormula.TERMINAL_ACTIVE_RATE: (_ENGINEERING_SOURCE,),
@@ -543,18 +549,35 @@ _UNIT_PRICE_UNITS: Final[Mapping[ProductClass, str]] = MappingProxyType(
 )
 """Each class's price per unit's unit: a GB, a message, a MB."""
 
+_OTHER_KINDS_USES: Final[Mapping[ClassKind, tuple[str, ...]]] = MappingProxyType(
+    {
+        ClassKind.TERMINAL: ("headline.years[].classes[].iot.", "inputs.constants.bytes_per_mb"),
+        ClassKind.IOT: ("headline.years[].classes[].terminal.",),
+    }
+)
+"""The uses a class's cell leaves out by its kind: a terminal's, the IoT block's paths and the
+MB's size (data IoT's unit); an IoT class's, the terminal block's paths (an IoT class has no
+seats)."""
+
 
 def _cell_of(
-    formula: ProductCaseFormula, value: float | int | None, unit: str, description: str
+    formula: ProductCaseFormula,
+    value: float | int | None,
+    unit: str,
+    description: str,
+    kind: ClassKind | None = None,
 ) -> ProvenanceCell:
     """A headline value as a provenance cell from the product case's catalog.
 
     ``common.provenance.cell`` reads the data center's catalog, so the product case builds its
     cells here: the formula's text and name from :data:`FORMULA_CATALOG`, its ``uses`` the
-    entry's input paths, its sources the ledger rows behind them.
+    entry's input paths (for a class's cell, those of its kind: :data:`_OTHER_KINDS_USES`), its
+    sources the ledger rows behind them.
     """
     entry = FORMULA_CATALOG[formula]
     uses = [path for path in entry.input_path_pattern.split(PATH_SEPARATOR) if " " not in path]
+    if kind is not None:
+        uses = [path for path in uses if not path.startswith(_OTHER_KINDS_USES[kind])]
     return ProvenanceCell(
         value=value,
         unit=unit,
@@ -572,39 +595,46 @@ def _whole(value: float) -> int:
 
 
 def _class_block(entry: ClassOutcome) -> HeadlineClassBlock:
-    """One headline class's cells."""
+    """One headline class's cells, each cell's uses its kind's."""
+
+    def cell(
+        formula: ProductCaseFormula, value: float | int | None, unit: str, description: str
+    ) -> ProvenanceCell:
+        """A cell of this class: :func:`_cell_of` at the class's kind."""
+        return _cell_of(formula, value, unit, description, entry.kind)
+
     noun = "customers" if entry.kind is ClassKind.TERMINAL else "devices"
     unit_price = _UNIT_PRICE_UNITS[entry.product_class]
     terminal = None
     if entry.terminal is not None:
         block = entry.terminal
         terminal = TerminalBlock(
-            seats=_cell_of(ProductCaseFormula.SEATS, block.seats, "customers", "Its seats."),
-            seats_filled=_cell_of(
+            seats=cell(ProductCaseFormula.SEATS, block.seats, "customers", "Its seats."),
+            seats_filled=cell(
                 ProductCaseFormula.TERMINAL_DOWNLINK_USE,
                 block.seats_filled,
                 "share",
                 "Seats filled.",
             ),
-            busy_hour_gb_per_month=_cell_of(
+            busy_hour_gb_per_month=cell(
                 ProductCaseFormula.TERMINAL_BUSY_HOUR_DATA,
                 block.busy_hour_gb_per_month,
                 "GB/month",
                 "The engineering usage's busy-hour data a month.",
             ),
-            offpeak_gb_per_month=_cell_of(
+            offpeak_gb_per_month=cell(
                 ProductCaseFormula.TERMINAL_OFFPEAK_DATA,
                 block.offpeak_gb_per_month,
                 "GB/month",
                 "The monthly total less the busy-hour part.",
             ),
-            active_rate_mbps=_cell_of(
+            active_rate_mbps=cell(
                 ProductCaseFormula.TERMINAL_ACTIVE_RATE,
                 block.active_rate_mbps,
                 "Mbps",
                 "The engineering usage's rate while active.",
             ),
-            offpeak_downlink_use=_cell_of(
+            offpeak_downlink_use=cell(
                 ProductCaseFormula.TERMINAL_DOWNLINK_USE,
                 block.offpeak_downlink_use,
                 "share",
@@ -615,23 +645,23 @@ def _class_block(entry: ClassOutcome) -> HeadlineClassBlock:
     if entry.iot is not None:
         usage = entry.iot
         iot = IotBlock(
-            messages_per_day=_cell_of(
+            messages_per_day=cell(
                 ProductCaseFormula.USAGE_LINE, usage.messages_per_day, "messages/day", "Messages."
             ),
-            bursts_per_day=_cell_of(
+            bursts_per_day=cell(
                 ProductCaseFormula.USAGE_LINE, usage.bursts_per_day, "bursts/day", "Bursts."
             ),
             bursts_outside_busy_hours=usage.bursts_outside_busy_hours,
-            bytes_per_day=_cell_of(
+            bytes_per_day=cell(
                 ProductCaseFormula.IOT_BYTES_PER_DAY, usage.bytes_per_day, "bytes/day", "Bytes."
             ),
-            uplink_use_busy=_cell_of(
+            uplink_use_busy=cell(
                 ProductCaseFormula.IOT_UPLINK_USE,
                 usage.uplink_use_busy,
                 "share",
                 "Its term of the busy-hour uplink use.",
             ),
-            uplink_use_offpeak=_cell_of(
+            uplink_use_offpeak=cell(
                 ProductCaseFormula.IOT_UPLINK_USE,
                 usage.uplink_use_offpeak,
                 "share",
@@ -641,16 +671,16 @@ def _class_block(entry: ClassOutcome) -> HeadlineClassBlock:
     return HeadlineClassBlock(
         product_class=entry.product_class,
         kind=entry.kind,
-        price_usd_per_month=_cell_of(
+        price_usd_per_month=cell(
             ProductCaseFormula.PRICE_LINE, entry.price_usd_per_month, "USD/month", "Its price."
         ),
-        service=_cell_of(ProductCaseFormula.SERVICE, entry.service, "-", "Its service."),
-        demand=_cell_of(ProductCaseFormula.DEMAND_CURVE, entry.demand, noun, "Its demand."),
-        customers=_cell_of(ProductCaseFormula.SOLD, _whole(entry.customers), noun, "Sold."),
-        revenue_musd=_cell_of(
+        service=cell(ProductCaseFormula.SERVICE, entry.service, "-", "Its service."),
+        demand=cell(ProductCaseFormula.DEMAND_CURVE, entry.demand, noun, "Its demand."),
+        customers=cell(ProductCaseFormula.SOLD, _whole(entry.customers), noun, "Sold."),
+        revenue_musd=cell(
             ProductCaseFormula.CLASS_REVENUE, entry.revenue_musd, "MUSD/year", "Its revenue."
         ),
-        price_per_unit=_cell_of(
+        price_per_unit=cell(
             ProductCaseFormula.PRICE_PER_UNIT, entry.price_per_unit, unit_price, "Its unit price."
         ),
         terminal=terminal,

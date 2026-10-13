@@ -604,7 +604,6 @@ DEFINITIONS = frozenset(
         "MONTHS_PER_YEAR",
         "DOLLARS_PER_MILLION",
         "PERCENT",
-        "BYTES_PER_MB",
         "PRODUCT_CASE_SCHEMA_VERSION",
         "ENGINEERING_SCHEMA_VERSION",
         "MIN_REPORTED_YEARS",

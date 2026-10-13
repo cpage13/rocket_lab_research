@@ -197,6 +197,59 @@ def test_every_block_holds_the_foundations_keys_in_order(
     assert all(isinstance(line, str) for line in artifact["assumptions"])
 
 
+def test_each_cell_names_its_kinds_uses_and_its_sources(
+    synthetic_scenario: dict[str, Any],
+    synthetic_engineering: dict[str, Any],
+    write_scenario: Writer,
+    write_engineering: Writer,
+    tmp_path: Path,
+) -> None:
+    """Objective: each headline cell traces what it reads (the spec lens's m8): a class's cells
+    use only its own kind's paths (an IoT class no terminal seats, a terminal no IoT bytes and no
+    MB size); the customers cells cite data IoT's anchor row (COMM-726), the margin and profit
+    cells the prices' row (COMM-722) as revenue does; the decimal MB is an input cell beside the
+    GB (COMM-724), which data IoT's price per unit uses.
+
+    Sample: the synthetic case's artifact, every headline year and class.
+
+    Expected outcome: no IoT class's cell uses a path under ``terminal.`` and no terminal's one
+    under ``iot.`` or the MB's size; every customers cell's sources hold COMM-726 and every
+    margin and profit cell's COMM-722; ``inputs.constants.bytes_per_mb`` holds 1,000,000, status
+    ``scenario``, citing COMM-724; data IoT's price-per-unit cells use it.
+    """
+    output = tmp_path / "cells.json"
+    assert (
+        _promote(
+            synthetic_scenario, synthetic_engineering, write_scenario, write_engineering, output
+        )
+        == EXIT_OK
+    )
+    artifact = json.loads(output.read_text(encoding="utf-8"))
+    classes = "headline.years[].classes[]"
+    others = {
+        "terminal": (f"{classes}.iot.", "inputs.constants.bytes_per_mb"),
+        "iot": (f"{classes}.terminal.",),
+    }
+    for year in artifact["headline"]["years"]:
+        for entry in year["classes"]:
+            blocks = [entry, *(entry[name] for name in ("terminal", "iot") if entry[name])]
+            for block in blocks:
+                for key, cell in block.items():
+                    if isinstance(cell, dict) and "formula_name" in cell:
+                        used = [
+                            use for use in cell["uses"] if use.startswith(others[entry["kind"]])
+                        ]
+                        assert used == [], (entry["product_class"], key, used)
+            assert "COMM-726" in entry["customers"]["sources"], entry["product_class"]
+        for name in ("margin_pct", "profit_musd"):
+            assert "COMM-722" in year["totals"][name]["sources"], name
+        data = next(entry for entry in year["classes"] if entry["product_class"] == "data_iot")
+        assert "inputs.constants.bytes_per_mb" in data["price_per_unit"]["uses"]
+    megabyte = artifact["inputs"]["constants"]["bytes_per_mb"]
+    assert (megabyte["value"], megabyte["source_status"]) == (1_000_000, "scenario")
+    assert megabyte["source_refs"][0]["claim_id"] == "COMM-724"
+
+
 def _set(path: tuple[str, ...], value: object) -> Callable[[dict[str, Any]], None]:
     """A change setting one key of a nested mapping."""
 

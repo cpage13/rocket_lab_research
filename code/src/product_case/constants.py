@@ -187,10 +187,6 @@ DOLLARS_PER_MILLION: Final[int] = 1_000_000
 PERCENT: Final[float] = 100.0
 """Percent in a whole: the margin is published in percent (``margin_pct``)."""
 
-BYTES_PER_MB: Final[int] = 1_000_000
-"""Bytes in a megabyte (decimal, as every size here): data IoT's price per unit is published in
-dollars a MB, its bytes a month over 10^6."""
-
 
 # ---------------------------------------------------------------------------
 # The conventions (model inputs: each has a cell spec, COMM-724)
@@ -213,6 +209,11 @@ figure of the product case uses."""
 
 BYTES_PER_GB: Final[int] = 1_000_000_000
 """SCENARIO (round 1's convention, 2026-10-06; COMM-724): decimal units, a GB is 10^9 bytes."""
+
+BYTES_PER_MB: Final[int] = 1_000_000
+"""SCENARIO (round 1's convention, 2026-10-06; COMM-724): decimal units, a MB is 10^6 bytes, as a
+GB is 10^9 (:data:`BYTES_PER_GB`); data IoT's price per unit is published in dollars a MB, its
+bytes a month over this."""
 
 
 # ---------------------------------------------------------------------------
@@ -971,6 +972,7 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     f"{_HEADLINE_CLASS}.price_usd_per_month",
                     "inputs.scenario.usage",
                     f"{_HEADLINE_CLASS}.iot.bytes_per_day",
+                    "inputs.constants.bytes_per_mb",
                 ),
                 outputs=(f"{_HEADLINE_CLASS}.price_per_unit",),
                 units="dollars a GB, a message or a MB (the cell's unit)",
