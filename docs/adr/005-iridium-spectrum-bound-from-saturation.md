@@ -1,10 +1,7 @@
 # 005 - The Iridium Spectrum Bound Is Derived From Saturation; The 2,000 Cap Retires
 
-Status: Accepted (2026-10-04, with the saturation module's strategy, Revision 4)
-
-Amended 2026-10-12: the Decision names the last midpoint a class's rows measure as the fleet
-its saturation number is not reached by, and gained the refusal of a run whose final year's
-fleet passes that fleet.
+Status: Accepted (2026-10-04, with the saturation module's strategy, Revision 4); amended
+2026-10-12 (see the Amendment)
 
 ## Context
 
@@ -47,3 +44,19 @@ body, 15.4 m^2): capacity per satellite scales with the panel over 25 m^2,
 and the saturation numbers do not move. Satellites per launch is a direct
 scenario value, no longer coupled to the panel. The coordinated 10.5 MHz,
 linear in spectrum, is a conclusions note, not an input.
+
+## Amendment (2026-10-12)
+
+The Decision above was edited in place three times on this date. First, its
+sentence "When a class's marker is not reached on the grid, that class has no
+spectrum bound." became the sentence that names the last midpoint at which a
+class's rows measure the elasticity (the geometric mean of the last two rows'
+fleets) as the fleet its saturation number is not reached by, its spectrum
+bound lying beyond that fleet, unmeasured. Second, the saturation number is
+"reported beside" the N-independent maximum use, where it read "measured
+against" it: the elasticity markers never read maximum use, which only the
+90 percent fleet does. Third, a run whose final year's living fleet passes a
+class's not-reached-by fleet is refused with an error, since the curve does
+not measure the elasticity there and which limit binds is not known. The
+decision itself is unchanged: each class's spectrum bound is its saturation
+number, reported beside the launch cadence and never a cap on the build.
