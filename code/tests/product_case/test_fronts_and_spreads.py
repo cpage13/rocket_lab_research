@@ -108,17 +108,25 @@ def test_the_pick_rules(config: ProductCaseConfig) -> None:
     (the probes' walk W3), warned; else no pick; ``dominated_in_context_by`` at a fallback names
     the context front's members that beat it, each on that front.
 
-    Sample: robust candidates tied at a median (1,600 and 1,700 usable); a fallback where seven
+    Sample: robust candidates tied at a median (1,600 and 1,700 usable); robust candidates tied at
+    both the median and the share (ids 5 and 3, listed in that order); a fallback where seven
     candidates tie at 1,238 usable draws, beside a context choice at a lower price usable in 1,516
     with a higher median; candidates usable in no draw.
 
-    Expected outcome: the more usable of the tied robust pair; the fallback the tied candidate with
-    the highest median, on the candidates' front, beaten in context by the lower-priced choice;
-    None when no candidate is usable.
+    Expected outcome: the more usable of the tied robust pair; of the exact robust ties the
+    earlier choice, 3; the fallback the tied candidate with the highest median, on the
+    candidates' front, beaten in context by the lower-priced choice; None when no candidate is
+    usable.
     """
     robust = [_summary(0, 1_600, 500.0), _summary(1, 1_700, 500.0), _summary(2, 1_800, 400.0)]
     pick = pick_of(robust, fronts_of(robust), config)
     assert pick is not None and (pick.choice_id, pick.basis) == (1, PickBasis.ROBUST_FLOOR_MET)
+    twins = [_summary(5, 1_700, 500.0), _summary(3, 1_700, 500.0), _summary(4, 1_600, 500.0)]
+    earlier = pick_of(twins, fronts_of(twins), config)
+    assert earlier is not None and (earlier.choice_id, earlier.basis) == (
+        3,
+        PickBasis.ROBUST_FLOOR_MET,
+    )
     tied = [_summary(index, 1_238, 200.0 + index) for index in range(7)]
     context = _summary(7, 1_516, 300.0, candidate=False)
     fronts = fronts_of([*tied, context])

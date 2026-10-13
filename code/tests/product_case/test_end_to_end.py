@@ -20,6 +20,7 @@ import pytest
 from common.cli import EXIT_OK
 from product_case.config import ProductCaseConfig, load_product_case_config
 from product_case.constants import FORMULA_CATALOG, PATH_SEPARATOR, ProductClass
+from product_case.engine import run_product_case
 from product_case.engineering import engineering_view_from_bytes
 from product_case.json_output import QUERY_EXAMPLES, main
 from product_case.monte_carlo import draw_markets, outcome_in_market
@@ -516,10 +517,10 @@ def test_iot_customers_move_with_the_draw_and_the_year(
     synthetic_engineering: dict[str, Any],
     as_engineering_bytes: Callable[[dict[str, Any]], bytes],
 ) -> None:
-    """Objective: no IoT count is ever set: each IoT class's devices come from the demand curve and
+    """Objective: no IoT count is ever set: the pick's IoT customers come from the demand curve and
     differ between two draws and between two reported years.
 
-    Sample: the small scenario's first choice in draws 0 and 1, every reported year.
+    Sample: the synthetic run's pick in draws 0 and 1, every reported year.
 
     Expected outcome: each IoT class's devices differ between the two draws in the last year, and
     between the first and the last year in a draw.
@@ -530,7 +531,9 @@ def test_iot_customers_move_with_the_draw_and_the_year(
         path="synthetic",
         reported_years=config.reported_years,
     )
-    choice = choice_grid(config)[0]
+    pick = run_product_case(config, view).pick
+    assert pick is not None
+    choice = choice_grid(config)[pick.choice_id]
     first, second = (
         outcome_in_market(config, view, choice, market) for market in draw_markets(config)[:2]
     )
@@ -559,8 +562,8 @@ def test_a_central_market_unusable_for_the_pick_is_published_and_warned(
     Sample: the small scenario at the anchors' prices ($47 and $259 held flat): at the ranges'
     midpoints the terminals fill under three quarters of their busy-hour beams.
 
-    Expected outcome: exit 0 and the artifact written; ``headline.usable`` false naming the fill;
-    the E6 and fallback warnings ``warn``.
+    Expected outcome: exit 0 and the artifact written; ``headline.usable`` false, its failing
+    tests exactly the fill; the E6 and fallback warnings ``warn``.
     """
     synthetic_scenario["prices"]["small_terminal"] = {
         "start_usd_month": 47.0,
@@ -577,9 +580,8 @@ def test_a_central_market_unusable_for_the_pick_is_published_and_warned(
         write_engineering,
         tmp_path / "e6.json",
     )
-    assert (
-        artifact["headline"]["usable"] is False and "fill" in artifact["headline"]["failing_tests"]
-    )
+    assert artifact["headline"]["usable"] is False
+    assert artifact["headline"]["failing_tests"] == ["fill"]
     results = {r["validation_id"]: r["severity"] for r in artifact["meta"]["validation_results"]}
     assert results["warning.central_market_unusable_for_pick"] == "warn"
     assert results["warning.start_prices_under_robust_floor"] == "warn"
