@@ -519,9 +519,16 @@ def _iot_offer(
             f"{usage_field}: FY{year}'s messages and bursts a day are beyond the range of a "
             "double in its loads (a setting too large for the arithmetic)"
         ) from error
-    loads = (bits_busy, bits_offpeak, attempts_busy, attempts_offpeak, message_attempts, service)
-    for value in loads:
-        _finite(value, "per-device loads", usage_field, year)
+    checked = (
+        ("busy-hour uplink bits a second", bits_busy),
+        ("off-peak uplink bits a second", bits_offpeak),
+        ("busy-hour access attempts a second", attempts_busy),
+        ("off-peak access attempts a second", attempts_offpeak),
+        ("single-tone messages a second", message_attempts),
+        ("service", service),
+    )
+    for quantity, value in checked:
+        _finite(value, quantity, usage_field, year)
     return IotOffer(
         product_class=product_class,
         price_usd_month=_finite(
