@@ -682,7 +682,7 @@ def _panel_factor(dials: IridiumDials, curve: SaturationCurve) -> float:
 
 
 def _class_price(arpu: IridiumArpuDials, device_class: DeviceClass) -> float:
-    """Return a class's monthly price from the five prices."""
+    """Return a class's monthly price from the three prices."""
     match device_class:
         case DeviceClass.SMALL_TERMINAL_CLASS:
             return arpu.small_terminal_class_price_usd_month
@@ -695,8 +695,8 @@ def _class_price(arpu: IridiumArpuDials, device_class: DeviceClass) -> float:
 
 
 def _annual_revenue_musd(count: float, price_usd_per_month: float) -> float:
-    """Return a count (people, devices, or the people one satellite adds) at a monthly price
-    for a year, $M."""
+    """Return a count (people, or the people one satellite adds) at a monthly price for a year,
+    $M."""
     return count * price_usd_per_month * MONTHS_PER_YEAR / MUSD_TO_USD
 
 
@@ -1451,8 +1451,8 @@ def _refuse_a_number_that_is_not_finite(
 
     The shared fleet-and-cost record is walked first, then the Iridium record. The fleet
     record's numbers are its cost lines, which scale with the cost settings alone; the Iridium
-    record's scale with the panel (people, beams, capacity and the IoT check), the prices
-    (revenue) and the cost settings (the margins, the readings' costs and the cost per
+    record's scale with the panel (people, beams, capacity, and IoT's room and capacities), the
+    prices (revenue) and the cost settings (the margins, the readings' costs and the cost per
     satellite-year). No bound moves: a setting this far out is one the model cannot compute.
 
     Raises:

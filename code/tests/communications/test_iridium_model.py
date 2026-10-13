@@ -5,33 +5,38 @@ Iridium run goes through the Iridium entry, ``run_iridium_model(config, curve)``
 committed saturation curve or, for dials it was not computed for and for the tripwire, on a
 synthetic curve stamped for the dials (``conftest.py``). The suite covers each class's physics
 (the class-to-SE mapping, the satellite's peak, people per beam, the downlink pool and the
-per-user rates); the entries' refusals and the identity check; the tripwire in its new form (an
+per-user rates); IoT as capacity (ADR 011): each IoT class's engineering usage and its loads, the
+worked capacity case, the edge views, each class's useful beams and IoT's room in every year and
+at every reading; the entries' refusals and the identity check; the tripwire in its new form (an
 Iridium run and a cellular run whose target the horizon never reaches share the fleet-and-cost
 record whole, and that record's values are frozen); the headline, every class alone and side by
 side, against the usage check's table (below; the terminals' revenue restated at the investor's
 prices of 2026-10-07, $10 and $50: the small and mounted terminals within 5 percent, the phone
-class within 1 percent; the fleets, costs and books exactly); the no-upgrade bracket; revenue
-rising with the fleet; the floor rule; the books outside every margin; a share that never
-launches; the downlink share; the panel setting; every class in one run, in order; a fleet past
-a class's last row (the engine and the command); a run that would hold a number that is not
-finite, refused naming the settings; the readings and the reported fleets (the retired cap's
-reading its own constant); the IoT reading; the marginal intervals (hand-worked, and their
-verdicts on the committed curve at the investor's prices); a saturation number beside the
-cadence, never a cap; the scenario YAML; the stated assumptions; the promoted export frozen on
-``iridium-v6``; and the drift guard that regenerates the committed artifact byte for byte.
+class within 1 percent; the fleets and costs exactly); the no-upgrade bracket; revenue rising
+with the fleet; the floor rule; the three class prices and no government key; each class's
+revenue its people at its price; a share that never launches; the downlink share; the panel
+setting; every class in one run, in order; a fleet past a class's last row (the engine and the
+command); a run that would hold a number that is not finite, refused naming the settings; the
+readings and the reported fleets (the retired cap's reading its own constant); the marginal
+intervals (hand-worked, and their verdicts on the committed curve at the investor's prices),
+with d = 1's IoT room; a saturation number beside the cadence, never a cap; the scenario YAML;
+the stated assumptions; the promoted export frozen on ``iridium-v6``; and the drift guard that
+regenerates the committed artifact byte for byte.
 
-Where the targets come from. The fleets, costs and books are exact arithmetic, worked beside
-them. The people and revenue targets and the marginal chords come from the usage check: an
-independent computation of the investor's usage (2026-10-04) made before the module was built,
-on a prototype of its allocation (``check_usage_10_04_output.txt`` (local), in the investor's
+Where the targets come from. The fleets and costs are exact arithmetic, worked beside them. The
+people and revenue targets and the marginal chords come from the usage check: an independent
+computation of the investor's usage (2026-10-04) made before the module was built, on a
+prototype of its allocation (``check_usage_10_04_output.txt`` (local), in the investor's
 records). "The usage check's table" is its per-class people and revenue at FY2031, FY2033,
 FY2036, the steady state, the coverage floor and 2,000; "its rates" are each class's pool and
 per-user rates; "its chords" are the prototype's marginal chords between rows and their
 verdicts. A class's "first stop" is its first chord below cost: the phone class's is the usage
 check's, and the two terminals' come from the prototype's own rows at the earlier prices
 (``p6_targets_output.txt`` (local)). The bracket at 15 per launch comes from the investor's
-table of the new defaults (``revenue_new_defaults_10_03_output.txt`` (local)), and the IoT
-targets from the saturation design's IoT table (``strategy_09_29.md`` (local)).
+table of the new defaults (``revenue_new_defaults_10_03_output.txt`` (local)). The IoT usage's
+loads are worked by hand; the worked capacity case is the build's own print at full precision
+(``A_capacity_print.txt`` (local)), equal to the product-case design's probe P6 to every
+printed digit.
 
 The values these tests freeze from the committed curve (people, the markers) move only with a
 re-promotion of the curve, which re-freezes them on purpose (the re-promotion rule). Each class's

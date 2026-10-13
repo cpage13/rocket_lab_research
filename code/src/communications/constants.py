@@ -42,8 +42,9 @@ ceil(subscriber_target / subscribers_per_satellite)))``.
 
 THE IRIDIUM MODEL has no target and no cap: its fleet is every comms launch the cadence
 share allows, each device class's people are read from the promoted saturation curve, and
-its defaults are below: the five monthly prices, the panel, each class's usage and
-spectral efficiency, the two IoT lines' fixed counts, and the IoT reading's constants.
+its defaults are below: the three monthly prices, the panel, each class's usage and
+spectral efficiency, and IoT's capacity constants (each IoT class's reference usage and the
+IoT room's constants, ADR 011).
 """
 
 from __future__ import annotations
@@ -331,9 +332,9 @@ family it is the lower bound on the fleet target, NOT the fleet the build fills 
 when the subscriber base is large: the capacity dimension (see
 :data:`SUBSCRIBERS_PER_SATELLITE_DEFAULT`) can require more satellites than this to
 SERVE the base, in which case the capacity need binds and the fleet target rises
-above the floor. On the Iridium path it is pinned at this value (one shell, one floor;
-the IoT counts are sized at it, ADR 007): nothing is sold in a year whose living fleet
-is below it, and it is the first of the reported fleets. The floor is the quality-link
+above the floor. On the Iridium path it is pinned at this value (one shell, one floor):
+nothing is sold in a year whose living fleet is below it, IoT's capacity is null there, and
+it is the first of the reported fleets. The floor is the quality-link
 case (a 25 degree elevation mask over
 the populated mid-latitude band, +/-55 deg, at 95% coverage, ~450 km, ~53 deg
 inclined). Backed by the project coverage simulation (populated band, 450 km, 25 deg
@@ -643,12 +644,12 @@ HZ_PER_MHZ: Final[float] = 1_000_000.0
 tones. A unit constant, not a tunable."""
 
 SECONDS_PER_DAY: Final[int] = 86_400
-"""Fixed unit conversion: a day's seconds, for the IoT reading's daily volumes and access
-rates. A unit constant, not a tunable."""
+"""A unit conversion: a day's seconds, turning an IoT device's loads a day into loads a second
+(the IoT capacity's day average). A unit constant, not a tunable."""
 
 BITS_PER_BYTE: Final[int] = 8
-"""Fixed unit conversion: bits in a byte, for the IoT reading's daily volumes. A unit
-constant, not a tunable."""
+"""A unit conversion: bits in a byte, for an IoT device's uplink bits a day. A unit constant,
+not a tunable."""
 
 ECOSYSTEM_ASSUMPTION_NOTE: Final[str] = (
     "The Iridium model's phone-class tier assumes phone-form-factor devices with in-chipset "
@@ -776,8 +777,9 @@ DATA_IOT_BURST_BYTES: Final[int] = 100_000
 
 IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW: Final[int] = 57
 """SOURCED_ESTIMATE (COMM-654). The low end of the devices one NB-IoT NTN random-access window
-serves, by mode: the IoT reading's access attempts a second a beam are read against this
-window (a per-opportunity contention figure, not a population cap)."""
+serves, by mode: the IoT room's access attempts a second are the phone class's useful beams
+times this window times the windows a second, the access view's conservative end (a
+per-opportunity contention figure, not a population cap)."""
 
 IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH: Final[int] = 1_650
 """SOURCED_ESTIMATE (COMM-654). The high end of the devices one NB-IoT NTN random-access window
@@ -785,22 +787,23 @@ serves, by mode."""
 
 IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND: Final[int] = 1
 """ESTIMATE (an assumption with no source: COMM-654 gives the devices one random-access window
-serves, not how often a window opens). The random-access windows a beam offers a second,
-against which the access attempts a second a beam are read."""
+serves, not how often a window opens). The random-access windows a beam offers a second: the
+IoT room's access attempts a second are the useful beams times a window's devices times this."""
 
 IOT_MAC_EFFICIENCY: Final[float] = 0.20
 """ESTIMATE (COMM-659). The share of a beam's uplink bits that carry payload after the MAC
-layer's overhead: the IoT reading reports the uplink bits share without it and with it (the
-share over this)."""
+layer's overhead: the IoT room's payload bits a second are its uplink bits a second times
+this, the payload view."""
 
 IOT_MESSAGE_AIRTIME_LOW_S: Final[float] = 4.0
 """ESTIMATE (COMM-719, a ``scenario`` row: the design reviewer's figure, not investor-set).
-The low end of the time one 340-byte minimal-packet IoT message holds one uplink tone,
-seconds."""
+The low end of the time one 340-byte IoT message, of either IoT class, holds one uplink
+tone, seconds."""
 
 IOT_MESSAGE_AIRTIME_HIGH_S: Final[float] = 7.0
-"""ESTIMATE (COMM-719, a ``scenario`` row). The high end of the time one 340-byte
-minimal-packet IoT message holds one uplink tone, seconds."""
+"""ESTIMATE (COMM-719, a ``scenario`` row). The high end of the time one 340-byte IoT message,
+of either IoT class, holds one uplink tone, seconds: the single-tone view's conservative end,
+at which each IoT class's capacity is read."""
 
 NB_IOT_TONE_HZ: Final[float] = 3_750.0
 """SOURCED_FACT (COMM-714, certified). NB-IoT's narrowest uplink allocation, one single-tone

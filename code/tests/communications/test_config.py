@@ -485,8 +485,8 @@ def test_a_retired_iridium_setting_fails_at_load_naming_it(tmp_path: Path) -> No
     rather than being silently ignored (``extra="forbid"``).
 
     Sample: an Iridium scenario setting each retired field in turn (each class's usage and its
-    spectral efficiency are named constants; the IoT counts are the books'; there is no
-    government price), at a plausible value.
+    spectral efficiency are named constants; IoT is capacity in this model, its prices the
+    product case's; there is no government price), at a plausible value.
 
     Expected outcome: each fails at load with one ValidationError located at that field
     (``iridium.device_class``, ``iridium.arpu.government_price_usd_month``, say), of the type
@@ -555,12 +555,12 @@ def test_the_iridium_dials_refuse_a_boolean_naming_the_field(tmp_path: Path) -> 
     ``tests/common/test_cadence_move.py``.
 
     Sample: every float field of the Iridium dials and of the blocks nested in them (the
-    spectrum, the panel, the downlink share and the five prices), walked from the model's own
+    spectrum, the panel, the downlink share and the three prices), walked from the model's own
     fields, each written in a scenario YAML as ``true``; the panel written as ``yes`` and as
     ``on`` (YAML 1.1 reads both as true) and as the quoted ``"15"``; the panel as the integer
     ``15``.
 
-    Expected outcome: the walk finds those eight fields; each boolean and the quoted number
+    Expected outcome: the walk finds those six fields; each boolean and the quoted number
     fail at load with one ValidationError, located at that field (``iridium.aperture_m2``,
     say); the integer panel loads as 15.0, a float.
     """
