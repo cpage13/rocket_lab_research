@@ -205,7 +205,7 @@ can build and ship without anyone's permission:
 | | Small terminal | Mounted terminal |
 |---|---|---|
 | Who | A person who wants connectivity anywhere: a laptop in the field, a cabin, a boat | A vehicle, ship, aircraft, or fixed site |
-| Antenna | A puck, or a USB device on a laptop; about 10 dBi, self-orienting | A mounted antenna; 15 dBi |
+| Antenna | A small flat antenna, or a USB device on a laptop; about 10 dBi, self-orienting | A mounted antenna; 15 dBi |
 | Price | $10 a month | $50 a month |
 | Speed while active | 2 Mbps; about 10 Mbps off-peak | 5 Mbps; about 13.4 Mbps off-peak |
 | Users active at once | 2.5 percent at the busy hour; 0.5 percent off-peak | 10 percent at the busy hour; 2 percent off-peak |
@@ -219,7 +219,7 @@ month by FY2036 (the investor's usage, 2026-10-12).
 
 One design note travels with the small terminal: antenna gain is directional,
 so it is specified with a self-orienting mount (a fixed tilt or a few switched
-elements, no user pointing, no moving parts). A bare flat puck lying face-up
+elements, no user pointing, no moving parts). A bare flat antenna lying face-up
 earns these rates only with a satellite high overhead. The mount is what makes
 the rates typical rather than best-case.
 
