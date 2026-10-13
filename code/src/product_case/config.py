@@ -15,9 +15,9 @@ than two reported years or years out of order; a range whose low end is above it
 draws below 9; a fill or robust floor outside (0, 1]; a margin floor outside (0, 100) percent.
 
 Every default is a named constant of :mod:`product_case.constants`, and the shipped scenario
-holds exactly the defaults (a test ties the two). Each scenario value has one
-:class:`~common.input_manifest.CellSpec` in :data:`SCENARIO_SPECS`, and each named constant that
-is a model input one in :data:`CONSTANT_INPUTS` with its value: the artifact's input cells are
+holds exactly the defaults, its own label aside (a test ties the two). Each scenario value has
+one :class:`~common.input_manifest.CellSpec` in :data:`SCENARIO_SPECS`, and each named constant
+that is a model input one in :data:`CONSTANT_INPUTS` with its value: the artifact's input cells are
 built from them by :func:`common.input_manifest._spec_cell`'s rule, so a value that differs from
 its default is a scenario override (status ``scenario``, the scenario YAML its only source) and a
 side run's price never inherits the investor's words. Every spec's status is one of the shared
@@ -498,8 +498,9 @@ class ProductCaseConfig(BaseModel):
     """The product case's scenario, frozen: the config every product-case run reads.
 
     Every field defaults to its named constant, so ``ProductCaseConfig()`` is the shipped
-    scenario. A usage path holds one value per reported year; the years are at least two, in
-    order. No IoT count is a setting: a scenario that sets one fails at load, naming the key.
+    scenario but its label, which is neutral (the shipped file names itself). A usage path holds
+    one value per reported year; the years are at least two, in order. No IoT count is a
+    setting: a scenario that sets one fails at load, naming the key.
     """
 
     model_config = _FROZEN_STRICT
@@ -507,7 +508,7 @@ class ProductCaseConfig(BaseModel):
     scenario_name: str = Field(
         default=SCENARIO_NAME_DEFAULT,
         min_length=1,
-        description="The scenario's label.",
+        description="The scenario's label: the run's identity, not an input.",
     )
     engineering_artifact_path: str = Field(
         default=ENGINEERING_ARTIFACT_PATH_DEFAULT,

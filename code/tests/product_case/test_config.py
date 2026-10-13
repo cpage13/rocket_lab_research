@@ -1,9 +1,9 @@
 """The product case's scenario, its refusals, its cell specs and its formula catalog (box B0).
 
-The code defaults and ``code/scenarios/product_case.yaml`` are one default; every refusal the
-config makes names its field; no IoT count is a setting; every scenario value and every named
-constant that is an input carries a cell spec with its status, claim and basis; the formula
-catalog holds one entry per formula of the method.
+The code defaults and ``code/scenarios/product_case.yaml`` are one default (the file's own label
+aside); every refusal the config makes names its field; no IoT count is a setting; every
+scenario value and every named constant that is an input carries a cell spec with its status,
+claim and basis; the formula catalog holds one entry per formula of the method.
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ from product_case.constants import (
     IOT_ARPU_USD_MONTH,
     IOT_CUSTOMERS_TODAY,
     PATH_SEPARATOR,
+    SCENARIO_NAME_DEFAULT,
     TERMINAL_CUSTOMERS_TODAY,
     ClassKind,
     ProductCaseFormula,
@@ -100,17 +101,21 @@ def _leaf_paths(model: BaseModel, prefix: str = "") -> list[str]:
 
 def test_the_code_defaults_equal_the_shipped_scenario_file(product_case_yaml: Path) -> None:
     """Objective: the code defaults and ``code/scenarios/product_case.yaml`` are one default, so
-    the shipped scenario holds exactly the named constants (the data center's
-    ``test_code_defaults_equal_the_default_scenario_file`` is the model).
+    the shipped scenario holds exactly the named constants, its own label aside (the data
+    center's ``test_code_defaults_equal_the_default_scenario_file`` is the model, popping the
+    name); the code's label is neutral, so a side run that sets none claims nothing.
 
     Sample: the shipped scenario file, loaded through ``load_product_case_config``; the config
     built from the code alone, ``ProductCaseConfig()``.
 
-    Expected outcome: the two configs are equal field for field, the scenario's name included.
+    Expected outcome: the two configs are equal field for field once the names are popped; the
+    file names itself "The product case at the investor's prices, held flat" and the code's
+    label is ``SCENARIO_NAME_DEFAULT``, "A product-case scenario".
     """
-    from_file = load_product_case_config(product_case_yaml)
-    from_code = ProductCaseConfig()
-    assert from_file.model_dump() == from_code.model_dump()
+    from_file = load_product_case_config(product_case_yaml).model_dump()
+    from_code = ProductCaseConfig().model_dump()
+    assert from_file.pop("scenario_name") == "The product case at the investor's prices, held flat"
+    assert from_code.pop("scenario_name") == SCENARIO_NAME_DEFAULT == "A product-case scenario"
     assert from_file == from_code
 
 

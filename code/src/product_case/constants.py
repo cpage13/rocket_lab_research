@@ -4,8 +4,8 @@ Every value the product case's method uses that no scenario sets lives here: the
 curve's anchors (Iridium's customers and ARPU today, COMM-617 and COMM-618, and data IoT's
 anchor by the investor's proportion, COMM-726), the conventions (the 4 busy hours, 30 days a
 month and decimal units, COMM-724), the unit conversions, the shipped scenario's defaults
-(each ``*_DEFAULT``, which ``code/scenarios/product_case.yaml`` holds exactly), the two schema
-versions, the enums every product-case list and record runs on, and
+(each ``*_DEFAULT``, which ``code/scenarios/product_case.yaml`` holds exactly, its own label
+aside), the two schema versions, the enums every product-case list and record runs on, and
 :data:`FORMULA_CATALOG`, one entry per formula of the method, from which the artifact's
 ``meta.formulas`` is built alone.
 
@@ -337,11 +337,15 @@ refuses a run, and far below any quantity the product case publishes."""
 
 
 # ---------------------------------------------------------------------------
-# The shipped scenario's defaults (code/scenarios/product_case.yaml holds exactly these)
+# The shipped scenario's defaults (code/scenarios/product_case.yaml holds exactly these, its
+# own label aside)
 # ---------------------------------------------------------------------------
 
-SCENARIO_NAME_DEFAULT: Final[str] = "The product case at the investor's prices, held flat"
-"""The shipped scenario's label (the artifact's ``metadata.scenario_name``)."""
+SCENARIO_NAME_DEFAULT: Final[str] = "A product-case scenario"
+"""The label of a scenario that sets none (the artifact's ``metadata.scenario_name``): neutral,
+so a side run that names nothing claims nothing about its prices or usage; the label is the run's
+identity, not an input cell, so no override would mark it. The shipped scenario names itself
+("The product case at the investor's prices, held flat")."""
 
 ENGINEERING_ARTIFACT_PATH_DEFAULT: Final[str] = "communications/models/iridium/default.json"
 """The engineering artifact the product case reads, repository-relative: the promoted Iridium

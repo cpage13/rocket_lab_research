@@ -3,7 +3,8 @@
 # =============================================================================
 #
 # THE SHIPPED PRODUCT-CASE SCENARIO. It holds exactly the code defaults (the
-# *_DEFAULT constants of code/src/product_case/constants.py; a test ties the two).
+# *_DEFAULT constants of code/src/product_case/constants.py; a test ties the two),
+# but its label: a scenario that sets none takes a neutral one.
 # Promote it from code/ with:
 #
 #   uv run python -m product_case.json_output scenarios/product_case.yaml \
@@ -34,7 +35,7 @@
 # think this is yes") and the plan (2026-10-12 20:27: "yes, approved, go ahead
 # with the plan").
 
-scenario_name: "The product case at the investor's prices, held flat"  # the run's label (the artifact's metadata), not an input
+scenario_name: "The product case at the investor's prices, held flat"  # the shipped run's own label (the artifact's metadata), not an input
 engineering_artifact_path: communications/models/iridium/default.json  # the promoted Iridium artifact, repository-relative
 reported_years: [2031, 2033, 2035, 2036]  # SCENARIO: the 2026-10-05 product-case design's years (COMM-723)
 
