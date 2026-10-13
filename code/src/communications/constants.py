@@ -759,9 +759,10 @@ COMM-659's 0.03 to 1.5 bits a second for a low-duty narrowband device. Data IoT 
 beside its bursts."""
 
 MINIMAL_PACKET_IOT_BURSTS_PER_DAY: Final[int] = 0
-"""The bursts a day of a minimal-packet IoT device in the IoT capacity's reference usage: none,
-since the class sends short messages only (the bursts are data IoT's,
-:data:`DATA_IOT_BURSTS_PER_DAY`). The class's definition, not a tunable."""
+"""INVESTOR_SET (the investor's usage table, 2026-10-04). The bursts a day one minimal-packet IoT
+device sends in the IoT capacity's reference usage (:data:`IOT_ENGINEERING_USAGE`), a usage and
+never a count of devices: none, since the class sends short messages only (the bursts are data
+IoT's, :data:`DATA_IOT_BURSTS_PER_DAY`)."""
 
 DATA_IOT_BURSTS_PER_DAY: Final[int] = 4
 """INVESTOR_SET (the investor's usage, 2026-10-04, an assumption). The bursts a day one data IoT
