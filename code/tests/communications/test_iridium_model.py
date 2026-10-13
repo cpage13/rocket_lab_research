@@ -69,12 +69,10 @@ from communications.constants import (
     BASE_YEAR_DEFAULT,
     CLASS_SE_CENTRAL,
     CLASS_USAGE,
-    DATA_IOT_DEVICES,
     ECOSYSTEM_ASSUMPTION_NOTE,
     HORIZON_YEARS_DEFAULT,
     IOT_ENGINEERING_USAGE,
     IRIDIUM_SCENARIO_NAME_DEFAULT,
-    MINIMAL_PACKET_IOT_DEVICES,
     ORBIT_ALTITUDE_KM_SCENARIO,
     ORBIT_INCLINATION_DEG_SCENARIO,
     ORBIT_SCENARIO_BASIS,
@@ -101,7 +99,6 @@ from communications.iridium import (
     ClassReadingRecord,
     ClassRecord,
     ClassYearRecord,
-    IotCheckRowRecord,
     IridiumRun,
     MarginalIntervalRecord,
     NotAnIridiumConfigError,
@@ -273,20 +270,6 @@ TRIPWIRE_TOTAL_COST_MUSD = 1594.5941525706626  # cumulative build and launch cas
 TRIPWIRE_FY2036_REPLACEMENT_COST_MUSD = 79.51337204338448
 """The FY2036 cash replacement, $M: the FY2031 cohort's 36 satellites at $1.05M plus its 3
 launches at the FY2036 whole-fleet cadence's price (90 launches, $13.904M), frozen exactly."""
-
-# ---------------------------------------------------------------------------
-# The two IoT lines and the IoT reading (the saturation design's IoT table; within 1 percent).
-# ---------------------------------------------------------------------------
-IOT_BOOK_MUSD = 2_480.175_36  # 51,670,320 x $4 x 12 = 25,835,160 x $8 x 12, $M a year.
-IOT_TOLERANCE = 0.01
-# (fleet, devices a useful beam, uplink bits share with MAC, attempts a second a beam,
-#  tone share low, tone share high), minimal-packet IoT.
-IOT_TARGETS = (
-    (340, 4_095.8, 0.01803, 2.275, 0.01293, 0.02263),
-    (2_000, 817.3, 0.003598, 0.454, 0.002580, 0.004515),
-    (4_288, 459.6, 0.002024, 0.255, 0.001451, 0.002539),
-    (7_200, 334.1, 0.001471, 0.186, 0.001055, 0.001845),
-)
 
 # ---------------------------------------------------------------------------
 # The marginal intervals' verdicts at full price at the investor's prices of 2026-10-07, each
@@ -1225,7 +1208,7 @@ def test_long_satellite_life_publishes_no_cash_replacement(
 
 
 # ---------------------------------------------------------------------------
-# Revenue, the floor rule and the books.
+# Revenue and the floor rule.
 # ---------------------------------------------------------------------------
 
 
@@ -1233,10 +1216,9 @@ def test_every_class_revenue_rises_every_year_from_the_floor_year(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
     """Objective: every seat sold on the fleet the cadence builds, so revenue rises with the
-    fleet; the books stay flat.
+    fleet.
 
-    Expected outcome: from FY2031 to FY2036 every class's people and revenue rise every year;
-    both IoT lines read the same book every year.
+    Expected outcome: from FY2031 to FY2036 every class's people and revenue rise every year.
     """
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
     sold = [year for year in run.iridium.years if year.year >= FLOOR_YEAR]
@@ -1245,20 +1227,17 @@ def test_every_class_revenue_rises_every_year_from_the_floor_year(
         people = [year.classes[index].people_served for year in sold]
         assert all(later > earlier for earlier, later in zip(revenue, revenue[1:])), revenue
         assert all(later > earlier for earlier, later in zip(people, people[1:])), people
-    assert {year.minimal_packet_iot_revenue_musd for year in sold} == {IOT_BOOK_MUSD}
-    assert {year.data_iot_revenue_musd for year in sold} == {IOT_BOOK_MUSD}
 
 
 def test_below_the_floor_nothing_is_sold_and_the_cost_accrues(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
     """Objective: the floor rule: nothing is sold in a year whose living fleet is below the
-    coverage floor (340), and from the first year at it the books apply in full.
+    coverage floor (340), and from the first year at it every class is sold in full.
 
     Expected outcome: FY2026 to FY2030 (0, 32, 80, 160 and 304 satellites) have every class's
-    people 0, revenue 0.0 and a null margin, and both IoT lines 0.0, while their annualized cost
-    accrues (above 0.0 from FY2027); the floor is reached in FY2031, from which both books are
-    sold in full.
+    people 0, revenue 0.0 and a null margin, while their annualized cost accrues (above 0.0 from
+    FY2027); the floor is reached in FY2031, from which every class has its own margin.
     """
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
     assert run.iridium.coverage_floor_reached_year == FLOOR_YEAR
@@ -1269,64 +1248,49 @@ def test_below_the_floor_nothing_is_sold_and_the_cost_accrues(
                 (line.people_served, line.revenue_musd, line.own_margin_pct) == (0, 0.0, None)
                 for line in iridium_year.classes
             )
-            assert iridium_year.minimal_packet_iot_revenue_musd == 0.0
-            assert iridium_year.data_iot_revenue_musd == 0.0
             if fleet_year.year > BASE_YEAR_DEFAULT:
                 assert fleet_year.annual_cost_this_year_musd > 0.0
         else:
-            assert iridium_year.minimal_packet_iot_revenue_musd == pytest.approx(IOT_BOOK_MUSD)
-            assert iridium_year.data_iot_revenue_musd == pytest.approx(IOT_BOOK_MUSD)
             assert all(line.own_margin_pct is not None for line in iridium_year.classes)
 
 
-def test_the_two_iot_lines_are_fixed_books_frozen_exactly(
+def test_the_three_class_prices_and_no_government_key(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
-    """Objective: the books (the rewritten Sheet A test): the five prices and the two IoT lines,
-    exact, each its own line, and no government line anywhere.
+    """Objective: the engineering config carries the three people classes' prices, exact, and
+    no other (IoT is capacity in this model, its prices the product case's, ADR 011); and the
+    artifact carries no government key anywhere (government is left out of revenue).
 
-    Expected outcome: the prices default to $10, $50, $15, $4 and $8; minimal-packet IoT is
-    51,670,320 devices at $4, $2,480.17536M a year; data IoT 25,835,160 devices at $8,
-    $2,480.17536M; the artifact has no key naming government and no combined IoT total.
+    Expected outcome: the ``arpu`` block's fields are the small terminal's, the mounted
+    terminal's and the phone class's prices, in that order, defaulting to $10, $50 and $15; no
+    key of the shipped scenario's artifact, at any depth, names government.
     """
     prices = IridiumArpuDials()
+    assert list(IridiumArpuDials.model_fields) == [
+        "small_terminal_class_price_usd_month",
+        "mounted_terminal_class_price_usd_month",
+        "phone_class_price_usd_month",
+    ]
     assert (
         prices.small_terminal_class_price_usd_month,
         prices.mounted_terminal_class_price_usd_month,
         prices.phone_class_price_usd_month,
-        prices.minimal_packet_iot_price_usd_month,
-        prices.data_iot_price_usd_month,
-    ) == (10.0, 50.0, 15.0, 4.0, 8.0)
+    ) == (10.0, 50.0, 15.0)
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
-    books = run.iridium.fixed_books
-    assert (books.minimal_packet_iot_devices, books.data_iot_devices) == (51_670_320, 25_835_160)
-    assert (MINIMAL_PACKET_IOT_DEVICES, DATA_IOT_DEVICES) == (51_670_320, 25_835_160)
-    assert books.minimal_packet_iot_price_usd_per_month == 4.0
-    assert books.data_iot_price_usd_per_month == 8.0
-    assert books.minimal_packet_iot_annual_revenue_musd == pytest.approx(
-        51_670_320 * 4.0 * 12 / 1e6
-    )
-    assert books.data_iot_annual_revenue_musd == pytest.approx(25_835_160 * 8.0 * 12 / 1e6)
-    assert books.minimal_packet_iot_annual_revenue_musd == pytest.approx(IOT_BOOK_MUSD)
     payload = json.loads(render_artifact_json(_artifact_for(run)))
     assert not any("government" in key for key in _keys(payload))
-    assert not any("total" in key for key in payload["fixed_books"])
 
 
-def test_each_class_revenue_is_its_people_times_its_price_and_the_books_stay_out(
+def test_each_class_revenue_is_its_people_times_its_price(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
-    """Objective: each class's revenue is its served people times its price times 12; the books
-    never move with the fleet, d, the panel or satellites per launch, and never enter a class's
-    margin.
+    """Objective: each class's revenue is its served people times its price times 12, and its own
+    margin is its own revenue against the year's whole-fleet cost.
 
-    Sample: the shipped scenario; the same at d = 0.5, at a 10 m^2 panel, at 15 per launch, and
-    with both IoT prices raised to $50.
+    Sample: the shipped scenario.
 
-    Expected outcome: in every sold year every class's revenue is its people x its price x 12 /
-    1e6 and its own margin its own revenue against the year's cost; every variant's books equal
-    the shipped scenario's but the repriced one's, whose class lines equal the shipped
-    scenario's year by year (so no class margin moves with the book prices).
+    Expected outcome: in every year every class's revenue is its people x its price x 12 / 1e6,
+    and in every sold year its own margin its own revenue against the year's cost.
     """
     config = load_comms_config(iridium_yaml)
     base = run_iridium_model(config, committed_saturation_curve)
@@ -1339,26 +1303,11 @@ def test_each_class_revenue_is_its_people_times_its_price_and_the_books_stay_out
                 assert line.own_margin_pct == pytest.approx(
                     _margin(line.revenue_musd, fleet_year.annual_cost_this_year_musd)
                 )
-    variants = (
-        _with_iridium(config, saturation={"downlink_share": 0.5}),
-        _with_iridium(config, aperture_m2=10.0),
-        _iridium_scenario_with(iridium_yaml, "satellite", satellites_per_launch=15),
-    )
-    for variant in variants:
-        run = run_iridium_model(variant, committed_saturation_curve)
-        assert run.iridium.fixed_books == base.iridium.fixed_books
-    repriced = _with_iridium(
-        config, arpu={"minimal_packet_iot_price_usd_month": 50.0, "data_iot_price_usd_month": 50.0}
-    )
-    moved = run_iridium_model(repriced, committed_saturation_curve)
-    assert moved.iridium.fixed_books.minimal_packet_iot_annual_revenue_musd > IOT_BOOK_MUSD
-    for moved_year, base_year in zip(moved.iridium.years, base.iridium.years, strict=True):
-        assert moved_year.classes == base_year.classes
 
 
 def test_the_prices_are_validated() -> None:
-    """Objective: every price is above 0 and at most $5,000 a month (the books' counts are named
-    constants, not settings).
+    """Objective: every price is above 0 and at most $5,000 a month (the three classes'
+    prices).
 
     Expected outcome: each price at 0 and at 5,000.01 is refused at construction naming the
     field; each at 5,000 is accepted.
@@ -1377,12 +1326,12 @@ def test_near_zero_share_does_not_publish_a_full_margin_on_an_empty_fleet(
     publishes nothing that does not exist: no margin without revenue, no U at a fleet of 0, and
     no inf or NaN.
 
-    Expected outcome: every year's fleet 0, cost 0.0, people 0, revenue 0.0 and null margins;
-    the floor never reached (null); the cost per satellite-year still defined ($0.3625M); the
-    horizon-end and steady-state readings at 0 with useful beams 0.0, share 0.0, people 0,
-    revenue 0.0, a null U and null margins, and every field of their IoT rows but the fleet
-    null; the coverage-floor and 2,000 readings equal the all-in run's; the JSON holds no
-    infinity or NaN.
+    Expected outcome: every year's fleet 0, cost 0.0, people 0, revenue 0.0 and null margins,
+    and its IoT room 0.0 with both IoT capacities null; the floor never reached (null); the
+    cost per satellite-year still defined ($0.3625M); the horizon-end and steady-state readings
+    at 0 with useful beams 0.0, share 0.0, people 0, revenue 0.0, a null U and null margins, and
+    the same empty IoT room; the coverage-floor and 2,000 readings equal the all-in run's; the
+    JSON holds no infinity or NaN.
     """
     all_in = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
     config = _iridium_scenario_with(iridium_yaml, "comms_cadence", share_of_fleet=0.001)
@@ -1404,9 +1353,16 @@ def test_near_zero_share_does_not_publish_a_full_margin_on_an_empty_fleet(
             line == ClassReadingRecord(line.device_class, 0.0, 0.0, None, 0, 0.0, None)
             for line in reading.classes
         )
-    iot = run.iridium.saturation.iot_check
-    for row in (*iot.minimal_packet_iot[2:], *iot.data_iot[2:]):
-        assert row == IotCheckRowRecord(0, None, None, None, None, None, None)
+    empty_room = iot_room(
+        0.0,
+        spectrum_mhz=HELD_SPECTRUM_MHZ,
+        downlink_share=DEFAULT_DOWNLINK_SHARE,
+        at_or_above_floor=False,
+    )
+    assert dataclasses.astuple(empty_room)[:5] == (0.0, 0.0, 0.0, 0.0, 0.0)
+    assert all(dataclasses.astuple(entry)[1:] == (None,) * 5 for entry in empty_room.classes)
+    for iot in (*(year.iot for year in run.iridium.years), *(r.iot for r in readings[2:])):
+        assert iot == empty_room
 
     def refuse(constant: str) -> float:
         raise AssertionError(f"the JSON holds {constant}")
@@ -1428,8 +1384,7 @@ def test_halving_the_downlink_share_halves_people_capacity_and_the_pool_only(
 
     Expected outcome: at half d every class's people at 2,000 are half (within one person's
     rounding), its capacity there (``read_fleet``) half and its pool half; useful beams, the
-    share of maximum use, U, maximum use, the satellite's peak, the markers and the IoT counts
-    unchanged.
+    share of maximum use, U, maximum use, the satellite's peak and the markers unchanged.
     """
     config = load_comms_config(iridium_yaml)
     full = run_iridium_model(config, committed_saturation_curve)
@@ -1465,7 +1420,6 @@ def test_halving_the_downlink_share_halves_people_capacity_and_the_pool_only(
         )
         for marker in markers:
             assert getattr(half_block, marker) == getattr(full_block, marker), marker
-    assert half.iridium.fixed_books == full.iridium.fixed_books
 
 
 def test_the_panel_setting_scales_people_beams_capacity_and_maximum_use_linearly(
@@ -1691,7 +1645,7 @@ def test_a_run_that_would_hold_a_number_that_is_not_finite_is_refused_naming_the
 
 
 # ---------------------------------------------------------------------------
-# The readings and the IoT reading.
+# The readings at the reported fleets.
 # ---------------------------------------------------------------------------
 
 
@@ -1757,51 +1711,6 @@ def test_the_retired_cap_reading_is_its_own_constant_at_the_historical_cap(
     assert (reading.label, reading.fleet) == (RETIRED_CAP_LABEL, HISTORICAL_FLEET_CAP)
 
 
-def test_the_iot_reading_at_the_reported_fleets(
-    iridium_yaml: Path, committed_saturation_curve: SaturationCurve
-) -> None:
-    """Objective: the IoT reading, each line on its own, at every reported fleet.
-
-    Expected outcome: minimal-packet IoT within 1 percent of the saturation design's IoT table
-    at 340, 2,000,
-    4,288 and 7,200 (devices per useful beam, the uplink bits share with MAC, the access attempts
-    a second a beam, the two tone shares); its share without MAC 0.2 times with it; data IoT's
-    rows the module's (25,835,160 devices at 416,320 bytes and 52 attempts a day), its tone
-    shares null.
-    """
-    run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
-    iot = run.iridium.saturation.iot_check
-    for row, (fleet, per_beam, with_mac, attempts, tone_low, tone_high) in zip(
-        iot.minimal_packet_iot, IOT_TARGETS, strict=True
-    ):
-        assert row.fleet == fleet
-        values = (
-            row.devices_per_useful_beam,
-            row.uplink_bits_share_with_mac,
-            row.access_attempts_per_second_per_beam,
-            row.uplink_tone_share_low,
-            row.uplink_tone_share_high,
-        )
-        for value, target in zip(
-            values, (per_beam, with_mac, attempts, tone_low, tone_high), strict=True
-        ):
-            assert value is not None
-            assert _within(value, target, IOT_TOLERANCE), (fleet, value, target)
-        assert row.uplink_bits_share == pytest.approx(0.2 * with_mac, rel=IOT_TOLERANCE)
-    for minimal, data in zip(iot.minimal_packet_iot, iot.data_iot, strict=True):
-        assert data.fleet == minimal.fleet
-        assert minimal.devices_per_useful_beam is not None
-        assert data.devices_per_useful_beam == pytest.approx(minimal.devices_per_useful_beam / 2)
-        assert data.access_attempts_per_second_per_beam == pytest.approx(
-            data.devices_per_useful_beam * 52 / 86_400
-        )
-        assert minimal.uplink_bits_share is not None
-        assert data.uplink_bits_share == pytest.approx(
-            minimal.uplink_bits_share / 2 * 416_320 / 16_320
-        )
-        assert (data.uplink_tone_share_low, data.uplink_tone_share_high) == (None, None)
-
-
 # ---------------------------------------------------------------------------
 # The marginal intervals.
 # ---------------------------------------------------------------------------
@@ -1824,9 +1733,9 @@ def test_the_marginal_intervals_against_hand_worked_chords(
     Expected outcome: 0 to 342 adds 4,000 people a satellite, $0.48M, paying; 342 to 506 3,500,
     $0.42M, paying; 506 to 756 1,000, $0.12M, not paying; 756 to 992 3,500, $0.42M, paying again;
     then 992 to 1,482 continues from the synthetic rows; every class lists one interval per row.
-    Also, d = 1 leaves the uplink no time, so in every row of both IoT lines every uplink share
-    (bits, bits with MAC, and the two tone shares) is null while the devices per beam and the
-    access attempts are read.
+    Also, d = 1 leaves the uplink no time, so in every year from the floor year and at every
+    reading IoT's uplink, payload and tone rooms are 0.0 while its access room is read, and each
+    IoT class's capacity is 0 with ``payload_bits`` binding.
     """
     config = _with_iridium(
         load_comms_config(iridium_yaml),
@@ -1863,17 +1772,17 @@ def test_the_marginal_intervals_against_hand_worked_chords(
         assert [interval.upper_fleet for interval in block.marginal_intervals] == [
             row.fleet for row in entry.rows
         ]
-    iot = run.iridium.saturation.iot_check
-    for row in (*iot.minimal_packet_iot, *iot.data_iot):
-        assert row.devices_per_useful_beam is not None
-        assert row.access_attempts_per_second_per_beam is not None
-        shares = (
-            row.uplink_bits_share,
-            row.uplink_bits_share_with_mac,
-            row.uplink_tone_share_low,
-            row.uplink_tone_share_high,
+    sold_rooms = [year.iot for year in run.iridium.years if year.year >= FLOOR_YEAR]
+    for room in (*sold_rooms, *(reading.iot for reading in run.iridium.saturation.readings)):
+        zero_rooms = (
+            room.uplink_bits_per_second,
+            room.uplink_payload_bits_per_second,
+            room.single_tone_seconds_per_second,
         )
-        assert shares == (None, None, None, None), row
+        assert zero_rooms == (0.0, 0.0, 0.0), room
+        assert room.access_attempts_per_second_low > 0.0
+        for entry in room.classes:
+            assert (entry.device_capacity, entry.binding_view) == (0, IotView.PAYLOAD_BITS)
 
 
 def test_the_marginal_interval_verdicts_on_the_committed_curve(
@@ -2106,9 +2015,10 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
     with the block upgrade and its two conditions, 15 without it); every seat sold; the class
     prices held flat (the small terminal $10, the mounted terminal $50 and the phone class $15 a
     month) and the phone class's floor, $15, apart from its price; a haircut as a division with
-    every margin re-derived; each class's usage; the two IoT lines (data IoT's price a month)
-    and the floor rule; government left out of revenue; the readings; the limits; no line calls
-    the margin gross; no stack caveat at the default.
+    every margin re-derived; each class's usage; IoT as two device classes, each with its
+    capacity alone at its engineering usage and never a count sold or revenue (ADR 011), and the
+    floor rule; government left out of revenue; the readings; the limits; no line calls the
+    margin gross; no stack caveat at the default.
     """
     run = run_iridium_model(load_comms_config(iridium_yaml), committed_saturation_curve)
     lines = run.iridium.assumptions
@@ -2134,12 +2044,15 @@ def test_iridium_assumptions_states_ecosystem_and_ops(
         "the small terminal $10, the mounted terminal $50 and the phone class $15 a month",
         "the phone class's floor is the investor's $15 a month",
         "re-derived against the same fleet cost, never divided or averaged",
-        "data iot, 25,835,160 devices at $8 a month",
         "the small terminal 2 mbps while active",
         "the mounted terminal 5 mbps",
         "the phone class 0.75 mbps",
-        "minimal-packet iot, 51,670,320 devices",
-        "data iot, 25,835,160 devices",
+        "iot is two device classes, minimal-packet iot and data iot",
+        "each iot class's device capacity alone at its engineering usage (minimal-packet iot 48 "
+        "messages of 340 bytes a day; data iot 4 bursts of 100 kb a day beside 48 messages)",
+        "the two capacities never add",
+        "a capacity is never a count sold and never revenue",
+        "the product case's (adr 011)",
         "nothing is sold",
         "government is left out of revenue",
         "the retired cap, kept for comparison",
@@ -2252,11 +2165,11 @@ def test_promoted_json_export_writes_frozen_baseline(
     annualized, $406.0M replacement, 4,288 living, 301 launches, the floor reached in FY2031,
     $0.3625M a satellite-year); the orbit block; the physics (8 MHz, 15.4 m^2, 16 per launch,
     operations 0.0, the ecosystem note); the class blocks in order with their prices and
-    saturation numbers; the years' fleet, cost, books and frozen people at FY2031, FY2033 and
-    FY2036; the steady state's frozen people; the books; the saturation block's identity (the
-    committed curve's path, schema, stamp and hash), d, the panel factor, the band saturation
-    numbers, four IoT rows a line and the curve's limits; none of the 29 key names the v6
-    schema removed, at any depth (``V6_REMOVED_KEYS``).
+    saturation numbers; the years' fleet, cost and frozen people at FY2031, FY2033 and FY2036;
+    the steady state's frozen people; the saturation block's identity (the committed curve's
+    path, schema, stamp and hash), d, the panel factor, the band saturation numbers and the
+    curve's limits; none of the 29 key names the v6 schema removed, at any depth
+    (``V6_REMOVED_KEYS``).
     """
     out_path = tmp_path / "iridium_default.json"
     written = export_iridium_json(iridium_yaml, out_path, version_stamp="test-stamp")
@@ -2269,7 +2182,6 @@ def test_promoted_json_export_writes_frozen_baseline(
         "iridium_physics",
         "classes",
         "years",
-        "fixed_books",
         "saturation",
         "assumptions",
     ]
@@ -2318,14 +2230,10 @@ def test_promoted_json_export_writes_frozen_baseline(
     for year, people in FROZEN_PEOPLE.items():
         assert years[year]["annual_cost_musd"] == pytest.approx(ANNUAL_COST_MUSD[year])
         assert [line["people_served"] for line in years[year]["classes"]] == list(people)
-        assert years[year]["minimal_packet_iot_revenue_musd"] == pytest.approx(IOT_BOOK_MUSD)
-        assert years[year]["data_iot_revenue_musd"] == pytest.approx(IOT_BOOK_MUSD)
     saturation = payload["saturation"]
     steady = saturation["readings"][3]
     assert steady["fleet"] == STEADY_STATE_FLEET
     assert [line["people"] for line in steady["classes"]] == list(FROZEN_STEADY_STATE_PEOPLE)
-    assert payload["fixed_books"]["minimal_packet_iot_devices"] == MINIMAL_PACKET_IOT_DEVICES
-    assert payload["fixed_books"]["data_iot_devices"] == DATA_IOT_DEVICES
     assert saturation["curve_path"] == "communications/models/iridium/saturation_curve.json"
     assert saturation["curve_schema_version"] == committed_saturation_curve.schema_version
     assert saturation["curve_version_stamp"] == committed_saturation_curve.version_stamp
@@ -2333,10 +2241,6 @@ def test_promoted_json_export_writes_frozen_baseline(
     assert saturation["downlink_share"] == DEFAULT_DOWNLINK_SHARE
     assert saturation["panel_factor"] == pytest.approx(DEFAULT_PANEL_FACTOR)
     assert saturation["band_saturation_numbers"] == FROZEN_BAND_SATURATION_NUMBERS
-    assert [len(saturation["iot_check"][line]) for line in ("minimal_packet_iot", "data_iot")] == [
-        4,
-        4,
-    ]
     assert saturation["limits"] == list(committed_saturation_curve.limits)
     assert len(V6_REMOVED_KEYS) == 29
     returned = sorted(_keys(payload) & V6_REMOVED_KEYS)

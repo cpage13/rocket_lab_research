@@ -10,10 +10,11 @@ constellation, with two families sharing one fleet-and-cost loop:
   Every device class (the small terminal, the mounted terminal, the phone class)
   reads its people from the promoted saturation curve, the useful co-channel beams
   over the places people live, times the downlink share and the panel factor, and
-  every seat is sold at the class's flat price, side by side in one run; the two
-  IoT lines are fixed books of their own; each class's saturation number, its
-  spectrum bound, is reported beside the cadence. The promoted artifact is
-  ``communications/models/iridium/default.json``.
+  every seat is sold at the class's flat price, side by side in one run; IoT is
+  published as capacity (ADR 011): the room on the phone class's useful beams and
+  each IoT class's device capacity alone, never a count sold or revenue; each
+  class's saturation number, its spectrum bound, is reported beside the cadence.
+  The promoted artifact is ``communications/models/iridium/default.json``.
 * The High-Bandwidth Cellular Pure Play model (formerly Model A), the kept second
   family and the config default (no ``iridium`` block): CELLULAR direct-to-cell on
   partner cellular spectrum, with a fixed subscriber-density dial, its fleet sized
@@ -28,8 +29,9 @@ The package mirrors the data-center model's shape and reuses the shared spine in
 ``common`` unchanged. Each family's record sits beside the shared fleet-and-cost
 record (the deployment, the living fleet, the build, launch and replacement cost
 lines and the annualized cost). The Iridium record carries each class's people,
-revenue and own margin by year, the readings at the reported fleets, the IoT check
-and the marginal intervals; the cellular record carries its target, its served
+revenue, own margin and useful beams by year, IoT's room and capacities by year and
+at the readings, the readings at the reported fleets and the marginal intervals; the
+cellular record carries its target, its served
 base, its two revenue cases and its cost per person, which the ground comparison
 sets against a ground cost (a marked, two-regime INTERFACE the caller supplies). It
 is NOT a market-share, demand, or DCF model. People are PEOPLE, never households and

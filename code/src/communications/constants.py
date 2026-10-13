@@ -695,14 +695,14 @@ never moves this historical reading."""
 
 # ===========================================================================
 # The Iridium model's prices (investor-set, 2026-10-03 and 2026-10-04; the two terminal
-# prices 2026-10-07): each class's and each IoT line's monthly price, held flat
+# prices 2026-10-07): each device class's monthly price, held flat
 # ===========================================================================
 #
-# Each device class sells every seat its living fleet carries at its own price, and the two
-# IoT lines are fixed books at theirs (the counts below). A lower price or a smaller market
-# is a division in the conclusions, never in the model; a margin is re-derived there, never
-# divided. Government is left out of revenue (2026-10-04): no government count, price or
-# line.
+# Each device class sells every seat its living fleet carries at its own price. IoT has no
+# price here: the engineering model publishes IoT as capacity, and IoT's prices are the
+# product case's (ADR 011). A lower price or a smaller market is a division in the
+# conclusions, never in the model; a margin is re-derived there, never divided. Government is
+# left out of revenue (2026-10-04): no government count, price or line.
 
 SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT: Final[float] = 10.0
 """INVESTOR_SET (the investor, 2026-10-07: "Yes, let's use the $10 and $50"; it was $15, the
@@ -730,57 +730,21 @@ phone class's monthly price, dollars: set at its floor, :data:`PHONE_CLASS_PRICE
 (Sheet A's standard $15), held flat. Its own constant, since Sheet A's standard price went to
 the small terminal, whose own price is now the investor's $10 (2026-10-07)."""
 
-MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT: Final[float] = 4.0
-"""INVESTOR_SET (the investor's trial price, 2026-10-04). Minimal-packet IoT's monthly price
-per device, dollars."""
-
-DATA_IOT_PRICE_USD_MONTH_DEFAULT: Final[float] = 8.0
-"""INVESTOR_SET (the investor's trial price, 2026-10-04; Sheet A's IoT price of 2026-07-09,
-the investor's confirmed about-8 against Iridium's 7.78 IoT ARPU today, COMM-618, renamed for
-data IoT). Data IoT's monthly price per device, dollars."""
-
 ARPU_PRICE_CEILING_USD_MONTH: Final[float] = 5000.0
-"""The upper Field bound on every monthly price (the three classes' and the two IoT
-lines'), dollars: a generous sanity ceiling well above the Certus 259 anchor (COMM-618),
-guarding a fat-fingered price without constraining any real MSS tier. A fixed bound, not a
-tunable."""
+"""The upper Field bound on every monthly price (the three device classes'), dollars: a
+generous sanity ceiling well above the Certus 259 anchor (COMM-618), guarding a fat-fingered
+price without constraining any real MSS tier. A fixed bound, not a tunable."""
 
 # ===========================================================================
-# The two IoT lines (ADR 007): fixed counts, and the IoT reading's constants
+# IoT as capacity (ADR 011): the capacity's reference usage and the IoT room's constants
 # ===========================================================================
 #
-# IoT is two fixed books, each its own revenue line, never inside a device class's margin,
-# sold from the first year the living fleet reaches the coverage floor. Their counts are
-# named constants, not settings, and never move with the fleet, the class, the downlink
-# share, the panel or satellites per launch. The IoT reading (ADR 007's IoT check)
-# spreads each line's count over the phone class's useful beams (IoT devices are low gain,
-# so their reuse follows the phone rule) and reports its share of a beam's uplink.
-
-MINIMAL_PACKET_IOT_DEVICES: Final[int] = 51_670_320
-"""INVESTOR_SET (the investor, 2026-10-04; held as a stated assumption, ADR 007).
-Minimal-packet IoT's fixed device count, the capable count: the iridium-v5 model's Sheet A IoT
-count at the :data:`MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES`-satellite coverage floor, not
-Iridium's own IoT book (:data:`IRIDIUM_IOT_BOOK_DEVICES`, COMM-617). Nothing physical caps the
-count short of billions of devices (COMM-659), so any count is a stated assumption."""
-
-MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES: Final[int] = 340
-"""INVESTOR_SET (2026-10-04, ADR 007). The coverage floor, satellites, at which the iridium-v5
-model's Sheet A IoT count was read for :data:`MINIMAL_PACKET_IOT_DEVICES`: the count's stated
-basis, its own constant (not :data:`SATELLITES_FOR_FULL_COVERAGE_DEFAULT`, the floor the
-Iridium path pins), so a later change to the pinned floor never rewrites where the count came
-from."""
-
-IRIDIUM_IOT_BOOK_DEVICES: Final[int] = 1_998_000
-"""SOURCED_FACT (COMM-617, certified: Iridium's billable IoT subscribers at year-end 2025).
-Iridium's own IoT book, devices: named beside the model's minimal-packet IoT count, which is a
-stated assumption and not this book."""
-
-DATA_IOT_DEVICES: Final[int] = 25_835_160
-"""INVESTOR_SET (the investor, 2026-10-04: "somewhere in proportion"; held as a stated
-assumption, ADR 007). Data IoT's fixed device count: half the minimal-packet count at double
-its price, so the two books are equal. Iridium's own tiers run close to that inverse
-proportion (IoT 1,998,000 devices at $7.78 a month against voice and data 402,000 at $47,
-COMM-617, COMM-618)."""
+# IoT is two device classes, minimal-packet IoT and data IoT, measured in devices. The
+# engineering model sells no IoT seat: it publishes IoT's room on the phone class's useful
+# beams (IoT devices are low gain, so their reuse follows the phone rule) in the uplink's
+# share of the frame, and each IoT class's device capacity alone at its reference usage,
+# never a count sold, a price or revenue. IoT's customers, usage and revenue are the product
+# case's.
 
 MINIMAL_PACKET_IOT_MESSAGE_BYTES: Final[int] = 340
 """SOURCED_FACT (COMM-620, certified: Iridium's SBD IoT messages, about 340 bytes, the
@@ -1325,16 +1289,13 @@ __all__ = [
     "SPECTRUM_MHZ_DEFAULT",
     # The Iridium model's prices (2026-10-03 and 2026-10-04; the two terminal prices 2026-10-07).
     "ARPU_PRICE_CEILING_USD_MONTH",
-    "DATA_IOT_PRICE_USD_MONTH_DEFAULT",
-    "MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT",
     "MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT",
     "PHONE_CLASS_PRICE_FLOOR_USD_MONTH",
     "PHONE_CLASS_PRICE_USD_MONTH_DEFAULT",
     "SMALL_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT",
-    # The two IoT lines and the IoT reading (ADR 007).
+    # IoT as capacity (ADR 011): its classes, views and reference usage, and the room's constants.
     "DATA_IOT_BURSTS_PER_DAY",
     "DATA_IOT_BURST_BYTES",
-    "DATA_IOT_DEVICES",
     "IOT_ENGINEERING_USAGE",
     "IOT_MAC_EFFICIENCY",
     "IOT_MESSAGE_AIRTIME_HIGH_S",
@@ -1342,13 +1303,10 @@ __all__ = [
     "IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND",
     "IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH",
     "IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW",
-    "IRIDIUM_IOT_BOOK_DEVICES",
     "IotClass",
     "IotUsage",
     "IotView",
     "MINIMAL_PACKET_IOT_BURSTS_PER_DAY",
-    "MINIMAL_PACKET_IOT_COUNT_FLOOR_SATELLITES",
-    "MINIMAL_PACKET_IOT_DEVICES",
     "MINIMAL_PACKET_IOT_MESSAGES_PER_DAY",
     "MINIMAL_PACKET_IOT_MESSAGE_BYTES",
     "NB_IOT_TONE_HZ",

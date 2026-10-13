@@ -29,20 +29,23 @@
 # promoted saturation curve (the useful co-channel beams over places people live,
 # computed once at the 25 m^2 reference panel and the held 8 MHz), times the
 # downlink share and the panel factor, and every seat its living fleet carries is
-# sold at the class's flat price, side by side in one run. The two IoT lines are
-# fixed books of their own. Each class's saturation number, its spectrum bound, is
-# reported beside the cadence, never a cap on the build. Every class's people,
-# revenue and own margin, the readings and the IoT check are in the promoted
-# artifact; this file computes no conclusion.
+# sold at the class's flat price, side by side in one run. IoT is the network's
+# capacity in this model (ADR 011): the promoted artifact carries IoT's room on the
+# phone class's useful beams and each IoT class's device capacity alone, never a
+# count sold, a price or revenue; IoT's devices, prices and revenue are the product
+# case's, in its own scenario. Each class's saturation number, its spectrum bound,
+# is reported beside the cadence, never a cap on the build. Every class's people,
+# revenue, own margin and useful beams, the readings, and IoT's room and capacities
+# are in the promoted artifact; this file computes no conclusion.
 #
 # THE SETTINGS. The all-in share and the flat cost model below differ from the
 # shared-spine defaults (the config defaults themselves, the 0.18 share, the 25 to
 # 13.5 $M launch curve and the 1.05 $M build cost, are untouched, so the cellular
 # family and the equality tripwire still see them); satellites per launch is 16
 # with the Neutron block upgrade assumed; the Iridium block sets the held spectrum,
-# the 15.4 m^2 panel, the label, the saturation block and the five prices. Each
-# class's usage and spectral efficiency and the two IoT lines' device counts are
-# named constants (ADR 007), not settings. On an Iridium config the cellular
+# the 15.4 m^2 panel, the label, the saturation block and the three prices. Each
+# class's usage and spectral efficiency and each IoT class's reference usage are
+# named constants, not settings. On an Iridium config the cellular
 # family's sizing and revenue dials (the coverage, subscribers and revenue blocks)
 # keep their defaults, the coverage floor pinned at 340 satellites (nothing is sold
 # in a year whose living fleet is below it), and a ground block is refused: the
@@ -114,13 +117,11 @@ iridium:
     downlink_share: 0.67   # TDD downlink time share (ADR 008); 0.5 is the symmetric frame, 0.75 an estimated alternative
     curve_path: communications/models/iridium/saturation_curve.json   # the promoted curve, repo-relative
 
-  # The five monthly prices, dollars, held flat (the investor, 2026-10-03; the IoT
-  # split 2026-10-04; the two terminal prices moved to $10 and $50 on 2026-10-07).
-  # A lower price or a smaller market is a division in the conclusions, never a
-  # setting. Government is left out of revenue.
+  # The three monthly prices, dollars, held flat (the investor, 2026-10-03; the two
+  # terminal prices moved to $10 and $50 on 2026-10-07). IoT has no price here: its
+  # prices are the product case's (ADR 011). A lower price or a smaller market is a
+  # division in the conclusions, never a setting. Government is left out of revenue.
   arpu:
     small_terminal_class_price_usd_month: 10.0     # the investor's $10 (2026-10-07), held flat; it was $15, the midpoint of the $10 to $20 range
     mounted_terminal_class_price_usd_month: 50.0   # the investor's $50 (2026-10-07), held flat; it was $100; near Iridium voice and data $47, under Certus $259
     phone_class_price_usd_month: 15.0              # its floor (the investor, 2026-10-03); a fallback that needs the chip, never primary
-    minimal_packet_iot_price_usd_month: 4.0        # 48 messages of 340 bytes a day; the IoT counts are named constants (ADR 007), not settings
-    data_iot_price_usd_month: 8.0                  # about 88 kbps, 4 bursts of 100 KB a day plus the messages; its count 25,835,160, half the minimal-packet count at double its price (a named constant)

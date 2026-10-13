@@ -101,7 +101,6 @@ from communications.constants import (
     ARPU_USD_PER_MONTH_DEFAULT,
     BASE_YEAR_DEFAULT,
     COMMS_SHARE_DEFAULT,
-    DATA_IOT_PRICE_USD_MONTH_DEFAULT,
     DOWNLINK_SHARE_DEFAULT,
     GROUND_BASIS_DEFAULT,
     HORIZON_YEARS_DEFAULT,
@@ -111,7 +110,6 @@ from communications.constants import (
     MAX_HORIZON_YEARS,
     MIN_FY,
     MIN_HORIZON_YEARS,
-    MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT,
     MOUNTED_TERMINAL_CLASS_PRICE_USD_MONTH_DEFAULT,
     PHONE_CLASS_PRICE_USD_MONTH_DEFAULT,
     REVENUE_MULTIPLE_DEFAULT,
@@ -501,16 +499,15 @@ class GroundInterfaceDials(BaseModel):
 
 
 class IridiumArpuDials(BaseModel):
-    """The Iridium model's five monthly prices, held flat (investor-set; the YAML's ``arpu:``).
+    """The Iridium model's three monthly prices, held flat (investor-set; the YAML's ``arpu:``).
 
-    Each device class sells every seat its living fleet carries at its own price, and each
-    of the two IoT lines is a fixed book at its own (their device counts are named constants,
-    :data:`~communications.constants.MINIMAL_PACKET_IOT_DEVICES` and
-    :data:`~communications.constants.DATA_IOT_DEVICES`, ADR 007, not settings). The classes
-    run small terminal, mounted terminal, phone class, never phone-first. Every price is
-    above 0 and at most :data:`~communications.constants.ARPU_PRICE_CEILING_USD_MONTH`, and
-    a number, never a boolean (each field is strict: a YAML ``true`` is refused, not read as
-    a price of 1).
+    Each device class sells every seat its living fleet carries at its own price; the classes
+    run small terminal, mounted terminal, phone class, never phone-first. IoT has no price
+    here: the engineering model publishes IoT as capacity, never a count sold or revenue, and
+    IoT's prices are the product case's (ADR 011), so a scenario still setting one fails at
+    load, naming it (``extra="forbid"``). Every price is above 0 and at most
+    :data:`~communications.constants.ARPU_PRICE_CEILING_USD_MONTH`, and a number, never a
+    boolean (each field is strict: a YAML ``true`` is refused, not read as a price of 1).
     Government is left out of revenue (2026-10-04): there is no government price. A lower
     price or a smaller market is a division in the conclusions, never a setting here.
 
@@ -554,28 +551,6 @@ class IridiumArpuDials(BaseModel):
             f"{PHONE_CLASS_PRICE_USD_MONTH_DEFAULT:g} (2026-10-03), its floor: no price "
             "haircut takes it lower. Configurable; a run priced below the floor says so in its "
             "stated assumptions."
-        ),
-    )
-    minimal_packet_iot_price_usd_month: float = Field(
-        default=MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT,
-        gt=0,
-        le=ARPU_PRICE_CEILING_USD_MONTH,
-        strict=True,
-        description=(
-            "Minimal-packet IoT's monthly price per device, dollars. INVESTOR_SET to "
-            f"{MINIMAL_PACKET_IOT_PRICE_USD_MONTH_DEFAULT:g} (the investor's trial price, "
-            "2026-10-04). Configurable."
-        ),
-    )
-    data_iot_price_usd_month: float = Field(
-        default=DATA_IOT_PRICE_USD_MONTH_DEFAULT,
-        gt=0,
-        le=ARPU_PRICE_CEILING_USD_MONTH,
-        strict=True,
-        description=(
-            "Data IoT's monthly price per device, dollars. INVESTOR_SET to "
-            f"{DATA_IOT_PRICE_USD_MONTH_DEFAULT:g} (the investor's trial price, 2026-10-04; "
-            "Iridium's IoT ARPU is 7.78 today, COMM-618). Configurable."
         ),
     )
 
