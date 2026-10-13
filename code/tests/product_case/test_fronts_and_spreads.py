@@ -2,12 +2,14 @@
 
 Constructed summaries and values, so each rule is read alone (the design's E9 and D10; the
 probes' walk W3 the fallback's model); the percentiles' exact cuts on every range a point, the
-single-tone test's dominance and a terminal's off-peak downlink use on the synthetic run. Each
-test names what it exercises, its sample and what counts as success.
+margin read in one unit by the usable test and the check, the single-tone test's dominance and a
+terminal's off-peak downlink use on the synthetic run. Each test names what it exercises, its
+sample and what counts as success.
 """
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -15,6 +17,8 @@ from typing import Any
 import numpy as np
 import pytest
 
+from common.meta import ValidationSeverity
+from product_case.checks import believability_results
 from product_case.config import ProductCaseConfig, load_product_case_config
 from product_case.constants import (
     PickBasis,
@@ -30,7 +34,9 @@ from product_case.monte_carlo import (
     Fronts,
     YearOutcome,
     _basis_spread,
+    central_market,
     fronts_of,
+    outcome_in_market,
     pick_of,
 )
 from product_case.offers import Choice
@@ -216,6 +222,58 @@ def test_every_range_a_point_gives_each_spread_its_one_value(
             for basis in (spread.usable_draws, spread.all_draws):
                 assert (basis.p10, basis.p50, basis.p90) == (value, value, value), spread.field
                 assert basis.headline_rank == 0.5, spread.field
+
+
+def test_the_usable_test_and_the_check_read_one_margin(
+    synthetic_scenario: dict[str, Any],
+    write_scenario: Callable[[dict[str, Any]], Path],
+    synthetic_engineering: dict[str, Any],
+    as_engineering_bytes: Callable[[dict[str, Any]], bytes],
+) -> None:
+    """Objective: one floor, one comparison (the numerics lens's m1): the usable test compares
+    the margin in percent, the number the artifact publishes and the believability check reads,
+    so at a floor equal to a published margin both pass and at the next float above it both
+    fail. On this sample the margin as a fraction against the floor over 100 failed the usable
+    test at FY2032's own published margin while the check passed.
+
+    Sample: the synthetic case with FY2031's fleet cost at $100M (FY2032's margin the lowest);
+    the pick at the central market under a margin floor equal to FY2032's published margin, then
+    the next float above it.
+
+    Expected outcome: at the margin, no margin failure and every margin check passes; at the next
+    float, the margin fails and FY2032's margin check warns, the other years' pass.
+    """
+    for year in synthetic_engineering["years"]:
+        if year["year"] == 2031:
+            year["annual_cost_musd"] = 100.0
+    config = load_product_case_config(write_scenario(synthetic_scenario))
+    view = engineering_view_from_bytes(
+        as_engineering_bytes(synthetic_engineering),
+        path="synthetic",
+        reported_years=config.reported_years,
+    )
+    run = run_product_case(config, view)
+    assert run.pick is not None and run.headline is not None
+    lowest = min(run.headline.years, key=lambda year: year.totals.margin_pct)
+    assert lowest.year == 2032
+    choice = run.choices[run.pick.choice_id].choice
+    floor = lowest.totals.margin_pct
+    for margin_floor, holds in ((floor, True), (math.nextafter(floor, math.inf), False)):
+        synthetic_scenario["floors"]["margin_pct"] = margin_floor
+        side = load_product_case_config(write_scenario(synthetic_scenario))
+        headline = outcome_in_market(side, view, choice, central_market(side))
+        assert (UsableTest.MARGIN not in headline.failing_tests) is holds
+        checks = {
+            result.validation_id.rsplit(".", 1)[-1]: result.severity
+            for result in believability_results(side, headline)
+            if ".margin_at_or_above_floor." in result.validation_id
+        }
+        expected = ValidationSeverity.OK if holds else ValidationSeverity.WARN
+        assert checks == {
+            "2031": ValidationSeverity.OK,
+            "2032": expected,
+            "2033": ValidationSeverity.OK,
+        }
 
 
 def test_the_mid_rank_treats_ties_evenly() -> None:

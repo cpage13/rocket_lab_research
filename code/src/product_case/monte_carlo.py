@@ -26,7 +26,8 @@ reported year t, on the engineering view's network (:mod:`product_case.engineeri
 5. the year's numbers: the busy-hour beams filled F(t) = s x n_small / S_small + (1 - s) x
    n_mounted / S_mounted; each class's revenue n_c x p_c x 12 / 10^6 and the year's
    Rev(t) = (the sum over the four classes of n_c x p_c) x 12 / 10^6, $M a year; the margin
-   1 - C(t) / Rev(t), published x 100, with C(t) the fleet's annual cost; profit Rev(t) - C(t);
+   (1 - C(t) / Rev(t)) x 100, percent, with C(t) the fleet's annual cost (one number, which the
+   usable test compares with the margin floor and the artifact publishes); profit Rev(t) - C(t);
    IoT's uplink use in each period (the busy hours, off-peak), U(t) = the sum over the two IoT
    classes of n_c x (b_c / R(t)), with b_c a device's uplink bits a second in the period and R(t)
    the payload room; the access use, the larger period's sum of n_c x a_c over A(t), with a_c a
@@ -71,7 +72,9 @@ peak. It can move with a price or a terminal change, in steps; the prices never 
 **Operation order.** Every quantity floored or compared with a threshold is computed in round 3's
 operation order (round 3 of the product case's scratch exploration, local): the curve, multiplied
 left to right; the min and the floor at the seats; the fill; each room use as the devices x each
-device's share of the room; the margin; the summed revenue. numpy's elementwise float64 arithmetic
+device's share of the room; the margin (compared in percent, the published form: at round 3's 50
+percent floor, (1 - C / Rev) x 100 >= 50 holds exactly when 1 - C / Rev >= 0.5, round 3's
+fraction, for every margin); the summed revenue. numpy's elementwise float64 arithmetic
 is IEEE arithmetic, as Python's floats are, and its float64 power equals Python's on this platform.
 The access use is read against the published access room A(t) (the design's form), which gives
 round 3's per-beam verdict, 57 attempts a second a beam, in every choice, draw and year of round
@@ -665,7 +668,7 @@ class _YearArrays:
     uplink_offpeak_by_class: tuple[_Floats, ...]
     fill: _Floats
     revenue: _Floats
-    margin: _Floats
+    margin_pct: _Floats
     uplink_busy: _Floats
     uplink_offpeak: _Floats
     access_use: _Floats
@@ -849,7 +852,7 @@ def _year_arrays(
         uplink_offpeak_by_class=offpeak_by_class,
         fill=fill,
         revenue=revenue,
-        margin=1.0 - network.annual_cost_musd / revenue,
+        margin_pct=(1.0 - network.annual_cost_musd / revenue) * PERCENT,
         uplink_busy=busy_by_class[0] + busy_by_class[1],
         uplink_offpeak=offpeak_by_class[0] + offpeak_by_class[1],
         access_use=attempts / network.iot_access_attempts_per_second,
@@ -868,13 +871,17 @@ def _any_year(years: Sequence[_YearArrays], fails: Callable[[_YearArrays], _Flag
     return failing
 
 
-def _failures(years: Sequence[_YearArrays], fill_floor: float, margin_floor: float) -> _Failures:
+def _failures(
+    years: Sequence[_YearArrays], fill_floor: float, margin_floor_pct: float
+) -> _Failures:
     """Each usable test's failing markets (method step 6): a test's condition not held fails it.
 
     Args:
         years: Each reported year's arrays, in order (at least two).
         fill_floor: The fill floor, a share of the busy-hour beams.
-        margin_floor: The margin floor, a fraction (the scenario's percent over 100).
+        margin_floor_pct: The margin floor, percent, as the scenario sets it: compared with the
+            margin in percent, the number the artifact publishes and the believability check
+            reads, so the usable test and the check never part over a last bit.
 
     Returns:
         The failing markets of each test.
@@ -884,7 +891,7 @@ def _failures(years: Sequence[_YearArrays], fill_floor: float, margin_floor: flo
         rising = rising | ~(later.revenue > earlier.revenue)
     return _Failures(
         fill=_any_year(years, lambda year: ~(year.fill >= fill_floor)),
-        margin=_any_year(years, lambda year: ~(year.margin >= margin_floor)),
+        margin=_any_year(years, lambda year: ~(year.margin_pct >= margin_floor_pct)),
         iot_uplink_busy=_any_year(years, lambda year: ~(year.uplink_busy <= FULL_USE)),
         iot_uplink_offpeak=_any_year(years, lambda year: ~(year.uplink_offpeak <= FULL_USE)),
         random_access=_any_year(years, lambda year: ~(year.access_use <= FULL_USE)),
@@ -915,7 +922,7 @@ def _evaluate(
             )
             for network, offered in zip(engineering.years, offers.years, strict=True)
         )
-        failures = _failures(years, config.floors.fill, config.floors.margin_pct / PERCENT)
+        failures = _failures(years, config.floors.fill, config.floors.margin_pct)
     return _Evaluation(years=years, failures=failures, usable=~failures.any_test())
 
 
@@ -1018,7 +1025,7 @@ def _year_outcome(
         totals=YearTotals(
             revenue_musd=revenue,
             fleet_annual_cost_musd=network.annual_cost_musd,
-            margin_pct=float(arrays.margin[0] * PERCENT),
+            margin_pct=float(arrays.margin_pct[0]),
             profit_musd=revenue - network.annual_cost_musd,
             busy_hour_beams_filled=float(arrays.fill[0]),
             iot_uplink_use_busy=float(arrays.uplink_busy[0]),
@@ -1314,7 +1321,7 @@ def _field_values(field: SpreadField, arrays: _YearArrays) -> _Floats:
         case SpreadField.REVENUE:
             return arrays.revenue
         case SpreadField.MARGIN:
-            return arrays.margin * PERCENT
+            return arrays.margin_pct
         case SpreadField.IOT_UPLINK_USE_BUSY:
             return arrays.uplink_busy
         case SpreadField.IOT_UPLINK_USE_OFFPEAK:
