@@ -205,6 +205,30 @@ REFUSALS: list[tuple[str, Mutation, str, str]] = [
         "is above the high end",
     ),
     (
+        "a network response below 0",
+        _set(("market", "gamma", "low"), -0.1),
+        "market.gamma.low",
+        "greater than or equal to 0",
+    ),
+    (
+        "a price response below 0",
+        _set(("market", "epsilon", "low"), -0.5),
+        "market.epsilon.low",
+        "greater than or equal to 0",
+    ),
+    (
+        "a service response below 0",
+        _set(("market", "eta", "low"), -0.1),
+        "market.eta.low",
+        "greater than or equal to 0",
+    ),
+    (
+        "a negative seed",
+        _set(("market", "seed"), -20261006),
+        "market.seed",
+        "greater than or equal to 0",
+    ),
+    (
         "draws below 9",
         _set(("market", "draws"), 8),
         "market.draws",
@@ -343,7 +367,8 @@ def test_every_refusal_names_its_field(
     not the reported years'; fewer than two reported years or years out of order; a range whose
     low end is above its high end; draws below 9; a fill or robust floor outside (0, 1]; a
     margin floor outside (0, 100) percent; an unknown key; a boolean or a quoted number where a
-    number goes; a number that is not finite) and for the positivity each path needs.
+    number goes; a number that is not finite), for the positivity each path needs, and for a
+    response's low end below 0 and a negative seed (the review's m9 and m6).
 
     Sample: the shipped scenario with one change, written to a temporary YAML file and loaded
     through ``load_product_case_config`` (so YAML's own booleans, quotes and ``.inf`` reach the

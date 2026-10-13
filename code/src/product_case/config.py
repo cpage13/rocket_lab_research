@@ -11,8 +11,9 @@ proportion, never a setting), each class's usage path, the market (draws, seed a
 responses' ranges) and the usable floors. The validators refuse, naming the field: an end-price
 list that does not open with its start price or does not fall strictly; a usage-scale list that
 does not open at 1 or does not rise; a usage path whose length is not the reported years'; fewer
-than two reported years or years out of order; a range whose low end is above its high end;
-draws below 9; a fill or robust floor outside (0, 1]; a margin floor outside (0, 100) percent.
+than two reported years or years out of order; a range whose low end is below 0 or above its
+high end; a negative seed; draws below 9; a fill or robust floor outside (0, 1]; a margin floor
+outside (0, 100) percent.
 
 Every default is a named constant of :mod:`product_case.constants`, and the shipped scenario
 holds exactly the defaults, its own label aside (a test ties the two). Each scenario value has
@@ -405,11 +406,22 @@ class UsageDials(BaseModel):
 
 
 class ResponseRange(BaseModel):
-    """The range one market response is drawn from, uniformly: its low end and its high end."""
+    """The range one market response is drawn from, uniformly: its low end and its high end.
+
+    The low end is at least 0, so in no drawn market does a bigger network, a lower price or
+    more service bring fewer customers; the high end is at least the low end.
+    """
 
     model_config = _FROZEN_STRICT
 
-    low: float = Field(strict=True, description="The response's low end (an exponent).")
+    low: float = Field(
+        ge=0,
+        strict=True,
+        description=(
+            "The response's low end, an exponent of at least 0 (a bigger network, a lower price "
+            "or more service never brings fewer customers)."
+        ),
+    )
     high: float = Field(strict=True, description="The response's high end (an exponent).")
 
     @model_validator(mode="after")
@@ -438,8 +450,13 @@ class MarketDials(BaseModel):
     )
     seed: int = Field(
         default=SEED_DEFAULT,
+        ge=0,
         strict=True,
-        description="The seed of the standard generator that draws the markets.",
+        description=(
+            "The seed of the standard generator that draws the markets, at least 0 (the generator "
+            "seeds from a whole number's size, so a negative seed would draw its positive's "
+            "markets under another name)."
+        ),
     )
     gamma: ResponseRange = Field(
         default_factory=lambda: ResponseRange(low=GAMMA_LOW_DEFAULT, high=GAMMA_HIGH_DEFAULT),
