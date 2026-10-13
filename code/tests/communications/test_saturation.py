@@ -5642,30 +5642,45 @@ def test_a_reading_the_curve_cannot_give_is_refused_with_a_typed_error() -> None
         )
 
 
+ROWS_TOO_FAR_APART = "the two rows' values lie too far apart for this reading's arithmetic"
+"""The refusal's cause between two rows whose ratio leaves a float's range."""
+
+FIRST_ROW_TOO_LARGE = "that value is too large for this reading's arithmetic"
+"""The refusal's cause below the first row when the fleet times its value leaves a float's range."""
+
+
 @pytest.mark.parametrize(
-    ("low_beams", "high_beams", "fleet"),
-    [(5e-324, 1e300, 582), (1e300, 5e-324, 582), (1.5e308, 1.5e308, 341)],
+    ("low_beams", "high_beams", "fleet", "cause"),
+    [
+        (5e-324, 1e300, 582, ROWS_TOO_FAR_APART),
+        (1e300, 5e-324, 582, ROWS_TOO_FAR_APART),
+        (1.5e308, 1.5e308, 341, FIRST_ROW_TOO_LARGE),
+    ],
     ids=["a ratio past a float's range", "a ratio under a float's range", "below the first row"],
 )
 def test_a_reading_past_a_floats_range_is_refused_with_a_typed_error(
-    low_beams: float, high_beams: float, fleet: int
+    low_beams: float, high_beams: float, fleet: int, cause: str
 ) -> None:
-    """Objective: a reading a float cannot hold is the curve's typed error, never an infinity
-    published as a number or a bare arithmetic ValueError, whatever finite values the rows hold.
+    """Objective: a reading whose arithmetic leaves a float's range (the rows' values too far
+    apart, or the fleet times the first row's value too large) is the curve's typed error naming
+    that cause, never an infinity published as a number or a bare arithmetic ValueError, though
+    the reading itself may be a finite number.
 
     Sample: a phone-class curve of two rows, 342 and 992 satellites, its useful beams 5e-324 and
-    1e300 (their ratio past a float's range), then 1e300 and 5e-324 (their ratio under it, 0),
-    each read at 582 between the rows; then 1.5e308 at the first row, read at 341 below it (341 x
-    1.5e308 past a float's range).
+    1e300 (their ratio past a float's range; the reading at 582 is 7.6e-13), then 1e300 and
+    5e-324 (their ratio under it, 0; the reading 6.5e-12), each read at 582 between the rows;
+    then 1.5e308 at the first row, read at 341 below it (341 x 1.5e308 past a float's range; the
+    reading 1.4956e308).
 
-    Expected outcome: SaturationCurveError naming the class's useful beams, the fleet and a
-    float's range; at each row the row's own value still reads.
+    Expected outcome: SaturationCurveError naming the class's useful beams, the fleet and the
+    cause, the rows' values too far apart between the rows and the first row's value too large
+    below it; at each row the row's own value still reads.
     """
     low, high = _row(342, low_beams, 1.0), _row(992, high_beams, 2.0)
     curve = power_law_curve((low, high))
     with pytest.raises(
         SaturationCurveError,
-        match=f"the phone_class curve's useful beams at {fleet} satellites, .* float's range",
+        match=f"the phone_class curve's useful beams at {fleet} satellites, .*: {cause}",
     ):
         useful_beams_at(curve, PHONE, fleet)
     assert useful_beams_at(curve, PHONE, 342) == low_beams

@@ -1530,12 +1530,14 @@ class _Bracket:
 
         Raises:
             SaturationCurveError: Between two rows at which the quantity is not positive at
-                both (its logarithm does not exist), or for a reading a float cannot hold: the
-                two rows' ratio past a float's range either way, or a result too large (never
-                on a computed curve, whose values lie within a few orders of magnitude). A
-                loaded curve's rows are never 0 (the completeness check refuses one), so the
-                first guards a curve built in Python; the second, any curve whose values span
-                too far.
+                both (its logarithm does not exist), or where this reading's arithmetic leaves
+                a float's range though the reading itself may not: below the first row, the
+                fleet times the first row's value; between two rows, the rows' ratio (their
+                values too far apart), or a reading so near a float's largest value that it
+                rounds past it (never on a computed curve, whose values lie within a few orders
+                of magnitude). A loaded curve's rows are never 0 (the completeness check refuses
+                one), so the first guards a curve built in Python; the second, any curve whose
+                values span too far.
         """
         high, low = self.high, self.low
         name = f"the {self.curve.device_class.value} curve's {quantity.name}"
@@ -1548,7 +1550,9 @@ class _Bracket:
             if not math.isfinite(reading):
                 raise SaturationCurveError(
                     f"{name} at {self.fleet} satellites, below the first row's "
-                    f"{quantity.value_of(high)} at {high.fleet}, lies past a float's range"
+                    f"{quantity.value_of(high)} at {high.fleet}, cannot be read: that value is "
+                    "too large for this reading's arithmetic (the fleet times it leaves a "
+                    "float's range)"
                 )
             return reading
         low_value, high_value = quantity.value_of(low), quantity.value_of(high)
@@ -1559,16 +1563,22 @@ class _Bracket:
                 f"{high_value} at {high.fleet}"
             )
         ratio = high_value / low_value
-        out_of_range = SaturationCurveError(
+        between = (
             f"{name} at {self.fleet} satellites, between {low_value} at {low.fleet} satellites "
-            f"and {high_value} at {high.fleet}, lies past a float's range"
+            f"and {high_value} at {high.fleet}, cannot be read: "
         )
         if not (math.isfinite(ratio) and ratio > 0):
-            raise out_of_range
+            raise SaturationCurveError(
+                f"{between}the two rows' values lie too far apart for this reading's arithmetic "
+                "(their ratio leaves a float's range)"
+            )
         try:
             return math.exp(math.log(low_value) + self.fraction * math.log(ratio))
         except OverflowError as exc:
-            raise out_of_range from exc
+            raise SaturationCurveError(
+                f"{between}the reading lies so near a float's largest value that this reading's "
+                "arithmetic rounds past it"
+            ) from exc
 
 
 def class_curve_of(curve: SaturationCurve, device_class: DeviceClass) -> ClassCurve:
