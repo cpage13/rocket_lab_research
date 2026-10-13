@@ -902,9 +902,10 @@ def build_iridium_artifact(
     Pure assembly: no IO and no config. The cost totals, the final year and each year's
     launches, living fleet and annualized cost come from the shared fleet-and-cost record
     (``fleet``); the orbit block and the physics block's IoT constants are named constants of
-    :mod:`communications.constants`, which no setting moves; everything else, the settings it
-    publishes among it, comes from the Iridium record (``iridium``), so the artifact always
-    describes exactly the run it was built from.
+    :mod:`communications.constants`, which no setting moves; the provenance's model name and
+    schema version are this module's, its scenario path and stamp the caller's; everything else,
+    the settings it publishes among it, comes from the Iridium record (``iridium``), so the
+    artifact always describes exactly the run it was built from.
 
     Args:
         fleet: The run's shared fleet-and-cost record (``IridiumRun.fleet``).

@@ -1492,10 +1492,11 @@ def test_near_zero_share_does_not_publish_a_full_margin_on_an_empty_fleet(
 def test_halving_the_downlink_share_halves_people_capacity_and_the_pool_only(
     iridium_yaml: Path, committed_saturation_curve: SaturationCurve
 ) -> None:
-    """Objective: d scales people, each class's capacity and the pool (ADR 008), the off-peak
-    per-user rate following the pool only where the pool caps it and the busy-hour per-user rate
-    not moving, while the rest of the frame, 1 - d, scales IoT's uplink, payload and single-tone
-    rooms and IoT's random-access room moves with neither: what the stated line on d says.
+    """Objective: d scales people (and the curve's capacity behind them, ``read_fleet``) and the
+    pool (ADR 008), the off-peak per-user rate following the pool only where the pool caps it
+    and the busy-hour per-user rate not moving, while the rest of the frame, 1 - d, scales IoT's
+    uplink, payload and single-tone rooms and IoT's random-access room moves with neither: what
+    the stated line on d says.
 
     Sample: the shipped scenario at d = 0.67 and at d = 0.335, read at the 2,000 reading.
 
@@ -1504,10 +1505,10 @@ def test_halving_the_downlink_share_halves_people_capacity_and_the_pool_only(
     each d the lower of its pool and its own rate x busy-hour share over off-peak share (at 0.67
     the small terminal's own ratio caps it, 10.0 Mbps; at 0.335 every pool does); its busy-hour
     rate, useful beams, the share of maximum use, U, maximum use, the satellite's peak and the
-    markers unchanged. IoT's
-    uplink, payload and single-tone rooms there grow by (1 - 0.335) / (1 - 0.67), about 2.015,
-    and its two access rooms stay equal, so minimal-packet IoT's capacity (random access binding
-    at both) is unchanged and data IoT's payload view (binding at both) grows by that ratio.
+    markers unchanged. IoT's uplink, payload and single-tone rooms there grow by
+    (1 - 0.335) / (1 - 0.67), about 2.015, and its two access rooms stay equal, so minimal-packet
+    IoT's capacity (random access binding at both) is unchanged and data IoT's payload view
+    (binding at both) grows by that ratio.
     """
     config = load_comms_config(iridium_yaml)
     full = run_iridium_model(config, committed_saturation_curve)
@@ -1550,7 +1551,11 @@ def test_halving_the_downlink_share_halves_people_capacity_and_the_pool_only(
         for marker in markers:
             assert getattr(half_block, marker) == getattr(full_block, marker), marker
     small_at_shipped_d = full.iridium.classes[0]
-    assert small_at_shipped_d.per_user_rate_offpeak_mbps == 10.0 < small_at_shipped_d.beam_pool_mbps
+    assert (
+        small_at_shipped_d.per_user_rate_offpeak_mbps
+        == OFFPEAK_RATE_MBPS[0]
+        < small_at_shipped_d.beam_pool_mbps
+    )
     uplink_growth = (1.0 - 0.335) / (1.0 - 0.67)
     full_room = full.iridium.saturation.readings[1].iot
     half_room = half.iridium.saturation.readings[1].iot
