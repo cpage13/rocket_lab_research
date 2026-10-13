@@ -1047,9 +1047,51 @@ def _money(value_musd: float) -> str:
     return f"${value_musd:,.1f}M"
 
 
+_IOT_CLASS_NAMES: Final[Mapping[ProductClass, str]] = MappingProxyType(
+    {ProductClass.MINIMAL_PACKET_IOT: "minimal-packet IoT", ProductClass.DATA_IOT: "data IoT"}
+)
+"""The two IoT classes as the stated lines name them (a usage edge is always an IoT class's)."""
+
+
+def _usage_edge_clause(edges: Sequence[ProductClass], chosen: ChoiceSummary) -> str:
+    """The clause the usage-stop line adds when the pick sits on an upper usage edge: each IoT
+    class whose usage stops at the top of its list, with its scale there ("" when none does).
+
+    Args:
+        edges: The pick's usage edges, in class order (at most the two IoT classes).
+        chosen: The pick's summary, whose choice holds the two usage scales.
+
+    Returns:
+        The clause, opening with "; ", or "" when the pick is on no upper usage edge.
+    """
+    scales = {
+        ProductClass.MINIMAL_PACKET_IOT: chosen.choice.minimal_packet_scale,
+        ProductClass.DATA_IOT: chosen.choice.data_iot_scale,
+    }
+    if not edges:
+        return ""
+    if len(edges) == 1:
+        (only,) = edges
+        return (
+            f"; {_IOT_CLASS_NAMES[only]}'s usage stops at x{scales[only]:g}, the top of its usage "
+            "list (an upper usage edge, warned)"
+        )
+    first, second = edges
+    return (
+        f"; {_IOT_CLASS_NAMES[first]}'s usage stops at x{scales[first]:g} and "
+        f"{_IOT_CLASS_NAMES[second]}'s at x{scales[second]:g}, each the top of its usage list "
+        "(upper usage edges, warned)"
+    )
+
+
 def _usage_stop_line(run: ProductCaseRun, chosen: ChoiceSummary) -> str:
     """The stated line on what stops the usage, as this run's pick came: by the robust floor, or,
     when no candidate reaches it, by the fallback (the design's D19), every number the run's.
+
+    The robust branch names the three stops: the floor, the median's peak and the top of an IoT
+    class's usage list. On either basis, a pick on an upper usage edge adds each IoT class whose
+    usage stops at the top of its list, with its scale (:func:`_usage_edge_clause`; the artifact
+    warns of it, ``warning.pick_on_upper_usage_edge``).
 
     Args:
         run: A run with a pick.
@@ -1069,7 +1111,9 @@ def _usage_stop_line(run: ProductCaseRun, chosen: ChoiceSummary) -> str:
     if pick.basis is PickBasis.ROBUST_FLOOR_MET:
         why = (
             "What stops the usage: the pick's IoT usage rises while its median summed revenue "
-            f"rises and its usable draws stay at or above {floor}; every candidate shares the "
+            f"rises and its usable draws stay at or above {floor}, and stops at whichever comes "
+            "first: that floor, the median's peak, or the top of an IoT class's usage list, where "
+            "the pick then sits on an upper usage edge, warned; every candidate shares the "
             "terminals' fill, so IoT's own failures may take only the draws between the fill's "
             "share and that floor."
         )
@@ -1079,10 +1123,11 @@ def _usage_stop_line(run: ProductCaseRun, chosen: ChoiceSummary) -> str:
             "candidate, the first on the candidates' front, ties to the higher median, and its "
             "usage is that candidate's; the run warns of it and never lowers a price."
         )
+    edges = _usage_edge_clause(pick.usage_edges, chosen)
     return (
         f"{why} This run's pick: minimal-packet IoT x{chosen.choice.minimal_packet_scale:g} and "
         f"data IoT x{chosen.choice.data_iot_scale:g}, usable in {chosen.usable_draws:,} of "
-        f"{config.market.draws:,} draws ({pick.basis})."
+        f"{config.market.draws:,} draws ({pick.basis}){edges}."
     )
 
 

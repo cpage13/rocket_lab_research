@@ -146,19 +146,38 @@ def _no_change(_: dict[str, Any]) -> None:
     """No change."""
 
 
-STATED_SAMPLES: tuple[tuple[str, Change, Change, str, bool], ...] = (
-    ("the synthetic case", _no_change, _no_change, "robust_floor_met", False),
-    ("the anchors' prices, E6", _anchors_prices, _no_change, "most_usable_fallback", False),
+STATED_SAMPLES: tuple[tuple[str, Change, Change, str, bool, tuple[str, ...]], ...] = (
+    (
+        "the synthetic case",
+        _no_change,
+        _no_change,
+        "robust_floor_met",
+        False,
+        ("minimal_packet_iot", "data_iot"),
+    ),
+    (
+        "the anchors' prices, E6",
+        _anchors_prices,
+        _no_change,
+        "most_usable_fallback",
+        False,
+        ("minimal_packet_iot",),
+    ),
     (
         "a hundredth of the tone room",
         _no_change,
         _tone_room_a_hundredth,
         "most_usable_fallback",
         True,
+        (),
     ),
 )
 """Each sample of the stated lines' test: its scenario change, its engineering change, the pick's
-basis it reaches, and whether some draws pass the single-tone room alone."""
+basis it reaches, whether some draws pass the single-tone room alone, and the IoT classes whose
+usage the pick takes at the top of their lists (its upper usage edges: both, one, none)."""
+
+IOT_NAMES: dict[str, str] = {"minimal_packet_iot": "minimal-packet IoT", "data_iot": "data IoT"}
+"""The two IoT classes as the stated lines name them, keyed by their published class value."""
 
 
 def _floor_draws(draws: int, robust: float) -> int:
@@ -197,7 +216,9 @@ def _stated_lines(artifact: dict[str, Any], config: ProductCaseConfig) -> list[s
     if pick["basis"] == "robust_floor_met":
         why = (
             "What stops the usage: the pick's IoT usage rises while its median summed revenue "
-            f"rises and its usable draws stay at or above {floor}; every candidate shares the "
+            f"rises and its usable draws stay at or above {floor}, and stops at whichever comes "
+            "first: that floor, the median's peak, or the top of an IoT class's usage list, where "
+            "the pick then sits on an upper usage edge, warned; every candidate shares the "
             "terminals' fill, so IoT's own failures may take only the draws between the fill's "
             "share and that floor."
         )
@@ -207,6 +228,24 @@ def _stated_lines(artifact: dict[str, Any], config: ProductCaseConfig) -> list[s
             "candidate, the first on the candidates' front, ties to the higher median, and its "
             "usage is that candidate's; the run warns of it and never lowers a price."
         )
+    scale = {
+        "minimal_packet_iot": chosen["minimal_packet_scale"],
+        "data_iot": chosen["data_iot_scale"],
+    }
+    tops = pick["usage_edges"]
+    if len(tops) == 1:
+        edge = (
+            f"; {IOT_NAMES[tops[0]]}'s usage stops at x{scale[tops[0]]:g}, the top of its usage "
+            "list (an upper usage edge, warned)"
+        )
+    elif len(tops) == 2:
+        edge = (
+            f"; {IOT_NAMES[tops[0]]}'s usage stops at x{scale[tops[0]]:g} and "
+            f"{IOT_NAMES[tops[1]]}'s at x{scale[tops[1]]:g}, each the top of its usage list "
+            "(upper usage edges, warned)"
+        )
+    else:
+        edge = ""
     last = artifact["headline"]["years"][-1]
     iot = {entry["product_class"]: entry["iot"] for entry in last["classes"] if entry["iot"]}
     basis = artifact["spreads"]["all_draws_basis"]
@@ -243,7 +282,7 @@ def _stated_lines(artifact: dict[str, Any], config: ProductCaseConfig) -> list[s
         "no IoT count is ever set.",
         f"{why} This run's pick: minimal-packet IoT x{chosen['minimal_packet_scale']:g} and data "
         f"IoT x{chosen['data_iot_scale']:g}, usable in {chosen['usable_draws']:,} of "
-        f"{market.draws:,} draws ({pick['basis']}).",
+        f"{market.draws:,} draws ({pick['basis']}){edge}.",
         "Each IoT class's usage and time basis differ from the engineering capacity's: the "
         "engineering artifact counts each class's devices alone at its reference usage, averaged "
         "over the day; the product case sells at the pick's usage by period "
@@ -266,7 +305,7 @@ def _stated_lines(artifact: dict[str, Any], config: ProductCaseConfig) -> list[s
 
 
 @pytest.mark.parametrize(
-    ("name", "scenario_change", "engineering_change", "basis", "tone_binds"),
+    ("name", "scenario_change", "engineering_change", "basis", "tone_binds", "edges"),
     STATED_SAMPLES,
     ids=[sample[0] for sample in STATED_SAMPLES],
 )
@@ -276,6 +315,7 @@ def test_the_stated_assumptions_are_the_runs_line_by_line(
     engineering_change: Change,
     basis: str,
     tone_binds: bool,
+    edges: tuple[str, ...],
     synthetic_scenario: dict[str, Any],
     synthetic_engineering: dict[str, Any],
     write_scenario: Writer,
@@ -287,20 +327,24 @@ def test_the_stated_assumptions_are_the_runs_line_by_line(
     the shipped settings is the failure code_switch M1 found in p6): the 13 lines equal the lines
     this test writes from the artifact's own published values and the scenario, never the shipped
     run's; the usage-stop line follows the pick's basis (the spec lens's M1: the robust floor's
-    mechanism, or the fallback in the design's D19 words); the data IoT anchor at twice Iridium's
-    IoT revenue today, a run rate (montecarlo M1, the spec lens's m1); the population sentence
-    (m5); the all-draw count equal to the count this test recomputes from the pick's four uses in
-    each of the 50 draws (montecarlo M2), the single-tone room among them (the numerics lens's
-    m4).
+    mechanism, or the fallback in the design's D19 words), its robust account names the three
+    stops (the floor, the median's peak, the top of an IoT class's usage list), and on either
+    basis it names each IoT class whose usage stops at the top of its list, warned (the re-check's
+    m1); the data IoT anchor at twice Iridium's IoT revenue today, a run rate (montecarlo M1, the
+    spec lens's m1); the population sentence (m5); the all-draw count equal to the count this
+    test recomputes from the pick's four uses in each of the 50 draws (montecarlo M2), the
+    single-tone room among them (the numerics lens's m4).
 
-    Sample: the synthetic case (robust_floor_met), the anchors' prices, $47 and $259 held flat
-    (E6, most_usable_fallback), and a hundredth of the single-tone room (most_usable_fallback,
-    some draws past the tone room alone); each 50 draws, so a count copied from the shipped 73
-    cannot pass.
+    Sample: the synthetic case (robust_floor_met, both IoT classes at the top of their lists),
+    the anchors' prices, $47 and $259 held flat (E6, most_usable_fallback, minimal-packet IoT at
+    the top of its list), and a hundredth of the single-tone room (most_usable_fallback, some
+    draws past the tone room alone, no class at its top); each 50 draws, so a count copied from
+    the shipped 73 cannot pass.
 
-    Expected outcome: the pick's basis as the sample reaches it; the artifact's assumptions equal
-    the 13 lines written from the run; the label's count equal to the recount; where the tone room
-    binds, the recount without it smaller (the tone room counted).
+    Expected outcome: the pick's basis and usage edges as the sample reaches them, the edge
+    warning raised exactly when there is an edge; the artifact's assumptions equal the 13 lines
+    written from the run; the label's count equal to the recount; where the tone room binds, the
+    recount without it smaller (the tone room counted).
     """
     scenario_change(synthetic_scenario)
     engineering_change(synthetic_engineering)
@@ -313,6 +357,9 @@ def test_the_stated_assumptions_are_the_runs_line_by_line(
     )
     config = load_product_case_config(scenario_path)
     assert artifact["pick"]["basis"] == basis
+    assert artifact["pick"]["usage_edges"] == list(edges)
+    severity = {r["validation_id"]: r["severity"] for r in artifact["meta"]["validation_results"]}
+    assert severity["warning.pick_on_upper_usage_edge"] == ("warn" if edges else "pass")
     assert artifact["assumptions"] == _stated_lines(artifact, config)
     view = engineering_view_from_bytes(
         as_engineering_bytes(synthetic_engineering),

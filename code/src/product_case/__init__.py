@@ -43,9 +43,11 @@ formula is a catalog entry the artifact publishes in ``meta.formulas``.
 **What stops the usage.** Every candidate shares the terminals' fill, so IoT's own failures may
 take only the markets between the fill's share and the robust floor: the pick's usage rises
 while its median rises and its share stays at or above the floor, and stops at whichever comes
-first; it can move in steps with a price or a terminal change, never the prices. When no
-candidate reaches the floor, the pick is the most usable candidate (ties to the higher median),
-its usage that candidate's, warned; no price is ever lowered.
+first: the floor, the median's peak, or the top of an IoT class's usage list; it can move in
+steps with a price or a terminal change, never the prices. When no candidate reaches the floor,
+the pick is the most usable candidate (ties to the higher median), its usage that candidate's,
+warned. On either basis, a pick whose usage is the top of an IoT class's list sits on an upper
+usage edge, warned; no price is ever lowered.
 
 **The investor's words that set the rules**, verbatim and dated. The method's own rules: the
 case kept apart from the engineering model (2026-10-05: "you don't want to mix your market with

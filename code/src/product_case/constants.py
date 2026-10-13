@@ -1321,11 +1321,13 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                     "more IoT usage fails IoT's room, access or tone time in more of the filled "
                     "markets and drops the strongest of them; so the usage rises only while its "
                     "usable share stays at or above the robust floor and its median still rises, "
-                    "and the floor or the median's peak stops it, whichever comes first. A change "
-                    "that moves the terminals' fill or an IoT price can move the usage, in steps. "
-                    "When no candidate reaches the floor, the pick is the most usable candidate, "
-                    "the first on the candidates' front (ties to the higher median), and its usage "
-                    "is that candidate's, warned."
+                    "and the floor, the median's peak, or the top of an IoT class's usage list "
+                    "stops it, whichever comes first. A change that moves the terminals' fill or "
+                    "an IoT price can move the usage, in steps. When no candidate reaches the "
+                    "floor, the pick is the most usable candidate, the first on the candidates' "
+                    "front (ties to the higher median), and its usage is that candidate's, warned. "
+                    "On either basis, a pick whose usage is the top of an IoT class's list sits on "
+                    "an upper usage edge (usage_edges), warned."
                 ),
                 inputs=(
                     "choices[].usable_share",
