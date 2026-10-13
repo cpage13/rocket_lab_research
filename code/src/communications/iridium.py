@@ -43,9 +43,9 @@ that the curve was computed for the config's own inputs (the identity check,
    class whose curve reaches no saturation number, its final fleet past the fleet the curve
    names it not reached by, raises :class:`BindingLimitUnmeasuredError`: the curve does not
    measure the elasticity of capacity past that fleet, so which limit binds there is not known.
-5. **The record**, :class:`IridiumRecord`: everything the ``iridium-v6`` artifact publishes
-   beside the shared fleet-and-cost record, with the stated assumptions, so the artifact
-   builder reads no dial and holds no Optional check.
+5. **The record**, :class:`IridiumRecord`: everything the ``iridium-v7`` artifact publishes
+   beside the shared fleet-and-cost record (each IoT class's engineering usage among it), with
+   the stated assumptions, so the artifact builder reads no dial and holds no Optional check.
 
 Every list of classes runs small terminal, mounted terminal, phone class (the order of
 :class:`~communications.constants.DeviceClass`), never phone-first. No quantity that does not
@@ -489,9 +489,9 @@ class SaturationRecord:
 class IridiumRecord:
     """The Iridium family's record of a run, read beside its shared fleet-and-cost record.
 
-    It mirrors the ``iridium-v6`` artifact's Iridium blocks (the class blocks, each year's
-    Iridium lines, the saturation block and the assumptions) and carries
-    what the artifact reads from the Iridium dials, so the builder needs no config. The
+    It mirrors the ``iridium-v7`` artifact's Iridium blocks (the class blocks, each IoT class's
+    engineering usage, each year's Iridium lines, the saturation block and the assumptions) and
+    carries what the artifact reads from the Iridium dials, so the builder needs no config. The
     deployment, the living fleet and every cost line are the shared record's; nothing here
     repeats them.
 
@@ -507,6 +507,8 @@ class IridiumRecord:
         cost_per_satellite_year_musd: One satellite's annualized cost at the final year's
             launch price, $M (defined even when no cohort flies).
         classes: Each class's block, in class order.
+        iot_classes: Each IoT class's engineering usage and its loads a day, in IoT class
+            order: the usage each IoT capacity is read at, never a count of devices (ADR 011).
         years: Each model year's Iridium lines, in the shared record's order.
         saturation: The curve and its readings.
         assumptions: The stated assumptions, in order.
@@ -521,6 +523,7 @@ class IridiumRecord:
     coverage_floor_reached_year: int | None
     cost_per_satellite_year_musd: float
     classes: tuple[ClassRecord, ...]
+    iot_classes: tuple[IotClassRecord, ...]
     years: tuple[YearRecord, ...]
     saturation: SaturationRecord
     assumptions: tuple[str, ...]
@@ -1096,6 +1099,25 @@ def iot_room(
     )
 
 
+def _iot_class_records() -> tuple[IotClassRecord, ...]:
+    """Each IoT class's engineering usage and its loads a day, in IoT class order: the usage
+    every IoT capacity is read at (:data:`~communications.constants.IOT_ENGINEERING_USAGE`)."""
+    records: list[IotClassRecord] = []
+    for iot_class in IotClass:
+        usage = IOT_ENGINEERING_USAGE[iot_class]
+        records.append(
+            IotClassRecord(
+                iot_class=iot_class,
+                messages_per_day=usage.messages_per_day,
+                bursts_per_day=usage.bursts_per_day,
+                uplink_bits_per_day=usage.uplink_bits_per_day,
+                access_attempts_per_day=usage.access_attempts_per_day,
+                single_tone_messages_per_day=usage.single_tone_messages_per_day,
+            )
+        )
+    return tuple(records)
+
+
 def _marginal_intervals(
     curve: SaturationCurve,
     class_curve: ClassCurve,
@@ -1565,6 +1587,7 @@ def run_iridium_model(config: CommsConfig, curve: SaturationCurve) -> IridiumRun
         ),
         cost_per_satellite_year_musd=cost_per_satellite_year_musd,
         classes=classes,
+        iot_classes=_iot_class_records(),
         years=years,
         saturation=SaturationRecord(
             curve_path=dials.saturation.curve_path,

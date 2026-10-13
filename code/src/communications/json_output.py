@@ -4,12 +4,14 @@ Runs an Iridium scenario through the Iridium entry,
 :func:`communications.iridium.run_iridium_model`, on its saturation curve, and writes the
 promoted JSON artifact, schema :data:`IRIDIUM_SCHEMA_VERSION`: a small provenance header,
 the trajectory summary (the shared fleet-and-cost record's totals beside the Iridium
-record's floor year and cost per satellite-year), the orbit scenario, the Iridium physics,
-every device class's block (its price, usage, physics, markers, limit and marginal
-intervals), every model year's lines (the shared fleet and cost beside each class's people,
-revenue and own margin), the saturation block (the curve's identity, the downlink share and
-the panel factor, the readings at the reported fleets, the phone class's band saturation
-numbers and the curve's limits) and the stated assumptions. Every block that lists the
+record's floor year and cost per satellite-year), the orbit scenario, the Iridium physics
+(the IoT room's constants among it), every device class's block (its price, usage, physics,
+markers, limit and marginal intervals), each IoT class's engineering usage, every model year's
+lines (the shared fleet and cost beside each class's useful beams, people, revenue and own
+margin, and IoT's room with each IoT class's device capacity alone, ADR 011), the saturation
+block (the curve's identity, the downlink share and the panel factor, the readings at the
+reported fleets with IoT's room at each, the phone class's band saturation numbers and the
+curve's limits) and the stated assumptions. Every block that lists the
 classes lists them small terminal, mounted terminal, phone class, never phone-first. It
 mirrors the data-center promotion pattern (``data_center.json_output`` + the
 ``rklb-value --promote`` path): a typed Pydantic artifact serialized by the shared
@@ -85,11 +87,22 @@ from common.file_io import (
 from common.input_manifest import SourceStatus
 from communications.config import load_comms_config
 from communications.constants import (
+    DATA_IOT_BURST_BYTES,
+    IOT_MAC_EFFICIENCY,
+    IOT_MESSAGE_AIRTIME_HIGH_S,
+    IOT_MESSAGE_AIRTIME_LOW_S,
+    IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH,
+    IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW,
+    IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND,
+    MINIMAL_PACKET_IOT_MESSAGE_BYTES,
+    NB_IOT_TONE_HZ,
     ORBIT_ALTITUDE_KM_SCENARIO,
     ORBIT_INCLINATION_DEG_SCENARIO,
     ORBIT_SCENARIO_BASIS,
     ORBIT_SCENARIO_SOURCE_STATUS,
     DeviceClass,
+    IotClass,
+    IotView,
 )
 from communications.engine import FleetTrajectory
 from communications.iridium import (
@@ -97,6 +110,9 @@ from communications.iridium import (
     ClassReadingRecord,
     ClassRecord,
     ClassYearRecord,
+    IotClassCapacityRecord,
+    IotClassRecord,
+    IotRoomRecord,
     IridiumRecord,
     MarginalIntervalRecord,
     ReadingRecord,
@@ -115,25 +131,38 @@ logger = logging.getLogger(__name__)
 MODEL_NAME: Final[str] = "iridium"
 """The promoted artifact's model name (the provenance header's fixed identity)."""
 
-IRIDIUM_SCHEMA_VERSION: Final[str] = "iridium-v6"
-"""The promoted Iridium artifact's schema version tag. ``iridium-v6`` (2026-10-06, the
-saturation module's switch, approved 2026-10-04) publishes the Iridium model on the promoted
-saturation curve and the launch cadence: every device class side by side (``classes``, each
-with its price, usage, physics, markers, binding limit and marginal intervals), each model
-year's people, revenue and own margin per class beside the shared fleet and cost and IoT's
-two revenue fields (``years``), IoT's device counts and prices (``fixed_books``), and the
-curve's identity, readings, band saturation numbers, ``iot_check`` and limits
-(``saturation``). The
-trajectory summary renames ``total_build_and_hold_cost_musd`` to
-``total_cost_through_final_year_musd`` and ``steady_state_annual_cost_musd`` to
-``final_year_annual_cost_musd``, replaces ``full_coverage_reached_year`` with
-``coverage_floor_reached_year`` and adds ``cost_per_satellite_year_musd``; the physics block
-keeps the spectrum, the panel, the operations cost and the ecosystem assumption and renames
-``effective_satellites_per_launch`` to ``satellites_per_launch``. Removed: the target,
-regime, completion and built-fleet fields, the per-person cost fields, the density and the
-fleet aggregate, the IoT passthrough, the one device class and its physics (each class's now
-in ``classes``), the served base ``subscribers_served`` and the living fleet's people capacity
-``people_capacity_living_fleet_final_year`` (each class's people now in ``years`` and the
+IRIDIUM_SCHEMA_VERSION: Final[str] = "iridium-v7"
+"""The promoted Iridium artifact's schema version tag. ``iridium-v7`` (2026-10-13, ADR 011, on
+the investor's approval of the product-case design, 2026-10-07) publishes IoT as capacity:
+each model year and each reading carries IoT's room on the phone class's useful beams and each
+IoT class's device capacity alone at its engineering usage, with the three views and the view
+that binds (``years[].iot``, ``saturation.readings[].iot``), the capacities null below the
+coverage floor; each year's class lines carry the class's busy-hour useful beams
+(``years[].classes[].useful_beams``); ``iot_classes`` publishes each IoT class's engineering
+usage and its loads a day; and the physics block gains the IoT room's nine constants (the
+message and burst sizes, the MAC efficiency, the random-access window's two ends and its rate,
+the tone and the message airtime's two ends). Removed: ``fixed_books``, each year's
+``minimal_packet_iot_revenue_musd`` and ``data_iot_revenue_musd``, and ``saturation.iot_check``;
+IoT's prices left the engineering config. No people, revenue, own margin, fleet, cost or curve
+value moves.
+
+``iridium-v6`` (2026-10-06, the saturation module's switch, approved 2026-10-04) published the
+Iridium model on the promoted saturation curve and the launch cadence: every device class side
+by side (``classes``, each with its price, usage, physics, markers, binding limit and marginal
+intervals), each model year's people, revenue and own margin per class beside the shared fleet
+and cost and IoT's two revenue fields (``years``), IoT's device counts and prices
+(``fixed_books``), and the curve's identity, readings, band saturation numbers, ``iot_check``
+and limits (``saturation``). Its trajectory summary renamed
+``total_build_and_hold_cost_musd`` to ``total_cost_through_final_year_musd`` and
+``steady_state_annual_cost_musd`` to ``final_year_annual_cost_musd``, replaced
+``full_coverage_reached_year`` with ``coverage_floor_reached_year`` and added
+``cost_per_satellite_year_musd``; its physics block kept the spectrum, the panel, the
+operations cost and the ecosystem assumption and renamed ``effective_satellites_per_launch``
+to ``satellites_per_launch``. It removed the target, regime, completion and built-fleet
+fields, the per-person cost fields, the density and the fleet aggregate, the IoT passthrough,
+the one device class and its physics (each class's in ``classes``), the served base
+``subscribers_served`` and the living fleet's people capacity
+``people_capacity_living_fleet_final_year`` (each class's people in ``years`` and the
 readings), and the four-bucket ``revenue_arpu_buckets`` block. Earlier versions, in
 brief: ``iridium-v5`` (2026-09-23) made the edge cases honest (nullable final-year cash
 figures, the built fleet's annualized cost as the ARPU margin's basis); ``iridium-v4``
@@ -210,8 +239,8 @@ class TrajectorySummaryBlock(BaseModel):
     coverage_floor_reached_year: int | None = Field(
         description=(
             "The first fiscal year the living fleet is at or above the coverage floor, when "
-            "every class and both IoT lines start selling; None when the floor is never "
-            "reached."
+            "every class starts selling and each IoT class's capacity is first published; None "
+            "when the floor is never reached."
         )
     )
     cost_per_satellite_year_musd: float = Field(
@@ -254,8 +283,8 @@ class OrbitScenarioBlock(BaseModel):
 
 
 class IridiumPhysicsBlock(BaseModel):
-    """The run's Iridium settings and the two stated physics notes; each class's physics is in
-    its own block in ``classes``."""
+    """The run's Iridium settings, the two stated physics notes and the IoT room's nine
+    constants (ADR 011); each class's physics is in its own block in ``classes``."""
 
     model_config = _BLOCK_CONFIG
 
@@ -271,6 +300,53 @@ class IridiumPhysicsBlock(BaseModel):
     )
     ecosystem_assumption: str = Field(
         description="The stated ecosystem assumption behind the phone class."
+    )
+    iot_message_bytes: int = Field(
+        description=(
+            "One IoT message, bytes (COMM-620): the size of every message of each IoT class's "
+            "engineering usage."
+        )
+    )
+    iot_burst_bytes: int = Field(
+        description="One data IoT burst, bytes (the investor's usage, 2026-10-04)."
+    )
+    iot_mac_efficiency: float = Field(
+        description=(
+            "The share of the uplink's bits that carry payload after the MAC layer's overhead "
+            "(COMM-659): the IoT room's payload view."
+        )
+    )
+    iot_random_access_window_devices_low: int = Field(
+        description=(
+            "The devices one NB-IoT NTN random-access window serves, its low end (COMM-654): "
+            "the IoT room's access view, at its conservative end."
+        )
+    )
+    iot_random_access_window_devices_high: int = Field(
+        description="The devices one random-access window serves, its high end (COMM-654)."
+    )
+    iot_random_access_windows_per_second: int = Field(
+        description=(
+            "The random-access windows a beam offers a second, an assumption with no source "
+            "(COMM-654 gives the devices a window serves, not how often one opens)."
+        )
+    )
+    iot_tone_hz: float = Field(
+        description=(
+            "NB-IoT's narrowest uplink allocation, one single-tone subcarrier, Hz (COMM-714): "
+            "the held width over it counts the tones."
+        )
+    )
+    iot_message_airtime_low_s: float = Field(
+        description=(
+            "The time one IoT message holds one uplink tone, its low end, seconds (COMM-719)."
+        )
+    )
+    iot_message_airtime_high_s: float = Field(
+        description=(
+            "The time one IoT message holds one uplink tone, its high end, seconds (COMM-719): "
+            "the single-tone view's conservative end."
+        )
     )
 
 
@@ -370,12 +446,131 @@ class ClassBlock(BaseModel):
     )
 
 
+class IotClassBlock(BaseModel):
+    """One IoT class's engineering usage and the loads a day it gives (ADR 011): the usage every
+    IoT capacity is read at, a day's average, never a count of devices or a forecast."""
+
+    model_config = _BLOCK_CONFIG
+
+    iot_class: IotClass = Field(description="The IoT class.")
+    messages_per_day: int = Field(
+        description="The messages one device sends a day, each of ``iot_message_bytes``."
+    )
+    bursts_per_day: int = Field(
+        description=(
+            "The bursts one device sends a day beside its messages, each of ``iot_burst_bytes``."
+        )
+    )
+    uplink_bits_per_day: int = Field(
+        description="One device's uplink bits a day: its messages and bursts at their sizes."
+    )
+    access_attempts_per_day: int = Field(
+        description="One device's random-access attempts a day, one per message or burst."
+    )
+    single_tone_messages_per_day: int = Field(
+        description=(
+            "One device's messages a day read on single tones: every message, a data IoT "
+            "device's included (its bursts are not single-tone messages)."
+        )
+    )
+
+
+class IotClassCapacityBlock(BaseModel):
+    """One IoT class alone at one fleet: the devices IoT's whole room holds for it at its
+    engineering usage, averaged over the day (ADR 011). Each IoT class is given the whole room,
+    so the two capacities are never added. A capacity, never a count sold or a forecast; every
+    field but the class is null below the coverage floor (IoT needs continuous coverage)."""
+
+    model_config = _BLOCK_CONFIG
+
+    iot_class: IotClass = Field(description="The IoT class.")
+    devices_by_payload_bits: float | None = Field(
+        description=(
+            "The devices the uplink's payload bits a second hold, each at its engineering "
+            "usage's uplink bits a second (a day's average); null below the coverage floor."
+        )
+    )
+    devices_by_random_access: float | None = Field(
+        description=(
+            "The devices the access attempts a second hold at the random-access window's low "
+            "end, each at its attempts a second (a day's average); null below the coverage floor."
+        )
+    )
+    devices_by_single_tone_time: float | None = Field(
+        description=(
+            "The devices the single-tone seconds a second hold, each message holding a tone for "
+            "the airtime's high end (a day's average); null below the coverage floor."
+        )
+    )
+    device_capacity: int | None = Field(
+        description=(
+            "The class's device capacity alone: the least of the three views, rounded down to "
+            "whole devices. Never a count sold or a forecast, and never added to the other "
+            "class's; null below the coverage floor."
+        )
+    )
+    binding_view: IotView | None = Field(
+        description=(
+            "The view that gives the capacity (payload_bits, random_access or "
+            "single_tone_time; a tie goes to the earlier in that order); null below the "
+            "coverage floor."
+        )
+    )
+
+
+class IotRoomBlock(BaseModel):
+    """IoT's room at one fleet, on the phone class's useful beams in the uplink's share of the
+    frame (1 - d), and each IoT class's capacity in it alone (ADR 011). The room is published
+    at every fleet (0.0 at a fleet of 0), each class's capacity only at or above the coverage
+    floor."""
+
+    model_config = _BLOCK_CONFIG
+
+    uplink_bits_per_second: float = Field(
+        description=(
+            "The phone class's useful beams x the held width x the phone class's central "
+            "spectral efficiency x (1 - d), bits a second."
+        )
+    )
+    uplink_payload_bits_per_second: float = Field(
+        description="That x the MAC efficiency, bits a second: the payload IoT can carry."
+    )
+    access_attempts_per_second_low: float = Field(
+        description=(
+            "The useful beams x the random-access window's low end x its windows a second: the "
+            "access attempts a second, at the conservative end."
+        )
+    )
+    access_attempts_per_second_high: float = Field(
+        description="The same at the random-access window's high end."
+    )
+    single_tone_seconds_per_second: float = Field(
+        description=(
+            "The useful beams x the held width over the NB-IoT tone x (1 - d): the single-tone "
+            "seconds the uplink holds a second."
+        )
+    )
+    classes: tuple[IotClassCapacityBlock, ...] = Field(
+        description=(
+            "Each IoT class's capacity alone, in IoT class order (minimal-packet IoT, data "
+            "IoT); the two are never added."
+        )
+    )
+
+
 class ClassYearBlock(BaseModel):
     """One class's line in one model year."""
 
     model_config = _BLOCK_CONFIG
 
     device_class: DeviceClass = Field(description="The class.")
+    useful_beams: float = Field(
+        description=(
+            "The class's busy-hour useful beams at the year's living fleet (the co-channel "
+            "beams over people, times the panel factor), in every year, below the coverage "
+            "floor too: beams are physical."
+        )
+    )
     people_served: int = Field(
         description=(
             "Every person the living fleet carries for the class (every seat sold); 0 below "
@@ -387,14 +582,14 @@ class ClassYearBlock(BaseModel):
     )
     own_margin_pct: float | None = Field(
         description=(
-            "The class's own revenue against the year's whole-fleet annualized cost, percent "
-            "(the IoT lines never inside it); null when the revenue is 0.0."
+            "The class's own revenue against the year's whole-fleet annualized cost, percent; "
+            "null when the revenue is 0.0."
         )
     )
 
 
 class YearBlock(BaseModel):
-    """One model year: the shared fleet and cost and each class's line."""
+    """One model year: the shared fleet and cost, each class's line and IoT's room."""
 
     model_config = _BLOCK_CONFIG
 
@@ -405,6 +600,12 @@ class YearBlock(BaseModel):
         description="The year's annualized fleet cost, $M (the margins' cost basis)."
     )
     classes: tuple[ClassYearBlock, ...] = Field(description="Each class's line, in class order.")
+    iot: IotRoomBlock = Field(
+        description=(
+            "IoT's room on the year's phone-class useful beams and each IoT class's capacity in "
+            "it alone, the capacities null below the coverage floor."
+        )
+    )
 
 
 class ClassReadingBlock(BaseModel):
@@ -432,7 +633,7 @@ class ClassReadingBlock(BaseModel):
 
 
 class ReadingBlock(BaseModel):
-    """Every class at one reported fleet."""
+    """Every class at one reported fleet, and IoT's room there."""
 
     model_config = _BLOCK_CONFIG
 
@@ -446,6 +647,12 @@ class ReadingBlock(BaseModel):
     )
     classes: tuple[ClassReadingBlock, ...] = Field(
         description="Each class's reading, in class order."
+    )
+    iot: IotRoomBlock = Field(
+        description=(
+            "IoT's room on the reading's phone-class useful beams and each IoT class's capacity "
+            "in it alone, the capacities null below the coverage floor."
+        )
     )
 
 
@@ -495,6 +702,12 @@ class IridiumModelArtifact(BaseModel):
         description="The run's Iridium settings and stated physics notes."
     )
     classes: tuple[ClassBlock, ...] = Field(description="Each device class's block, in order.")
+    iot_classes: tuple[IotClassBlock, ...] = Field(
+        description=(
+            "Each IoT class's engineering usage and its loads a day, in IoT class order: the "
+            "usage every IoT capacity is read at."
+        )
+    )
     years: tuple[YearBlock, ...] = Field(description="Each model year's lines.")
     saturation: SaturationBlock = Field(description="The curve and its readings.")
     assumptions: tuple[str, ...] = Field(description="The stated-assumptions lines, in order.")
@@ -534,10 +747,47 @@ def _class_block(record: ClassRecord) -> ClassBlock:
     )
 
 
+def _iot_class_block(record: IotClassRecord) -> IotClassBlock:
+    """Map one IoT class's engineering usage onto its block."""
+    return IotClassBlock(
+        iot_class=record.iot_class,
+        messages_per_day=record.messages_per_day,
+        bursts_per_day=record.bursts_per_day,
+        uplink_bits_per_day=record.uplink_bits_per_day,
+        access_attempts_per_day=record.access_attempts_per_day,
+        single_tone_messages_per_day=record.single_tone_messages_per_day,
+    )
+
+
+def _iot_class_capacity_block(entry: IotClassCapacityRecord) -> IotClassCapacityBlock:
+    """Map one IoT class's capacity at a fleet onto its block."""
+    return IotClassCapacityBlock(
+        iot_class=entry.iot_class,
+        devices_by_payload_bits=entry.devices_by_payload_bits,
+        devices_by_random_access=entry.devices_by_random_access,
+        devices_by_single_tone_time=entry.devices_by_single_tone_time,
+        device_capacity=entry.device_capacity,
+        binding_view=entry.binding_view,
+    )
+
+
+def _iot_room_block(room: IotRoomRecord) -> IotRoomBlock:
+    """Map IoT's room at a fleet, with each IoT class's capacity, onto its block."""
+    return IotRoomBlock(
+        uplink_bits_per_second=room.uplink_bits_per_second,
+        uplink_payload_bits_per_second=room.uplink_payload_bits_per_second,
+        access_attempts_per_second_low=room.access_attempts_per_second_low,
+        access_attempts_per_second_high=room.access_attempts_per_second_high,
+        single_tone_seconds_per_second=room.single_tone_seconds_per_second,
+        classes=tuple(_iot_class_capacity_block(entry) for entry in room.classes),
+    )
+
+
 def _class_year_block(line: ClassYearRecord) -> ClassYearBlock:
     """Map one class's line in a year onto its block."""
     return ClassYearBlock(
         device_class=line.device_class,
+        useful_beams=line.useful_beams,
         people_served=line.people_served,
         revenue_musd=line.revenue_musd,
         own_margin_pct=line.own_margin_pct,
@@ -565,6 +815,7 @@ def _year_blocks(fleet: FleetTrajectory, iridium: IridiumRecord) -> tuple[YearBl
             living_fleet=fleet_year.living_fleet,
             annual_cost_musd=fleet_year.annual_cost_this_year_musd,
             classes=tuple(_class_year_block(line) for line in iridium_year.classes),
+            iot=_iot_room_block(iridium_year.iot),
         )
         for fleet_year, iridium_year in zip(fleet.years, iridium.years, strict=True)
     )
@@ -590,6 +841,7 @@ def _reading_block(reading: ReadingRecord) -> ReadingBlock:
         fleet=reading.fleet,
         fleet_annual_cost_musd=reading.fleet_annual_cost_musd,
         classes=tuple(_class_reading_block(line) for line in reading.classes),
+        iot=_iot_room_block(reading.iot),
     )
 
 
@@ -667,8 +919,18 @@ def build_iridium_artifact(
             satellites_per_launch=iridium.satellites_per_launch,
             operations_cost_musd=iridium.operations_cost_musd,
             ecosystem_assumption=iridium.ecosystem_assumption,
+            iot_message_bytes=MINIMAL_PACKET_IOT_MESSAGE_BYTES,
+            iot_burst_bytes=DATA_IOT_BURST_BYTES,
+            iot_mac_efficiency=IOT_MAC_EFFICIENCY,
+            iot_random_access_window_devices_low=IOT_RANDOM_ACCESS_WINDOW_DEVICES_LOW,
+            iot_random_access_window_devices_high=IOT_RANDOM_ACCESS_WINDOW_DEVICES_HIGH,
+            iot_random_access_windows_per_second=IOT_RANDOM_ACCESS_WINDOWS_PER_SECOND,
+            iot_tone_hz=NB_IOT_TONE_HZ,
+            iot_message_airtime_low_s=IOT_MESSAGE_AIRTIME_LOW_S,
+            iot_message_airtime_high_s=IOT_MESSAGE_AIRTIME_HIGH_S,
         ),
         classes=tuple(_class_block(record) for record in iridium.classes),
+        iot_classes=tuple(_iot_class_block(record) for record in iridium.iot_classes),
         years=_year_blocks(fleet, iridium),
         saturation=_saturation_block(iridium.saturation),
         assumptions=iridium.assumptions,

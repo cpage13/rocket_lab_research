@@ -57,6 +57,9 @@ from communications.iridium import (
     ClassReadingRecord,
     ClassRecord,
     ClassYearRecord,
+    IotClassCapacityRecord,
+    IotClassRecord,
+    IotRoomRecord,
     IridiumRecord,
     MarginalIntervalRecord,
     ReadingRecord,
@@ -67,6 +70,9 @@ from communications.json_output import (
     ClassBlock,
     ClassReadingBlock,
     ClassYearBlock,
+    IotClassBlock,
+    IotClassCapacityBlock,
+    IotRoomBlock,
     IridiumModelArtifact,
     MarginalIntervalBlock,
     ReadingBlock,
@@ -560,6 +566,9 @@ _RECORDS_AND_BLOCKS: Final[tuple[tuple[type, type[BaseModel]], ...]] = (
     (ClassYearRecord, ClassYearBlock),
     (ReadingRecord, ReadingBlock),
     (ClassReadingRecord, ClassReadingBlock),
+    (IotRoomRecord, IotRoomBlock),
+    (IotClassCapacityRecord, IotClassCapacityBlock),
+    (IotClassRecord, IotClassBlock),
     (SaturationRecord, SaturationBlock),
 )
 """Each Iridium record the artifact publishes whole, beside the block the writer maps it onto
@@ -575,6 +584,7 @@ _IRIDIUM_RECORD_HOMES: Final[dict[str, str | None]] = {
     "coverage_floor_reached_year": "trajectory_summary",
     "cost_per_satellite_year_musd": "trajectory_summary",
     "classes": None,
+    "iot_classes": None,
     "years": None,
     "saturation": None,
     "assumptions": None,
@@ -614,9 +624,9 @@ def test_each_record_and_its_block_carry_the_same_fields_in_the_same_order(
     published: the block the writer maps the record onto carries the record's every field,
     under the same name and in the same order (the artifact's key order), and no other.
 
-    Sample: the six record and block pairs the writer maps field for field (classes and their
-    intervals, each year's class lines, the readings and their class lines, the saturation
-    block).
+    Sample: the nine record and block pairs the writer maps field for field (classes and their
+    intervals, each year's class lines, the readings and their class lines, IoT's room and each
+    IoT class's capacity in it, each IoT class's engineering usage, the saturation block).
 
     Expected outcome: the record's field names, in order, equal the block's.
     """
@@ -627,9 +637,10 @@ def test_every_field_of_the_iridium_record_and_its_years_reaches_the_artifact() 
     """Objective: the Iridium record's own fields, and each year's Iridium lines, are published
     too: none can be added without a home in the artifact.
 
-    Sample: the Iridium record's twelve fields and their homes (``_IRIDIUM_RECORD_HOMES``);
-    the year record's fields against the year block, which also carries the shared record's
-    launches, living fleet and annualized cost beside them.
+    Sample: the Iridium record's thirteen fields and their homes (``_IRIDIUM_RECORD_HOMES``,
+    ``iot_classes`` a field of the artifact's top level); the year record's fields against the
+    year block, which also carries the shared record's launches, living fleet and annualized
+    cost beside them.
 
     Expected outcome: the homes name exactly the Iridium record's fields; each home is a field
     of the artifact's top level, or of the block it names, under the same name; every field of
