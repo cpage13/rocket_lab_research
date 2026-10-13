@@ -50,7 +50,7 @@ from common.cli import EXIT_ERROR, EXIT_OK
 from common.file_io import ARTIFACT_FILE_END, render_artifact_json
 from communications import json_output
 from communications.config import IridiumArpuDials, IridiumDials
-from communications.constants import SATURATION_CURVE_PATH_DEFAULT
+from communications.constants import BASE_YEAR_DEFAULT, SATURATION_CURVE_PATH_DEFAULT
 from communications.iridium import (
     ClassReadingRecord,
     ClassRecord,
@@ -485,6 +485,73 @@ def test_a_scenario_runs_on_a_curve_computed_for_its_inputs(
     phone = payload["classes"][2]
     assert phone["device_class"] == "phone_class"
     assert phone["per_satellite_capacity_gbps"] == pytest.approx(10.5 * 0.65 * 0.15 * 0.616)
+
+
+PAST_LABEL_HORIZON_YEARS = 30
+"""The horizon of the run whose final fleet passes a no-number class's label (with the shipped
+scenario's all-in share and 16 satellites per launch, and the life below, its final year's
+living fleet is 38,160: past the synthetic curve's 36,900, inside its 40,000 last row, at the
+reported fleets too)."""
+
+PAST_LABEL_SATELLITE_LIFETIME_YEARS = 16
+"""That run's satellite life, years."""
+
+PAST_LABEL_SCENARIO = (
+    "metadata:\n"
+    f"  base_year: {BASE_YEAR_DEFAULT}\n"
+    f"  horizon_years: {PAST_LABEL_HORIZON_YEARS}\n"
+    "comms_cadence:\n"
+    "  share_of_fleet: 1.0\n"
+    "satellite:\n"
+    "  satellites_per_launch: 16\n"
+    f"  satellite_lifetime_years: {PAST_LABEL_SATELLITE_LIFETIME_YEARS}\n"
+    "iridium:\n"
+    "  saturation:\n"
+    "    curve_path: {curve_path}\n"
+)
+"""That run's scenario, its curve path to be filled in: the shipped scenario's all-in share
+(1.0) and 16 satellites per launch, at that horizon and life."""
+
+
+def test_a_final_fleet_past_a_no_number_classs_label_is_one_error_line(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    synthetic_saturation_curve: Callable[[IridiumDials], SaturationCurve],
+) -> None:
+    """Objective: a run whose final year's living fleet passes the fleet a class with no
+    saturation number is not reached by ends the command in one ERROR line, never a traceback,
+    naming the class, that label and the fleet: the curve measures nothing past the label, so
+    the binding limit there is not known (ADR 005).
+
+    Sample: the synthetic curve for the default dials (no saturation number on any class; the
+    small terminal not reached by 36,900, its last row 40,000), written as the promotion writes
+    a curve; a scenario naming it, at the shipped all-in share and 16 satellites per launch over
+    a 30-year horizon with a 16-year satellite life, so the final year's living fleet is 38,160.
+
+    Expected outcome: exit 1; exactly one ERROR record, on one line and with no exception
+    attached, naming the scenario, the small terminal's curve, 36,900 and 38,160; no artifact
+    written.
+    """
+    curve_path = tmp_path / "synthetic_curve.json"
+    curve = synthetic_saturation_curve(IridiumDials())
+    curve_path.write_text(render_artifact_json(curve) + ARTIFACT_FILE_END, encoding="utf-8")
+    scenario = tmp_path / "past_label.yaml"
+    scenario.write_text(PAST_LABEL_SCENARIO.format(curve_path=curve_path), encoding="utf-8")
+    out_path = tmp_path / "past_label.json"
+
+    assert main([str(scenario), str(out_path)]) == EXIT_ERROR
+
+    records = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(records) == 1
+    message = records[0].getMessage()
+    assert "\n" not in message
+    assert message.startswith(
+        f"could not promote {scenario}: the small_terminal_class curve reaches no saturation "
+        "number and is not reached by 36900 satellites"
+    )
+    assert "the final year's living fleet of 38160 satellites lies past it" in message
+    assert records[0].exc_info is None
+    assert not out_path.exists()
 
 
 # --------------------------------------------------------------------------

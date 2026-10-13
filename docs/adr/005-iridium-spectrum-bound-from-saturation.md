@@ -2,6 +2,10 @@
 
 Status: Accepted (2026-10-04, with the saturation module's strategy, Revision 4)
 
+Amended 2026-10-12: the Decision names the last midpoint a class's rows measure as the fleet
+its saturation number is not reached by, and gained the refusal of a run whose final year's
+fleet passes that fleet.
+
 ## Context
 
 The Iridium model inherited a 2,000-satellite cap set for the cellular family.
@@ -26,8 +30,10 @@ refused with an error. When a class's crossing is not reached on its rows,
 the curve publishes no saturation number for that class and names the last
 midpoint at which its rows measure the elasticity (the geometric mean of the
 last two rows' fleets) as the fleet it is not reached by: the class's
-spectrum bound lies beyond that fleet, unmeasured. 2,000 stays only as a
-reading, labeled the retired cap, for comparison.
+spectrum bound lies beyond that fleet, unmeasured, so a run whose final
+year's living fleet passes it is refused with an error, since which limit
+binds there is not known. 2,000 stays only as a reading, labeled the retired
+cap, for comparison.
 
 ## Consequences
 
