@@ -171,12 +171,14 @@ def test_the_adopted_choice_paths_are_pb1s(product_case_yaml: Path) -> None:
     """Objective: the adopted case's usage paths, the line factor in fiscal years rounded half
     up: minimal-packet IoT at x8 sends 48, 274, 634 and 768 messages a day and data IoT at x1 8,
     10, 12 and 13 bursts (the plan's probe pB1), its 48 messages in every year and its bursts
-    outside the busy hours from FY2033; the prices flat at $10, $50, $3 and $6.
+    outside the busy hours from FY2033; minimal-packet IoT sends no bursts, so its timing flag
+    is None, never False; the prices flat at $10, $50, $3 and $6.
 
     Sample: the shipped scenario, choice 12, on an engineering view of round numbers for the
     four reported years.
 
-    Expected outcome: the paths, the flags and the flat prices as stated.
+    Expected outcome: the paths, the flags (minimal-packet IoT's None in every year) and the
+    flat prices as stated.
     """
     config = load_product_case_config(product_case_yaml)
     offers = choice_offers(config, _view(SHIPPED_YEARS), choice_grid(config)[ADOPTED_CHOICE])
@@ -188,6 +190,9 @@ def test_the_adopted_choice_paths_are_pb1s(product_case_yaml: Path) -> None:
         768,
     ]
     assert [year.minimal_packet_iot.bursts_per_day for year in offers.years] == [0, 0, 0, 0]
+    assert [year.minimal_packet_iot.bursts_outside_busy_hours for year in offers.years] == [
+        None
+    ] * len(SHIPPED_YEARS)
     assert [year.data_iot.bursts_per_day for year in offers.years] == [8, 10, 12, 13]
     assert [year.data_iot.messages_per_day for year in offers.years] == [48, 48, 48, 48]
     assert [year.data_iot.bursts_outside_busy_hours for year in offers.years] == [

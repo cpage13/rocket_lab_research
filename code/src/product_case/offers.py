@@ -209,7 +209,9 @@ class IotOffer:
         price_usd_month: p(t), dollars a month.
         messages_per_day: The messages a device sends a day.
         bursts_per_day: The 100 KB bursts a device sends a day (0 for minimal-packet IoT).
-        bursts_outside_busy_hours: Whether the bursts go outside the busy hours.
+        bursts_outside_busy_hours: Whether the bursts go outside the busy hours (spread over
+            the off-peak hours); None for a class that sends no bursts, minimal-packet IoT,
+            for which the flag would mean nothing (published null).
         bytes_per_day: B(t), what a device sends a day, bytes.
         service: v(t), B(t) over the first reported year's.
         uplink_bits_per_second_busy: A device's uplink load in the busy hours, bits a second.
@@ -223,7 +225,7 @@ class IotOffer:
     price_usd_month: float
     messages_per_day: int
     bursts_per_day: int
-    bursts_outside_busy_hours: bool
+    bursts_outside_busy_hours: bool | None
     bytes_per_day: int
     service: float
     uplink_bits_per_second_busy: float
@@ -478,7 +480,7 @@ def _iot_offer(
     price_usd_month: float,
     messages_per_day: int,
     bursts_per_day: int,
-    bursts_outside_busy_hours: bool,
+    bursts_outside_busy_hours: bool | None,
     first_bytes_per_day: int,
     engineering: EngineeringView,
     year: int,
@@ -488,8 +490,9 @@ def _iot_offer(
     Uplink bits a second: messages x 340 x 8 / 86,400, plus the bursts' bits over the day, or,
     outside the busy hours, none in the busy hours and their bits over the 20 off-peak hours;
     attempts a second the same way, one per message or burst; tone messages a second, the
-    messages over the day (round 1's order). A usage whose loads or service are beyond the range
-    of a double, or a price that is not finite, is refused, naming the field and the year.
+    messages over the day (round 1's order). A class that sends no bursts (minimal-packet IoT)
+    carries None for their timing. A usage whose loads or service are beyond the range of a
+    double, or a price that is not finite, is refused, naming the field and the year.
     """
     usage_field = f"usage.{product_class}"
     try:
@@ -625,7 +628,7 @@ def choice_offers(
                         minimal_field,
                     ),
                     0,
-                    False,
+                    None,
                     minimal_first_bytes,
                     engineering,
                     year,
