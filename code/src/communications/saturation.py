@@ -121,14 +121,17 @@ floor x min(ceiling, supply) from 20,000 satellites up, at every snapshot and in
 not the band points); capacity per satellite never rising between consecutive rows of any
 class or band point by more than 2 percent of the earlier row (the snapshots' noise).
 
-The curves' snapshots run in separate processes, each task sent its own curve's demand cells
-and limits. Each curve's largest task runs first and measures a worker's peak memory; then
-as many workers run at once as keep the parent's peak plus their summed peaks under the 16 GB
-budget, at most one per CPU: every other task in one pool when the budget allows a worker per
-CPU, otherwise each curve in memory tiers down its fleets, each tier sized by its own largest
-task (one process at a time only at the top of the grid). The curve records the wall time
-and that bound (each worker reports its own peak; the bound is the parent's peak plus the
-summed peaks of the largest set of workers alive at once).
+The curves' snapshots run in separate processes, each task in a fresh worker of its own (a
+process keeps memory its tasks freed, so a worker kept for several would peak above any one of
+them), sent its own curve's demand cells and limits. Each curve's largest task runs first,
+alone, and its peak memory is the reading; then as many workers run at once as keep the
+parent's peak plus their peaks under the 16 GB budget, each worker counted at the reading times
+a margin (a fresh worker's peak varies between runs of one task), at most one per CPU: every
+other task in one pool when the budget allows a worker per CPU, otherwise each curve in memory
+tiers down its fleets, each tier sized by its own largest task (one process at a time only at
+the top of the grid). The curve records the wall time and that bound (each task reports its
+worker's peak; the bound is the parent's peak plus the largest sum of task peaks that can be
+alive at once: a pool's largest, as many as its workers).
 
 **The command** promotes the curve, from ``code/``::
 
@@ -140,7 +143,9 @@ of 16 CPUs and 32 GB, contended by other work: ``time -l`` counted 46.4 million 
 context switches) measured 1,740.5 s of wall time, about 29 minutes, and a peak-memory bound of
 16,077 MB, 77 MB over the 16 GB budget, which it logged as a warning (the bound is the budget's
 figure; ``time -l`` reported a largest resident set of 3.50 GB); the curve's
-``provenance.run_measurement`` carries the same two figures.
+``provenance.run_measurement`` carries the same two figures. That run kept each pool's worker
+for many tasks, past whose single readings a worker's peak grows; the schedule above, one task a
+worker and the margin, has no full promotion measured yet.
 
 It loads the scenario, narrows it to its Iridium dials (a scenario without an ``iridium:``
 block is refused before anything runs), refuses a destination the shared writer would refuse
@@ -495,15 +500,29 @@ _RU_MAXRSS_UNIT_BYTES_OTHER: Final[int] = 1024
 """Linux and the other Unix systems report ``ru_maxrss`` in kibibytes."""
 
 _MIN_WORKERS: Final[int] = 1
-"""The fewest workers a sweep runs with, even when one worker's peak alone exceeds the
-budget (the bound then exceeds it too, and the run says so)."""
+"""The fewest workers a sweep runs with, even when one task's reading, with the margin, exceeds
+the budget (the bound may then exceed it too, and the run says so)."""
+
+_TASKS_PER_WORKER: Final[int] = 1
+"""The snapshot tasks a worker runs before a fresh worker replaces it, in a pool and alone. A
+process keeps memory its tasks freed, so a worker kept for several tasks peaks above any one of
+them, past the reading its pool is sized on: one worker running three of the mounted terminal's
+tasks at 20,000 satellites peaked at 1.43 to 1.49 times the heaviest one's peak in a fresh
+worker (measured on 2026-10-12)."""
+
+_WORKER_PEAK_MARGIN: Final[float] = 1.25
+"""The factor the worker count takes each worker's peak at, over its tier's reading. A fresh
+worker's peak varies between runs of one task (the mounted terminal's snapshot at 20,000
+satellites read 1,352.1 to 1,625.7 MB in five fresh workers on 2026-10-12, a ratio of 1.20), so
+one reading can fall short of another task's peak in its tier; the rest covers the parent's growth
+after the pools are sized (every curve's maximum use, 9.8 MB on the shipped inputs)."""
 
 _SWEEP_TIER_FLEET_RATIO: Final[float] = 2.0
 """A memory tier of the sweep spans one class's largest remaining requested fleet down to
-that over this ratio. A worker's peak grows about linearly with the fleet (the strategy's
-budget, SR-21), so a tier's measured largest task bounds the rest of it, and each lower tier
-measures again and runs more workers at once (one process at a time only at the top of the
-grid, where one worker's peak nears the budget)."""
+that over this ratio. A task's peak grows about linearly with the fleet (the strategy's
+budget, SR-21), so a tier's measured largest task, with the margin, bounds the rest of it, and
+each lower tier measures again and runs more workers at once (one process at a time only at the
+top of the grid, where one task's peak nears the budget)."""
 
 _TRACEBACK_QUOTES: Final[str] = "'\""
 """The quote marks a process pool fences a cause's formatted traceback with (``'''`` or three
@@ -2603,8 +2622,8 @@ class _SnapshotResult:
         supply_beams: The supply.
         statistics: A directional class's kept stacked layers; None for the phone class.
         trims: The interference trim at each floor, when the task prices it; None otherwise.
-        worker_pid: The worker's process id.
-        worker_peak_mb: The worker's peak resident memory so far, MB.
+        worker_peak_mb: The peak resident memory of the process that ran the task, up to the
+            task's end, MB (in a sweep, a fresh worker's: the task's own).
     """
 
     task: _SnapshotTask
@@ -2615,7 +2634,6 @@ class _SnapshotResult:
     supply_beams: float
     statistics: _StackStatistics | None
     trims: tuple[float, ...] | None
-    worker_pid: int
     worker_peak_mb: float
 
 
@@ -2646,7 +2664,6 @@ def _run_snapshot(task: _SnapshotTask, context: _SweepContext) -> _SnapshotResul
         supply_beams=allocation.supply_beams,
         statistics=None if allocation.directional is None else allocation.directional.statistics,
         trims=trims,
-        worker_pid=os.getpid(),
         worker_peak_mb=_own_peak_mb(),
     )
 
@@ -2687,8 +2704,10 @@ class _SweepRun:
     Attributes:
         results: Every task's result, in the tasks' order.
         workers: The most workers any tier ran at once.
-        workers_peak_mb: The largest summed peak of a set of workers alive at once, MB (the
-            tiers run one after another, so the largest of their bounds).
+        workers_peak_mb: The most memory the sweep's workers held at once, MB, as a bound: for
+            a pool, the sum of its largest task peaks, as many as its workers (each task runs in
+            a fresh worker, at most that many at once); for a task run alone, its peak; the
+            largest of them (the pools and the runs alone run one after another).
     """
 
     results: tuple[_SnapshotResult, ...]
@@ -2696,26 +2715,26 @@ class _SweepRun:
     workers_peak_mb: float
 
 
+def _affordable_workers(task_peak_mb: float) -> int:
+    """Return how many workers the budget holds at a task reading: the budget less this
+    process's peak, over the reading times :data:`_WORKER_PEAK_MARGIN`."""
+    return math.floor((_MEMORY_BUDGET_MB - _own_peak_mb()) / (task_peak_mb * _WORKER_PEAK_MARGIN))
+
+
 def _worker_count(task_peak_mb: float, remaining_tasks: int) -> int:
-    """Return how many workers may run at once: the budget over one worker's peak.
+    """Return how many workers may run at once: what the budget holds at this reading
+    (:func:`_affordable_workers`).
 
     At most one per CPU and one per remaining task, and at least one.
     """
-    affordable = math.floor((_MEMORY_BUDGET_MB - _own_peak_mb()) / task_peak_mb)
     cpus = os.process_cpu_count() or _MIN_WORKERS
-    return max(_MIN_WORKERS, min(affordable, cpus, remaining_tasks))
+    return max(_MIN_WORKERS, min(_affordable_workers(task_peak_mb), cpus, remaining_tasks))
 
 
 def _memory_binds(task_peak_mb: float) -> bool:
-    """Return whether the budget, not the CPUs, limits the workers at this worker peak."""
+    """Return whether the budget, not the CPUs, limits the workers at this task reading."""
     cpus = os.process_cpu_count() or _MIN_WORKERS
-    return math.floor((_MEMORY_BUDGET_MB - _own_peak_mb()) / task_peak_mb) < cpus
-
-
-def _sector_count(limits: _AllocationLimits) -> int:
-    """Return a curve's sky sectors (none for the phone class and its band points): the sweep
-    measures the curves in this order, the lightest first, since stage 2's keys grow with it."""
-    return 0 if limits.directional is None else limits.directional.layout.count
+    return _affordable_workers(task_peak_mb) < cpus
 
 
 def _run_pool(
@@ -2725,17 +2744,24 @@ def _run_pool(
     task_peak_mb: float,
     results: dict[int, _SnapshotResult],
 ) -> tuple[int, float]:
-    """Run the tasks at ``indices`` in a fresh pool sized to ``task_peak_mb``; store their results.
+    """Run the tasks at ``indices`` in a fresh pool sized to ``task_peak_mb``, each in a fresh
+    worker of its own; store their results.
 
-    Each task is sent with its own curve's context.
+    Each task is sent with its own curve's context. A worker runs :data:`_TASKS_PER_WORKER`
+    task and a fresh one replaces it, the finished worker joined before its replacement
+    starts, so at most the pool's workers run at once, each holding one task.
 
     Returns:
-        The pool's worker count and the summed peaks of its workers, MB (they are alive at
-        once; a process's peak only grows, so each worker's last report is its peak).
+        The pool's worker count and the most its workers can hold at once, MB: the sum of its
+        largest task peaks, as many as its workers.
     """
     workers = _worker_count(task_peak_mb, len(indices))
-    worker_peaks: dict[int, float] = {}
-    with ProcessPoolExecutor(max_workers=workers, mp_context=get_context("spawn")) as pool:
+    task_peaks: list[float] = []
+    with ProcessPoolExecutor(
+        max_workers=workers,
+        mp_context=get_context("spawn"),
+        max_tasks_per_child=_TASKS_PER_WORKER,
+    ) as pool:
         for index, result in zip(
             indices,
             pool.map(
@@ -2746,11 +2772,8 @@ def _run_pool(
             strict=True,
         ):
             results[index] = result
-            worker_peaks[result.worker_pid] = max(
-                worker_peaks.get(result.worker_pid, result.worker_peak_mb),
-                result.worker_peak_mb,
-            )
-    return workers, sum(worker_peaks.values())
+            task_peaks.append(result.worker_peak_mb)
+    return workers, sum(sorted(task_peaks, reverse=True)[:workers])
 
 
 def _run_alone(
@@ -2759,11 +2782,18 @@ def _run_alone(
     contexts: Mapping[_CurveKey, _SweepContext],
     results: dict[int, _SnapshotResult],
 ) -> None:
-    """Run the tasks at ``indices`` one after another in one fresh process; store their results.
+    """Run the tasks at ``indices`` one after another, each alone in a fresh worker of its own;
+    store their results.
 
-    The process's peak only grows, so each result's worker peak bounds its own task's.
+    A worker runs :data:`_TASKS_PER_WORKER` task, so each result's worker peak is its own
+    task's (a process keeps memory its tasks freed, so one kept for several would read each
+    later task above its own peak).
     """
-    with ProcessPoolExecutor(max_workers=_MIN_WORKERS, mp_context=get_context("spawn")) as alone:
+    with ProcessPoolExecutor(
+        max_workers=_MIN_WORKERS,
+        mp_context=get_context("spawn"),
+        max_tasks_per_child=_TASKS_PER_WORKER,
+    ) as alone:
         for index in indices:
             task = tasks[index]
             results[index] = alone.submit(
@@ -2776,17 +2806,18 @@ def _run_sweep(
 ) -> _SweepRun:
     """Run every task in separate processes, the largest tasks first and measured.
 
-    A worker's peak grows about linearly with the fleet and differs by curve. Each curve's
-    largest task runs first, the lightest curve's first, one after another in one fresh
-    process, so each one's reading bounds every other task of its curve. When the budget does
-    not limit the workers at the largest reading, every other task then runs in one pool
-    under it. Otherwise each curve runs from its largest fleet down in tiers: a tier holds the
-    tasks whose requested fleet exceeds its largest over :data:`_SWEEP_TIER_FLEET_RATIO` and
-    runs under its largest's reading, each lower tier's largest task running alone first in a
-    fresh process, until the budget no longer limits the workers and the rest of the curve
-    runs in one pool. Every pool is fresh, a pool's workers are alive at once so their peaks
-    sum, and the pools run one after another. The curves keep the order their tasks first
-    appear in.
+    A task's peak grows about linearly with the fleet and differs by curve. Each curve's
+    largest task runs first, one at a time, each alone in a fresh worker (:func:`_run_alone`),
+    so each reading is its own task's peak and, with the margin (:data:`_WORKER_PEAK_MARGIN`),
+    bounds every other task of its curve, each of which also runs in a fresh worker of its own
+    (:func:`_run_pool`). When the budget does not limit the workers at the largest reading,
+    every other task then runs in one pool under it. Otherwise each curve runs from its largest
+    fleet down in tiers: a tier holds the tasks whose requested fleet exceeds its largest over
+    :data:`_SWEEP_TIER_FLEET_RATIO` and runs under its largest's reading, each lower tier's
+    largest task running alone first, until the budget no longer limits the workers and the
+    rest of the curve runs in one pool. Every pool is fresh, its largest task peaks, as many as
+    its workers, are counted as if they ran at once, and the pools and the runs alone run one
+    after another. The curves keep the order their tasks first appear in.
 
     The sweep's failures are its own error, each naming the sweep's task count: a worker that
     dies (the pool breaks with no cause; most likely the system killed it out of memory), a
@@ -2806,12 +2837,7 @@ def _run_sweep(
         by_curve.setdefault(task.curve, []).append(index)
     for order in by_curve.values():
         order.sort(key=lambda i: (-tasks[i].requested_fleet, i))
-    tops = [
-        order[0]
-        for _, order in sorted(
-            by_curve.items(), key=lambda item: _sector_count(contexts[item[0]].limits)
-        )
-    ]
+    tops = [order[0] for order in by_curve.values()]
     widest = _MIN_WORKERS
     try:
         _run_alone(tops, tasks, contexts, results)

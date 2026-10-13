@@ -62,10 +62,12 @@ import subprocess
 import sys
 import tracemalloc
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from enum import StrEnum
 from functools import partial
 from itertools import combinations, pairwise
+from multiprocessing.context import BaseContext
 from pathlib import Path
 from typing import Protocol, assert_never
 
@@ -5073,14 +5075,14 @@ def test_the_memory_tiers_change_no_number(
     Sample: the uniform band (B = 1) at 1,000 and 10,000 requested satellites (realized 992
     and 10,000), one snapshot, the CPU count pinned to 8; computed once at the default budget
     and once with the budget lowered to this process's peak plus two of the task peaks the
-    first run measured, so whether the budget binds depends on neither the machine's CPUs nor
-    a worker's own peak.
+    first run measured, each taken times the margin as the worker count takes it, so whether
+    the budget binds depends on neither the machine's CPUs nor a worker's own peak.
 
-    Expected outcome: at the default budget (room for at least eight task peaks) one process
-    runs the nine curves' largest tasks (three classes, six band points) and one pool the
-    rest; with the budget binding (room for about two), each curve's 992 task, a tier of its
-    own (under half of 10,000), runs alone too: ten alone runs. The two curves are equal in
-    everything but the run's own measurement.
+    Expected outcome: at the default budget (room for at least eight task peaks at the margin)
+    the nine curves' largest tasks (three classes, six band points) run alone, in one run, and
+    one pool runs the rest; with the budget binding (room for about two), each curve's 992
+    task, a tier of its own (under half of 10,000), runs alone too: ten runs alone. The two
+    curves are equal in everything but the run's own measurement.
     """
     monkeypatch.setattr(sat.os, "process_cpu_count", lambda: TIER_TEST_CPUS)
     inputs = small_sweep(
@@ -5101,10 +5103,10 @@ def test_the_memory_tiers_change_no_number(
     monkeypatch.setattr(sat, "_run_alone", counted_run_alone)
     free = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
     assert len(alone_runs) == 1
-    task_peak_mb = max(alone_runs[0])
-    room = (sat._MEMORY_BUDGET_MB - sat._own_peak_mb()) / task_peak_mb
+    counted_mb = max(alone_runs[0]) * sat._WORKER_PEAK_MARGIN
+    room = (sat._MEMORY_BUDGET_MB - sat._own_peak_mb()) / counted_mb
     assert room >= TIER_TEST_CPUS
-    monkeypatch.setattr(sat, "_MEMORY_BUDGET_MB", sat._own_peak_mb() + 2 * task_peak_mb)
+    monkeypatch.setattr(sat, "_MEMORY_BUDGET_MB", sat._own_peak_mb() + 2 * counted_mb)
     tiered = compute_saturation(inputs, uniform_band, version_stamp=STAMP)
     assert len(alone_runs) == 1 + 1 + len(DeviceClass) + len(BandName)
     measured_as_free = tiered.model_copy(
@@ -5115,6 +5117,101 @@ def test_the_memory_tiers_change_no_number(
         }
     )
     assert measured_as_free == free
+
+
+def test_the_worker_count_takes_each_worker_at_its_reading_times_the_margin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Objective: the worker count is what the budget holds at a task reading taken times the
+    margin (a fresh worker's peak varies between runs of one task), at most one per CPU and one
+    per remaining task, and at least one; the budget binds when it holds fewer than the CPUs.
+
+    Sample: the parent's peak pinned at 1,000 MB under the 16,000 MB budget (15,000 MB of
+    room), 16 CPUs, the margin 1.25; readings of 1,000, 760, 750 and 20,000 MB.
+
+    Expected outcome, by hand: 1,000 MB counts as 1,250, so 12 workers (15 without the margin)
+    and the budget binds; 760 MB counts as 950, so 15 (15.79 floored), and it binds; 750 MB
+    counts as 937.5, so 16, the CPUs, and it does not bind; with 5 tasks left, 5; 20,000 MB
+    counts as 25,000, past the room, so the one worker a sweep always runs.
+    """
+    monkeypatch.setattr(sat, "_own_peak_mb", lambda: 1_000.0)
+    monkeypatch.setattr(sat.os, "process_cpu_count", lambda: 16)
+    assert sat._MEMORY_BUDGET_MB == 16_000.0
+    assert sat._WORKER_PEAK_MARGIN == 1.25
+    assert sat._worker_count(1_000.0, 100) == 12
+    assert sat._memory_binds(1_000.0)
+    assert sat._worker_count(760.0, 100) == 15
+    assert sat._memory_binds(760.0)
+    assert sat._worker_count(750.0, 100) == 16
+    assert not sat._memory_binds(750.0)
+    assert sat._worker_count(750.0, 5) == 5
+    assert sat._worker_count(20_000.0, 100) == 1
+
+
+POOL_TEST_CPUS = 2
+"""The CPU count the pool test pins, so its pool of three tasks runs two workers at once."""
+
+POOL_TEST_READING_MB = 200.0
+"""The task reading the pool test sizes its pool to: the budget holds far more than two
+workers at it, so the pinned CPUs set the count."""
+
+
+def recording_pool(built: list[tuple[int, int | None]]) -> type[ProcessPoolExecutor]:
+    """A process pool class that appends each pool's workers and tasks per worker to ``built``
+    before building it as the module would (the module builds its pools through
+    ``sat.ProcessPoolExecutor``, which a test patches with this)."""
+
+    class RecordedPool(ProcessPoolExecutor):
+        """The process pool, recording how it is built."""
+
+        def __init__(
+            self,
+            max_workers: int,
+            mp_context: BaseContext,
+            *,
+            max_tasks_per_child: int | None = None,
+        ) -> None:
+            built.append((max_workers, max_tasks_per_child))
+            super().__init__(max_workers, mp_context, max_tasks_per_child=max_tasks_per_child)
+
+    return RecordedPool
+
+
+def test_every_task_runs_in_a_fresh_worker_and_a_pool_counts_its_largest_peaks(
+    monkeypatch: pytest.MonkeyPatch, synthetic_population_grid: GridBuilder
+) -> None:
+    """Objective: the sweep runs each snapshot task in a fresh worker of its own, in a pool and
+    alone, since a process keeps memory its tasks freed (a worker kept for several tasks peaks
+    above any one of them); a pool's bound is what its workers can hold at once: the sum of its
+    largest task peaks, as many as its workers.
+
+    Sample: three phone-class tasks of 342 satellites on one populated 2 degree cell, run by
+    ``_run_pool`` at a reading of 200 MB with the CPU count pinned to 2, then two of them by
+    ``_run_alone``, the module's process pool patched to record how each pool is built.
+
+    Expected outcome: a pool of two workers, each running one task (``max_tasks_per_child``
+    1), then the runs alone one worker at a time, each running one task; the count 2; every
+    task's result stored; the pool's bound the sum of the two largest of its three task peaks,
+    below the sum of all three.
+    """
+    built: list[tuple[int, int | None]] = []
+    monkeypatch.setattr(sat, "ProcessPoolExecutor", recording_pool(built))
+    monkeypatch.setattr(sat.os, "process_cpu_count", lambda: POOL_TEST_CPUS)
+    tasks = [phone_snapshot_task(index, 342) for index in range(3)]
+    context = one_patch_context(synthetic_population_grid)
+    results: dict[int, sat._SnapshotResult] = {}
+    workers, bound_mb = sat._run_pool(
+        range(3), tasks, {PHONE: context}, POOL_TEST_READING_MB, results
+    )
+    alone: dict[int, sat._SnapshotResult] = {}
+    sat._run_alone([0, 1], tasks, {PHONE: context}, alone)
+    assert built == [(POOL_TEST_CPUS, 1), (1, 1)]
+    assert workers == POOL_TEST_CPUS
+    assert sorted(results) == [0, 1, 2]
+    assert sorted(alone) == [0, 1]
+    peaks = sorted((result.worker_peak_mb for result in results.values()), reverse=True)
+    assert bound_mb == peaks[0] + peaks[1]
+    assert bound_mb < sum(peaks)
 
 
 # ---------------------------------------------------------------------------
