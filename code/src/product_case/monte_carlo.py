@@ -562,9 +562,9 @@ class Spreads:
         draws: All drawn markets.
         usable_draws: The pick's usable draws.
         draws_past_iot_room: The drawn markets, all of them, the usable test not applied, in which
-            the pick's IoT uplink use in either period, or its access use, passes 1 in at least
-            one reported year (a market counts once; the single-tone test is not in the count):
-            the all-draw basis's label (montecarlo M2).
+            the pick's IoT uplink use in either period, its access use or its single-tone use
+            passes 1 in at least one reported year (a market counts once): the all-draw basis's
+            label (montecarlo M2).
         years: Each reported year's spreads, in order.
     """
 
@@ -717,8 +717,14 @@ class _Failures:
         return failing
 
     def past_iot_room(self) -> _Flags:
-        """The markets selling IoT past its uplink room in either period or past its access room."""
-        return self.iot_uplink_busy | self.iot_uplink_offpeak | self.random_access
+        """The markets selling IoT past its uplink room in either period, its access room or its
+        single-tone room."""
+        return (
+            self.iot_uplink_busy
+            | self.iot_uplink_offpeak
+            | self.random_access
+            | self.single_tone_time
+        )
 
 
 @dataclass(frozen=True, eq=False)
@@ -1443,8 +1449,8 @@ def spreads_of(
     all draws: the 10th, 50th and 90th percentiles and the headline's mid-rank; for a terminal's
     customers and revenue, whether the headline sells every seat (customers = floor(S)) and the
     share of each basis's draws that do. Beside them, the all-draw basis's label count: the draws
-    in which the pick sells IoT past its uplink room in either period or past its access room in
-    some reported year (montecarlo M2; the single-tone test is not in it).
+    in which the pick sells IoT past its uplink room in either period, its access room or its
+    single-tone room in some reported year (montecarlo M2).
 
     Args:
         config: The scenario.

@@ -157,13 +157,14 @@ def test_the_stated_assumptions_are_the_runs(
     for market in draw_markets(config):
         years = outcome_in_market(config, view, choice, market).years
         if any(
-            max(
+            not use <= 1
+            for year in years
+            for use in (
                 year.totals.iot_uplink_use_busy,
                 year.totals.iot_uplink_use_offpeak,
                 year.totals.access_use,
+                year.totals.single_tone_use,
             )
-            > 1
-            for year in years
         ):
             past += 1
     assert artifact["spreads"]["all_draws_basis"]["draws_past_iot_room"] == past

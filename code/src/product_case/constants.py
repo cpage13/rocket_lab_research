@@ -1442,13 +1442,13 @@ FORMULA_CATALOG: Final[Mapping[ProductCaseFormula, FormulaDefinition]] = Mapping
                 ProductCaseFormula.DRAWS_PAST_IOT_ROOM,
                 text=(
                     "the number of drawn markets, all of them, the usable test not applied, in "
-                    "which the pick's IoT uplink use in the busy hours or off-peak, or its access "
-                    "use, is above 1 in at least one reported year (a market counts once; the tone "
-                    "test is not in the count)"
+                    "which the pick's IoT uplink use in the busy hours or off-peak, its access use "
+                    "or its single-tone use is above 1 in at least one reported year (a market "
+                    "counts once)"
                 ),
                 description=(
                     "The all-draw basis's label: in how many markets the pick sells IoT past its "
-                    "room or access, markets the usable draws leave out."
+                    "uplink, access or single-tone room, markets the usable draws leave out."
                 ),
                 inputs=("pick.choice_id", "inputs.scenario.market"),
                 outputs=("spreads.all_draws_basis",),

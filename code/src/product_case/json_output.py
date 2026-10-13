@@ -449,7 +449,9 @@ class AllDrawsBasisBlock(BaseModel):
     label: str = Field(description="What the all-draw spreads cover.")
     draws: int = _plain("All drawn markets.", "count")
     draws_past_iot_room: int = _plain(
-        "The drawn markets in which the pick sells IoT past its uplink or access room.", "count"
+        "The drawn markets in which the pick sells IoT past its uplink, access or single-tone "
+        "room.",
+        "count",
     )
 
 
@@ -946,7 +948,7 @@ def _spreads_block(spreads: Spreads) -> SpreadsBlock:
     label = (
         "every drawn market, the usable test not applied: in "
         f"{spreads.draws_past_iot_room:,} of the {spreads.draws:,} drawn markets the pick sells "
-        "IoT past its uplink room or its access room in some reported year"
+        "IoT past its uplink, access or single-tone room in some reported year"
     )
     return SpreadsBlock(
         all_draws_basis=AllDrawsBasisBlock(
@@ -1087,7 +1089,7 @@ def _assumptions(run: ProductCaseRun, headline: MarketOutcome, spreads: Spreads)
         "subtracted.",
         "The all-draw spreads cover every drawn market, the usable test not applied: in "
         f"{spreads.draws_past_iot_room:,} of the {spreads.draws:,} drawn markets the pick sells "
-        "IoT past its uplink room or its access room in some reported year.",
+        "IoT past its uplink, access or single-tone room in some reported year.",
         "People and devices are never added: no total of customers is published; bytes add "
         "across the classes in the GB carried.",
         "Government is left out of revenue.",
