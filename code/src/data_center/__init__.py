@@ -28,8 +28,9 @@ The public surface:
 * :mod:`data_center.generations`: `KNOWN_GENS`, `extend_generations`, `frontier_at`.
 * :mod:`data_center.engine`: the GPU-first engine + `run_valuation`.
 * :mod:`data_center.output`: the typed Pydantic models of the space artifact.
-* :mod:`data_center.json_output`: output assembly + the generated data dictionary
-  (serialized by :func:`common.file_io.render_artifact_json`).
+* :mod:`data_center.json_output`: output assembly (serialized by
+  :func:`common.file_io.render_artifact_json`), its data dictionary built by the shared
+  walker, :func:`common.meta.build_data_dictionary`.
 * :mod:`data_center.text_report`: human-readable text rendering.
 * :mod:`data_center.cli`: the `rklb-value <config.yaml>` entry point.
 

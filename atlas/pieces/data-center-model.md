@@ -22,7 +22,8 @@ assumption-index entry for every input).
   `volume`, `r_band`, `launch_cost`, `gospel`, `slopes`, optional
   `generations`) and `code/scenarios/ground_default.yaml` (the assumptions
   page); the defaults in `constants.py`, each with a source class; the
-  cadence spine, cohort cliff and cell types from `code/src/common/`.
+  cadence spine, cohort cliff, cell and meta-block types and the
+  data-dictionary walker from `code/src/common/`.
 - Out: the space artifact (`SpaceModelOutput`, defined in `output.py`) and
   the ground artifact (`GroundReferenceOutput`, in `ground.py`), published
   by promotion; a text report and a one-line `--brief` headline.
@@ -107,10 +108,13 @@ values, with the reason; the ground's is
 `test_default_ground_reproduces_the_recorded_invariant`
 (`test_ground_reference.py`). Around them: the engine, fleet, generations,
 volume, config, constants, cadence, naming, validation, output,
-query-example, text-report, run-window, command and promotion suites, and
-`test_input_manifest.py` and `test_provenance_uses.py`. Missed: the ground
-defaults' guard (Open), the committed artifacts (the promotion page) and
-the conclusion's numbers (the conclusions page).
+query-example, text-report, run-window, command and promotion suites,
+`test_input_manifest.py` and `test_provenance_uses.py`, and
+`test_committed_meta.py` (both committed artifacts' data dictionaries and
+the space artifact's formula definitions equal a fresh build's). Missed:
+the ground defaults' guard (Open), the committed artifacts beyond those
+blocks (the promotion page) and the conclusion's numbers (the conclusions
+page).
 
 **If this changes, update here.** A module added or split; a dial block;
 the artifact's top-level shape; the anchor rule.
