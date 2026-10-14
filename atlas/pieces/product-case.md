@@ -2,7 +2,7 @@
 
 **Maturity.** Built and promoted: the package, its shipped scenario and its
 tests stand, and a regeneration test guards its promoted artifact. Checked
-against `part-p7-documents` at d478e9f, 2026-10-13.
+against `main` at 5449106, 2026-10-14.
 
 **Role.** The communications market view, its own model on the engineering
 artifact (ADR 012): what the network the Iridium model builds would sell at

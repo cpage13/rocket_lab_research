@@ -1,7 +1,7 @@
 # Data-center model
 
 **Maturity.** Stable: a frozen golden trajectory locks the default run.
-Checked against `part-c-contract-helpers` at 2ce71ba, 2026-10-13.
+Checked against `main` at 5449106, 2026-10-14.
 
 **Role.** Models a Neutron-launched orbital AI-inference data center, year
 by year. Each fiscal year it picks the frontier GPU package generation, fits

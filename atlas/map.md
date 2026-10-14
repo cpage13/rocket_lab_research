@@ -42,7 +42,7 @@ read the resume point it names: it holds what is decided but not built.
 
 - **Get oriented:** `AGENTS.md`, this map, `CONTEXT.md`; then where the
   models stand: the promotion page's headline reads and, for communications,
-  its page's State and Open.
+  its page's State and Open and the product-case page's State.
 - **Resume active work:** `.agent/INDEX.md` (local), then the resume point
   it names, through forge-recover, then that file's read list.
 - **Answer a question about results, or draft a public piece:** the
@@ -62,8 +62,9 @@ read the resume point it names: it holds what is decided but not built.
 - **Work on the data center:** the data-center page, then
   `data_center/CURRENT_STATE.md`, `data_center/README.md`,
   `data_center/assumptions.md`, `data_center/conclusion.md`.
-- **Work on communications or saturation:** the communications page (State
-  and Open first) and ADRs 005 to 012; for active work, the resume point
+- **Work on communications, saturation or the product case:** the
+  communications page (State and Open first), the product-case page and ADRs
+  005 to 012; for active work, the resume point
   named in `.agent/INDEX.md` (local), through forge-recover. Then the
   folder's documents (`communications/CURRENT_STATE.md`,
   `communications/README.md`, `communications/assumptions.md`,
@@ -333,6 +334,16 @@ Iridium artifact's `provenance.schema_version`; the curve's top-level
   never a set count
   (`test_an_iot_count_in_the_scenario_is_refused_naming_the_field`,
   `test_iot_customers_move_with_the_draw_and_the_year`).
+- The product case's headline is the pick at the central market, each
+  market response at the middle of its range, which neither the seed nor the
+  draw count moves; the investor's prices are held flat, so the pick holds
+  every start price and chooses only each IoT class's usage, by the rule the
+  charter's One model, one maximum line states, and lower prices appear only
+  as context (`docs/adr/012-product-case-is-its-own-model.md`). Guards:
+  `test_the_central_market_is_each_range_middle`, `test_the_pick_rules`,
+  `test_the_pick_invariants_refuse` (a pick off its start prices or off the
+  candidates' front is refused) and
+  `test_every_choice_reads_in_one_market_and_the_headline_is_the_pick_there`.
 - `common` imports no model package, and `communications` never imports
   `data_center` or the product case, or carries Starship, market-share,
   market-size, adoption, take-rate or uptake machinery
@@ -348,8 +359,10 @@ Iridium artifact's `provenance.schema_version`; the curve's top-level
   ADR 012 widens it, `docs/adr/010-numpy-runtime-dependency.md`;
   `test_numpy_stays_inside_the_saturation_module`,
   `test_only_the_monte_carlo_imports_numpy`).
-- Both models run on one cadence spine (`test_cadence_move.py`); how their
-  all-in cases relate is the charter's Objective 1.
+- The data-center and communications models run on one cadence spine
+  (`test_cadence_move.py`), and the product case reads its fleet and cost
+  from the Iridium artifact; how the applications' all-in cases relate is
+  the charter's Objective 1.
 - Frozen baselines lock the published numbers: the data-center golden
   trajectory (`test_parity.py`), the ground invariant, the Iridium suite and
   the committed saturation curve (the drift tests

@@ -6,9 +6,7 @@ saturation curve its drift tests rebuild. The High-Bandwidth Cellular Pure
 Play family is on hold. IoT is published as capacity (ADR 011, `iridium-v7`);
 the product case (ADR 012) is built as its own model on this model's
 artifact and promoted (the product-case page). Checked against `main`
-at 1570350, 2026-10-12; what it says of IoT against part A's code
-(`iridium-v7`), 2026-10-13; of the product case against part B's code,
-2026-10-13.
+at 5449106, 2026-10-14.
 
 **Role.** Models a Neutron-launched communications constellation as model
 families on one shared fleet-and-cost loop: each family hands the loop its
