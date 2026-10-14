@@ -63,10 +63,11 @@ side).
 | `json_output.py` | the artifact (`ProductCaseArtifact`, `build_product_case_artifact`) and its command |
 
 **Terms.** product case, engineering case, device class, minimal-packet IoT,
-data IoT, margin, provenance cell (see `CONTEXT.md`). The method's own words
-(the central market, a candidate, the usable test, a usage scale, the fronts,
-the pick) are defined in the package docstring; they are not yet glossary
-terms.
+data IoT, margin, provenance cell, the typical market (the code's central
+market), usable market, the pick, IoT's room, device capacity, seats (see
+`CONTEXT.md`). The method's other words (a candidate, the usable test, a
+usage scale, the fronts) are defined in the package docstring, not in the
+glossary.
 
 **State.**
 - Promoted: the default artifact is the shipped scenario's run on the
