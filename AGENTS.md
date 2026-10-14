@@ -44,21 +44,21 @@ everything a knob, it's just absolutely overwhelming."
 
 ## Goals
 
-- **Communications, saturation.** Built: the Iridium model derives in code how
+- **Communications, saturation.** Met: built, promoted, told in the public
+  documents and accepted (2026-10-14). The Iridium model derives in code how
   many satellites the owned spectrum can serve for each of its people classes
   (the small terminal, the mounted terminal and the phone class: the class's
   saturation number where its rows reach one, a knee on the promoted
   saturation curve), in place of the inherited cap, and sells every seat of
-  the three side by side on the fleet the all-in launch cadence builds (ADRs
-  005 to 010). Open until the public documents tell the built model and the
-  work is accepted.
-- **Communications, IoT and the product case.** Approved 2026-10-07. IoT as
+  each of the three, each class alone, on the fleet the all-in launch cadence
+  builds (ADRs 005 to 010).
+- **Communications, IoT and the product case.** Met: built, promoted, told in
+  the public documents and accepted (2026-10-14; approved 2026-10-07). IoT is
   capacity in the engineering model, which carries no IoT count, price or
-  revenue (ADR 011): built (`iridium-v7`). The product case as its own model
-  on the engineering artifact, selling the terminals and the two IoT classes
-  at the investor's prices held flat (ADR 012): built and promoted
-  (`product-case-v1`). Open until the public documents tell both and the
-  work is accepted.
+  revenue (ADR 011, `iridium-v7`). The product case is its own model on the
+  engineering artifact, selling the terminals and the two IoT classes at the
+  investor's prices held flat (ADR 012, `product-case-v1`); the documents
+  read it beside the engineering case, never added.
 - **Agent documentation.** The charter, atlas and glossary are true to the
   code; the older agent guides are folded in and retired.
 - **Data center.** Rename the space artifact's `gross_profit_*` fields, which
@@ -101,9 +101,10 @@ everything a knob, it's just absolutely overwhelming."
   years; never EV, DCF or net-of-capital. The percentage is the margin (a
   full-cost margin); a dollar figure is the profit, never gross profit. Show
   the device classes side by side, never phone-first: in the engineering case
-  the small terminal, the mounted terminal and the phone class, with IoT's
-  capacity; in the product case the small terminal, the mounted terminal,
-  minimal-packet IoT and data IoT.
+  the small terminal and the mounted terminal, with IoT's capacity, and the
+  phone class a short mention until its own model (the network can serve
+  phones and voice); in the product case the small terminal, the mounted
+  terminal, minimal-packet IoT and data IoT.
 - **Public documents.** Story first, upside explicit, one hedge at the end;
   the conservative floor stays visible but never leads, and the tone is
   never promotional (more rules and guardrails on the conclusions page).
