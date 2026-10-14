@@ -41,13 +41,15 @@ never add:
 
 The answer, in short:
 
-- **The fleet.** Fly every Neutron launch on the shared ramp and the fleet
-  passes the 340-satellite coverage floor in FY2031, with 528 satellites
-  flying. By FY2036 it flies 4,288 satellites. It costs $1,554.4M a year then.
+- **The fleet.** In this case every Neutron launch carries 16 of these
+  satellites. The fleet passes the 340-satellite coverage floor in FY2031, with
+  528 satellites flying. By FY2036 it flies 4,288 satellites. Building,
+  launching and replacing them costs $1,554.4M a year by then.
 - **The product case.** At the investor's prices the network would earn
-  **$13,156.2M a year in FY2036 at an 88.2 percent margin**. About four fifths
-  of it is IoT. This is the typical market. It sits a little below the median
-  of the markets where the case works ($14,159.9M).
+  **$13,156.2M a year in FY2036**. Less the fleet's $1,554.4M, that is
+  $11,601.8M of profit, an **88.2 percent margin**. About four fifths of the
+  revenue is IoT. This is the typical market. It sits a little below the
+  median of the markets where the case works ($14,159.9M).
 - **The engineering case.** Each people class could fill the whole fleet
   alone. In FY2036 the small terminal alone would serve 24.6 million people
   for $2,952.8M a year, at a 47.4 percent own margin. The mounted terminal
@@ -105,8 +107,8 @@ Four things never add:
 - People and devices.
 - IoT and government.
 - The two applications. The data-center model's all-in case flies the same 301
-  launches through FY2036. Each application runs as if it had the shared ramp
-  to itself, so their headlines never add.
+  launches through FY2036. Each application runs as if it had all of those
+  launches to itself, so their headlines never add.
 
 ## Source Snapshot
 

@@ -80,48 +80,60 @@ The full data-center case, with every number traced to a source:
 
 ## Communications: The Iridium Model
 
-In June 2026 Rocket Lab agreed to acquire Iridium (closing expected
-mid-2027), and with it about 8 MHz of owned, globally coordinated L-band
-spectrum near 1.6 GHz (COMM-611). The band's position is the product: it holds through
-rain, clouds, and foliage, so it carries a decent, reliable link everywhere
-(voice, text, maps, photos, music, AI-agent traffic, and IoT devices) rather
-than video-grade broadband. It is first an IoT network. The model asks what
-that spectrum could do on a modern Neutron-launched fleet: flat 15.4 square
-meter panels with laser crosslinks, 16 to a launch with the Neutron block
-upgrade assumed, replacing the 66-satellite Iridium NEXT fleet (launched 2017
-to 2019) that moves about 174 Mbps today, less than one home internet
-connection (COMM-639).
+In June 2026 Rocket Lab agreed to buy Iridium. The deal is expected to close
+in mid-2027. Iridium owns about 8 MHz of L-band radio spectrum near 1.6 GHz,
+coordinated worldwide (COMM-611). That band holds through rain, clouds and
+trees. It carries a decent, reliable link where higher frequencies struggle:
+voice, text, maps, photos, music, AI-agent traffic and IoT devices. It is not
+built for video. It is first an IoT network.
 
-Two cases answer it, side by side and never added. The engineering case is
-every seat each people class could carry, each class alone, with IoT's room
-beside them. The product case is what the network would sell at the
-investor's prices, held flat. Its headline is the typical market (each
-response at the middle of its range), read beside 2,000 drawn markets.
+The model asks what that spectrum could do on a new fleet launched by Neutron.
+Each satellite has a flat antenna panel of 15.4 square meters and laser links
+to the others. Sixteen fit on one Neutron launch, with Neutron's block upgrade
+assumed. Today's Iridium fleet is 66 satellites, launched 2017 to 2019.
+Together they move about 174 Mbps, less than one home internet connection
+(COMM-639).
 
-- **The fleet.** Every Neutron launch on the shared ramp flies communications
-  satellites. The fleet passes the 340-satellite coverage floor in FY2031, with
-  528 flying, and reaches 4,288 in FY2036, at $1,554.4M a year.
-- **The product case.** At $10 and $50 a month for the two terminals and $3
-  and $6 for the two IoT classes, the network would earn $2,194.6M in FY2031
-  and **$13,156.2M in FY2036 at an 88.2 percent margin**, about four fifths of
-  it from IoT. That is the typical market; it sits a little below the median
-  of the markets where the case works.
-- **The engineering case.** Each class could fill the fleet alone. In FY2036
-  the small terminal alone serves 24.6 million people ($2,952.8M a year, a
-  47.4 percent own margin) and the mounted terminal alone 3.5 million
-  ($2,116.3M, 26.5 percent). IoT's room fits 11.5 billion minimal-packet
-  devices, that class alone: a capacity, not a forecast.
-- **The spectrum bound.** Each class's saturation number is a spectrum bound
-  reported beside the launch cadence, never a cap: 19,995 satellites for the
-  small terminal. Inside the horizon the launch cadence binds every class.
-- **The devices.** The small terminal gets 2 Mbps while active (about 10
-  off-peak), the mounted terminal 5 (about 13.4). A better antenna does not
-  widen the spectrum: it cleans the signal so each wave-change carries more
-  bits. The terminals and IoT need no one's permission. Phones and voice are a
-  later, separate model that needs a phone chip for the band.
-- **Never added.** The two cases never add, and neither do the two
-  applications: both fly the same 301 Neutron launches through FY2036, each as
-  if it had the ramp to itself.
+The answer for FY2036, in the typical market:
+
+| FY2036 | Amount |
+|---|---:|
+| Revenue a year | $13,156.2M |
+| What the fleet costs a year (build, launch and replace) | $1,554.4M |
+| Profit a year | $11,601.8M |
+| Margin | 88.2 percent |
+
+About four fifths of the revenue is IoT. The prices are the investor's, and
+they stay flat: $10 a month for the small terminal, $50 for the mounted
+terminal, and $3 and $6 for the two IoT classes.
+
+- **The fleet.** In this case every Neutron launch carries these satellites.
+  Neutron's launch rate ramps up to 90 a year by FY2036. Each satellite lasts
+  five years. Nothing is sold until 340 satellites are flying, enough for
+  continuous coverage where people live (the coverage floor). The fleet passes
+  that in FY2031, with 528 satellites. By FY2036 it flies 4,288.
+- **Two cases, never added.** The product case is what the network would
+  sell. The table above is its typical market: each customer response at the
+  middle of its range. It passes every test (at least a 50 percent margin, the
+  terminals filled, IoT within its room, revenue rising) in 1,744 of the 2,000
+  markets the model draws. The engineering case is the most the fleet could
+  carry. It gives the whole fleet to one kind of customer at a time. In FY2036
+  the small terminal alone would serve 24.6 million people for $2,952.8M a
+  year, and the mounted terminal alone 3.5 million for $2,116.3M.
+- **IoT's room.** In FY2036 the fleet's IoT capacity alone fits about 11.5
+  billion minimal-packet devices. That is a capacity, not a forecast. The
+  product case's devices use less than a third of it.
+- **The devices.** The small terminal gets 2 Mbps while in use (about 10
+  off-peak). The mounted terminal gets 5 Mbps (about 13.4 off-peak). Rocket Lab
+  can build and sell both, and the IoT modules, without anyone's permission.
+  Phones and voice need a phone chip that speaks this band, so they are a
+  later, separate model.
+- **Room to grow.** Through FY2036 the launch rate, not the spectrum, limits
+  the fleet. For the small terminal, adding satellites keeps adding capacity
+  until about 19,995 satellites (its saturation number).
+- **Never added.** The two cases never add. Neither do the two applications:
+  both use the same 301 Neutron launches through FY2036, each as if it had
+  them all.
 
 The full case, with every number traced:
 

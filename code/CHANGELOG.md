@@ -13,13 +13,13 @@ The communications work since `iridium-v5`, in four schemas. The Iridium model
 now reads its people from a promoted saturation curve and flies the full launch
 cadence; it publishes every device class side by side, each class alone, and
 IoT as capacity. The product case is a new model on the Iridium model's
-artifact. The published numbers moved with the model, as the conclusion
-states: in FY2036 the fleet flies 4,288 satellites at $1,554.4M a year, the
-small terminal alone serves 24,607,046 people for $2,952.8M a year at a 47.4
-percent own margin, and the product case reads $13,156.2M at an 88.2 percent
-margin in the central market, a little below its usable markets' median. The
-curve was promoted on 2026-10-12 and the Iridium artifact on 2026-10-13; the
-product case's artifact is new.
+artifact. The published numbers moved with the model, as the conclusion states:
+in FY2036 the fleet flies 4,288 satellites and costs $1,554.4M a year to build,
+launch and replace, the small terminal alone serves 24,607,046 people for
+$2,952.8M a year at a 47.4 percent own margin, and the product case reads
+$13,156.2M at an 88.2 percent margin in the central market, a little below its
+usable markets' median. The curve was promoted on 2026-10-12 and the Iridium
+artifact on 2026-10-13; the product case's artifact is new.
 
 ### Added
 

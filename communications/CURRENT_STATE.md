@@ -26,24 +26,35 @@ case, with their promoted artifacts and a static reviewed conclusion.
 
 ## Current Read
 
-Every Neutron launch on the shared ramp flies communications satellites, 16 to
-a launch. The fleet passes the 340-satellite coverage floor in FY2031, with
-528 satellites flying, and reaches 4,288 in FY2036. The fleet costs $191.4M a
-year in FY2031 and $1,554.4M in FY2036. The cost model is investor-flat
-(2026-07-09): satellites $1.0M each and launches $13.0M at any cadence.
+The answer for FY2036, in the product case's typical market:
 
-The engineering case sells every seat of each people class, each class alone.
-In FY2036 the small terminal alone serves 24,607,046 people for $2,952.8M a
-year, at a 47.4 percent own margin. The mounted terminal alone serves
-3,527,090 for $2,116.3M, at 26.5 percent. IoT is a capacity there, not a
-forecast: in FY2036 the room fits 11,497,881,052 minimal-packet IoT devices or
-997,732,709 data IoT devices, each class alone at its engineering usage.
+| FY2036 | Amount |
+|---|---:|
+| Revenue a year | $13,156.2M |
+| What the fleet costs a year (build, launch and replace) | $1,554.4M |
+| Profit a year | $11,601.8M |
+| Margin | 88.2 percent |
 
-The product case sells four classes at the investor's prices, held flat. In
-FY2036, in the typical market, it would earn $13,156.2M a year at an 88.2
-percent margin, 79.1 percent of it from IoT. That headline sits a little below
-the median of the markets where the case is usable. It is usable in 1,744 of
-2,000 drawn markets. The two cases are never added.
+In this case every Neutron launch carries 16 of these satellites. The fleet
+passes the 340-satellite coverage floor in FY2031, with 528 satellites flying,
+and reaches 4,288 in FY2036. Building, launching and replacing them costs
+$191.4M a year in FY2031 and $1,554.4M a year in FY2036. The cost model is
+investor-flat (2026-07-09): $1.0M to build a satellite and $13.0M a launch at
+any cadence.
+
+The engineering case is the most the fleet could carry. It gives the whole
+fleet to one kind of customer at a time. In FY2036 the small terminal alone
+would serve 24,607,046 people for $2,952.8M a year, at a 47.4 percent margin of
+its own. The mounted terminal alone would serve 3,527,090 for $2,116.3M, at
+26.5 percent. IoT is a capacity there, not a forecast. In FY2036 the fleet's
+IoT room fits 11,497,881,052 minimal-packet devices, or 997,732,709 data IoT
+devices, each class alone.
+
+The product case is what the network would sell: four classes at the
+investor's prices, held flat. The table above is its typical market, and 79.1
+percent of its revenue is IoT. The case passes every test in 1,744 of the
+2,000 markets the model draws. The typical market sits a little below the
+median of those markets. The two cases are never added.
 
 Treat these as traceable model outputs from the artifacts, not a final
 recommendation.

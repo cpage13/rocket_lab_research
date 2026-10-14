@@ -175,7 +175,7 @@ all-in: share 1.0, the whole modeled Neutron manifest flying communications
 satellites. The reasoning is framework consistency: every application in this
 repository answers the same all-in question the data-center model answers,
 what happens if you go pedal to the metal? Each application runs as if it had
-the shared ramp to itself, so their headlines never add.
+all of Neutron's launches to itself, so their headlines never add.
 
 Under it the fleet flies every launch the ramp allows, 16 satellites to a
 launch: 2, 3, 5, 9 and 14 launches from FY2027 to FY2031 (33 in all, 528
@@ -244,7 +244,7 @@ These values are read from the promoted JSON, not external facts. All are
 | Phone class alone, FY2031 / FY2036 | 3,560,271 people, 640.8 million dollars, 70.1 percent / 20,823,193 people, 3,748.2 million dollars, 58.5 percent |
 | Saturation numbers | 19,995; not reached by 55,407; 20,652 |
 | Where the next satellite stops paying, at full price | from about 6,006 (small terminal), 5,402 (mounted terminal) and 8,010 (phone class) satellites: rows of the curve, each crossing within a row's spacing |
-| The readings | the coverage floor (340, 123.25 million dollars a year); 2,000, the retired cap, kept for comparison (725.0); the horizon-end reach (4,288, 1,554.4); the steady state beyond the horizon (7,200, 2,610.0) |
+| The readings: each a fleet and what it costs a year | the coverage floor, 340 satellites: 123.25 million dollars. The retired 2,000 cap, kept for comparison: 725.0 million. The horizon-end reach, 4,288 satellites: 1,554.4 million. The steady state beyond the horizon, 7,200 satellites: 2,610.0 million. |
 | IoT's room, FY2031 / FY2036 | payload 6.6 / 38.5 Gbps; access attempts 1.1 / 6.4 million a second; tones 13.5 / 78.9 million at once |
 | IoT capacity, each class alone, FY2031 / FY2036 | minimal-packet 1,965,864,139 / 11,497,881,052; data IoT 170,588,558 / 997,732,709 |
 
