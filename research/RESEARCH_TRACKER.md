@@ -50,7 +50,7 @@ Intentionally excluded:
 | [RESEARCH_TRACKER.md](RESEARCH_TRACKER.md) | reviewed | Research Wiki tracker and file coverage audit. | Tracks every current file under `research/` and intentionally excludes generated outputs. |
 | [SOURCE_INDEX.md](SOURCE_INDEX.md) | reviewed | Claim-level hard-number ledger. | Uses the public source-status taxonomy and records stable `RLDC-*` IDs for default assumptions and public model outputs. |
 | [vision/initial_thesis.md](vision/initial_thesis.md) | reviewed | Append-only thesis and belief history. | Rev 7 preserves historical conclusion references as history while moving live outputs to `data_center/`. |
-| [vision/comms_thesis.md](vision/comms_thesis.md) | draft | Communications thesis: starting belief record for the comms track (four working hypotheses plus the open questions that test them); no verdict for or against a Rocket Lab space-comms business. | Added 2026-06-11, comms wave-1 ingest. Revision 2 appended (2026-06-11): the two missing dollar numbers are now sized (rural/remote fringe and premium/sovereign niche), updating the confirm/break notes for Hypotheses 2 and 4; Revision 1 unchanged, still no verdict, the sizes are demand-side and ILLUSTRATIVE. Revision 3 appended (2026-06-17): the cost side now has a test (the ground-vs-space cost ratio and the incumbent marginal-cost floor); updates Hypothesis 2's confirm/break notes (supply economics close for *scaled* space in the fringe and do not close in served markets; the gate narrows to whether a specific entrant at realistic scale reaches the cost level), leaving Hypotheses 1, 3, 4 unchanged; still no verdict, the entrant-specific cost stack is unmodeled. Belief record only; carries no external source burden of its own, pointing to `synthesis/comms_baseline_synthesis.md`, the three wave-2 `economics/comms_*_sizing.md` docs, and the three wave-3 `economics/comms_*` cost docs for the sourced base. |
+| [vision/comms_thesis.md](vision/comms_thesis.md) | draft | Communications thesis: starting belief record for the comms track (four working hypotheses plus the open questions that test them); no verdict for or against a Rocket Lab space-comms business. | Added 2026-06-11, comms wave-1 ingest. Revision 2 appended (2026-06-11): the two missing dollar numbers are now sized (rural/remote fringe and premium/sovereign niche), updating the confirm/break notes for Hypotheses 2 and 4; Revision 1 unchanged, still no verdict, the sizes are demand-side and ILLUSTRATIVE. Revision 3 appended (2026-06-17): the cost side now has a test (the ground-vs-space cost ratio and the incumbent marginal-cost floor); updates Hypothesis 2's confirm/break notes (supply economics close for *scaled* space in the fringe and do not close in served markets; the gate narrows to whether a specific entrant at realistic scale reaches the cost level), leaving Hypotheses 1, 3, 4 unchanged; still no verdict, the entrant-specific cost stack is unmodeled. Belief record only; carries no external source burden of its own, pointing to `synthesis/comms_baseline_synthesis.md`, the three wave-2 `economics/comms_*_sizing.md` docs, and the three wave-3 `economics/comms_*` cost docs for the sourced base. Revision 5 appended (2026-10-14): waves 5 to 9 and the saturation build; the spectrum owned through the Iridium acquisition; the engineering case and the product case built side by side, never added; each hypothesis read against the build; the verdict is the conclusion's. |
 | [direct_communication/README.md](direct_communication/README.md) | draft | Communications workstream front door. | Navigation doc; no external source burden. |
 
 ### AI Hardware
@@ -513,10 +513,10 @@ Highest-priority research gaps:
     per-user revenue for the D2D layer, and AST is pre-scale (~$70.9M FY2025
     against a ~$1.1T cited TAM); the unit economics of "fill the dead zones"
     remain unproven (`economics/comms_us_cellular_market.md`).
-  - The communications thesis (`vision/comms_thesis.md`) stops at Revision 4
-    (wave 4). Its next revision, for waves 5 to 9 and the saturation build,
-    is the investor's, after the public documents are rewritten to the built
-    models (the investor's yes, 2026-10-12).
+  - The communications thesis (`vision/comms_thesis.md`): closed 2026-10-14.
+    Revision 5 records waves 5 to 9 and the saturation build, after the public
+    documents were rewritten to the built models (the investor's yes,
+    2026-10-12; done on the investor's word, 2026-10-14).
   - The saturation build's repo rows (2026-10-05), the open items they carry:
     - Closed 2026-10-05: COMM-714, NB-IoT's 3.75 kHz uplink subcarrier, is
       `certified` on two secondary sources that cite 3GPP TS 36.211 Section

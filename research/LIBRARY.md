@@ -31,7 +31,7 @@ docs behind any claim you want to inspect:
 For communications (nine research waves, 2026-06-11 to 2026-07-08, and the saturation
 build's two notes, 2026-10-05; the saturation note's Section 2, 2026-10-12), start with
 [vision/comms_thesis.md](vision/comms_thesis.md), the belief record (its latest
-revision, Revision 4, covers wave 4), then the syntheses, which cover waves 1, 4, 5 and 6:
+revision, Revision 5, covers waves 5 to 9 and the built models), then the syntheses, which cover waves 1, 4, 5 and 6:
 [synthesis/comms_baseline_synthesis.md](synthesis/comms_baseline_synthesis.md) (the neutral
 market-and-technology base),
 [synthesis/comms_framework_synthesis.md](synthesis/comms_framework_synthesis.md),
@@ -60,7 +60,7 @@ platforms).
 | [RESEARCH_TRACKER.md](RESEARCH_TRACKER.md) | Research Wiki tracker. | Status, stale notes, stakeholder input, and open questions. |
 | [SOURCE_INDEX.md](SOURCE_INDEX.md) | Claim-level hard-number source ledger (`RLDC-*` rows current to the promoted default as of 2026-09-24). | Whether a number is `certified`, `sourced_estimate`, `derived_estimate`, `projection`, `extrapolation`, `scenario`, `placeholder`, or `stale`. |
 | [vision/initial_thesis.md](vision/initial_thesis.md) | Versioned thesis. | The belief history and current research/output boundary. |
-| [vision/comms_thesis.md](vision/comms_thesis.md) | Communications thesis, Revision 1 (belief record only; comms wave 1). | The starting belief record for the comms track: working hypotheses (diminishing returns past baseline broadband; space as a possible step change gated on economics and new use cases; laser high-bandwidth but weather-limited and possibly fiber-dependent; security as a differentiator) and the open questions that test them. No verdict; built on the comms baseline synthesis. |
+| [vision/comms_thesis.md](vision/comms_thesis.md) | Communications thesis, Revisions 1 to 5 (belief records for waves 1 to 4; Revision 5, 2026-10-14, records waves 5 to 9 and the built models). | The starting belief record for the comms track: working hypotheses (diminishing returns past baseline broadband; space as a possible step change gated on economics and new use cases; laser high-bandwidth but weather-limited and possibly fiber-dependent; security as a differentiator) and the open questions that test them. No verdict; built on the comms baseline synthesis. |
 | [direct_communication/README.md](direct_communication/README.md) | Communications workstream front door. | The adjacent Rocket Lab communications thesis and its scope. |
 
 ### AI Hardware

@@ -22,7 +22,7 @@ under `data_center/` and `communications/`.
   `direct_communication/`, `laser_comms/`, `competitors/`, `rocket_lab/` and
   `rocket_lab/neutron/`; its syntheses and lint reports are the
   `synthesis/comms_*` files; its thesis is `vision/comms_thesis.md`, whose
-  latest revision (Revision 4) covers wave 4. The two notes behind the Iridium
+  latest revision (Revision 5) covers waves 5 to 9 and the built models. The two notes behind the Iridium
   model's saturation module are `rocket_lab/flatellite_panel_and_stack.md`
   (the panel and satellites per launch) and
   `direct_communication/iridium_saturation_module.md`.
