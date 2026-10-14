@@ -2,7 +2,7 @@
 
 **Maturity.** Built and promoted: the package, its shipped scenario and its
 tests stand, and a regeneration test guards its promoted artifact. Checked
-against `part-p7-documents` at d478e9f, 2026-10-13.
+against `main` at 5449106, 2026-10-14.
 
 **Role.** The communications market view, its own model on the engineering
 artifact (ADR 012): what the network the Iridium model builds would sell at
@@ -63,10 +63,11 @@ side).
 | `json_output.py` | the artifact (`ProductCaseArtifact`, `build_product_case_artifact`) and its command |
 
 **Terms.** product case, engineering case, device class, minimal-packet IoT,
-data IoT, margin, provenance cell (see `CONTEXT.md`). The method's own words
-(the central market, a candidate, the usable test, a usage scale, the fronts,
-the pick) are defined in the package docstring; they are not yet glossary
-terms.
+data IoT, margin, provenance cell, the typical market (the code's central
+market), usable market, the pick, IoT's room, device capacity, seats (see
+`CONTEXT.md`). The method's other words (a candidate, the usable test, a
+usage scale, the fronts) are defined in the package docstring, not in the
+glossary.
 
 **State.**
 - Promoted: the default artifact is the shipped scenario's run on the

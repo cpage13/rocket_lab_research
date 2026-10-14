@@ -1,8 +1,6 @@
 # Assumptions
 
-**Maturity.** Stable. Checked against `main` at 1570350, 2026-10-12; its
-Iridium lines on IoT against part A's code (`iridium-v7`), 2026-10-13; its
-product-case lines against part B's code, 2026-10-13.
+**Maturity.** Stable. Checked against `main` at 5449106, 2026-10-14.
 
 **Role.** Where every assumption lives, in three forms. The machine form:
 the scenario files in `code/scenarios/` and the defaults behind them in

@@ -1,8 +1,6 @@
 # Shared core
 
-**Maturity.** Stable. Checked against `part-c-contract-helpers` at 2ce71ba,
-2026-10-13; its product-case lines against `part-b-product-case` at 9cd2b0d,
-2026-10-13.
+**Maturity.** Stable. Checked against `main` at 5449106, 2026-10-14.
 
 **Role.** The code the models import (`code/src/common/`: the data center,
 the communications model and the product case), one implementation per

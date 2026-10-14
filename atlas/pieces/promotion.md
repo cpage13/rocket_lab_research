@@ -1,8 +1,6 @@
 # Promotion
 
-**Maturity.** Stable. Checked against `main` at 1570350, 2026-10-12; its
-Iridium artifact's IoT blocks against part A's code (`iridium-v7`),
-2026-10-13; the product case's command against part B's code, 2026-10-13.
+**Maturity.** Stable. Checked against `main` at 5449106, 2026-10-14.
 
 **Role.** The publishing boundary: four commands run a scenario and write
 the promoted JSON (the final objects, listed on the map) through one

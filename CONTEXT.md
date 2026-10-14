@@ -22,7 +22,27 @@ product case, never added to it).
 The communications market view (ADR 012): its own model on the Iridium model's promoted JSON, of what the
 network would sell (the terminals and the two IoT classes) at the investor's prices held flat; it never feeds
 the engineering model.
-- **Relates to:** engineering case, minimal-packet IoT, data IoT
+- **Relates to:** engineering case, minimal-packet IoT, data IoT, the typical market, usable market, the pick
+
+### the typical market
+The product case's headline market, the code's central market (`central_market`, `headline.market`): each
+market response at the middle of its range, so neither the seed nor the draw count moves it; it sits below the
+median of the markets where the pick is usable (ADR 012).
+- **Avoid:** the median market
+- **Relates to:** product case, usable market, the pick
+
+### usable market
+A market in which a choice passes every usable test (`UsableTest`) in every reported year: the terminals'
+busy-hour beams filled to at least the fill floor, the whole business's margin at least the margin floor, IoT's
+uplink, access and single-tone uses each within its room, and revenue strictly rising.
+- **Relates to:** the pick, the typical market, IoT's room, margin
+
+### the pick
+The product case's chosen offer (`pick`): among the candidates (the choices that hold every price at its start
+price, the investor's), the highest median summed revenue over the reported years among those usable in at
+least the robust floor's share of the drawn markets, or, when none is, the most usable candidate, warned; the
+prices never move, so it chooses only each IoT class's usage.
+- **Relates to:** usable market, the typical market, product case
 
 ### the Iridium model
 The communications family the repository publishes: the most the L-band Rocket Lab is acquiring with Iridium
@@ -66,21 +86,36 @@ engineering case, the whole business's revenue in the product case); a dollar fi
 - **Avoid:** gross margin, gross profit
 
 ### device class
-A tier of devices shown side by side with the others, never phone-first: the small terminal, the mounted
-terminal and the phone class are the Iridium model's people classes (`DeviceClass`), and minimal-packet IoT and
-data IoT are two more (ADR 011); IoT counts devices, never people, and no model sells every IoT seat (ADR 011).
+A tier of devices, never phone-first (the charter's Presentation line says how each case shows them): the small
+terminal, the mounted terminal and the phone class are the Iridium model's people classes (`DeviceClass`), and
+minimal-packet IoT and data IoT are two more (ADR 011); IoT counts devices, never people, and has no seats.
 - **Avoid:** phone users
-- **Relates to:** minimal-packet IoT, data IoT
+- **Relates to:** minimal-packet IoT, data IoT, seats
 
 ### minimal-packet IoT
 The IoT device class that sends short messages only; with data IoT, a capacity in the engineering case, which
 the Iridium artifact publishes (ADR 011), and a market in the product case (ADR 012).
-- **Relates to:** data IoT, device class, engineering case, product case
+- **Relates to:** data IoT, device class, engineering case, product case, device capacity
 
 ### data IoT
 The IoT device class that sends bursts of data beside its messages; with minimal-packet IoT, a capacity in the
 engineering case, which the Iridium artifact publishes (ADR 011), and a market in the product case (ADR 012).
-- **Relates to:** minimal-packet IoT, device class, engineering case, product case
+- **Relates to:** minimal-packet IoT, device class, engineering case, product case, device capacity
+
+### IoT's room
+The uplink that IoT rides at a fleet, on the phone class's useful beams: its bits, payload bits and single-tone
+seconds a second in the uplink's share of the frame, and its random-access attempts a second; the Iridium
+artifact publishes it every year and reading (`IotRoomBlock`; `years[].iot`, `saturation.readings[].iot`),
+counting no beam over oceans or empty land, a conservative basis (ADR 011).
+- **Relates to:** device capacity, downlink share, useful beams, usable market
+
+### device capacity
+An IoT class's capacity alone at a fleet (`device_capacity`): the devices IoT's whole room holds for that class
+at its engineering usage, the least of three views (payload bits, random access, single-tone time) rounded down,
+null below the coverage floor; a capacity, never a count sold or a forecast, and the two classes' are never
+added (ADR 011).
+- **Avoid:** IoT count, IoT forecast
+- **Relates to:** IoT's room, minimal-packet IoT, data IoT, coverage floor
 
 ### frequency versus bandwidth
 Frequency is where the signal sits (about 1.6 GHz); bandwidth, the width held (about 8 MHz), sets capacity.
@@ -154,11 +189,19 @@ next satellite first stops paying for that class.
 The cellular family's deployment rule (also "build-and-hold"): build to the fleet target, then replace each
 retiring cohort; the Iridium model has no target and flies every launch its cadence share allows.
 
+### seats
+A people class's seats are every person the living fleet carries for that class alone: the engineering case
+sells every one from the coverage floor on (`people_served`); in the product case a terminal sells up to its
+seats, its share of its people in today's mix of beams; IoT has no seats, only a room and a device capacity
+(ADR 011).
+- **Relates to:** full sell-through, device class, device capacity
+
 ### full sell-through
 Every seat sold: each year the small terminal, the mounted terminal and the phone class each serve every person
 the living fleet carries, at the class's flat price, so revenue rises with the fleet; each class's column is the
 whole fleet sold to that class alone, never summed (ADR 006).
 - **Avoid:** take rate, adoption, capture
+- **Relates to:** seats
 
 ### all-in deployment
 A case at the full modeled Neutron cadence, run as if it had the shared launch ramp to itself.

@@ -1,7 +1,7 @@
 # Research wiki
 
 **Maturity.** Stable rules, growing content. Checked against `research/` on
-`main` at 1570350, 2026-10-12.
+`main` at 5449106, 2026-10-14.
 
 **Role.** The evidence base for every application. It holds each
 application's thesis, the investor's hypothesis as an append-only belief
