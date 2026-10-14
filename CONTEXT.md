@@ -26,8 +26,8 @@ the engineering model.
 
 ### the typical market
 The product case's headline market, the code's central market (`central_market`, `headline.market`): each
-market response at the middle of its range, so neither the seed nor the draw count moves it; it sits below the
-median of the markets where the pick is usable (ADR 012).
+market response at the middle of its range, so neither the seed nor the draw count moves it; in the promoted
+artifact it sits a little below the median of the markets where the pick is usable (ADR 012).
 - **Avoid:** the median market
 - **Relates to:** product case, usable market, the pick
 

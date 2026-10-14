@@ -23,7 +23,9 @@ What it checks, on every line of every page:
     and a ``jq`` filter are not looked up;
   - a module path (``communications.saturation``, ``common.file_io.load_yaml_mapping``, the
     word after ``-m``) names a module under ``code/src/`` and then a name that module defines
-    at its top level;
+    at its top level; a name a module only imports does not count, so a page cannot name a
+    function through a module that merely imports it, except a package's ``__init__.py``,
+    whose imports are the names it re-exports;
   - the word right after ``uv run`` is a command-line tool or an entry point that
     ``code/pyproject.toml`` declares under ``[project.scripts]`` (``rklb-value``);
   - a ``jq`` query's field names (``.name``, ``."key"``, ``["key"]`` and an object's shorthand
@@ -31,7 +33,7 @@ What it checks, on every line of every page:
     none;
   - a test name (``test_...``) is a test function defined under ``code/tests/``;
   - a claim ID (``COMM-601``) is a row of ``research/SOURCE_INDEX.md``;
-  - any other code name (``run_iridium_model``, ``fixed_books``,
+  - any other code name (``run_iridium_model``, ``device_capacity``,
     ``comms_cadence.share_of_fleet``) is, each dotted part, a code word: an identifier of the
     code (``code/src/``) or a word of a string literal there that is not a docstring, the
     source class a docstring opens with (``SOURCED_FACT``), a word of the scenarios or of the
@@ -443,9 +445,8 @@ def _claim_ids(repo_dir: Path) -> frozenset[str]:
 
 
 @cache
-def _top_level_names(module_file: Path) -> frozenset[str]:
-    """Return the names a module defines at its top level (functions, classes, assignments,
-    imports)."""
+def _defined_names(module_file: Path) -> frozenset[str]:
+    """Return the names a module defines at its top level: functions, classes, assignments."""
     tree = ast.parse(module_file.read_text(encoding="utf-8"))
     names: set[str] = set()
     for node in tree.body:
@@ -455,9 +456,20 @@ def _top_level_names(module_file: Path) -> frozenset[str]:
             names.update(t.id for t in node.targets if isinstance(t, ast.Name))
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             names.add(node.target.id)
-        elif isinstance(node, ast.Import | ast.ImportFrom):
-            names.update((alias.asname or alias.name).split(".")[0] for alias in node.names)
     return frozenset(names)
+
+
+@cache
+def _top_level_names(module_file: Path) -> frozenset[str]:
+    """Return the names a module binds at its top level: those it defines and those it imports."""
+    tree = ast.parse(module_file.read_text(encoding="utf-8"))
+    imported = {
+        (alias.asname or alias.name).split(".")[0]
+        for node in tree.body
+        if isinstance(node, ast.Import | ast.ImportFrom)
+        for alias in node.names
+    }
+    return _defined_names(module_file) | imported
 
 
 def _module_file(source_dir: Path, parts: list[str]) -> Path | None:
@@ -481,7 +493,10 @@ def _module_problem(repo_dir: Path, dotted: str) -> str | None:
         rest = parts[cut:]
         if not rest:
             return None
-        if rest[0] not in _top_level_names(module_file):
+        # A plain module must define the name; a package's __init__.py re-exports what it imports.
+        is_package = module_file.name == "__init__.py"
+        names = _top_level_names(module_file) if is_package else _defined_names(module_file)
+        if rest[0] not in names:
             return f"{'.'.join(parts[:cut])} defines no top-level {rest[0]}"
         missing = [part for part in rest[1:] if part not in _code_words(module_file)]
         return f"{'.'.join(parts[:cut])} has no {missing[0]}" if missing else None
@@ -834,6 +849,21 @@ def _failures(repo_dir: Path, page: Path) -> Iterator[Failure]:
                 continue
             for word, why in _span_problems(repo_dir, page, span, history=history):
                 yield Failure(where, number, word, why)
+
+
+def test_a_module_path_resolves_only_to_a_name_its_module_defines(repo_dir: Path) -> None:
+    """Objective: a module path names what its module defines, never a name the module only
+    imports, so a page cannot cite a function through a module that merely imports it.
+
+    Sample: ``data_center.json_output`` imports ``build_data_dictionary`` from ``common.meta``,
+    which defines it, and ``communications.iridium`` imports ``math``. Expected outcome: the
+    two import-only paths are refused and the defining module's path resolves.
+    """
+    assert _module_problem(repo_dir, "common.meta.build_data_dictionary") is None
+    for span in ("data_center.json_output.build_data_dictionary", "communications.iridium.math"):
+        assert _module_problem(repo_dir, span) == (
+            f"{span.rsplit('.', 1)[0]} defines no top-level {span.rsplit('.', 1)[1]}"
+        )
 
 
 def test_every_path_and_name_the_agent_pages_spell_resolves(repo_dir: Path) -> None:

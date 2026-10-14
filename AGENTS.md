@@ -59,8 +59,9 @@ everything a knob, it's just absolutely overwhelming."
   engineering artifact, selling the terminals and the two IoT classes at the
   investor's prices held flat (ADR 012, `product-case-v1`); the documents
   read it beside the engineering case, never added.
-- **Agent documentation.** The charter, atlas and glossary are true to the
-  code; the older agent guides are folded in and retired.
+- **Agent documentation.** Met (2026-10-14): the charter, atlas and glossary
+  are true to the code, checked at acceptance; the older agent guides are
+  folded in and retired.
 - **Data center.** Rename the space artifact's `gross_profit_*` fields, which
   hold a full-cost profit (approved; it starts on the investor's go).
 
